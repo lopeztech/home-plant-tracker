@@ -14,8 +14,17 @@ GCP_WORKLOAD_IDENTITY_PROVIDER=$(terraform output -raw workload_identity_provide
 GCP_SERVICE_ACCOUNT=$(terraform output -raw service_account_email)
 GCS_BUCKET_NAME=$(terraform output -raw bucket_name)
 ARTIFACT_REGISTRY_REPO=$(terraform output -raw artifact_registry_repo)
-VITE_GOOGLE_CLIENT_ID=$(terraform output -raw iap_client_id)
 LOAD_BALANCER_IP=$(terraform output -raw load_balancer_ip)
+
+# ── Prompt for OAuth Client ID (created manually in Cloud Console) ────────────
+
+echo ""
+echo "Paste your Google OAuth 2.0 Client ID (from Cloud Console → APIs & Services → Credentials):"
+read -r VITE_GOOGLE_CLIENT_ID
+if [[ -z "$VITE_GOOGLE_CLIENT_ID" ]]; then
+  echo "Error: OAuth Client ID cannot be empty." >&2
+  exit 1
+fi
 
 # ── Hardcoded values ──────────────────────────────────────────────────────────
 

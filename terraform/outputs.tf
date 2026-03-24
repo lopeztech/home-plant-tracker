@@ -33,12 +33,6 @@ output "ssl_certificate_name" {
   value       = google_compute_managed_ssl_certificate.app.name
 }
 
-output "iap_client_id" {
-  description = "IAP OAuth client ID — set as VITE_GOOGLE_CLIENT_ID in GitHub Secrets and .env.local"
-  value       = google_iap_client.app.client_id
-  sensitive   = true
-}
-
 output "artifact_registry_repo" {
   description = "Artifact Registry repo URL for Docker pushes"
   value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}"
@@ -55,7 +49,7 @@ output "github_secrets" {
     GCP_WORKLOAD_IDENTITY_PROVIDER = google_iam_workload_identity_pool_provider.github.name
     GCP_SERVICE_ACCOUNT            = google_service_account.github_deployer.email
     GCS_BUCKET_NAME                = google_storage_bucket.app.name
-    VITE_GOOGLE_CLIENT_ID          = "(run: terraform output -raw iap_client_id)"
+    VITE_GOOGLE_CLIENT_ID          = "(set manually — see terraform/iap.tf for instructions)"
     ARTIFACT_REGISTRY_REPO         = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}"
   }
 }

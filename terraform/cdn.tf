@@ -27,11 +27,11 @@ resource "google_compute_managed_ssl_certificate" "app" {
   depends_on = [google_project_service.apis]
 }
 
-# ── Backend Service (Cloud Run + IAP + Cloud CDN) ─────────────────────────────
+# ── Backend Service (Cloud Run + Cloud CDN) ───────────────────────────────────
 
 resource "google_compute_backend_service" "app" {
   name                  = "${local.app_name}-backend-${var.environment}"
-  description           = "Plant Tracker — Cloud Run backend with IAP"
+  description           = "Plant Tracker — Cloud Run backend with Cloud CDN"
   protocol              = "HTTPS"
   load_balancing_scheme = "EXTERNAL"
   enable_cdn            = true
@@ -41,17 +41,13 @@ resource "google_compute_backend_service" "app" {
   }
 
   cdn_policy {
-    cache_mode        = "CACHE_ALL_STATIC"
-    default_ttl       = var.cdn_default_ttl
-    max_ttl           = var.cdn_max_ttl
-    client_ttl        = var.cdn_default_ttl
-    negative_caching  = true
-    serve_while_stale = 86400
-  }
-
-  iap {
-    oauth2_client_id     = google_iap_client.app.client_id
-    oauth2_client_secret = google_iap_client.app.secret
+    cache_mode                   = "CACHE_ALL_STATIC"
+    default_ttl                  = var.cdn_default_ttl
+    max_ttl                      = var.cdn_max_ttl
+    client_ttl                   = var.cdn_default_ttl
+    negative_caching             = true
+    serve_while_stale            = 86400
+    signed_url_cache_max_age_sec = 0
   }
 
   log_config {

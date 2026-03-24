@@ -35,7 +35,7 @@ resource "google_cloud_run_v2_service" "app" {
       resources {
         limits = {
           cpu    = "1"
-          memory = "256Mi"
+          memory = "512Mi"
         }
       }
     }
@@ -54,6 +54,17 @@ resource "google_cloud_run_v2_service" "app" {
   }
 
   depends_on = [google_project_service.apis]
+}
+
+# Allow the load balancer to invoke Cloud Run.
+# Ingress is restricted to INTERNAL_LOAD_BALANCER so only the LB can reach it
+# even though allUsers is granted here.
+resource "google_cloud_run_v2_service_iam_member" "lb_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloud_run_v2_service.app.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 # Serverless NEG connecting the Load Balancer to Cloud Run
