@@ -7,9 +7,9 @@ import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import { plantsApi } from './api/plants.js'
 
 const STORAGE_KEYS = {
-  PLANTS: 'plantTracker_plants',
   FLOORPLAN: 'plantTracker_floorplanImage',
   API_KEY: 'plantTracker_apiKey',
 }
@@ -35,7 +35,9 @@ function saveToStorage(key, value) {
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth()
 
-  const [plants, setPlants] = useState(() => loadFromStorage(STORAGE_KEYS.PLANTS, []))
+  const [plants, setPlants] = useState([])
+  const [plantsLoading, setPlantsLoading] = useState(false)
+  const [plantsError, setPlantsError] = useState(null)
   const [floorplanImage, setFloorplanImage] = useState(() => loadFromStorage(STORAGE_KEYS.FLOORPLAN, null))
   const [apiKey, setApiKey] = useState(() => loadFromStorage(STORAGE_KEYS.API_KEY, null))
 
@@ -44,10 +46,16 @@ function AppContent() {
   const [editingPlant, setEditingPlant] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
 
-  // Persist state changes to localStorage
+  // Load plants from API when authenticated
   useEffect(() => {
-    saveToStorage(STORAGE_KEYS.PLANTS, plants)
-  }, [plants])
+    if (!isAuthenticated) return
+    setPlantsLoading(true)
+    setPlantsError(null)
+    plantsApi.list()
+      .then(setPlants)
+      .catch(err => setPlantsError(err.message))
+      .finally(() => setPlantsLoading(false))
+  }, [isAuthenticated])
 
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.FLOORPLAN, floorplanImage)
@@ -75,28 +83,39 @@ function AppContent() {
     setShowPlantModal(true)
   }, [])
 
-  const handleSavePlant = useCallback((plantData) => {
-    setPlants(prev => {
+  const handleSavePlant = useCallback(async (plantData) => {
+    const data = {
+      ...plantData,
+      x: pendingPosition?.x ?? editingPlant?.x ?? 50,
+      y: pendingPosition?.y ?? editingPlant?.y ?? 50,
+    }
+    try {
       if (editingPlant) {
-        return prev.map(p => p.id === editingPlant.id ? { ...p, ...plantData } : p)
+        const updated = await plantsApi.update(editingPlant.id, data)
+        setPlants(prev => prev.map(p => p.id === editingPlant.id ? updated : p))
       } else {
-        const newPlant = {
-          id: crypto.randomUUID(),
-          createdAt: new Date().toISOString(),
-          x: pendingPosition?.x ?? 50,
-          y: pendingPosition?.y ?? 50,
-          ...plantData,
-        }
-        return [...prev, newPlant]
+        const created = await plantsApi.create(data)
+        setPlants(prev => [created, ...prev])
       }
-    })
+    } catch (err) {
+      console.error('Failed to save plant:', err)
+      alert(`Failed to save plant: ${err.message}`)
+      return
+    }
     setShowPlantModal(false)
     setEditingPlant(null)
     setPendingPosition(null)
   }, [editingPlant, pendingPosition])
 
-  const handleDeletePlant = useCallback((plantId) => {
-    setPlants(prev => prev.filter(p => p.id !== plantId))
+  const handleDeletePlant = useCallback(async (plantId) => {
+    try {
+      await plantsApi.delete(plantId)
+      setPlants(prev => prev.filter(p => p.id !== plantId))
+    } catch (err) {
+      console.error('Failed to delete plant:', err)
+      alert(`Failed to delete plant: ${err.message}`)
+      return
+    }
     setShowPlantModal(false)
     setEditingPlant(null)
   }, [])
@@ -136,6 +155,12 @@ function AppContent() {
         apiKeySet={!!apiKey}
       />
 
+      {plantsError && (
+        <div className="bg-red-900/50 border border-red-700 text-red-300 text-sm px-4 py-2 text-center">
+          Failed to load plants: {plantsError}
+        </div>
+      )}
+
       <div className="flex flex-1 overflow-hidden">
         <FloorplanView
           plants={plants}
@@ -143,10 +168,12 @@ function AppContent() {
           onFloorplanUpload={handleFloorplanUpload}
           onFloorplanClick={handleFloorplanClick}
           onMarkerClick={handleMarkerClick}
+          loading={plantsLoading}
         />
         <PlantSidebar
           plants={plants}
           onPlantClick={handleMarkerClick}
+          loading={plantsLoading}
         />
       </div>
 
