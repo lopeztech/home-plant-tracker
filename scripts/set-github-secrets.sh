@@ -15,6 +15,8 @@ GCP_SERVICE_ACCOUNT=$(terraform output -raw service_account_email)
 GCS_BUCKET_NAME=$(terraform output -raw bucket_name)
 ARTIFACT_REGISTRY_REPO=$(terraform output -raw artifact_registry_repo)
 LOAD_BALANCER_IP=$(terraform output -raw load_balancer_ip)
+VITE_API_BASE_URL=$(terraform output -raw api_gateway_url)
+VITE_API_KEY=$(terraform output -raw api_key)
 
 # ── Prompt for OAuth Client ID (created manually in Cloud Console) ────────────
 
@@ -61,10 +63,20 @@ echo "  ✓ GCP_PROJECT_ID"
 gh secret set VITE_GOOGLE_CLIENT_ID --body "$VITE_GOOGLE_CLIENT_ID" --repo "$REPO"
 echo "  ✓ VITE_GOOGLE_CLIENT_ID"
 
+gh secret set VITE_API_BASE_URL --body "$VITE_API_BASE_URL" --repo "$REPO"
+echo "  ✓ VITE_API_BASE_URL"
+
+gh secret set VITE_API_KEY --body "$VITE_API_KEY" --repo "$REPO"
+echo "  ✓ VITE_API_KEY"
+
 # ── Write .env.local for local development ────────────────────────────────────
 
 ENV_FILE="$PROJECT_ROOT/.env.local"
-echo "VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID" > "$ENV_FILE"
+{
+  echo "VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID"
+  echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
+  echo "VITE_API_KEY=$VITE_API_KEY"
+} > "$ENV_FILE"
 echo ""
 echo "  ✓ Written $ENV_FILE for local development"
 

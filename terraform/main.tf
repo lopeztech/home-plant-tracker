@@ -1,6 +1,15 @@
 provider "google" {
-  project = var.project_id
-  region  = var.region
+  project               = var.project_id
+  region                = var.region
+  user_project_override = true
+  billing_project       = var.project_id
+}
+
+provider "google-beta" {
+  project               = var.project_id
+  region                = var.region
+  user_project_override = true
+  billing_project       = var.project_id
 }
 
 locals {
@@ -24,9 +33,20 @@ resource "google_project_service" "apis" {
     "iap.googleapis.com",
     "run.googleapis.com",
     "artifactregistry.googleapis.com",
+    "apigateway.googleapis.com",
+    "firestore.googleapis.com",
+    "cloudfunctions.googleapis.com",
+    "cloudbuild.googleapis.com",
+    "servicecontrol.googleapis.com",
+    "servicemanagement.googleapis.com",
+    "apikeys.googleapis.com",
   ])
 
   project            = var.project_id
   service            = each.value
   disable_on_destroy = false
+}
+
+data "google_project" "project" {
+  project_id = var.project_id
 }
