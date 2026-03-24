@@ -1,0 +1,43 @@
+output "load_balancer_ip" {
+  description = "Static IP address — create a DNS A record pointing your domain here"
+  value       = google_compute_global_address.app.address
+}
+
+output "app_url" {
+  description = "HTTPS URL for the application (active once DNS and cert are provisioned)"
+  value       = "https://${var.domain}"
+}
+
+output "bucket_name" {
+  description = "GCS bucket name — set as GCS_BUCKET_NAME in GitHub Secrets"
+  value       = google_storage_bucket.app.name
+}
+
+output "bucket_url" {
+  description = "GCS bucket URL"
+  value       = google_storage_bucket.app.url
+}
+
+output "workload_identity_provider" {
+  description = "WIF provider resource name — set as GCP_WORKLOAD_IDENTITY_PROVIDER in GitHub Secrets"
+  value       = google_iam_workload_identity_pool_provider.github.name
+}
+
+output "service_account_email" {
+  description = "Deployer service account email — set as GCP_SERVICE_ACCOUNT in GitHub Secrets"
+  value       = google_service_account.github_deployer.email
+}
+
+output "ssl_certificate_name" {
+  description = "Managed SSL certificate resource name"
+  value       = google_compute_managed_ssl_certificate.app.name
+}
+
+output "github_secrets" {
+  description = "Copy these values into your GitHub repository secrets"
+  value = {
+    GCP_WORKLOAD_IDENTITY_PROVIDER = google_iam_workload_identity_pool_provider.github.name
+    GCP_SERVICE_ACCOUNT            = google_service_account.github_deployer.email
+    GCS_BUCKET_NAME                = google_storage_bucket.app.name
+  }
+}

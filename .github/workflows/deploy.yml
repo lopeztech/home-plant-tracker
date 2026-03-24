@@ -37,18 +37,33 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Upload to GCS
+      # Upload hashed assets first with long-lived cache (1 year, immutable).
+      # Vite fingerprints these filenames so stale cache is never a problem.
+      - name: Upload assets (immutable cache)
         uses: google-github-actions/upload-cloud-storage@v2
         with:
-          path: dist
+          path: dist/assets
+          destination: ${{ secrets.GCS_BUCKET_NAME }}/assets
+          parent: false
+          headers: |-
+            cache-control: public, max-age=31536000, immutable
+
+      # Upload index.html last, with no-cache so browsers always fetch the
+      # latest entry point. This ensures new asset hashes are picked up.
+      - name: Upload index.html (no-cache)
+        uses: google-github-actions/upload-cloud-storage@v2
+        with:
+          path: dist/index.html
           destination: ${{ secrets.GCS_BUCKET_NAME }}
           parent: false
           headers: |-
             cache-control: no-cache, no-store, must-revalidate
-          glob: '**'
 
-      - name: Set cache headers for static assets
+      # Invalidate Cloud CDN so edge nodes fetch the new index.html immediately.
+      - name: Invalidate CDN cache
         run: |
-          gsutil -m setmeta \
-            -h "Cache-Control:public, max-age=31536000, immutable" \
-            "gs://${{ secrets.GCS_BUCKET_NAME }}/assets/**"
+          gcloud compute url-maps invalidate-cdn-cache \
+            plant-tracker-url-map-prod \
+            --path "/*" \
+            --global \
+            --async
