@@ -31,6 +31,11 @@ variable "github_repo" {
   default     = "home-plant-tracker"
 }
 
+variable "terraform_operator_email" {
+  description = "Email of the user or service account running terraform apply (e.g. you@example.com). Will be granted the IAM roles required to provision all resources."
+  type        = string
+}
+
 variable "cdn_default_ttl" {
   description = "Default CDN cache TTL in seconds for non-versioned assets"
   type        = number

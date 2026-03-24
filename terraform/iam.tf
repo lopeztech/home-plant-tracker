@@ -1,3 +1,30 @@
+# ── Terraform Operator IAM Roles ─────────────────────────────────────────────
+# Grants the account running `terraform apply` the minimum roles needed to
+# provision all resources in this configuration. The operator must already
+# exist in GCP (e.g. a user account or a CI service account) — these bindings
+# cannot bootstrap themselves from nothing, so run the initial apply as a
+# project Owner, then these roles take over for subsequent runs.
+
+locals {
+  operator_member = length(regexall("^serviceAccount:", var.terraform_operator_email)) > 0 ? var.terraform_operator_email : "user:${var.terraform_operator_email}"
+
+  operator_roles = [
+    "roles/serviceusage.serviceUsageAdmin", # Enable / disable GCP APIs
+    "roles/storage.admin",                  # Create and manage GCS buckets
+    "roles/compute.admin",                  # Load balancer, CDN, SSL certs, forwarding rules
+    "roles/iam.serviceAccountAdmin",        # Create and manage service accounts
+    "roles/iam.workloadIdentityPoolAdmin",  # Create WIF pools and providers
+  ]
+}
+
+resource "google_project_iam_member" "terraform_operator" {
+  for_each = toset(local.operator_roles)
+
+  project = var.project_id
+  role    = each.value
+  member  = local.operator_member
+}
+
 # ── Service Account — GitHub Actions Deployer ────────────────────────────────
 # Least-privilege account used only to sync the dist/ build to the GCS bucket
 # and invalidate Cloud CDN cache after each deployment.
