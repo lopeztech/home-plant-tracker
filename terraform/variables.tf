@@ -47,3 +47,9 @@ variable "cdn_max_ttl" {
   type        = number
   default     = 86400 # 24 hours
 }
+
+variable "iap_allowed_users" {
+  description = "List of Google account emails permitted to access the app via IAP"
+  type        = list(string)
+  default     = []
+}

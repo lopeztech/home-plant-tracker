@@ -27,13 +27,18 @@ resource "google_compute_managed_ssl_certificate" "app" {
   depends_on = [google_project_service.apis]
 }
 
-# ── Backend Bucket (GCS + Cloud CDN) ─────────────────────────────────────────
+# ── Backend Service (Cloud Run + IAP + Cloud CDN) ─────────────────────────────
 
-resource "google_compute_backend_bucket" "app" {
-  name        = "${local.app_name}-backend-${var.environment}"
-  description = "Plant Tracker static assets served from GCS via Cloud CDN"
-  bucket_name = google_storage_bucket.app.name
-  enable_cdn  = true
+resource "google_compute_backend_service" "app" {
+  name                  = "${local.app_name}-backend-${var.environment}"
+  description           = "Plant Tracker — Cloud Run backend with IAP"
+  protocol              = "HTTPS"
+  load_balancing_scheme = "EXTERNAL"
+  enable_cdn            = true
+
+  backend {
+    group = google_compute_region_network_endpoint_group.app.id
+  }
 
   cdn_policy {
     cache_mode        = "CACHE_ALL_STATIC"
@@ -42,24 +47,25 @@ resource "google_compute_backend_bucket" "app" {
     client_ttl        = var.cdn_default_ttl
     negative_caching  = true
     serve_while_stale = 86400
-
-    # Cache versioned assets (JS/CSS with content hashes) for a full year
-    bypass_cache_on_request_headers {
-      header_name = "Cache-Control"
-    }
   }
 
-  compression_mode = "AUTOMATIC"
+  iap {
+    oauth2_client_id     = google_iap_client.app.client_id
+    oauth2_client_secret = google_iap_client.app.secret
+  }
+
+  log_config {
+    enable = true
+  }
 }
 
 # ── URL Map — HTTPS ───────────────────────────────────────────────────────────
-# Routes all requests to the GCS backend bucket. The SPA's index.html handles
-# client-side routing; the bucket's not_found_page ensures deep links work.
+# Routes all requests to the Cloud Run backend service.
 
 resource "google_compute_url_map" "app_https" {
   name            = "${local.app_name}-url-map-${var.environment}"
   description     = "Plant Tracker HTTPS routing"
-  default_service = google_compute_backend_bucket.app.id
+  default_service = google_compute_backend_service.app.id
 }
 
 # ── Target HTTPS Proxy ────────────────────────────────────────────────────────
@@ -83,7 +89,7 @@ resource "google_compute_global_forwarding_rule" "https" {
 
 # ── HTTP → HTTPS Redirect ─────────────────────────────────────────────────────
 # Any HTTP request is redirected to HTTPS with a 301. No traffic touches the
-# backend bucket over plain HTTP.
+# backend service over plain HTTP.
 
 resource "google_compute_url_map" "http_redirect" {
   name = "${local.app_name}-http-redirect-${var.environment}"

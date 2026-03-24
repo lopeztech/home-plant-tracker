@@ -21,6 +21,9 @@ resource "google_project_service" "apis" {
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
     "sts.googleapis.com",
+    "iap.googleapis.com",
+    "run.googleapis.com",
+    "artifactregistry.googleapis.com",
   ])
 
   project            = var.project_id

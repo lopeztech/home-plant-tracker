@@ -41,10 +41,3 @@ resource "google_storage_bucket" "app" {
   depends_on = [google_project_service.apis]
 }
 
-# Allow the load balancer (and Cloud CDN) to read objects.
-# allUsers objectViewer is required for the GCS backend bucket integration.
-resource "google_storage_bucket_iam_member" "public_read" {
-  bucket = google_storage_bucket.app.name
-  role   = "roles/storage.objectViewer"
-  member = "allUsers"
-}

@@ -1,9 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { GoogleOAuthProvider } from '@react-oauth/google'
+import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import Header from './components/Header.jsx'
 import FloorplanView from './components/FloorplanView.jsx'
 import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
+import LoginPage from './pages/LoginPage.jsx'
 
 const STORAGE_KEYS = {
   PLANTS: 'plantTracker_plants',
@@ -29,7 +32,9 @@ function saveToStorage(key, value) {
   }
 }
 
-export default function App() {
+function AppContent() {
+  const { isAuthenticated, isLoading } = useAuth()
+
   const [plants, setPlants] = useState(() => loadFromStorage(STORAGE_KEYS.PLANTS, []))
   const [floorplanImage, setFloorplanImage] = useState(() => loadFromStorage(STORAGE_KEYS.FLOORPLAN, null))
   const [apiKey, setApiKey] = useState(() => loadFromStorage(STORAGE_KEYS.API_KEY, null))
@@ -111,6 +116,18 @@ export default function App() {
     setShowSettingsModal(false)
   }, [])
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-950">
+        <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage />
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-950">
       <Header
@@ -156,5 +173,17 @@ export default function App() {
         />
       )}
     </div>
+  )
+}
+
+const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'placeholder'
+
+export default function App() {
+  return (
+    <GoogleOAuthProvider clientId={clientId}>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </GoogleOAuthProvider>
   )
 }

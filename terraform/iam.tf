@@ -1,3 +1,7 @@
+data "google_compute_default_service_account" "default" {
+  project = var.project_id
+}
+
 # ── Terraform Operator IAM Roles ─────────────────────────────────────────────
 # Grants the account running `terraform apply` the minimum roles needed to
 # provision all resources in this configuration. The operator must already
@@ -26,13 +30,13 @@ resource "google_project_iam_member" "terraform_operator" {
 }
 
 # ── Service Account — GitHub Actions Deployer ────────────────────────────────
-# Least-privilege account used only to sync the dist/ build to the GCS bucket
-# and invalidate Cloud CDN cache after each deployment.
+# Least-privilege account used to build and push Docker images, deploy to
+# Cloud Run, and invalidate Cloud CDN cache after each deployment.
 
 resource "google_service_account" "github_deployer" {
   account_id   = "${local.app_name}-deployer"
   display_name = "Plant Tracker GitHub Actions Deployer"
-  description  = "Used by GitHub Actions to deploy the React app to GCS"
+  description  = "Used by GitHub Actions to deploy the React app via Cloud Run"
   project      = var.project_id
 
   depends_on = [google_project_service.apis]
@@ -50,6 +54,20 @@ resource "google_project_iam_member" "deployer_cdn_invalidator" {
   project = var.project_id
   role    = "roles/compute.networkAdmin"
   member  = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+# Deploy new revisions to Cloud Run
+resource "google_project_iam_member" "deployer_run_developer" {
+  project = var.project_id
+  role    = "roles/run.developer"
+  member  = "serviceAccount:${google_service_account.github_deployer.email}"
+}
+
+# Act as Cloud Run service agent (required for deployments)
+resource "google_service_account_iam_member" "deployer_act_as_run_sa" {
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${data.google_compute_default_service_account.default.email}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.github_deployer.email}"
 }
 
 # ── Workload Identity Federation ──────────────────────────────────────────────
