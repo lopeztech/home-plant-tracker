@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { Upload, Loader2, Sparkles, AlertCircle, X, Camera } from 'lucide-react'
+import { Loader2, Sparkles, AlertCircle, X, Camera } from 'lucide-react'
+import { analyseApi } from '../api/plants.js'
 
 const HEALTH_COLORS = {
   Excellent: { bg: 'bg-emerald-900', text: 'text-emerald-300', border: 'border-emerald-700' },
@@ -25,27 +26,7 @@ function Badge({ label, value, colorMap }) {
   )
 }
 
-// Reads a File or fetches a URL and returns a base64 data URI for the Claude API
-async function toBase64(fileOrUrl) {
-  if (fileOrUrl instanceof File) {
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target.result)
-      reader.readAsDataURL(fileOrUrl)
-    })
-  }
-  // GCS URL — fetch the bytes then convert
-  const res = await fetch(fileOrUrl)
-  const blob = await res.blob()
-  return new Promise((resolve) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target.result)
-    reader.readAsDataURL(blob)
-  })
-}
-
-export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete, onImageChange }) {
-  // previewSrc: object URL (blob:) for newly selected files, or GCS URL for existing images
+export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImageChange }) {
   const [previewSrc, setPreviewSrc] = useState(initialImage || null)
   const [imageFile, setImageFile] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
@@ -55,12 +36,27 @@ export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete
   const fileInputRef = useRef(null)
   const objectUrlRef = useRef(null)
 
-  // Revoke object URLs when they're replaced or the component unmounts
   useEffect(() => {
     return () => {
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
     }
   }, [])
+
+  const runAnalysis = useCallback(async (file) => {
+    setIsAnalysing(true)
+    setError(null)
+    setAnalysisResult(null)
+    try {
+      const result = await analyseApi.analyse(file)
+      if (!result.health || !result.maturity) throw new Error('Incomplete response from AI')
+      setAnalysisResult(result)
+      onAnalysisComplete?.(result)
+    } catch (err) {
+      setError(err.message || 'Analysis failed. Please try again.')
+    } finally {
+      setIsAnalysing(false)
+    }
+  }, [onAnalysisComplete])
 
   const loadImage = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) {
@@ -75,7 +71,8 @@ export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete
     setPreviewSrc(url)
     setImageFile(file)
     onImageChange?.(file)
-  }, [onImageChange])
+    runAnalysis(file)
+  }, [onImageChange, runAnalysis])
 
   const handleFileInput = useCallback((e) => {
     const file = e.target.files?.[0]
@@ -99,75 +96,6 @@ export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete
     setIsDragging(false)
   }, [])
 
-  const handleAnalyse = useCallback(async () => {
-    if (!previewSrc || !apiKey) return
-    setIsAnalysing(true)
-    setError(null)
-    setAnalysisResult(null)
-
-    try {
-      const base64DataUri = await toBase64(imageFile || previewSrc)
-      const [header, data] = base64DataUri.split(',')
-      const mimeMatch = header.match(/data:([^;]+);/)
-      const mediaType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
-
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 512,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'image',
-                  source: { type: 'base64', media_type: mediaType, data },
-                },
-                {
-                  type: 'text',
-                  text: `Analyse this plant image. Provide:
-1. Health status: Excellent/Good/Fair/Poor with brief reason
-2. Maturity: Seedling/Young/Mature/Established
-3. Top 3 care recommendations
-
-Respond ONLY with valid JSON in this exact format:
-{"health": "Good", "healthReason": "Brief reason here", "maturity": "Mature", "recommendations": ["Recommendation 1", "Recommendation 2", "Recommendation 3"]}`,
-                },
-              ],
-            },
-          ],
-        }),
-      })
-
-      if (!response.ok) {
-        const errData = await response.json().catch(() => ({}))
-        throw new Error(errData?.error?.message || `API error: ${response.status}`)
-      }
-
-      const result = await response.json()
-      const text = result.content?.[0]?.text || ''
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      if (!jsonMatch) throw new Error('Could not parse AI response')
-
-      const parsed = JSON.parse(jsonMatch[0])
-      if (!parsed.health || !parsed.maturity) throw new Error('Incomplete response from AI')
-
-      setAnalysisResult(parsed)
-      onAnalysisComplete?.(parsed)
-    } catch (err) {
-      setError(err.message || 'Analysis failed. Please try again.')
-    } finally {
-      setIsAnalysing(false)
-    }
-  }, [previewSrc, imageFile, apiKey, onAnalysisComplete])
-
   const handleRemoveImage = useCallback(() => {
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current)
@@ -179,6 +107,10 @@ Respond ONLY with valid JSON in this exact format:
     setError(null)
     onImageChange?.(null)
   }, [onImageChange])
+
+  const handleReanalyse = useCallback(() => {
+    if (imageFile) runAnalysis(imageFile)
+  }, [imageFile, runAnalysis])
 
   return (
     <div className="space-y-3">
@@ -203,57 +135,34 @@ Respond ONLY with valid JSON in this exact format:
           </div>
           <div className="text-center">
             <p className="text-sm text-gray-300">Drop a photo here</p>
-            <p className="text-xs text-gray-500 mt-0.5">or click to browse</p>
+            <p className="text-xs text-gray-500 mt-0.5">or click to browse — AI will analyse automatically</p>
           </div>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            capture="environment"
             className="hidden"
             onChange={handleFileInput}
           />
         </div>
       ) : (
-        <div className="space-y-3">
-          <div className="relative rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
-            <img
-              src={previewSrc}
-              alt="Plant"
-              className="w-full h-40 object-contain"
-            />
-            <button
-              onClick={handleRemoveImage}
-              className="absolute top-2 right-2 w-6 h-6 rounded-full bg-gray-900/80 hover:bg-gray-900 flex items-center justify-center border border-gray-700 transition-colors"
-              title="Remove image"
-            >
-              <X size={12} className="text-gray-300" />
-            </button>
-          </div>
-
-          {!analysisResult && (
-            <button
-              onClick={handleAnalyse}
-              disabled={isAnalysing || !apiKey}
-              className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                isAnalysing || !apiKey
-                  ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                  : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer'
-              }`}
-              title={!apiKey ? 'Set your Anthropic API key in Settings first' : ''}
-            >
-              {isAnalysing ? (
-                <>
-                  <Loader2 size={15} className="animate-spin" />
-                  Analysing...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={15} />
-                  Analyse with AI
-                  {!apiKey && <span className="text-xs">(API key required)</span>}
-                </>
-              )}
-            </button>
+        <div className="relative rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
+          <img src={previewSrc} alt="Plant" className="w-full h-40 object-contain" />
+          <button
+            onClick={handleRemoveImage}
+            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-gray-900/80 hover:bg-gray-900 flex items-center justify-center border border-gray-700 transition-colors"
+            title="Remove image"
+          >
+            <X size={12} className="text-gray-300" />
+          </button>
+          {isAnalysing && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-900/90 border border-gray-700">
+                <Loader2 size={14} className="animate-spin text-emerald-400" />
+                <span className="text-xs text-gray-300">Analysing with Gemini...</span>
+              </div>
+            </div>
           )}
         </div>
       )}
@@ -261,20 +170,42 @@ Respond ONLY with valid JSON in this exact format:
       {error && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-red-950 border border-red-800">
           <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-red-300">{error}</p>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-red-300">{error}</p>
+            {imageFile && (
+              <button onClick={handleReanalyse} className="text-xs text-red-400 hover:text-red-300 underline mt-1">
+                Retry analysis
+              </button>
+            )}
+          </div>
         </div>
       )}
 
       {analysisResult && (
         <div className="space-y-3 p-3 rounded-xl bg-gray-800 border border-gray-700">
-          <div className="flex items-center gap-2">
-            <Sparkles size={13} className="text-emerald-400" />
-            <span className="text-xs font-medium text-emerald-400 uppercase tracking-wider">AI Analysis</span>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles size={13} className="text-emerald-400" />
+              <span className="text-xs font-medium text-emerald-400 uppercase tracking-wider">Gemini Analysis</span>
+            </div>
+            <button onClick={handleReanalyse} className="text-xs text-gray-500 hover:text-gray-400 transition-colors">
+              Re-analyse
+            </button>
           </div>
+
+          {analysisResult.species && (
+            <p className="text-xs text-gray-300 font-medium">{analysisResult.species}</p>
+          )}
 
           <div className="flex flex-wrap gap-2">
             <Badge label="Health" value={analysisResult.health} colorMap={HEALTH_COLORS} />
             <Badge label="Maturity" value={analysisResult.maturity} colorMap={MATURITY_COLORS} />
+            {analysisResult.frequencyDays && (
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium bg-gray-700 text-gray-300 border-gray-600">
+                <span className="text-gray-500">Water every:</span>
+                <span>{analysisResult.frequencyDays}d</span>
+              </div>
+            )}
           </div>
 
           {analysisResult.healthReason && (
@@ -294,13 +225,6 @@ Respond ONLY with valid JSON in this exact format:
               </ul>
             </div>
           )}
-
-          <button
-            onClick={() => { setAnalysisResult(null); setError(null) }}
-            className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
-          >
-            Re-analyse
-          </button>
         </div>
       )}
     </div>

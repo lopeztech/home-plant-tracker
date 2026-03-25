@@ -1,8 +1,8 @@
 import React from 'react'
-import { Settings, Plus, Leaf, LogOut } from 'lucide-react'
+import { Plus, Leaf, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
-export default function Header({ onAddPlant, onOpenSettings, apiKeySet }) {
+export default function Header({ onAddPlant }) {
   const { user, logout } = useAuth()
 
   return (
@@ -18,18 +18,6 @@ export default function Header({ onAddPlant, onOpenSettings, apiKeySet }) {
       </div>
 
       <div className="flex items-center gap-2">
-        <button
-          onClick={onOpenSettings}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
-          title="Settings & API Key"
-        >
-          <Settings size={15} />
-          <span className="hidden sm:inline">Settings</span>
-          {!apiKeySet && (
-            <span className="w-2 h-2 rounded-full bg-amber-400" title="API key not set" />
-          )}
-        </button>
-
         <button
           onClick={onAddPlant}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium"

@@ -5,7 +5,6 @@ import Header from './components/Header.jsx'
 import FloorplanView from './components/FloorplanView.jsx'
 import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
-import SettingsModal from './components/SettingsModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import { plantsApi, imagesApi, floorsApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
@@ -15,28 +14,6 @@ const DEFAULT_FLOORS = [
   { id: 'garden', name: 'Garden', order: -1, type: 'outdoor', imageUrl: null },
 ]
 
-const STORAGE_KEYS = {
-  API_KEY: 'plantTracker_apiKey',
-}
-
-function loadFromStorage(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw === null) return fallback
-    return JSON.parse(raw)
-  } catch {
-    return fallback
-  }
-}
-
-function saveToStorage(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch (e) {
-    console.error('Failed to save to localStorage:', e)
-  }
-}
-
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth()
   const { weather, locationDenied } = useWeather()
@@ -44,13 +21,11 @@ function AppContent() {
   const [plants, setPlants] = useState([])
   const [plantsLoading, setPlantsLoading] = useState(false)
   const [plantsError, setPlantsError] = useState(null)
-  const [apiKey, setApiKey] = useState(() => loadFromStorage(STORAGE_KEYS.API_KEY, null))
 
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
   const [activeFloorId, setActiveFloorId] = useState('ground')
 
   const [showPlantModal, setShowPlantModal] = useState(false)
-  const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [editingPlant, setEditingPlant] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
 
@@ -68,17 +43,12 @@ function AppContent() {
       .then(({ floors: loaded }) => {
         if (loaded?.length) {
           setFloors(loaded)
-          // Default to first interior floor
           const first = loaded.find(f => f.type === 'interior') ?? loaded[0]
           setActiveFloorId(first.id)
         }
       })
       .catch(() => {}) // fall back to DEFAULT_FLOORS
   }, [isAuthenticated])
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.API_KEY, apiKey)
-  }, [apiKey])
 
   const handleFloorplanClick = useCallback((x, y) => {
     setPendingPosition({ x, y })
@@ -155,21 +125,15 @@ function AppContent() {
   const handleFloorplanUpload = useCallback(async (file) => {
     try {
       const rawUrl = await imagesApi.upload(file, 'floorplans')
-      // Update the active floor's imageUrl (stored as raw GCS URL)
       const updatedFloors = floors.map(f =>
         f.id === activeFloorId ? { ...f, imageUrl: rawUrl } : f
       )
       const { floors: saved } = await floorsApi.save(updatedFloors)
-      setFloors(saved) // API returns signed imageUrls
+      setFloors(saved)
     } catch (err) {
       alert(`Floorplan upload failed: ${err.message}`)
     }
   }, [floors, activeFloorId])
-
-  const handleSaveApiKey = useCallback((key) => {
-    setApiKey(key)
-    setShowSettingsModal(false)
-  }, [])
 
   if (isLoading) {
     return (
@@ -185,11 +149,7 @@ function AppContent() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-950">
-      <Header
-        onAddPlant={handleAddPlant}
-        onOpenSettings={() => setShowSettingsModal(true)}
-        apiKeySet={!!apiKey}
-      />
+      <Header onAddPlant={handleAddPlant} />
 
       {plantsError && (
         <div className="bg-red-900/50 border border-red-700 text-red-300 text-sm px-4 py-2 text-center">
@@ -223,24 +183,11 @@ function AppContent() {
         <PlantModal
           plant={editingPlant}
           position={pendingPosition}
-          apiKey={apiKey}
           floors={floors}
           activeFloorId={activeFloorId}
           onSave={handleSavePlant}
           onDelete={handleDeletePlant}
           onClose={handleCloseModal}
-          onOpenSettings={() => {
-            handleCloseModal()
-            setShowSettingsModal(true)
-          }}
-        />
-      )}
-
-      {showSettingsModal && (
-        <SettingsModal
-          currentApiKey={apiKey}
-          onSave={handleSaveApiKey}
-          onClose={() => setShowSettingsModal(false)}
         />
       )}
     </div>

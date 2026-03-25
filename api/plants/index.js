@@ -3,6 +3,7 @@
 const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
+const { VertexAI } = require('@google-cloud/vertexai');
 const express = require('express');
 const cors = require('cors');
 
@@ -47,10 +48,60 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
+const vertexAI = new VertexAI({ project: process.env.PROJECT_ID, location: 'us-central1' });
+const gemini = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+const ANALYSE_PROMPT = `Analyse this plant photo and respond ONLY with valid JSON matching this exact schema:
+{
+  "species": "Common Name (Scientific name) or null if unidentifiable",
+  "frequencyDays": 7,
+  "health": "Good",
+  "healthReason": "One sentence reason",
+  "maturity": "Mature",
+  "recommendations": ["tip 1", "tip 2", "tip 3"]
+}
+Rules:
+- health must be exactly one of: Excellent, Good, Fair, Poor
+- maturity must be exactly one of: Seedling, Young, Mature, Established
+- frequencyDays is an integer representing days between waterings
+- recommendations must have exactly 3 items
+- Respond with JSON only, no markdown or extra text`;
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// ── Plant photo analysis via Gemini (Vertex AI) ───────────────────────────────
+
+app.post('/analyse', async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64 || !mimeType) {
+      return res.status(400).json({ error: 'imageBase64 and mimeType are required' });
+    }
+
+    const result = await gemini.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType, data: imageBase64 } },
+          { text: ANALYSE_PROMPT },
+        ],
+      }],
+      generationConfig: { maxOutputTokens: 512, temperature: 0.1 },
+    });
+
+    const text = result.response.candidates[0].content.parts[0].text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.status(500).json({ error: 'Could not parse Gemini response' });
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    res.status(200).json(parsed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Image upload — returns a signed URL so the browser can PUT directly to GCS

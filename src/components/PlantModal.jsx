@@ -39,7 +39,7 @@ function InputClass(extra = '') {
   return `w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors ${extra}`
 }
 
-export default function PlantModal({ plant, position, apiKey, floors, activeFloorId, onSave, onDelete, onClose, onOpenSettings }) {
+export default function PlantModal({ plant, position, floors, activeFloorId, onSave, onDelete, onClose }) {
   const isEditing = !!plant
 
   const [form, setForm] = useState({
@@ -88,6 +88,8 @@ export default function PlantModal({ plant, position, apiKey, floors, activeFloo
   const handleAnalysisComplete = useCallback((result) => {
     setForm(prev => ({
       ...prev,
+      ...(result.species ? { species: result.species } : {}),
+      ...(result.frequencyDays ? { frequencyDays: Math.min(30, Math.max(1, Number(result.frequencyDays))) } : {}),
       health: result.health,
       healthReason: result.healthReason,
       maturity: result.maturity,
@@ -316,21 +318,10 @@ export default function PlantModal({ plant, position, apiKey, floors, activeFloo
 
             {/* Image Analyser */}
             <ImageAnalyser
-              apiKey={apiKey}
               initialImage={form.imageUrl}
               onAnalysisComplete={handleAnalysisComplete}
               onImageChange={handleImageChange}
             />
-
-            {!apiKey && (
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="w-full text-xs text-center text-emerald-500 hover:text-emerald-400 transition-colors py-1"
-              >
-                Set API key in Settings to enable AI analysis →
-              </button>
-            )}
           </div>
         </form>
 

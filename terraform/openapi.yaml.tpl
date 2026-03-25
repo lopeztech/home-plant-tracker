@@ -135,6 +135,50 @@ paths:
         "204":
           description: CORS preflight
 
+  /analyse:
+    post:
+      operationId: analysePlant
+      summary: Analyse a plant photo with Gemini
+      security:
+        - api_key: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              imageBase64:
+                type: string
+              mimeType:
+                type: string
+      responses:
+        "200":
+          description: Analysis result
+          schema:
+            type: object
+            properties:
+              species:
+                type: string
+              frequencyDays:
+                type: integer
+              health:
+                type: string
+              healthReason:
+                type: string
+              maturity:
+                type: string
+              recommendations:
+                type: array
+                items:
+                  type: string
+    options:
+      operationId: corsAnalyse
+      summary: CORS preflight
+      responses:
+        "204":
+          description: CORS preflight
+
   /images/upload-url:
     post:
       operationId: getImageUploadUrl

@@ -48,6 +48,12 @@ resource "google_project_iam_member" "plants_function_firestore" {
   member  = "serviceAccount:${google_service_account.plants_function.email}"
 }
 
+resource "google_project_iam_member" "plants_function_vertexai" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.plants_function.email}"
+}
+
 # ── Cloud Function (2nd gen) ──────────────────────────────────────────────────
 
 resource "google_cloudfunctions2_function" "plants" {
@@ -71,8 +77,8 @@ resource "google_cloudfunctions2_function" "plants" {
     service_account_email          = google_service_account.plants_function.email
     max_instance_count             = 5
     min_instance_count             = 0
-    available_memory               = "256M"
-    timeout_seconds                = 60
+    available_memory               = "512M"
+    timeout_seconds                = 120
     ingress_settings               = "ALLOW_ALL"
     all_traffic_on_latest_revision = true
 
