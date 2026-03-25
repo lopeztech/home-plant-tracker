@@ -140,8 +140,8 @@ function AppContent() {
   const handleFloorplanUpload = useCallback(async (file) => {
     try {
       const url = await imagesApi.upload(file, 'floorplans')
-      setFloorplanImage(url)
-      await plantsApi.saveFloorplan(url)
+      const { imageUrl } = await plantsApi.saveFloorplan(url)
+      setFloorplanImage(imageUrl)
     } catch (err) {
       alert(`Floorplan upload failed: ${err.message}`)
     }

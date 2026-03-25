@@ -94,7 +94,8 @@ app.put('/config/floorplan', async (req, res) => {
       { imageUrl, updatedAt: new Date().toISOString() },
       { merge: true }
     );
-    res.status(200).json({ imageUrl });
+    const signedUrl = await signReadUrl(imageUrl);
+    res.status(200).json({ imageUrl: signedUrl });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
