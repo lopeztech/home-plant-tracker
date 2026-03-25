@@ -233,6 +233,7 @@ function AppContent() {
         ].join(' ')}>
           <PlantSidebar
             plants={plants}
+            activeFloorId={activeFloorId}
             onPlantClick={handleMarkerClick}
             onAddPlant={handleAddPlant}
             onWater={handleWaterPlant}

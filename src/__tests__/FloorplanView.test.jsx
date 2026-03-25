@@ -89,13 +89,10 @@ describe('FloorplanView', () => {
     expect(screen.getByTestId('marker-p1')).toBeInTheDocument()
   })
 
-  it('inactive floor layers remain in the DOM with pointer-events disabled (CSS transition design)', () => {
+  it('does not render markers for plants on inactive floors', () => {
     renderView({ activeFloorId: 'ground' })
-    // marker-p2 is on the garden floor — still in DOM but its parent layer has pointerEvents: none
-    const marker = screen.getByTestId('marker-p2')
-    expect(marker).toBeInTheDocument()
-    const layer = marker.closest('.floor-layer')
-    expect(layer).toHaveStyle({ pointerEvents: 'none' })
+    // marker-p2 is on the garden floor — not rendered when ground is active
+    expect(screen.queryByTestId('marker-p2')).not.toBeInTheDocument()
   })
 
   it('renders the floor nav', () => {

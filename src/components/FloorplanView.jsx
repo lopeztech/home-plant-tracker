@@ -13,12 +13,6 @@ function svgForFloor(floor) {
   return GROUND_FLOOR_SVG
 }
 
-function floorOffset(floor, activeOrder) {
-  if (floor.order === activeOrder) return 'translateY(0%)'
-  if (floor.order > activeOrder) return 'translateY(-100%)'
-  return 'translateY(100%)'
-}
-
 export default function FloorplanView({
   plants,
   onFloorplanUpload,
@@ -38,7 +32,6 @@ export default function FloorplanView({
 
   const visibleFloors = floors.filter(f => !f.hidden)
   const activeFloor = visibleFloors.find(f => f.id === activeFloorId) ?? visibleFloors[0]
-  const activeOrder = activeFloor ? activeFloor.order : 0
 
   const sky = weather && weather.current
     ? (weather.current.isDay ? weather.current.condition.sky : 'night')
@@ -157,29 +150,16 @@ export default function FloorplanView({
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
           >
-            {/* All floor layers — CSS translateY stacks them like building floors */}
-            {visibleFloors.map(floor => {
-              const plantsOnFloor = plants.filter(p => (p.floor || 'ground') === floor.id)
-              const isActive = floor.id === activeFloorId
+            {/* Active floor — rendered directly, no stacking */}
+            {activeFloor && (() => {
+              const plantsOnFloor = plants.filter(p => (p.floor || 'ground') === activeFloor.id)
               return (
-                <div
-                  key={floor.id}
-                  className="floor-layer"
-                  style={{
-                    transform: floorOffset(floor, activeOrder),
-                    pointerEvents: isActive ? 'auto' : 'none',
-                  }}
-                >
-                  {/* Background: generated SVG from room data or default */}
+                <div className="floor-layer">
                   <div
                     style={{ width: '100%', height: '100%' }}
-                    dangerouslySetInnerHTML={{ __html: svgForFloor(floor) }}
+                    dangerouslySetInnerHTML={{ __html: svgForFloor(activeFloor) }}
                   />
-
-                  {/* Weather overlay on active floor only */}
-                  {isActive && <WeatherSky weather={weather} />}
-
-                  {/* Plant markers for this floor */}
+                  <WeatherSky weather={weather} />
                   {plantsOnFloor.map(plant => (
                     <PlantMarker
                       key={plant.id}
@@ -191,7 +171,7 @@ export default function FloorplanView({
                   ))}
                 </div>
               )
-            })}
+            })()}
 
             {/* Full-canvas analysis loading overlay */}
             {isAnalysingFloorplan && (

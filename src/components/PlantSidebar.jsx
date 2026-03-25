@@ -196,21 +196,27 @@ const LEGEND_ITEMS = [
   { color: '#22c55e', label: 'All good' },
 ]
 
-export default function PlantSidebar({ plants, onPlantClick, onAddPlant, onWater, weather, locationDenied }) {
+export default function PlantSidebar({ plants, activeFloorId, onPlantClick, onAddPlant, onWater, weather, locationDenied }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
 
+  // Filter to only plants on the active floor (if a floor is selected)
+  const floorPlants = useMemo(() => {
+    if (!activeFloorId) return plants
+    return plants.filter(p => (p.floor || 'ground') === activeFloorId)
+  }, [plants, activeFloorId])
+
   const sortedPlants = useMemo(() => {
-    return [...plants].sort((a, b) => {
+    return [...floorPlants].sort((a, b) => {
       const daysA = getDaysUntilWatering(a)
       const daysB = getDaysUntilWatering(b)
       return daysA - daysB
     })
-  }, [plants])
+  }, [floorPlants])
 
   const rooms = useMemo(
-    () => [...new Set(plants.map(p => p.room).filter(Boolean))].sort(),
-    [plants]
+    () => [...new Set(floorPlants.map(p => p.room).filter(Boolean))].sort(),
+    [floorPlants]
   )
 
   const filteredPlants = useMemo(() => {
@@ -225,6 +231,7 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, onWater
     return result
   }, [sortedPlants, roomFilter, searchTerm])
 
+  // Weather alert uses all plants (outdoor alert applies regardless of active floor)
   const outdoorPlantCount = useMemo(
     () => plants.filter(p => OUTDOOR_ROOMS.has(p.room)).length,
     [plants]
@@ -255,7 +262,7 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, onWater
           <h2 className="text-sm font-semibold text-white">Plant List</h2>
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">
-              {isFiltered ? `${filteredPlants.length} / ${plants.length}` : plants.length} plants
+              {isFiltered ? `${filteredPlants.length} / ${floorPlants.length}` : floorPlants.length} plants
             </span>
             <button
               onClick={onAddPlant}
@@ -267,7 +274,7 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, onWater
           </div>
         </div>
         {/* Summary pills */}
-        {plants.length > 0 && (
+        {floorPlants.length > 0 && (
           <div className="flex gap-1.5 mt-2 flex-wrap">
             {counts.overdue > 0 && (
               <span className="text-xs px-2 py-0.5 rounded-full bg-red-950 text-red-400 border border-red-900">
@@ -294,7 +301,7 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, onWater
       </div>
 
       {/* Search + room filter */}
-      {plants.length > 0 && (
+      {floorPlants.length > 0 && (
         <div className="px-3 pt-3 pb-2 border-b border-gray-800 flex-shrink-0 space-y-2">
           <div className="relative">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
@@ -337,6 +344,14 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, onWater
                 </div>
                 <p className="text-sm text-gray-500 font-medium">No plants yet</p>
                 <p className="text-xs text-gray-600 mt-1">Click on the floorplan to add your first plant</p>
+              </>
+            ) : floorPlants.length === 0 ? (
+              <>
+                <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
+                  <Droplets size={20} className="text-gray-600" />
+                </div>
+                <p className="text-sm text-gray-500 font-medium">No plants on this floor</p>
+                <p className="text-xs text-gray-600 mt-1">Click on the floorplan to add a plant here</p>
               </>
             ) : (
               <>
