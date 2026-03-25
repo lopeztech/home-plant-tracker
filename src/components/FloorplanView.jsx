@@ -28,7 +28,6 @@ export default function FloorplanView({
   floors,
   activeFloorId,
   onFloorChange,
-  onAddFloor,
 }) {
   const containerRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -96,7 +95,7 @@ export default function FloorplanView({
           className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
         >
           <Upload size={12} />
-          Upload Reference
+          Upload Floorplan
         </button>
         <input
           ref={fileInputRef}
@@ -113,7 +112,6 @@ export default function FloorplanView({
           floors={floors}
           activeFloorId={activeFloorId}
           onChange={onFloorChange}
-          onAddFloor={onAddFloor}
         />
 
         <div className="flex-1 overflow-hidden p-3">
@@ -186,7 +184,7 @@ export default function FloorplanView({
                     >
                       <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-900/80 border border-gray-700 text-xs text-gray-500">
                         <Upload size={11} />
-                        Drop an image or click Upload Reference
+                        Drop an image or click Upload Floorplan
                       </div>
                     </div>
                   )}

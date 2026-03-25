@@ -166,20 +166,6 @@ function AppContent() {
     }
   }, [floors, activeFloorId])
 
-  const handleAddFloor = useCallback(async (name) => {
-    const id = name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now()
-    const maxOrder = Math.max(...floors.map(f => f.order))
-    const newFloor = { id, name, order: maxOrder + 1, type: 'interior', imageUrl: null }
-    const updatedFloors = [...floors, newFloor]
-    setFloors(updatedFloors)
-    setActiveFloorId(id)
-    try {
-      await floorsApi.save(updatedFloors)
-    } catch (err) {
-      console.error('Failed to save floors:', err)
-    }
-  }, [floors])
-
   const handleSaveApiKey = useCallback((key) => {
     setApiKey(key)
     setShowSettingsModal(false)
@@ -223,7 +209,6 @@ function AppContent() {
           floors={floors}
           activeFloorId={activeFloorId}
           onFloorChange={setActiveFloorId}
-          onAddFloor={handleAddFloor}
         />
         <PlantSidebar
           plants={plants}
