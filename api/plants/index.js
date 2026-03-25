@@ -56,8 +56,10 @@ function extractJson(text) {
   const raw = fenced ? fenced[1] : text;
   const match = raw.match(/\{[\s\S]*\}/);
   if (!match) return null;
-  // Strip trailing commas before ] or } which LLMs commonly emit
-  return match[0].replace(/,(\s*[}\]])/g, '$1');
+  return match[0]
+    .replace(/\/\/[^\n]*/g, '')           // strip // line comments
+    .replace(/\/\*[\s\S]*?\*\//g, '')     // strip /* block comments */
+    .replace(/,(\s*[}\]])/g, '$1');       // strip trailing commas
 }
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
@@ -125,14 +127,15 @@ app.post('/analyse-floorplan', async (req, res) => {
           { text: ANALYSE_FLOORPLAN_PROMPT },
         ],
       }],
-      generationConfig: { maxOutputTokens: 2048, temperature: 0.1 },
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
     });
 
     const text = result.response.text();
-    console.log('Gemini floorplan response:', text.slice(0, 2000));
     const jsonStr = extractJson(text);
-    if (!jsonStr) return res.status(500).json({ error: 'Could not parse Gemini response' });
-
+    if (!jsonStr) {
+      console.error('Raw Gemini response (no JSON found):', text.slice(0, 1000));
+      return res.status(500).json({ error: 'Could not parse Gemini response' });
+    }
     const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed.floors) || parsed.floors.length === 0) {
       return res.status(500).json({ error: 'No floors identified in floorplan' });
