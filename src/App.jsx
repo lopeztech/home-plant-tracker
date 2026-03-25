@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { GoogleOAuthProvider } from '@react-oauth/google'
+import { Map, Leaf } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import Header from './components/Header.jsx'
 import FloorplanView from './components/FloorplanView.jsx'
@@ -29,6 +30,10 @@ function AppContent() {
   const [editingPlant, setEditingPlant] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
+
+  // Responsive layout state
+  const [mobileTab, setMobileTab] = useState('floorplan')
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   // Load plants and floors from API when authenticated
   useEffect(() => {
@@ -61,6 +66,7 @@ function AppContent() {
     setPendingPosition({ x: 50, y: 50 })
     setEditingPlant(null)
     setShowPlantModal(true)
+    setMobileTab('floorplan') // show the floorplan so users see where the plant lands
   }, [])
 
   const handleMarkerClick = useCallback((plant) => {
@@ -164,28 +170,67 @@ function AppContent() {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        <FloorplanView
-          plants={plants}
-          onFloorplanUpload={handleFloorplanUpload}
-          onFloorplanClick={handleFloorplanClick}
-          onMarkerClick={handleMarkerClick}
-          onMarkerDrag={handleMarkerDrag}
-          loading={plantsLoading}
-          weather={weather}
-          floors={floors}
-          activeFloorId={activeFloorId}
-          onFloorChange={setActiveFloorId}
-          isAnalysingFloorplan={isAnalysingFloorplan}
-        />
-        <PlantSidebar
-          plants={plants}
-          onPlantClick={handleMarkerClick}
-          onAddPlant={handleAddPlant}
-          loading={plantsLoading}
-          weather={weather}
-          locationDenied={locationDenied}
-        />
+        {/* Floorplan panel — hidden on mobile when Plants tab is active */}
+        <div className={mobileTab === 'plants' ? 'hidden md:flex md:flex-1 md:flex-col md:min-w-0' : 'flex flex-1 flex-col min-w-0'}>
+          <FloorplanView
+            plants={plants}
+            onFloorplanUpload={handleFloorplanUpload}
+            onFloorplanClick={handleFloorplanClick}
+            onMarkerClick={handleMarkerClick}
+            onMarkerDrag={handleMarkerDrag}
+            loading={plantsLoading}
+            weather={weather}
+            floors={floors}
+            activeFloorId={activeFloorId}
+            onFloorChange={setActiveFloorId}
+            isAnalysingFloorplan={isAnalysingFloorplan}
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(o => !o)}
+          />
+        </div>
+
+        {/* Sidebar panel — controlled by mobileTab on mobile, sidebarOpen on md+ */}
+        <div className={[
+          'flex-col',
+          mobileTab === 'floorplan' ? 'hidden' : 'flex w-full',
+          sidebarOpen ? 'md:flex md:flex-shrink-0 md:w-72' : 'md:hidden',
+        ].join(' ')}>
+          <PlantSidebar
+            plants={plants}
+            onPlantClick={handleMarkerClick}
+            onAddPlant={handleAddPlant}
+            loading={plantsLoading}
+            weather={weather}
+            locationDenied={locationDenied}
+          />
+        </div>
       </div>
+
+      {/* Mobile tab bar */}
+      <nav
+        role="tablist"
+        aria-label="App navigation"
+        className="md:hidden flex-shrink-0 flex border-t border-gray-800 bg-gray-900"
+      >
+        <button
+          role="tab"
+          aria-selected={mobileTab === 'floorplan'}
+          onClick={() => setMobileTab('floorplan')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${mobileTab === 'floorplan' ? 'text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <Map size={20} />
+          <span>Floorplan</span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={mobileTab === 'plants'}
+          onClick={() => setMobileTab('plants')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${mobileTab === 'plants' ? 'text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <Leaf size={20} />
+          <span>Plants{plants.length > 0 ? ` (${plants.length})` : ''}</span>
+        </button>
+      </nav>
 
       {showPlantModal && (
         <PlantModal

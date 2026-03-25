@@ -164,6 +164,10 @@
 
 .floor-nav::-webkit-scrollbar { display: none; }
 
+@media (max-width: 767px) {
+  .floor-nav { display: none; }
+}
+
 .floor-nav-add {
   display: flex;
   align-items: center;

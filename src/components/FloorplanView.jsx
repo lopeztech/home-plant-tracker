@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react'
-import { Home, ScanLine, Upload } from 'lucide-react'
+import { Home, ScanLine, Upload, ChevronLeft, ChevronRight } from 'lucide-react'
 import PlantMarker from './PlantMarker.jsx'
 import WeatherSky, { SKY_BORDER_COLORS } from './WeatherSky.jsx'
 import FloorNav from './FloorNav.jsx'
@@ -30,8 +30,11 @@ export default function FloorplanView({
   activeFloorId,
   onFloorChange,
   isAnalysingFloorplan,
+  sidebarOpen,
+  onToggleSidebar,
 }) {
   const containerRef = useRef(null)
+  const lastTouchRef = useRef(0)
 
   const activeFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
   const activeOrder = activeFloor ? activeFloor.order : 0
@@ -42,11 +45,25 @@ export default function FloorplanView({
   const borderColor = sky ? SKY_BORDER_COLORS[sky] : null
 
   const handleContainerClick = useCallback((e) => {
+    // Suppress the synthetic click that fires ~300ms after a touch
+    if (Date.now() - lastTouchRef.current < 500) return
     if (!containerRef.current) return
     if (e.target.closest('.plant-marker')) return
     const rect = containerRef.current.getBoundingClientRect()
     const x = Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width) * 100))
     const y = Math.max(2, Math.min(98, ((e.clientY - rect.top) / rect.height) * 100))
+    onFloorplanClick(x, y)
+  }, [onFloorplanClick])
+
+  const handleTouchEnd = useCallback((e) => {
+    if (e.changedTouches.length !== 1) return
+    if (e.target.closest('.plant-marker')) return
+    lastTouchRef.current = Date.now()
+    const touch = e.changedTouches[0]
+    if (!containerRef.current) return
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = Math.max(2, Math.min(98, ((touch.clientX - rect.left) / rect.width) * 100))
+    const y = Math.max(2, Math.min(98, ((touch.clientY - rect.top) / rect.height) * 100))
     onFloorplanClick(x, y)
   }, [onFloorplanClick])
 
@@ -73,13 +90,43 @@ export default function FloorplanView({
     <div className="flex-1 flex flex-col min-w-0 bg-gray-950 border-r border-gray-800">
       {/* Toolbar */}
       <div className="flex items-center px-4 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0 gap-2">
-        <Home size={14} className="text-emerald-400" />
-        <span className="text-sm text-gray-400">
+        <Home size={14} className="text-emerald-400 flex-shrink-0" />
+
+        {/* Desktop: static floor name */}
+        <span className="hidden md:inline text-sm text-gray-400 truncate">
           {activeFloor ? activeFloor.name : 'Floorplan'}
         </span>
-        <span className="text-xs text-gray-600">(click to place plant)</span>
+        <span className="hidden md:inline text-xs text-gray-600">(click to place plant)</span>
+
+        {/* Mobile: floor selector dropdown */}
+        {floors.length > 1 && (
+          <select
+            className="md:hidden text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none"
+            value={activeFloorId}
+            onChange={e => onFloorChange(e.target.value)}
+          >
+            {floors.map(f => (
+              <option key={f.id} value={f.id}>{f.name}</option>
+            ))}
+          </select>
+        )}
+
+        {/* Sidebar toggle — tablet and desktop */}
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="hidden md:flex ml-auto items-center gap-1.5 px-2 py-1 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 transition-colors flex-shrink-0"
+            aria-label={sidebarOpen ? 'Hide plant list' : 'Show plant list'}
+            aria-expanded={sidebarOpen}
+            aria-controls="plant-sidebar"
+          >
+            {sidebarOpen ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+            <span className="hidden lg:inline">{sidebarOpen ? 'Hide' : 'Plants'}</span>
+          </button>
+        )}
+
         {weather && (
-          <span className="flex items-center gap-1 text-xs text-gray-400 ml-1">
+          <span className={`flex items-center gap-1 text-xs text-gray-400 flex-shrink-0 ${onToggleSidebar ? '' : 'ml-auto'}`}>
             <span className="text-base leading-none">{weather.current.condition.emoji}</span>
             <span>{weather.current.temp}°</span>
           </span>
@@ -104,6 +151,7 @@ export default function FloorplanView({
               boxShadow: borderColor ? ('0 0 20px ' + borderColor + '40') : undefined,
             }}
             onClick={handleContainerClick}
+            onTouchEnd={handleTouchEnd}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}

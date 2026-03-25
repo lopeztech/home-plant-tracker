@@ -152,13 +152,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex flex-col md:items-center md:justify-center md:p-4"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="modal-enter w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col"
-        style={{ maxHeight: 'calc(100vh - 32px)' }}
+        className="modal-enter w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl flex flex-col md:max-h-[calc(100vh-2rem)]"
       >
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
@@ -183,6 +182,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
           >
             <X size={16} />
@@ -201,7 +201,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
                 value={form.name}
                 onChange={e => update('name', e.target.value)}
                 required
-                autoFocus
               />
             </FormField>
 

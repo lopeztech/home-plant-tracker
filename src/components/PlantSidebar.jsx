@@ -210,7 +210,7 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, weather
   }, [plants])
 
   return (
-    <div className="w-72 flex-shrink-0 flex flex-col bg-gray-900 border-l border-gray-800">
+    <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full">
       {/* Weather */}
       <WeatherSection
         weather={weather}
