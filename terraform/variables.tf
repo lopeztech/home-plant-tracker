@@ -48,6 +48,12 @@ variable "cdn_max_ttl" {
   default     = 86400 # 24 hours
 }
 
+variable "gemini_api_key" {
+  description = "Google AI Gemini API key for plant and floorplan analysis"
+  type        = string
+  sensitive   = true
+}
+
 variable "iap_allowed_users" {
   description = "List of Google account emails permitted to access the app via IAP"
   type        = list(string)

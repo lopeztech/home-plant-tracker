@@ -3,7 +3,7 @@
 const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
-const { VertexAI } = require('@google-cloud/vertexai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const express = require('express');
 const cors = require('cors');
 
@@ -48,8 +48,8 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-const vertexAI = new VertexAI({ project: process.env.PROJECT_ID, location: 'us-central1' });
-const gemini = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const gemini = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
 
@@ -119,7 +119,7 @@ app.post('/analyse-floorplan', async (req, res) => {
       generationConfig: { maxOutputTokens: 2048, temperature: 0.1 },
     });
 
-    const text = result.response.candidates[0].content.parts[0].text;
+    const text = result.response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return res.status(500).json({ error: 'Could not parse Gemini response' });
 
@@ -164,7 +164,7 @@ app.post('/analyse', async (req, res) => {
       generationConfig: { maxOutputTokens: 512, temperature: 0.1 },
     });
 
-    const text = result.response.candidates[0].content.parts[0].text;
+    const text = result.response.text();
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return res.status(500).json({ error: 'Could not parse Gemini response' });
 

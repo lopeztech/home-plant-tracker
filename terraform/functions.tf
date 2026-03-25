@@ -86,6 +86,7 @@ resource "google_cloudfunctions2_function" "plants" {
       PROJECT_ID            = var.project_id
       IMAGES_BUCKET         = google_storage_bucket.images.name
       SERVICE_ACCOUNT_EMAIL = google_service_account.plants_function.email
+      GEMINI_API_KEY        = var.gemini_api_key
     }
   }
 
