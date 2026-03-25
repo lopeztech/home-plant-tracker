@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react'
-import { Home, ScanLine } from 'lucide-react'
+import { Home, ScanLine, Upload } from 'lucide-react'
 import PlantMarker from './PlantMarker.jsx'
 import WeatherSky, { SKY_BORDER_COLORS } from './WeatherSky.jsx'
 import FloorNav from './FloorNav.jsx'
