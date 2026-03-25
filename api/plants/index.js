@@ -52,11 +52,12 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const gemini = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
 function extractJson(text) {
-  // Strip markdown code fences if present
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
   const raw = fenced ? fenced[1] : text;
   const match = raw.match(/\{[\s\S]*\}/);
-  return match ? match[0] : null;
+  if (!match) return null;
+  // Strip trailing commas before ] or } which LLMs commonly emit
+  return match[0].replace(/,(\s*[}\]])/g, '$1');
 }
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
@@ -128,7 +129,7 @@ app.post('/analyse-floorplan', async (req, res) => {
     });
 
     const text = result.response.text();
-    console.log('Gemini floorplan response:', text.slice(0, 500));
+    console.log('Gemini floorplan response:', text.slice(0, 2000));
     const jsonStr = extractJson(text);
     if (!jsonStr) return res.status(500).json({ error: 'Could not parse Gemini response' });
 
