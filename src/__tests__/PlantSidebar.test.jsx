@@ -93,6 +93,116 @@ describe('PlantSidebar', () => {
     expect(onPlantClick).toHaveBeenCalledWith(plant)
   })
 
+  // ── Water Now (issue #5) ──────────────────────────────────────────────────
+
+  it('shows a water button on each card when onWater is provided', () => {
+    const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
+    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} onWater={vi.fn()} />)
+    expect(screen.getAllByRole('button', { name: /mark as watered/i })).toHaveLength(2)
+  })
+
+  it('calls onWater with the plant when the water button is clicked', () => {
+    const onWater = vi.fn()
+    const plant = makePlant('1', 'Fern', 3)
+    render(<PlantSidebar plants={[plant]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} onWater={onWater} />)
+    fireEvent.click(screen.getByRole('button', { name: /mark as watered/i }))
+    expect(onWater).toHaveBeenCalledWith(plant)
+  })
+
+  it('does not show water buttons when onWater is not provided', () => {
+    const plant = makePlant('1', 'Fern', 3)
+    render(<PlantSidebar plants={[plant]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: /mark as watered/i })).not.toBeInTheDocument()
+  })
+
+  // ── Search + filter (issue #6) ────────────────────────────────────────────
+
+  it('shows a search input when there are plants', () => {
+    render(<PlantSidebar plants={[makePlant('1', 'Fern', 3)]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    expect(screen.getByPlaceholderText(/search plants/i)).toBeInTheDocument()
+  })
+
+  it('does not show the search input when there are no plants', () => {
+    render(<PlantSidebar plants={[]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    expect(screen.queryByPlaceholderText(/search plants/i)).not.toBeInTheDocument()
+  })
+
+  it('filters plants by name when a search term is typed', () => {
+    const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
+    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    fireEvent.change(screen.getByPlaceholderText(/search plants/i), { target: { value: 'Fern' } })
+    expect(screen.getByText('Fern')).toBeInTheDocument()
+    expect(screen.queryByText('Cactus')).not.toBeInTheDocument()
+  })
+
+  it('filters plants by species (case-insensitive)', () => {
+    const p1 = { ...makePlant('1', 'Plant A', 3), species: 'Nephrolepis' }
+    const p2 = { ...makePlant('2', 'Plant B', 0), species: 'Mammillaria' }
+    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    fireEvent.change(screen.getByPlaceholderText(/search plants/i), { target: { value: 'nephrole' } })
+    expect(screen.getByText('Plant A')).toBeInTheDocument()
+    expect(screen.queryByText('Plant B')).not.toBeInTheDocument()
+  })
+
+  it('shows room filter chips when plants have multiple rooms', () => {
+    const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
+    const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
+    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    expect(screen.getByRole('button', { name: 'Living Room' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Kitchen' })).toBeInTheDocument()
+  })
+
+  it('does not show room chips when all plants are in one room', () => {
+    const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
+    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    // makePlant defaults room to 'Living Room' — only 1 unique room
+    expect(screen.queryByRole('button', { name: 'Living Room' })).not.toBeInTheDocument()
+  })
+
+  it('filters plants to the selected room when a chip is clicked', () => {
+    const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
+    const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
+    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
+    expect(screen.queryByText('Fern')).not.toBeInTheDocument()
+    expect(screen.getByText('Cactus')).toBeInTheDocument()
+  })
+
+  it('deselects the room filter when the active chip is clicked again', () => {
+    const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
+    const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
+    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
+    expect(screen.getByText('Fern')).toBeInTheDocument()
+    expect(screen.getByText('Cactus')).toBeInTheDocument()
+  })
+
+  it('updates summary counts to reflect the filtered subset', () => {
+    const p1 = { ...makePlant('1', 'Overdue Plant', 3), room: 'Living Room' }
+    const p2 = { ...makePlant('2', 'Good Plant', -5), room: 'Kitchen' }
+    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    expect(screen.getByText(/1 overdue/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
+    expect(screen.queryByText(/1 overdue/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/1 good/i)).toBeInTheDocument()
+  })
+
+  it('shows "No plants match" when no plants match the current search', () => {
+    const plants = [makePlant('1', 'Fern', 3)]
+    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    fireEvent.change(screen.getByPlaceholderText(/search plants/i), { target: { value: 'xyz not found' } })
+    expect(screen.getByText(/no plants match/i)).toBeInTheDocument()
+  })
+
+  it('shows filtered count in header when a filter is active', () => {
+    const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
+    const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
+    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
+    expect(screen.getByText(/1 \/ 2 plants/i)).toBeInTheDocument()
+  })
+
   // ── Weather section ───────────────────────────────────────────────────────
 
   it('shows current conditions when weather is provided', () => {

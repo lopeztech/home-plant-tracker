@@ -42,6 +42,7 @@ function renderModal(props = {}) {
       activeFloorId={props.activeFloorId ?? 'ground'}
       onSave={props.onSave ?? vi.fn()}
       onDelete={props.onDelete ?? vi.fn()}
+      onWater={props.onWater}
       onClose={props.onClose ?? vi.fn()}
     />
   )
@@ -183,6 +184,62 @@ describe('PlantModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
     fireEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
     expect(onDelete).toHaveBeenCalledWith('plant-1')
+  })
+
+  // ── Watering log (issue #5) ───────────────────────────────────────────────
+
+  it('does not show Water Now button for a new plant', () => {
+    renderModal({ onWater: vi.fn() })
+    expect(screen.queryByRole('button', { name: /water now/i })).not.toBeInTheDocument()
+  })
+
+  it('shows Water Now button when editing and onWater is provided', () => {
+    renderModal({ plant: existingPlant, onWater: vi.fn() })
+    expect(screen.getByRole('button', { name: /water now/i })).toBeInTheDocument()
+  })
+
+  it('does not show Water Now button when editing but onWater is not provided', () => {
+    renderModal({ plant: existingPlant })
+    expect(screen.queryByRole('button', { name: /water now/i })).not.toBeInTheDocument()
+  })
+
+  it('calls onWater with the plant id when Water Now is clicked', () => {
+    const onWater = vi.fn()
+    renderModal({ plant: existingPlant, onWater })
+    fireEvent.click(screen.getByRole('button', { name: /water now/i }))
+    expect(onWater).toHaveBeenCalledWith('plant-1')
+  })
+
+  it('shows watering history when plant has a wateringLog', () => {
+    const plant = {
+      ...existingPlant,
+      wateringLog: [
+        { date: '2026-03-10T10:00:00Z', note: '' },
+        { date: '2026-03-17T10:00:00Z', note: '' },
+      ],
+    }
+    renderModal({ plant })
+    expect(screen.getByText(/recent waterings/i)).toBeInTheDocument()
+  })
+
+  it('shows at most the last 5 watering entries', () => {
+    const plant = {
+      ...existingPlant,
+      wateringLog: Array.from({ length: 7 }, (_, i) => ({
+        date: `2026-03-${String(i + 1).padStart(2, '0')}T10:00:00Z`,
+        note: `entry ${i + 1}`,
+      })),
+    }
+    renderModal({ plant })
+    // entries are reversed then sliced to 5 — entries 1 and 2 (oldest) should not appear
+    expect(screen.queryByText(/— entry 1/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/— entry 2/)).not.toBeInTheDocument()
+    expect(screen.getByText(/— entry 7/)).toBeInTheDocument()
+  })
+
+  it('does not show watering history when wateringLog is empty', () => {
+    renderModal({ plant: existingPlant })
+    expect(screen.queryByText(/recent waterings/i)).not.toBeInTheDocument()
   })
 
   // ── Error states / missing props ──────────────────────────────────────────

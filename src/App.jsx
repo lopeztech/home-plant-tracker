@@ -110,6 +110,17 @@ function AppContent() {
     setPendingPosition(null)
   }, [editingPlant, pendingPosition, activeFloorId])
 
+  const handleWaterPlant = useCallback(async (plantId) => {
+    try {
+      const updated = await plantsApi.water(plantId)
+      setPlants(prev => prev.map(p => p.id === plantId ? updated : p))
+      setEditingPlant(prev => prev?.id === plantId ? updated : prev)
+    } catch (err) {
+      console.error('Failed to water plant:', err)
+      alert(`Failed to water plant: ${err.message}`)
+    }
+  }, [])
+
   const handleDeletePlant = useCallback(async (plantId) => {
     try {
       await plantsApi.delete(plantId)
@@ -199,6 +210,7 @@ function AppContent() {
             plants={plants}
             onPlantClick={handleMarkerClick}
             onAddPlant={handleAddPlant}
+            onWater={handleWaterPlant}
             loading={plantsLoading}
             weather={weather}
             locationDenied={locationDenied}
@@ -240,6 +252,7 @@ function AppContent() {
           activeFloorId={activeFloorId}
           onSave={handleSavePlant}
           onDelete={handleDeletePlant}
+          onWater={handleWaterPlant}
           onClose={handleCloseModal}
         />
       )}

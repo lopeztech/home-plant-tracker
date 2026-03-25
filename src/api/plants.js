@@ -24,6 +24,7 @@ export const plantsApi = {
   create: (data) => request('/plants', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/plants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/plants/${id}`, { method: 'DELETE' }),
+  water: (id) => request(`/plants/${id}/water`, { method: 'POST' }),
   getFloorplan: () => request('/config/floorplan'),
   saveFloorplan: (imageUrl) => request('/config/floorplan', { method: 'PUT', body: JSON.stringify({ imageUrl }) }),
 }

@@ -335,6 +335,27 @@ app.put('/plants/:id', async (req, res) => {
   }
 });
 
+app.post('/plants/:id/water', async (req, res) => {
+  try {
+    const ref = db.collection(COLLECTION).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const now = new Date().toISOString();
+    const existing = doc.data();
+    const wateringLog = [...(existing.wateringLog || []), { date: now, note: '' }];
+
+    await ref.set({ lastWatered: now, wateringLog, updatedAt: now }, { merge: true });
+
+    const updated = await ref.get();
+    const data = { id: updated.id, ...updated.data() };
+    data.imageUrl = await signReadUrl(data.imageUrl);
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/plants/:id', async (req, res) => {
   try {
     const ref = db.collection(COLLECTION).doc(req.params.id);

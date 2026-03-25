@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { X, Trash2, Save, Leaf, Loader2 } from 'lucide-react'
+import { X, Trash2, Save, Leaf, Loader2, Droplets } from 'lucide-react'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi } from '../api/plants.js'
 
@@ -39,7 +39,7 @@ function InputClass(extra = '') {
   return `w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors ${extra}`
 }
 
-export default function PlantModal({ plant, position, floors, activeFloorId, onSave, onDelete, onClose }) {
+export default function PlantModal({ plant, position, floors, activeFloorId, onSave, onDelete, onWater, onClose }) {
   const isEditing = !!plant
 
   const [form, setForm] = useState({
@@ -312,6 +312,24 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
               />
             </FormField>
 
+            {/* Watering history */}
+            {isEditing && plant?.wateringLog?.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">Recent Waterings</p>
+                <div className="space-y-1">
+                  {[...plant.wateringLog].reverse().slice(0, 5).map((entry, i) => (
+                    <div key={i} className="flex items-center gap-2 text-xs text-gray-500">
+                      <Droplets size={11} className="text-blue-400 flex-shrink-0" />
+                      <span>
+                        {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                      {entry.note && <span className="text-gray-600 truncate">— {entry.note}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Divider */}
             <hr className="border-gray-800" />
 
@@ -326,22 +344,32 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
 
         {/* Footer actions */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-gray-800 flex-shrink-0 gap-3">
-          {isEditing ? (
-            <button
-              type="button"
-              onClick={handleDelete}
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                confirmDelete
-                  ? 'bg-red-600 hover:bg-red-500 text-white'
-                  : 'bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-gray-700'
-              }`}
-            >
-              <Trash2 size={14} />
-              {confirmDelete ? 'Confirm Delete' : 'Delete'}
-            </button>
-          ) : (
-            <div />
-          )}
+          <div className="flex items-center gap-2">
+            {isEditing && (
+              <button
+                type="button"
+                onClick={handleDelete}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  confirmDelete
+                    ? 'bg-red-600 hover:bg-red-500 text-white'
+                    : 'bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-gray-700'
+                }`}
+              >
+                <Trash2 size={14} />
+                {confirmDelete ? 'Confirm Delete' : 'Delete'}
+              </button>
+            )}
+            {isEditing && onWater && (
+              <button
+                type="button"
+                onClick={() => onWater(plant.id)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/60 transition-colors"
+              >
+                <Droplets size={14} />
+                Water Now
+              </button>
+            )}
+          </div>
 
           <div className="flex gap-2">
             <button

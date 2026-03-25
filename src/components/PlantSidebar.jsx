@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react'
-import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus } from 'lucide-react'
+import React, { useMemo, useState } from 'react'
+import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search } from 'lucide-react'
 
 const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace'])
 
@@ -24,7 +24,6 @@ function WeatherSection({ weather, locationDenied, outdoorPlantCount }) {
 
   const { current, days } = weather
   const forecast = days.slice(0, 3)
-  const rainDays = days.slice(0, 7).filter(d => d.precipitation >= 2)
   const nearRain  = days.slice(0, 3).filter(d => d.precipitation >= 2)
   const showAlert = outdoorPlantCount > 0 && nearRain.length > 0
 
@@ -124,19 +123,18 @@ function HealthBadge({ health }) {
   )
 }
 
-function PlantCard({ plant, onClick }) {
+function PlantCard({ plant, onClick, onWater }) {
   const days = getDaysUntilWatering(plant)
   const color = getUrgencyColor(days)
   const label = getUrgencyLabel(days)
   const initial = plant.name ? plant.name.charAt(0).toUpperCase() : '?'
 
   return (
-    <button
-      onClick={() => onClick(plant)}
-      className="w-full text-left px-3 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-750 border border-gray-700 hover:border-gray-600 transition-all group"
-      style={{ '--hover-border': color }}
-    >
-      <div className="flex items-center gap-2.5">
+    <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-600 transition-all group overflow-hidden">
+      <button
+        onClick={() => onClick(plant)}
+        className="flex-1 flex items-center gap-2.5 text-left px-3 py-2.5 min-w-0"
+      >
         {/* Color dot */}
         <div
           className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
@@ -175,8 +173,19 @@ function PlantCard({ plant, onClick }) {
             </div>
           )}
         </div>
-      </div>
-    </button>
+      </button>
+
+      {onWater && (
+        <button
+          onClick={() => onWater(plant)}
+          className="flex-shrink-0 px-2.5 hover:bg-blue-900/30 text-gray-600 hover:text-blue-400 transition-colors border-l border-gray-700"
+          aria-label="Mark as watered"
+          title="Water now"
+        >
+          <Droplets size={13} />
+        </button>
+      )}
+    </div>
   )
 }
 
@@ -187,7 +196,10 @@ const LEGEND_ITEMS = [
   { color: '#22c55e', label: 'All good' },
 ]
 
-export default function PlantSidebar({ plants, onPlantClick, onAddPlant, weather, locationDenied }) {
+export default function PlantSidebar({ plants, onPlantClick, onAddPlant, onWater, weather, locationDenied }) {
+  const [searchTerm, setSearchTerm] = useState('')
+  const [roomFilter, setRoomFilter] = useState(null)
+
   const sortedPlants = useMemo(() => {
     return [...plants].sort((a, b) => {
       const daysA = getDaysUntilWatering(a)
@@ -196,18 +208,37 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, weather
     })
   }, [plants])
 
+  const rooms = useMemo(
+    () => [...new Set(plants.map(p => p.room).filter(Boolean))].sort(),
+    [plants]
+  )
+
+  const filteredPlants = useMemo(() => {
+    let result = sortedPlants
+    if (roomFilter) result = result.filter(p => p.room === roomFilter)
+    if (searchTerm.trim()) {
+      const q = searchTerm.toLowerCase()
+      result = result.filter(p =>
+        p.name?.toLowerCase().includes(q) || p.species?.toLowerCase().includes(q)
+      )
+    }
+    return result
+  }, [sortedPlants, roomFilter, searchTerm])
+
   const outdoorPlantCount = useMemo(
     () => plants.filter(p => OUTDOOR_ROOMS.has(p.room)).length,
     [plants]
   )
 
   const counts = useMemo(() => {
-    const overdue = plants.filter(p => getDaysUntilWatering(p) < 0).length
-    const today = plants.filter(p => getDaysUntilWatering(p) === 0).length
-    const soon = plants.filter(p => { const d = getDaysUntilWatering(p); return d > 0 && d <= 2 }).length
-    const good = plants.filter(p => getDaysUntilWatering(p) > 2).length
+    const overdue = filteredPlants.filter(p => getDaysUntilWatering(p) < 0).length
+    const today   = filteredPlants.filter(p => getDaysUntilWatering(p) === 0).length
+    const soon    = filteredPlants.filter(p => { const d = getDaysUntilWatering(p); return d > 0 && d <= 2 }).length
+    const good    = filteredPlants.filter(p => getDaysUntilWatering(p) > 2).length
     return { overdue, today, soon, good }
-  }, [plants])
+  }, [filteredPlants])
+
+  const isFiltered = roomFilter !== null || searchTerm.trim() !== ''
 
   return (
     <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full">
@@ -223,7 +254,9 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, weather
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">Plant List</h2>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500">{plants.length} plants</span>
+            <span className="text-xs text-gray-500">
+              {isFiltered ? `${filteredPlants.length} / ${plants.length}` : plants.length} plants
+            </span>
             <button
               onClick={onAddPlant}
               className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium"
@@ -260,19 +293,61 @@ export default function PlantSidebar({ plants, onPlantClick, onAddPlant, weather
         )}
       </div>
 
+      {/* Search + room filter */}
+      {plants.length > 0 && (
+        <div className="px-3 pt-3 pb-2 border-b border-gray-800 flex-shrink-0 space-y-2">
+          <div className="relative">
+            <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
+            <input
+              type="search"
+              placeholder="Search plants…"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              className="w-full pl-7 pr-3 py-1.5 text-xs bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-emerald-600 transition-colors"
+            />
+          </div>
+          {rooms.length > 1 && (
+            <div className="flex gap-1 flex-wrap">
+              {rooms.map(room => (
+                <button
+                  key={room}
+                  onClick={() => setRoomFilter(f => f === room ? null : room)}
+                  className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
+                    roomFilter === room
+                      ? 'bg-emerald-700 border-emerald-600 text-white'
+                      : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
+                  }`}
+                >
+                  {room}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Plant list */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-2">
-        {sortedPlants.length === 0 ? (
+        {filteredPlants.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-12 px-4">
-            <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
-              <Droplets size={20} className="text-gray-600" />
-            </div>
-            <p className="text-sm text-gray-500 font-medium">No plants yet</p>
-            <p className="text-xs text-gray-600 mt-1">Click on the floorplan to add your first plant</p>
+            {plants.length === 0 ? (
+              <>
+                <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
+                  <Droplets size={20} className="text-gray-600" />
+                </div>
+                <p className="text-sm text-gray-500 font-medium">No plants yet</p>
+                <p className="text-xs text-gray-600 mt-1">Click on the floorplan to add your first plant</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-gray-500 font-medium">No plants match</p>
+                <p className="text-xs text-gray-600 mt-1">Try a different search or filter</p>
+              </>
+            )}
           </div>
         ) : (
-          sortedPlants.map(plant => (
-            <PlantCard key={plant.id} plant={plant} onClick={onPlantClick} />
+          filteredPlants.map(plant => (
+            <PlantCard key={plant.id} plant={plant} onClick={onPlantClick} onWater={onWater} />
           ))
         )}
       </div>
