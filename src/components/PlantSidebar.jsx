@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react'
-import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain } from 'lucide-react'
+import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus } from 'lucide-react'
 
 const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace'])
 
@@ -187,7 +187,7 @@ const LEGEND_ITEMS = [
   { color: '#22c55e', label: 'All good' },
 ]
 
-export default function PlantSidebar({ plants, onPlantClick, weather, locationDenied }) {
+export default function PlantSidebar({ plants, onPlantClick, onAddPlant, weather, locationDenied }) {
   const sortedPlants = useMemo(() => {
     return [...plants].sort((a, b) => {
       const daysA = getDaysUntilWatering(a)
@@ -222,7 +222,16 @@ export default function PlantSidebar({ plants, onPlantClick, weather, locationDe
       <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-white">Plant List</h2>
-          <span className="text-xs text-gray-500">{plants.length} plants</span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500">{plants.length} plants</span>
+            <button
+              onClick={onAddPlant}
+              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium"
+            >
+              <Plus size={12} />
+              Add Plant
+            </button>
+          </div>
         </div>
         {/* Summary pills */}
         {plants.length > 0 && (

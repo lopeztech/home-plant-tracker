@@ -152,7 +152,10 @@ function AppContent() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-950">
-      <Header onAddPlant={handleAddPlant} />
+      <Header
+        onFloorplanUpload={handleFloorplanUpload}
+        isAnalysingFloorplan={isAnalysingFloorplan}
+      />
 
       {plantsError && (
         <div className="bg-red-900/50 border border-red-700 text-red-300 text-sm px-4 py-2 text-center">
@@ -177,6 +180,7 @@ function AppContent() {
         <PlantSidebar
           plants={plants}
           onPlantClick={handleMarkerClick}
+          onAddPlant={handleAddPlant}
           loading={plantsLoading}
           weather={weather}
           locationDenied={locationDenied}

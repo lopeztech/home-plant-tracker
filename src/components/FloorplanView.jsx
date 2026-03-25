@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react'
-import { Upload, Home, Loader2, ScanLine } from 'lucide-react'
+import { Home, ScanLine } from 'lucide-react'
 import PlantMarker from './PlantMarker.jsx'
 import WeatherSky, { SKY_BORDER_COLORS } from './WeatherSky.jsx'
 import FloorNav from './FloorNav.jsx'
@@ -32,7 +32,6 @@ export default function FloorplanView({
   isAnalysingFloorplan,
 }) {
   const containerRef = useRef(null)
-  const fileInputRef = useRef(null)
 
   const activeFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
   const activeOrder = activeFloor ? activeFloor.order : 0
@@ -50,13 +49,6 @@ export default function FloorplanView({
     const y = Math.max(2, Math.min(98, ((e.clientY - rect.top) / rect.height) * 100))
     onFloorplanClick(x, y)
   }, [onFloorplanClick])
-
-  const handleFileChange = useCallback((e) => {
-    const file = e.target.files && e.target.files[0]
-    if (!file) return
-    onFloorplanUpload(file)
-    e.target.value = ''
-  }, [onFloorplanUpload])
 
   const handleDrop = useCallback((e) => {
     e.preventDefault()
@@ -80,44 +72,18 @@ export default function FloorplanView({
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-gray-950 border-r border-gray-800">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-        <div className="flex items-center gap-2">
-          <Home size={14} className="text-emerald-400" />
-          <span className="text-sm text-gray-400">
-            {activeFloor ? activeFloor.name : 'Floorplan'}
+      <div className="flex items-center px-4 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0 gap-2">
+        <Home size={14} className="text-emerald-400" />
+        <span className="text-sm text-gray-400">
+          {activeFloor ? activeFloor.name : 'Floorplan'}
+        </span>
+        <span className="text-xs text-gray-600">(click to place plant)</span>
+        {weather && (
+          <span className="flex items-center gap-1 text-xs text-gray-400 ml-1">
+            <span className="text-base leading-none">{weather.current.condition.emoji}</span>
+            <span>{weather.current.temp}°</span>
           </span>
-          <span className="text-xs text-gray-600">(click to place plant)</span>
-          {weather && (
-            <span className="flex items-center gap-1 text-xs text-gray-400 ml-1">
-              <span className="text-base leading-none">{weather.current.condition.emoji}</span>
-              <span>{weather.current.temp}°</span>
-            </span>
-          )}
-        </div>
-        <button
-          onClick={() => fileInputRef.current && fileInputRef.current.click()}
-          disabled={isAnalysingFloorplan}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isAnalysingFloorplan ? (
-            <>
-              <Loader2 size={12} className="animate-spin" />
-              Analysing...
-            </>
-          ) : (
-            <>
-              <Upload size={12} />
-              {hasAnalysedFloors ? 'Re-analyse Floorplan' : 'Upload Floorplan'}
-            </>
-          )}
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={handleFileChange}
-        />
+        )}
       </div>
 
       {/* Floor nav + canvas */}
