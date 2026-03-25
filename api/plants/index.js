@@ -49,7 +49,7 @@ app.use(cors({
 }));
 
 const vertexAI = new VertexAI({ project: process.env.PROJECT_ID, location: 'us-central1' });
-const gemini = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const gemini = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash-001' });
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
 
