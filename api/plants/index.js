@@ -51,6 +51,14 @@ app.use(cors({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const gemini = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
+function extractJson(text) {
+  // Strip markdown code fences if present
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const raw = fenced ? fenced[1] : text;
+  const match = raw.match(/\{[\s\S]*\}/);
+  return match ? match[0] : null;
+}
+
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
 
 Respond ONLY with valid JSON:
@@ -120,10 +128,11 @@ app.post('/analyse-floorplan', async (req, res) => {
     });
 
     const text = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'Could not parse Gemini response' });
+    console.log('Gemini floorplan response:', text.slice(0, 500));
+    const jsonStr = extractJson(text);
+    if (!jsonStr) return res.status(500).json({ error: 'Could not parse Gemini response' });
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonStr);
     if (!Array.isArray(parsed.floors) || parsed.floors.length === 0) {
       return res.status(500).json({ error: 'No floors identified in floorplan' });
     }
@@ -165,10 +174,10 @@ app.post('/analyse', async (req, res) => {
     });
 
     const text = result.response.text();
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return res.status(500).json({ error: 'Could not parse Gemini response' });
+    const jsonStr = extractJson(text);
+    if (!jsonStr) return res.status(500).json({ error: 'Could not parse Gemini response' });
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonStr);
     res.status(200).json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
