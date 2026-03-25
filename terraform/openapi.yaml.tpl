@@ -169,6 +169,48 @@ paths:
         "204":
           description: CORS preflight
 
+  /config/floors:
+    get:
+      operationId: getFloors
+      summary: Get floors configuration
+      security:
+        - api_key: []
+      responses:
+        "200":
+          description: Floors config
+          schema:
+            type: object
+            properties:
+              floors:
+                type: array
+                items:
+                  $ref: "#/definitions/Floor"
+    put:
+      operationId: saveFloors
+      summary: Save floors configuration
+      security:
+        - api_key: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              floors:
+                type: array
+                items:
+                  $ref: "#/definitions/Floor"
+      responses:
+        "200":
+          description: Saved
+    options:
+      operationId: corsConfigFloors
+      summary: CORS preflight
+      responses:
+        "204":
+          description: CORS preflight
+
   /config/floorplan:
     get:
       operationId: getFloorplan
@@ -237,6 +279,19 @@ definitions:
         type: array
         items:
           type: string
+      imageUrl:
+        type: string
+  Floor:
+    type: object
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      order:
+        type: integer
+      type:
+        type: string
       imageUrl:
         type: string
   PlantWithId:
