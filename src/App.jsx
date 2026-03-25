@@ -7,8 +7,13 @@ import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
-import { plantsApi, imagesApi } from './api/plants.js'
+import { plantsApi, imagesApi, floorsApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
+
+const DEFAULT_FLOORS = [
+  { id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null },
+  { id: 'garden', name: 'Garden', order: -1, type: 'outdoor', imageUrl: null },
+]
 
 const STORAGE_KEYS = {
   API_KEY: 'plantTracker_apiKey',
@@ -32,7 +37,6 @@ function saveToStorage(key, value) {
   }
 }
 
-
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth()
   const { weather, locationDenied } = useWeather()
@@ -40,15 +44,17 @@ function AppContent() {
   const [plants, setPlants] = useState([])
   const [plantsLoading, setPlantsLoading] = useState(false)
   const [plantsError, setPlantsError] = useState(null)
-  const [floorplanImage, setFloorplanImage] = useState(null)
   const [apiKey, setApiKey] = useState(() => loadFromStorage(STORAGE_KEYS.API_KEY, null))
+
+  const [floors, setFloors] = useState(DEFAULT_FLOORS)
+  const [activeFloorId, setActiveFloorId] = useState('ground')
 
   const [showPlantModal, setShowPlantModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
   const [editingPlant, setEditingPlant] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
 
-  // Load plants and floorplan from API when authenticated
+  // Load plants and floors from API when authenticated
   useEffect(() => {
     if (!isAuthenticated) return
     setPlantsLoading(true)
@@ -57,9 +63,17 @@ function AppContent() {
       .then(setPlants)
       .catch(err => setPlantsError(err.message))
       .finally(() => setPlantsLoading(false))
-    plantsApi.getFloorplan()
-      .then(data => { if (data?.imageUrl) setFloorplanImage(data.imageUrl) })
-      .catch(() => {})
+
+    floorsApi.get()
+      .then(({ floors: loaded }) => {
+        if (loaded?.length) {
+          setFloors(loaded)
+          // Default to first interior floor
+          const first = loaded.find(f => f.type === 'interior') ?? loaded[0]
+          setActiveFloorId(first.id)
+        }
+      })
+      .catch(() => {}) // fall back to DEFAULT_FLOORS
   }, [isAuthenticated])
 
   useEffect(() => {
@@ -97,6 +111,7 @@ function AppContent() {
   const handleSavePlant = useCallback(async (plantData) => {
     const data = {
       ...plantData,
+      floor: plantData.floor ?? activeFloorId,
       x: pendingPosition?.x ?? editingPlant?.x ?? 50,
       y: pendingPosition?.y ?? editingPlant?.y ?? 50,
     }
@@ -116,7 +131,7 @@ function AppContent() {
     setShowPlantModal(false)
     setEditingPlant(null)
     setPendingPosition(null)
-  }, [editingPlant, pendingPosition])
+  }, [editingPlant, pendingPosition, activeFloorId])
 
   const handleDeletePlant = useCallback(async (plantId) => {
     try {
@@ -139,13 +154,31 @@ function AppContent() {
 
   const handleFloorplanUpload = useCallback(async (file) => {
     try {
-      const url = await imagesApi.upload(file, 'floorplans')
-      const { imageUrl } = await plantsApi.saveFloorplan(url)
-      setFloorplanImage(imageUrl)
+      const rawUrl = await imagesApi.upload(file, 'floorplans')
+      // Update the active floor's imageUrl (stored as raw GCS URL)
+      const updatedFloors = floors.map(f =>
+        f.id === activeFloorId ? { ...f, imageUrl: rawUrl } : f
+      )
+      const { floors: saved } = await floorsApi.save(updatedFloors)
+      setFloors(saved) // API returns signed imageUrls
     } catch (err) {
       alert(`Floorplan upload failed: ${err.message}`)
     }
-  }, [])
+  }, [floors, activeFloorId])
+
+  const handleAddFloor = useCallback(async (name) => {
+    const id = name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now()
+    const maxOrder = Math.max(...floors.map(f => f.order))
+    const newFloor = { id, name, order: maxOrder + 1, type: 'interior', imageUrl: null }
+    const updatedFloors = [...floors, newFloor]
+    setFloors(updatedFloors)
+    setActiveFloorId(id)
+    try {
+      await floorsApi.save(updatedFloors)
+    } catch (err) {
+      console.error('Failed to save floors:', err)
+    }
+  }, [floors])
 
   const handleSaveApiKey = useCallback((key) => {
     setApiKey(key)
@@ -181,13 +214,16 @@ function AppContent() {
       <div className="flex flex-1 overflow-hidden">
         <FloorplanView
           plants={plants}
-          floorplanImage={floorplanImage}
           onFloorplanUpload={handleFloorplanUpload}
           onFloorplanClick={handleFloorplanClick}
           onMarkerClick={handleMarkerClick}
           onMarkerDrag={handleMarkerDrag}
           loading={plantsLoading}
           weather={weather}
+          floors={floors}
+          activeFloorId={activeFloorId}
+          onFloorChange={setActiveFloorId}
+          onAddFloor={handleAddFloor}
         />
         <PlantSidebar
           plants={plants}
@@ -203,6 +239,8 @@ function AppContent() {
           plant={editingPlant}
           position={pendingPosition}
           apiKey={apiKey}
+          floors={floors}
+          activeFloorId={activeFloorId}
           onSave={handleSavePlant}
           onDelete={handleDeletePlant}
           onClose={handleCloseModal}

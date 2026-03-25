@@ -39,13 +39,14 @@ function InputClass(extra = '') {
   return `w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors ${extra}`
 }
 
-export default function PlantModal({ plant, position, apiKey, onSave, onDelete, onClose, onOpenSettings }) {
+export default function PlantModal({ plant, position, apiKey, floors, activeFloorId, onSave, onDelete, onClose, onOpenSettings }) {
   const isEditing = !!plant
 
   const [form, setForm] = useState({
     name: '',
     species: '',
     room: 'Living Room',
+    floor: activeFloorId ?? 'ground',
     lastWatered: today(),
     frequencyDays: 7,
     notes: '',
@@ -66,6 +67,7 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
         name: plant.name || '',
         species: plant.species || '',
         room: plant.room || 'Living Room',
+        floor: plant.floor ?? activeFloorId ?? 'ground',
         lastWatered: plant.lastWatered ? plant.lastWatered.split('T')[0] : today(),
         frequencyDays: plant.frequencyDays ?? 7,
         notes: plant.notes || '',
@@ -77,7 +79,7 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
         recommendations: plant.recommendations || [],
       })
     }
-  }, [plant])
+  }, [plant, activeFloorId])
 
   const update = useCallback((key, value) => {
     setForm(prev => ({ ...prev, [key]: value }))
@@ -117,6 +119,7 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
       name: form.name.trim(),
       species: form.species.trim(),
       room: form.room,
+      floor: form.floor,
       lastWatered: new Date(form.lastWatered).toISOString(),
       frequencyDays: Number(form.frequencyDays),
       notes: form.notes.trim(),
@@ -211,18 +214,32 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
               />
             </FormField>
 
-            {/* Room */}
-            <FormField label="Room / Zone">
-              <select
-                className={InputClass('cursor-pointer')}
-                value={form.room}
-                onChange={e => update('room', e.target.value)}
-              >
-                {ROOMS.map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-            </FormField>
+            {/* Floor + Room */}
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Floor">
+                <select
+                  className={InputClass('cursor-pointer')}
+                  value={form.floor}
+                  onChange={e => update('floor', e.target.value)}
+                >
+                  {(floors ?? []).map(f => (
+                    <option key={f.id} value={f.id}>{f.name}</option>
+                  ))}
+                </select>
+              </FormField>
+
+              <FormField label="Room / Zone">
+                <select
+                  className={InputClass('cursor-pointer')}
+                  value={form.room}
+                  onChange={e => update('room', e.target.value)}
+                >
+                  {ROOMS.map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+              </FormField>
+            </div>
 
             {/* Watering */}
             <div className="grid grid-cols-2 gap-3">

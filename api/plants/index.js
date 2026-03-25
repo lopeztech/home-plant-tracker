@@ -14,6 +14,11 @@ const COLLECTION = 'plants';
 const CONFIG_COLLECTION = 'config';
 const IMAGES_BUCKET = process.env.IMAGES_BUCKET;
 
+const DEFAULT_FLOORS = [
+  { id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null },
+  { id: 'garden', name: 'Garden', order: -1, type: 'outdoor', imageUrl: null },
+];
+
 // Extract the GCS object path from a full public URL or return as-is if already a path.
 function gcsPath(urlOrPath) {
   if (!urlOrPath) return null;
@@ -74,7 +79,40 @@ app.post('/images/upload-url', async (req, res) => {
   }
 });
 
-// ── Floorplan config ──────────────────────────────────────────────────────────
+// ── Floors config ─────────────────────────────────────────────────────────────
+
+app.get('/config/floors', async (req, res) => {
+  try {
+    const doc = await db.collection(CONFIG_COLLECTION).doc('floors').get();
+    const floors = doc.exists ? doc.data().floors : DEFAULT_FLOORS;
+    const signed = await Promise.all(floors.map(async (f) => ({
+      ...f,
+      imageUrl: f.imageUrl ? await signReadUrl(f.imageUrl) : null,
+    })));
+    res.status(200).json({ floors: signed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/config/floors', async (req, res) => {
+  try {
+    const { floors } = req.body;
+    await db.collection(CONFIG_COLLECTION).doc('floors').set(
+      { floors, updatedAt: new Date().toISOString() },
+      { merge: true }
+    );
+    const signed = await Promise.all(floors.map(async (f) => ({
+      ...f,
+      imageUrl: f.imageUrl ? await signReadUrl(f.imageUrl) : null,
+    })));
+    res.status(200).json({ floors: signed });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Floorplan config (legacy) ──────────────────────────────────────────────────────────
 
 app.get('/config/floorplan', async (req, res) => {
   try {

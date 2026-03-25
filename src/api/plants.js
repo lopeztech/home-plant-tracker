@@ -28,6 +28,11 @@ export const plantsApi = {
   saveFloorplan: (imageUrl) => request('/config/floorplan', { method: 'PUT', body: JSON.stringify({ imageUrl }) }),
 }
 
+export const floorsApi = {
+  get: () => request('/config/floors'),
+  save: (floors) => request('/config/floors', { method: 'PUT', body: JSON.stringify({ floors }) }),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()
