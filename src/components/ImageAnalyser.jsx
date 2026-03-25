@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Upload, Loader2, Sparkles, AlertCircle, X, Camera } from 'lucide-react'
 
 const HEALTH_COLORS = {
@@ -25,13 +25,42 @@ function Badge({ label, value, colorMap }) {
   )
 }
 
+// Reads a File or fetches a URL and returns a base64 data URI for the Claude API
+async function toBase64(fileOrUrl) {
+  if (fileOrUrl instanceof File) {
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => resolve(e.target.result)
+      reader.readAsDataURL(fileOrUrl)
+    })
+  }
+  // GCS URL — fetch the bytes then convert
+  const res = await fetch(fileOrUrl)
+  const blob = await res.blob()
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => resolve(e.target.result)
+    reader.readAsDataURL(blob)
+  })
+}
+
 export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete, onImageChange }) {
-  const [imageBase64, setImageBase64] = useState(initialImage || null)
+  // previewSrc: object URL (blob:) for newly selected files, or GCS URL for existing images
+  const [previewSrc, setPreviewSrc] = useState(initialImage || null)
+  const [imageFile, setImageFile] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [isAnalysing, setIsAnalysing] = useState(false)
   const [error, setError] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef(null)
+  const objectUrlRef = useRef(null)
+
+  // Revoke object URLs when they're replaced or the component unmounts
+  useEffect(() => {
+    return () => {
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+    }
+  }, [])
 
   const loadImage = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) {
@@ -40,13 +69,12 @@ export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete
     }
     setError(null)
     setAnalysisResult(null)
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const base64 = e.target.result
-      setImageBase64(base64)
-      onImageChange?.(base64)
-    }
-    reader.readAsDataURL(file)
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+    const url = URL.createObjectURL(file)
+    objectUrlRef.current = url
+    setPreviewSrc(url)
+    setImageFile(file)
+    onImageChange?.(file)
   }, [onImageChange])
 
   const handleFileInput = useCallback((e) => {
@@ -72,14 +100,14 @@ export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete
   }, [])
 
   const handleAnalyse = useCallback(async () => {
-    if (!imageBase64 || !apiKey) return
+    if (!previewSrc || !apiKey) return
     setIsAnalysing(true)
     setError(null)
     setAnalysisResult(null)
 
     try {
-      // Extract mime type and base64 data
-      const [header, data] = imageBase64.split(',')
+      const base64DataUri = await toBase64(imageFile || previewSrc)
+      const [header, data] = base64DataUri.split(',')
       const mimeMatch = header.match(/data:([^;]+);/)
       const mediaType = mimeMatch ? mimeMatch[1] : 'image/jpeg'
 
@@ -100,11 +128,7 @@ export default function ImageAnalyser({ apiKey, initialImage, onAnalysisComplete
               content: [
                 {
                   type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: mediaType,
-                    data: data,
-                  },
+                  source: { type: 'base64', media_type: mediaType, data },
                 },
                 {
                   type: 'text',
@@ -129,17 +153,11 @@ Respond ONLY with valid JSON in this exact format:
 
       const result = await response.json()
       const text = result.content?.[0]?.text || ''
-
-      // Parse JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/)
       if (!jsonMatch) throw new Error('Could not parse AI response')
 
       const parsed = JSON.parse(jsonMatch[0])
-
-      // Validate required fields
-      if (!parsed.health || !parsed.maturity) {
-        throw new Error('Incomplete response from AI')
-      }
+      if (!parsed.health || !parsed.maturity) throw new Error('Incomplete response from AI')
 
       setAnalysisResult(parsed)
       onAnalysisComplete?.(parsed)
@@ -148,10 +166,15 @@ Respond ONLY with valid JSON in this exact format:
     } finally {
       setIsAnalysing(false)
     }
-  }, [imageBase64, apiKey, onAnalysisComplete])
+  }, [previewSrc, imageFile, apiKey, onAnalysisComplete])
 
   const handleRemoveImage = useCallback(() => {
-    setImageBase64(null)
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current)
+      objectUrlRef.current = null
+    }
+    setPreviewSrc(null)
+    setImageFile(null)
     setAnalysisResult(null)
     setError(null)
     onImageChange?.(null)
@@ -163,8 +186,7 @@ Respond ONLY with valid JSON in this exact format:
         Plant Photo
       </label>
 
-      {/* Upload area */}
-      {!imageBase64 ? (
+      {!previewSrc ? (
         <div
           className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
             isDragging
@@ -193,10 +215,9 @@ Respond ONLY with valid JSON in this exact format:
         </div>
       ) : (
         <div className="space-y-3">
-          {/* Image preview */}
           <div className="relative rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
             <img
-              src={imageBase64}
+              src={previewSrc}
               alt="Plant"
               className="w-full h-40 object-contain"
             />
@@ -209,7 +230,6 @@ Respond ONLY with valid JSON in this exact format:
             </button>
           </div>
 
-          {/* Analyse button */}
           {!analysisResult && (
             <button
               onClick={handleAnalyse}
@@ -238,7 +258,6 @@ Respond ONLY with valid JSON in this exact format:
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-red-950 border border-red-800">
           <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
@@ -246,7 +265,6 @@ Respond ONLY with valid JSON in this exact format:
         </div>
       )}
 
-      {/* Analysis results */}
       {analysisResult && (
         <div className="space-y-3 p-3 rounded-xl bg-gray-800 border border-gray-700">
           <div className="flex items-center gap-2">
@@ -260,9 +278,7 @@ Respond ONLY with valid JSON in this exact format:
           </div>
 
           {analysisResult.healthReason && (
-            <p className="text-xs text-gray-400 leading-relaxed">
-              {analysisResult.healthReason}
-            </p>
+            <p className="text-xs text-gray-400 leading-relaxed">{analysisResult.healthReason}</p>
           )}
 
           {analysisResult.recommendations?.length > 0 && (
@@ -280,10 +296,7 @@ Respond ONLY with valid JSON in this exact format:
           )}
 
           <button
-            onClick={() => {
-              setAnalysisResult(null)
-              setError(null)
-            }}
+            onClick={() => { setAnalysisResult(null); setError(null) }}
             className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
           >
             Re-analyse

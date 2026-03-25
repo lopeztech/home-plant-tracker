@@ -7,10 +7,10 @@ import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
-import { plantsApi } from './api/plants.js'
+import { plantsApi, imagesApi } from './api/plants.js'
+import { useWeather } from './hooks/useWeather.js'
 
 const STORAGE_KEYS = {
-  FLOORPLAN: 'plantTracker_floorplanImage',
   API_KEY: 'plantTracker_apiKey',
 }
 
@@ -32,13 +32,15 @@ function saveToStorage(key, value) {
   }
 }
 
+
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth()
+  const { weather, locationDenied } = useWeather()
 
   const [plants, setPlants] = useState([])
   const [plantsLoading, setPlantsLoading] = useState(false)
   const [plantsError, setPlantsError] = useState(null)
-  const [floorplanImage, setFloorplanImage] = useState(() => loadFromStorage(STORAGE_KEYS.FLOORPLAN, null))
+  const [floorplanImage, setFloorplanImage] = useState(null)
   const [apiKey, setApiKey] = useState(() => loadFromStorage(STORAGE_KEYS.API_KEY, null))
 
   const [showPlantModal, setShowPlantModal] = useState(false)
@@ -46,7 +48,7 @@ function AppContent() {
   const [editingPlant, setEditingPlant] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
 
-  // Load plants from API when authenticated
+  // Load plants and floorplan from API when authenticated
   useEffect(() => {
     if (!isAuthenticated) return
     setPlantsLoading(true)
@@ -55,11 +57,10 @@ function AppContent() {
       .then(setPlants)
       .catch(err => setPlantsError(err.message))
       .finally(() => setPlantsLoading(false))
+    plantsApi.getFloorplan()
+      .then(data => { if (data?.imageUrl) setFloorplanImage(data.imageUrl) })
+      .catch(() => {})
   }, [isAuthenticated])
-
-  useEffect(() => {
-    saveToStorage(STORAGE_KEYS.FLOORPLAN, floorplanImage)
-  }, [floorplanImage])
 
   useEffect(() => {
     saveToStorage(STORAGE_KEYS.API_KEY, apiKey)
@@ -126,8 +127,14 @@ function AppContent() {
     setPendingPosition(null)
   }, [])
 
-  const handleFloorplanUpload = useCallback((base64) => {
-    setFloorplanImage(base64)
+  const handleFloorplanUpload = useCallback(async (file) => {
+    try {
+      const url = await imagesApi.upload(file, 'floorplans')
+      setFloorplanImage(url)
+      await plantsApi.saveFloorplan(url)
+    } catch (err) {
+      alert(`Floorplan upload failed: ${err.message}`)
+    }
   }, [])
 
   const handleSaveApiKey = useCallback((key) => {
@@ -169,11 +176,14 @@ function AppContent() {
           onFloorplanClick={handleFloorplanClick}
           onMarkerClick={handleMarkerClick}
           loading={plantsLoading}
+          weather={weather}
         />
         <PlantSidebar
           plants={plants}
           onPlantClick={handleMarkerClick}
           loading={plantsLoading}
+          weather={weather}
+          locationDenied={locationDenied}
         />
       </div>
 

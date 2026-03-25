@@ -77,7 +77,9 @@ resource "google_cloudfunctions2_function" "plants" {
     all_traffic_on_latest_revision = true
 
     environment_variables = {
-      PROJECT_ID = var.project_id
+      PROJECT_ID            = var.project_id
+      IMAGES_BUCKET         = google_storage_bucket.images.name
+      SERVICE_ACCOUNT_EMAIL = google_service_account.plants_function.email
     }
   }
 
@@ -118,6 +120,13 @@ resource "google_cloud_run_v2_service_iam_member" "function_sa_run_invoker" {
   name     = google_cloudfunctions2_function.plants.name
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.plants_function.email}"
+}
+
+# Allow the function SA to sign blobs — required for generating v4 signed URLs in Cloud Run.
+resource "google_service_account_iam_member" "plants_fn_self_sign" {
+  service_account_id = google_service_account.plants_function.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.plants_function.email}"
 }
 
 # Allow the API Gateway managed SA to impersonate the function SA (needed to sign JWTs for the backend).

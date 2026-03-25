@@ -8,3 +8,6 @@ terraform/.terraform/
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfstate*
+
+# Terraform temporary files
+terraform/tmp/

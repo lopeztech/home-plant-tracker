@@ -51,5 +51,28 @@ output "github_secrets" {
     GCS_BUCKET_NAME                = google_storage_bucket.app.name
     VITE_GOOGLE_CLIENT_ID          = "(set manually — see terraform/iap.tf for instructions)"
     ARTIFACT_REGISTRY_REPO         = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.app.repository_id}"
+    VITE_API_BASE_URL              = "https://${google_api_gateway_gateway.app.default_hostname}"
+    VITE_API_KEY                   = "(run: terraform output -raw api_key)"
   }
+}
+
+output "api_gateway_url" {
+  description = "API Gateway base URL — use as VITE_API_BASE_URL"
+  value       = "https://${google_api_gateway_gateway.app.default_hostname}"
+}
+
+output "api_key" {
+  description = "API key for the Plant Tracker API — set as VITE_API_KEY in GitHub Secrets and .env.local"
+  value       = google_apikeys_key.app.key_string
+  sensitive   = true
+}
+
+output "images_bucket_name" {
+  description = "GCS bucket for user-uploaded images (floorplans + plant photos)"
+  value       = google_storage_bucket.images.name
+}
+
+output "function_url" {
+  description = "Cloud Function URL (direct, behind API Gateway)"
+  value       = google_cloudfunctions2_function.plants.service_config[0].uri
 }

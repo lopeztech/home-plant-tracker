@@ -1,6 +1,7 @@
 import React, { useRef, useCallback } from 'react'
 import { Upload, Home } from 'lucide-react'
 import PlantMarker from './PlantMarker.jsx'
+import WeatherSky, { SKY_BORDER_COLORS } from './WeatherSky.jsx'
 
 const DEFAULT_FLOORPLAN_SVG = `
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" style="background:#111827">
@@ -68,9 +69,15 @@ export default function FloorplanView({
   onFloorplanUpload,
   onFloorplanClick,
   onMarkerClick,
+  weather,
 }) {
   const containerRef = useRef(null)
   const fileInputRef = useRef(null)
+
+  const sky = weather?.current
+    ? (weather.current.isDay ? weather.current.condition.sky : 'night')
+    : null
+  const borderColor = sky ? SKY_BORDER_COLORS[sky] : null
 
   const handleContainerClick = useCallback((e) => {
     if (!containerRef.current) return
@@ -90,12 +97,7 @@ export default function FloorplanView({
   const handleFileChange = useCallback((e) => {
     const file = e.target.files?.[0]
     if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      onFloorplanUpload(ev.target.result)
-    }
-    reader.readAsDataURL(file)
-    // Reset input so same file can be re-uploaded
+    onFloorplanUpload(file)
     e.target.value = ''
   }, [onFloorplanUpload])
 
@@ -104,11 +106,7 @@ export default function FloorplanView({
     e.currentTarget.classList.remove('drag-active')
     const file = e.dataTransfer.files?.[0]
     if (!file || !file.type.startsWith('image/')) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      onFloorplanUpload(ev.target.result)
-    }
-    reader.readAsDataURL(file)
+    onFloorplanUpload(file)
   }, [onFloorplanUpload])
 
   const handleDragOver = useCallback((e) => {
@@ -128,6 +126,12 @@ export default function FloorplanView({
           <Home size={14} className="text-emerald-400" />
           <span className="text-sm text-gray-400">Floorplan</span>
           <span className="text-xs text-gray-600">(click to place plant)</span>
+          {weather && (
+            <span className="flex items-center gap-1 text-xs text-gray-400 ml-1">
+              <span className="text-base leading-none">{weather.current.condition.emoji}</span>
+              <span>{weather.current.temp}°</span>
+            </span>
+          )}
         </div>
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -149,8 +153,12 @@ export default function FloorplanView({
       <div className="flex-1 overflow-hidden p-3">
         <div
           ref={containerRef}
-          className="floorplan-container w-full h-full rounded-xl overflow-hidden border-2 border-gray-800 hover:border-gray-700 transition-colors"
-          style={{ position: 'relative' }}
+          className="floorplan-container w-full h-full rounded-xl overflow-hidden border-2 transition-colors"
+          style={{
+            position: 'relative',
+            borderColor: borderColor ?? '#1f2937',
+            boxShadow: borderColor ? `0 0 20px ${borderColor}40` : undefined,
+          }}
           onClick={handleContainerClick}
           onDrop={handleDrop}
           onDragOver={handleDragOver}
@@ -175,6 +183,9 @@ export default function FloorplanView({
               dangerouslySetInnerHTML={{ __html: DEFAULT_FLOORPLAN_SVG }}
             />
           )}
+
+          {/* Weather sky overlay — rendered before markers so markers stay on top */}
+          <WeatherSky weather={weather} />
 
           {/* Plant markers */}
           {plants.map(plant => (

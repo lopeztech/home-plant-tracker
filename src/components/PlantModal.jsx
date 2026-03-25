@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { X, Trash2, Save, Leaf, Droplets } from 'lucide-react'
+import { X, Trash2, Save, Leaf, Loader2 } from 'lucide-react'
 import ImageAnalyser from './ImageAnalyser.jsx'
+import { imagesApi } from '../api/plants.js'
 
 const ROOMS = [
   'Living Room',
@@ -48,12 +49,14 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
     lastWatered: today(),
     frequencyDays: 7,
     notes: '',
-    imageBase64: null,
+    imageFile: null,
+    imageUrl: null,
     health: null,
     healthReason: null,
     maturity: null,
     recommendations: [],
   })
+  const [isSaving, setIsSaving] = useState(false)
 
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -66,7 +69,8 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
         lastWatered: plant.lastWatered ? plant.lastWatered.split('T')[0] : today(),
         frequencyDays: plant.frequencyDays ?? 7,
         notes: plant.notes || '',
-        imageBase64: plant.imageBase64 || null,
+        imageFile: null,
+        imageUrl: plant.imageUrl || null,
         health: plant.health || null,
         healthReason: plant.healthReason || null,
         maturity: plant.maturity || null,
@@ -89,13 +93,25 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
     }))
   }, [])
 
-  const handleImageChange = useCallback((base64) => {
-    setForm(prev => ({ ...prev, imageBase64: base64 }))
+  const handleImageChange = useCallback((file) => {
+    setForm(prev => ({ ...prev, imageFile: file, imageUrl: null }))
   }, [])
 
-  const handleSubmit = useCallback((e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
     if (!form.name.trim()) return
+    setIsSaving(true)
+
+    let imageUrl = form.imageUrl
+    if (form.imageFile) {
+      try {
+        imageUrl = await imagesApi.upload(form.imageFile, 'plants')
+      } catch (err) {
+        alert(`Image upload failed: ${err.message}`)
+        setIsSaving(false)
+        return
+      }
+    }
 
     onSave({
       name: form.name.trim(),
@@ -104,12 +120,13 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
       lastWatered: new Date(form.lastWatered).toISOString(),
       frequencyDays: Number(form.frequencyDays),
       notes: form.notes.trim(),
-      imageBase64: form.imageBase64,
+      imageUrl,
       health: form.health,
       healthReason: form.healthReason,
       maturity: form.maturity,
       recommendations: form.recommendations,
     })
+    setIsSaving(false)
   }, [form, onSave])
 
   const handleDelete = useCallback(() => {
@@ -283,7 +300,7 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
             {/* Image Analyser */}
             <ImageAnalyser
               apiKey={apiKey}
-              initialImage={form.imageBase64}
+              initialImage={form.imageUrl}
               onAnalysisComplete={handleAnalysisComplete}
               onImageChange={handleImageChange}
             />
@@ -331,15 +348,15 @@ export default function PlantModal({ plant, position, apiKey, onSave, onDelete, 
               type="submit"
               form=""
               onClick={handleSubmit}
-              disabled={!form.name.trim()}
+              disabled={!form.name.trim() || isSaving}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                form.name.trim()
+                form.name.trim() && !isSaving
                   ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
                   : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}
             >
-              <Save size={14} />
-              {isEditing ? 'Save Changes' : 'Add Plant'}
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {isSaving ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Plant'}
             </button>
           </div>
         </div>
