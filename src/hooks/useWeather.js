@@ -30,6 +30,58 @@ export function getCondition(code) {
   return WMO[code] ?? WMO[0]
 }
 
+const CACHE_KEY = 'plantTracker_weather'
+const CACHE_TTL = 30 * 60 * 1000 // 30 min
+
+// Returns distance in metres between two lat/lon points (Haversine approximation)
+function distanceMetres(lat1, lon1, lat2, lon2) {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * (Math.PI / 180)
+  const dLon = (lon2 - lon1) * (Math.PI / 180)
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function readCache() {
+  try {
+    const raw = sessionStorage.getItem(CACHE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeCache(lat, lon, weather) {
+  try {
+    sessionStorage.setItem(CACHE_KEY, JSON.stringify({ lat, lon, weather, fetchedAt: Date.now() }))
+  } catch {
+    // sessionStorage unavailable (private browsing quota, etc.) — silently ignore
+  }
+}
+
+function parseWeather(data) {
+  const cw = data.current_weather
+  const d = data.daily
+  return {
+    current: {
+      temp: Math.round(cw.temperature),
+      code: cw.weathercode,
+      condition: getCondition(cw.weathercode),
+      isDay: cw.is_day === 1,
+    },
+    days: d.time.map((date, i) => ({
+      date,
+      code: d.weathercode[i],
+      condition: getCondition(d.weathercode[i]),
+      maxTemp: Math.round(d.temperature_2m_max[i]),
+      minTemp: Math.round(d.temperature_2m_min[i]),
+      precipitation: d.precipitation_sum[i] ?? 0,
+    })),
+  }
+}
+
 export function useWeather() {
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -51,31 +103,32 @@ export function useWeather() {
         .then(r => (r.ok ? r.json() : Promise.reject()))
         .then(data => {
           if (cancelled) return
-          const cw = data.current_weather
-          const d = data.daily
-          setWeather({
-            current: {
-              temp: Math.round(cw.temperature),
-              code: cw.weathercode,
-              condition: getCondition(cw.weathercode),
-              isDay: cw.is_day === 1,
-            },
-            days: d.time.map((date, i) => ({
-              date,
-              code: d.weathercode[i],
-              condition: getCondition(d.weathercode[i]),
-              maxTemp: Math.round(d.temperature_2m_max[i]),
-              minTemp: Math.round(d.temperature_2m_min[i]),
-              precipitation: d.precipitation_sum[i] ?? 0,
-            })),
-          })
+          const parsed = parseWeather(data)
+          writeCache(lat, lon, parsed)
+          setWeather(parsed)
         })
         .catch(() => {})
         .finally(() => { if (!cancelled) setLoading(false) })
     }
 
     navigator.geolocation.getCurrentPosition(
-      pos => fetchWeather(pos.coords.latitude, pos.coords.longitude),
+      pos => {
+        if (cancelled) return
+        const { latitude: lat, longitude: lon } = pos.coords
+
+        const cached = readCache()
+        if (
+          cached &&
+          Date.now() - cached.fetchedAt < CACHE_TTL &&
+          distanceMetres(lat, lon, cached.lat, cached.lon) < 1000
+        ) {
+          setWeather(cached.weather)
+          setLoading(false)
+          return
+        }
+
+        fetchWeather(lat, lon)
+      },
       () => {
         if (!cancelled) {
           setLocationDenied(true)
