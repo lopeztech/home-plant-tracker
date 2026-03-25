@@ -33,15 +33,27 @@ export const floorsApi = {
   save: (floors) => request('/config/floors', { method: 'PUT', body: JSON.stringify({ floors }) }),
 }
 
+async function fileToBase64(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader()
+    reader.onload = (e) => resolve(e.target.result)
+    reader.readAsDataURL(file)
+  })
+}
+
 export const analyseApi = {
   async analyse(file) {
-    const base64 = await new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target.result)
-      reader.readAsDataURL(file)
-    })
+    const base64 = await fileToBase64(file)
     const [, data] = base64.split(',')
     return request('/analyse', {
+      method: 'POST',
+      body: JSON.stringify({ imageBase64: data, mimeType: file.type }),
+    })
+  },
+  async analyseFloorplan(file) {
+    const base64 = await fileToBase64(file)
+    const [, data] = base64.split(',')
+    return request('/analyse-floorplan', {
       method: 'POST',
       body: JSON.stringify({ imageBase64: data, mimeType: file.type }),
     })

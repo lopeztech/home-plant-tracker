@@ -135,6 +135,40 @@ paths:
         "204":
           description: CORS preflight
 
+  /analyse-floorplan:
+    post:
+      operationId: analyseFloorplan
+      summary: Analyse a floorplan image with Gemini and return structured floor/room data
+      security:
+        - api_key: []
+      parameters:
+        - in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              imageBase64:
+                type: string
+              mimeType:
+                type: string
+      responses:
+        "200":
+          description: Analysed floor layout
+          schema:
+            type: object
+            properties:
+              floors:
+                type: array
+                items:
+                  $ref: "#/definitions/Floor"
+    options:
+      operationId: corsAnalyseFloorplan
+      summary: CORS preflight
+      responses:
+        "204":
+          description: CORS preflight
+
   /analyse:
     post:
       operationId: analysePlant

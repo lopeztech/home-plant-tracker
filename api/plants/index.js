@@ -51,6 +51,32 @@ app.use(cors({
 const vertexAI = new VertexAI({ project: process.env.PROJECT_ID, location: 'us-central1' });
 const gemini = vertexAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
+const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
+
+Respond ONLY with valid JSON:
+{
+  "floors": [
+    {
+      "name": "Ground Floor",
+      "type": "interior",
+      "order": 0,
+      "rooms": [
+        { "name": "Living Room", "x": 5, "y": 5, "width": 40, "height": 35 },
+        { "name": "Kitchen", "x": 50, "y": 5, "width": 45, "height": 30 }
+      ]
+    }
+  ]
+}
+
+Rules:
+- type must be exactly "interior" or "outdoor"
+- order: 0=ground floor, 1=first floor, 2=second floor, -1=outdoor/garden areas
+- x, y, width, height are integer percentages (0-100) relative to that floor's total area
+- All rooms must fit within 0-100 bounds with no overlaps
+- Room names: concise English (e.g. "Living Room", "Master Bedroom", "Kitchen", "Bathroom", "Hall", "Garage")
+- If outdoor/garden areas are visible include them as a separate floor with type "outdoor"
+- Respond with JSON only, no markdown fences`;
+
 const ANALYSE_PROMPT = `Analyse this plant photo and respond ONLY with valid JSON matching this exact schema:
 {
   "species": "Common Name (Scientific name) or null if unidentifiable",
@@ -71,6 +97,51 @@ Rules:
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// ── Floorplan analysis via Gemini (Vertex AI) ────────────────────────────────
+
+app.post('/analyse-floorplan', async (req, res) => {
+  try {
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64 || !mimeType) {
+      return res.status(400).json({ error: 'imageBase64 and mimeType are required' });
+    }
+
+    const result = await gemini.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType, data: imageBase64 } },
+          { text: ANALYSE_FLOORPLAN_PROMPT },
+        ],
+      }],
+      generationConfig: { maxOutputTokens: 2048, temperature: 0.1 },
+    });
+
+    const text = result.response.candidates[0].content.parts[0].text;
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return res.status(500).json({ error: 'Could not parse Gemini response' });
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed.floors) || parsed.floors.length === 0) {
+      return res.status(500).json({ error: 'No floors identified in floorplan' });
+    }
+
+    // Assign stable IDs based on name+order
+    const floors = parsed.floors.map((f) => ({
+      id: f.name.toLowerCase().replace(/\s+/g, '-'),
+      name: f.name,
+      type: f.type || 'interior',
+      order: typeof f.order === 'number' ? f.order : 0,
+      rooms: f.rooms || [],
+      imageUrl: null,
+    }));
+
+    res.status(200).json({ floors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ── Plant photo analysis via Gemini (Vertex AI) ───────────────────────────────

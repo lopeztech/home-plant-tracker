@@ -265,3 +265,75 @@ export const GARDEN_SVG = `
   <text x="400" y="590" text-anchor="middle" fill="#166534" font-size="10" font-family="sans-serif" letter-spacing="2">ENTRANCE</text>
 </svg>
 `
+
+// ── Room colour palette (matched by substring, case-insensitive) ──────────────
+const ROOM_PALETTE = [
+  { keys: ['living', 'lounge', 'sitting', 'reception'],  fill: '#0b1830', stroke: '#1e3a5f', text: '#2d5a9e' },
+  { keys: ['kitchen', 'dining', 'breakfast'],            fill: '#1a1000', stroke: '#3d2800', text: '#7c5a1e' },
+  { keys: ['master', 'bedroom', 'bed'],                  fill: '#130a2a', stroke: '#2d1a5f', text: '#5b3fa0' },
+  { keys: ['bath', 'shower', 'wc', 'toilet', 'ensuite'], fill: '#001818', stroke: '#0d3333', text: '#1a8080' },
+  { keys: ['hall', 'landing', 'corridor', 'lobby'],      fill: '#0a0a18', stroke: '#1a1a33', text: '#3a3a70' },
+  { keys: ['study', 'office', 'library'],                fill: '#001208', stroke: '#0d3320', text: '#1a6640' },
+  { keys: ['garage', 'utility', 'laundry', 'storage'],   fill: '#0a0a0a', stroke: '#1f1f1f', text: '#444444' },
+  { keys: ['garden', 'lawn', 'yard'],                    fill: '#011208', stroke: '#1a4d20', text: '#2a7a2a' },
+  { keys: ['patio', 'terrace', 'deck', 'balcony'],       fill: '#111008', stroke: '#2a2010', text: '#5a5030' },
+  { keys: ['driveway', 'drive', 'parking'],              fill: '#0a0a0a', stroke: '#252525', text: '#505050' },
+]
+
+function roomPalette(name) {
+  const lower = name.toLowerCase()
+  for (const p of ROOM_PALETTE) {
+    if (p.keys.some(k => lower.includes(k))) return p
+  }
+  return { fill: '#0d1117', stroke: '#1e3a5f', text: '#2d5a9e' }
+}
+
+export function generateFloorSvg(floor) {
+  const W = 800
+  const H = 600
+  const rooms = floor.rooms || []
+  const isOutdoor = floor.type === 'outdoor'
+  const bg = isOutdoor ? '#010d03' : '#070d18'
+
+  // Grid pattern id must be unique per floor to avoid SVG id collisions
+  const gridId = 'grid-' + (floor.id || 'f')
+
+  let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" style="background:${bg}">`
+  svg += `<defs><pattern id="${gridId}" width="30" height="30" patternUnits="userSpaceOnUse">`
+  svg += `<path d="M 30 0 L 0 0 0 30" fill="none" stroke="${isOutdoor ? '#0a1f0a' : '#0d1a2e'}" stroke-width="0.6"/>`
+  svg += `</pattern></defs>`
+  svg += `<rect width="${W}" height="${H}" fill="url(#${gridId})"/>`
+
+  for (const room of rooms) {
+    const x = Math.round((room.x / 100) * W)
+    const y = Math.round((room.y / 100) * H)
+    const w = Math.round((room.width / 100) * W)
+    const h = Math.round((room.height / 100) * H)
+    if (w < 4 || h < 4) continue
+
+    const p = roomPalette(room.name)
+    svg += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${p.fill}" stroke="${p.stroke}" stroke-width="2" rx="3"/>`
+
+    // Label — two lines if name has a space
+    const cx = x + w / 2
+    const cy = y + h / 2
+    const words = room.name.split(' ')
+    const fs = Math.min(13, Math.max(7, Math.floor(Math.min(w, h) / 5)))
+    if (words.length > 1 && h > 40) {
+      const half = Math.ceil(words.length / 2)
+      const line1 = words.slice(0, half).join(' ')
+      const line2 = words.slice(half).join(' ')
+      svg += `<text x="${cx}" y="${cy - fs * 0.7}" text-anchor="middle" fill="${p.text}" font-size="${fs}" font-family="system-ui,sans-serif" font-weight="600" letter-spacing="1">${line1}</text>`
+      svg += `<text x="${cx}" y="${cy + fs * 0.9}" text-anchor="middle" fill="${p.text}" font-size="${fs}" font-family="system-ui,sans-serif" font-weight="600" letter-spacing="1">${line2}</text>`
+    } else {
+      svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" fill="${p.text}" font-size="${fs}" font-family="system-ui,sans-serif" font-weight="600" letter-spacing="1">${room.name}</text>`
+    }
+  }
+
+  if (rooms.length === 0) {
+    svg += `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" dominant-baseline="middle" fill="#1e3a5f" font-size="14" font-family="system-ui,sans-serif">${floor.name}</text>`
+  }
+
+  svg += `</svg>`
+  return svg
+}

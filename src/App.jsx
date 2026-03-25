@@ -6,7 +6,7 @@ import FloorplanView from './components/FloorplanView.jsx'
 import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
-import { plantsApi, imagesApi, floorsApi } from './api/plants.js'
+import { plantsApi, imagesApi, floorsApi, analyseApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
 
 const DEFAULT_FLOORS = [
@@ -28,6 +28,7 @@ function AppContent() {
   const [showPlantModal, setShowPlantModal] = useState(false)
   const [editingPlant, setEditingPlant] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
+  const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
 
   // Load plants and floors from API when authenticated
   useEffect(() => {
@@ -123,17 +124,19 @@ function AppContent() {
   }, [])
 
   const handleFloorplanUpload = useCallback(async (file) => {
+    setIsAnalysingFloorplan(true)
     try {
-      const rawUrl = await imagesApi.upload(file, 'floorplans')
-      const updatedFloors = floors.map(f =>
-        f.id === activeFloorId ? { ...f, imageUrl: rawUrl } : f
-      )
-      const { floors: saved } = await floorsApi.save(updatedFloors)
+      const { floors: analysedFloors } = await analyseApi.analyseFloorplan(file)
+      const { floors: saved } = await floorsApi.save(analysedFloors)
       setFloors(saved)
+      const first = saved.find(f => f.type === 'interior') ?? saved[0]
+      if (first) setActiveFloorId(first.id)
     } catch (err) {
-      alert(`Floorplan upload failed: ${err.message}`)
+      alert(`Floorplan analysis failed: ${err.message}`)
+    } finally {
+      setIsAnalysingFloorplan(false)
     }
-  }, [floors, activeFloorId])
+  }, [])
 
   if (isLoading) {
     return (
@@ -169,6 +172,7 @@ function AppContent() {
           floors={floors}
           activeFloorId={activeFloorId}
           onFloorChange={setActiveFloorId}
+          isAnalysingFloorplan={isAnalysingFloorplan}
         />
         <PlantSidebar
           plants={plants}
