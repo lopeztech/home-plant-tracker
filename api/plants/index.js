@@ -49,7 +49,7 @@ app.use(cors({
 }));
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const gemini = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+const gemini = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-001' });
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
 
