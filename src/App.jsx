@@ -84,6 +84,16 @@ function AppContent() {
     setShowPlantModal(true)
   }, [])
 
+  const handleMarkerDrag = useCallback(async (plant, x, y) => {
+    setPlants(prev => prev.map(p => p.id === plant.id ? { ...p, x, y } : p))
+    try {
+      await plantsApi.update(plant.id, { x, y })
+    } catch (err) {
+      console.error('Failed to update plant position:', err)
+      setPlants(prev => prev.map(p => p.id === plant.id ? plant : p))
+    }
+  }, [])
+
   const handleSavePlant = useCallback(async (plantData) => {
     const data = {
       ...plantData,
@@ -175,6 +185,7 @@ function AppContent() {
           onFloorplanUpload={handleFloorplanUpload}
           onFloorplanClick={handleFloorplanClick}
           onMarkerClick={handleMarkerClick}
+          onMarkerDrag={handleMarkerDrag}
           loading={plantsLoading}
           weather={weather}
         />

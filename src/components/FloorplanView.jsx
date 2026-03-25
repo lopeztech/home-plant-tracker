@@ -69,6 +69,7 @@ export default function FloorplanView({
   onFloorplanUpload,
   onFloorplanClick,
   onMarkerClick,
+  onMarkerDrag,
   weather,
 }) {
   const containerRef = useRef(null)
@@ -193,6 +194,8 @@ export default function FloorplanView({
               key={plant.id}
               plant={plant}
               onClick={onMarkerClick}
+              onDragEnd={onMarkerDrag}
+              containerRef={containerRef}
             />
           ))}
 

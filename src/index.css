@@ -87,14 +87,22 @@
 .plant-marker {
   position: absolute;
   transform: translate(-50%, -50%);
-  cursor: pointer;
+  cursor: grab;
   z-index: 10;
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
 
 .plant-marker:hover {
   transform: translate(-50%, -50%) scale(1.2);
   z-index: 20;
+}
+
+.plant-marker-dragging {
+  cursor: grabbing !important;
+  z-index: 30 !important;
+  transform: translate(-50%, -50%) scale(1.28) !important;
+  transition: none !important;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.55)) !important;
 }
 
 .tooltip {
