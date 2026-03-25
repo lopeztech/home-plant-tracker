@@ -1,11 +1,19 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 const API_KEY = import.meta.env.VITE_API_KEY
 
+let _credential = null
+
+export function setApiCredential(credential) {
+  _credential = credential
+}
+
 function headers() {
-  return {
+  const h = {
     'Content-Type': 'application/json',
     'x-api-key': API_KEY,
   }
+  if (_credential) h['Authorization'] = `Bearer ${_credential}`
+  return h
 }
 
 async function request(path, options = {}) {

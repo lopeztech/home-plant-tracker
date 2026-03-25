@@ -11,8 +11,6 @@ const db = new Firestore();
 const storage = new Storage({
   serviceAccountEmail: process.env.SERVICE_ACCOUNT_EMAIL,
 });
-const COLLECTION = 'plants';
-const CONFIG_COLLECTION = 'config';
 const IMAGES_BUCKET = process.env.IMAGES_BUCKET;
 
 const DEFAULT_FLOORS = [
@@ -25,6 +23,48 @@ function gcsPath(urlOrPath) {
   if (!urlOrPath) return null;
   const prefix = `https://storage.googleapis.com/${IMAGES_BUCKET}/`;
   return urlOrPath.startsWith(prefix) ? urlOrPath.slice(prefix.length) : urlOrPath;
+}
+
+// Extract the authenticated user's Google `sub` from the request.
+// In production, API Gateway verifies the JWT and injects `x-apigateway-api-userinfo`.
+// In local dev, we decode the Bearer token payload directly (no re-verification needed
+// since the Cloud Function is not publicly reachable without the API key).
+function getUserSub(req) {
+  const gatewayInfo = req.headers['x-apigateway-api-userinfo'];
+  if (gatewayInfo) {
+    try {
+      const payload = JSON.parse(Buffer.from(gatewayInfo, 'base64').toString('utf-8'));
+      if (payload.sub) return payload.sub;
+    } catch {}
+  }
+  const auth = req.headers['authorization'];
+  if (auth && auth.startsWith('Bearer ')) {
+    try {
+      const parts = auth.slice(7).split('.');
+      if (parts.length === 3) {
+        const pad = parts[1].length % 4;
+        const padded = parts[1] + (pad ? '='.repeat(4 - pad) : '');
+        const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
+        if (payload.sub) return payload.sub;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function requireUser(req, res, next) {
+  const sub = getUserSub(req);
+  if (!sub) return res.status(401).json({ error: 'Unauthorized' });
+  req.userId = sub;
+  next();
+}
+
+function userPlants(userId) {
+  return db.collection('users').doc(userId).collection('plants');
+}
+
+function userConfig(userId) {
+  return db.collection('users').doc(userId).collection('config');
 }
 
 // Return a signed read URL valid for 1 hour, or null if no image.
@@ -216,9 +256,9 @@ app.post('/images/upload-url', async (req, res) => {
 
 // ── Floors config ─────────────────────────────────────────────────────────────
 
-app.get('/config/floors', async (req, res) => {
+app.get('/config/floors', requireUser, async (req, res) => {
   try {
-    const doc = await db.collection(CONFIG_COLLECTION).doc('floors').get();
+    const doc = await userConfig(req.userId).doc('floors').get();
     const floors = doc.exists ? doc.data().floors : DEFAULT_FLOORS;
     const signed = await Promise.all(floors.map(async (f) => ({
       ...f,
@@ -230,10 +270,10 @@ app.get('/config/floors', async (req, res) => {
   }
 });
 
-app.put('/config/floors', async (req, res) => {
+app.put('/config/floors', requireUser, async (req, res) => {
   try {
     const { floors } = req.body;
-    await db.collection(CONFIG_COLLECTION).doc('floors').set(
+    await userConfig(req.userId).doc('floors').set(
       { floors, updatedAt: new Date().toISOString() },
       { merge: true }
     );
@@ -249,9 +289,9 @@ app.put('/config/floors', async (req, res) => {
 
 // ── Floorplan config (legacy) ──────────────────────────────────────────────────────────
 
-app.get('/config/floorplan', async (req, res) => {
+app.get('/config/floorplan', requireUser, async (req, res) => {
   try {
-    const doc = await db.collection(CONFIG_COLLECTION).doc('floorplan').get();
+    const doc = await userConfig(req.userId).doc('floorplan').get();
     const data = doc.exists ? doc.data() : { imageUrl: null };
     data.imageUrl = await signReadUrl(data.imageUrl);
     res.status(200).json(data);
@@ -260,10 +300,10 @@ app.get('/config/floorplan', async (req, res) => {
   }
 });
 
-app.put('/config/floorplan', async (req, res) => {
+app.put('/config/floorplan', requireUser, async (req, res) => {
   try {
     const { imageUrl } = req.body;
-    await db.collection(CONFIG_COLLECTION).doc('floorplan').set(
+    await userConfig(req.userId).doc('floorplan').set(
       { imageUrl, updatedAt: new Date().toISOString() },
       { merge: true }
     );
@@ -276,9 +316,9 @@ app.put('/config/floorplan', async (req, res) => {
 
 // ── Plants CRUD ───────────────────────────────────────────────────────────────
 
-app.get('/plants', async (req, res) => {
+app.get('/plants', requireUser, async (req, res) => {
   try {
-    const snapshot = await db.collection(COLLECTION)
+    const snapshot = await userPlants(req.userId)
       .orderBy('createdAt', 'desc')
       .get();
     const plants = await Promise.all(
@@ -294,21 +334,21 @@ app.get('/plants', async (req, res) => {
   }
 });
 
-app.post('/plants', async (req, res) => {
+app.post('/plants', requireUser, async (req, res) => {
   try {
     const now = new Date().toISOString();
     const { imageBase64, ...body } = req.body;
     const data = { ...body, createdAt: now, updatedAt: now };
-    const docRef = await db.collection(COLLECTION).add(data);
+    const docRef = await userPlants(req.userId).add(data);
     res.status(201).json({ id: docRef.id, ...data });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/plants/:id', async (req, res) => {
+app.get('/plants/:id', requireUser, async (req, res) => {
   try {
-    const doc = await db.collection(COLLECTION).doc(req.params.id).get();
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
     const data = { id: doc.id, ...doc.data() };
     data.imageUrl = await signReadUrl(data.imageUrl);
@@ -318,9 +358,9 @@ app.get('/plants/:id', async (req, res) => {
   }
 });
 
-app.put('/plants/:id', async (req, res) => {
+app.put('/plants/:id', requireUser, async (req, res) => {
   try {
-    const ref = db.collection(COLLECTION).doc(req.params.id);
+    const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
@@ -335,9 +375,9 @@ app.put('/plants/:id', async (req, res) => {
   }
 });
 
-app.post('/plants/:id/water', async (req, res) => {
+app.post('/plants/:id/water', requireUser, async (req, res) => {
   try {
-    const ref = db.collection(COLLECTION).doc(req.params.id);
+    const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
@@ -356,9 +396,9 @@ app.post('/plants/:id/water', async (req, res) => {
   }
 });
 
-app.delete('/plants/:id', async (req, res) => {
+app.delete('/plants/:id', requireUser, async (req, res) => {
   try {
-    const ref = db.collection(COLLECTION).doc(req.params.id);
+    const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
     await ref.delete();

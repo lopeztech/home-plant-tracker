@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
+import { setApiCredential } from '../api/plants.js'
 
 const STORAGE_KEY = 'plant_tracker_user'
 
@@ -12,7 +13,9 @@ export function AuthProvider({ children }) {
     try {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
-        setUser(JSON.parse(stored))
+        const parsed = JSON.parse(stored)
+        setApiCredential(parsed.credential ?? null)
+        setUser(parsed)
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY)
@@ -34,9 +37,11 @@ export function AuthProvider({ children }) {
         email: decoded.email,
         picture: decoded.picture,
         sub: decoded.sub,
+        credential: credentialResponse.credential,
       }
 
       localStorage.setItem(STORAGE_KEY, JSON.stringify(userData))
+      setApiCredential(credentialResponse.credential)
       setUser(userData)
     } catch (err) {
       console.error('Failed to decode Google credential:', err)
@@ -45,6 +50,7 @@ export function AuthProvider({ children }) {
 
   function logout() {
     localStorage.removeItem(STORAGE_KEY)
+    setApiCredential(null)
     setUser(null)
 
     // Redirect to IAP logout endpoint in production
