@@ -7,6 +7,7 @@ import FloorplanView from './components/FloorplanView.jsx'
 import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import SettingsModal from './components/SettingsModal.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
 
@@ -34,6 +35,18 @@ function AppContent() {
   // Responsive layout state
   const [mobileTab, setMobileTab] = useState('floorplan')
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [showSettings, setShowSettings] = useState(false)
+
+  // API key (stored in localStorage; passed to SettingsModal)
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('plant_tracker_api_key') || '')
+  const handleSaveApiKey = useCallback((key) => {
+    if (key) {
+      localStorage.setItem('plant_tracker_api_key', key)
+    } else {
+      localStorage.removeItem('plant_tracker_api_key')
+    }
+    setApiKey(key || '')
+  }, [])
 
   // Load plants and floors from API when authenticated
   useEffect(() => {
@@ -140,6 +153,17 @@ function AppContent() {
     setPendingPosition(null)
   }, [])
 
+  const handleSaveFloors = useCallback(async (updatedFloors) => {
+    const { floors: saved } = await floorsApi.save(updatedFloors)
+    setFloors(saved)
+    // If the active floor is now hidden, switch to the first visible floor
+    const stillVisible = saved.find(f => f.id === activeFloorId && !f.hidden)
+    if (!stillVisible) {
+      const first = saved.find(f => !f.hidden && f.type === 'interior') ?? saved.find(f => !f.hidden) ?? saved[0]
+      if (first) setActiveFloorId(first.id)
+    }
+  }, [activeFloorId])
+
   const handleFloorplanUpload = useCallback(async (file) => {
     setIsAnalysingFloorplan(true)
     try {
@@ -172,6 +196,7 @@ function AppContent() {
       <Header
         onFloorplanUpload={handleFloorplanUpload}
         isAnalysingFloorplan={isAnalysingFloorplan}
+        onOpenSettings={() => setShowSettings(true)}
       />
 
       {plantsError && (
@@ -254,6 +279,16 @@ function AppContent() {
           onDelete={handleDeletePlant}
           onWater={handleWaterPlant}
           onClose={handleCloseModal}
+        />
+      )}
+
+      {showSettings && (
+        <SettingsModal
+          currentApiKey={apiKey}
+          floors={floors}
+          onSave={handleSaveApiKey}
+          onSaveFloors={handleSaveFloors}
+          onClose={() => setShowSettings(false)}
         />
       )}
     </div>

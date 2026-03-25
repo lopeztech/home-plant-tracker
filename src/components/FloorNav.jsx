@@ -1,8 +1,8 @@
 import React from 'react'
 
 export default function FloorNav({ floors, activeFloorId, onChange }) {
-  // Sort: highest order at top, lowest at bottom (physical building order)
-  const sorted = [...floors].sort((a, b) => b.order - a.order)
+  // Sort: highest order at top, lowest at bottom; skip hidden floors
+  const sorted = [...floors].filter(f => !f.hidden).sort((a, b) => b.order - a.order)
 
   return (
     <div className="floor-nav">

@@ -36,7 +36,8 @@ export default function FloorplanView({
   const containerRef = useRef(null)
   const lastTouchRef = useRef(0)
 
-  const activeFloor = floors.find(f => f.id === activeFloorId) ?? floors[0]
+  const visibleFloors = floors.filter(f => !f.hidden)
+  const activeFloor = visibleFloors.find(f => f.id === activeFloorId) ?? visibleFloors[0]
   const activeOrder = activeFloor ? activeFloor.order : 0
 
   const sky = weather && weather.current
@@ -84,7 +85,7 @@ export default function FloorplanView({
     e.currentTarget.classList.remove('drag-active')
   }, [])
 
-  const hasAnalysedFloors = floors.some(f => f.rooms && f.rooms.length > 0)
+  const hasAnalysedFloors = visibleFloors.some(f => f.rooms && f.rooms.length > 0)
 
   return (
     <div className="flex-1 flex flex-col min-w-0 bg-gray-950 border-r border-gray-800">
@@ -99,13 +100,13 @@ export default function FloorplanView({
         <span className="hidden md:inline text-xs text-gray-600">(click to place plant)</span>
 
         {/* Mobile: floor selector dropdown */}
-        {floors.length > 1 && (
+        {visibleFloors.length > 1 && (
           <select
             className="md:hidden text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none"
             value={activeFloorId}
             onChange={e => onFloorChange(e.target.value)}
           >
-            {floors.map(f => (
+            {visibleFloors.map(f => (
               <option key={f.id} value={f.id}>{f.name}</option>
             ))}
           </select>
@@ -136,7 +137,7 @@ export default function FloorplanView({
       {/* Floor nav + canvas */}
       <div className="flex-1 overflow-hidden flex">
         <FloorNav
-          floors={floors}
+          floors={visibleFloors}
           activeFloorId={activeFloorId}
           onChange={onFloorChange}
         />
@@ -157,7 +158,7 @@ export default function FloorplanView({
             onDragLeave={handleDragLeave}
           >
             {/* All floor layers — CSS translateY stacks them like building floors */}
-            {floors.map(floor => {
+            {visibleFloors.map(floor => {
               const plantsOnFloor = plants.filter(p => (p.floor || 'ground') === floor.id)
               const isActive = floor.id === activeFloorId
               return (
