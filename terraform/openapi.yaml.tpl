@@ -139,6 +139,11 @@ paths:
     post:
       operationId: analyseFloorplan
       summary: Analyse a floorplan image with Gemini and return structured floor/room data
+      x-google-backend:
+        address: ${function_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: ${function_url}
+        deadline: 110.0
       security:
         - api_key: []
       parameters:
@@ -173,6 +178,11 @@ paths:
     post:
       operationId: analysePlant
       summary: Analyse a plant photo with Gemini
+      x-google-backend:
+        address: ${function_url}
+        path_translation: APPEND_PATH_TO_ADDRESS
+        jwt_audience: ${function_url}
+        deadline: 110.0
       security:
         - api_key: []
       parameters:

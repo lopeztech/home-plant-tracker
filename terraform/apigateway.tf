@@ -11,7 +11,7 @@ resource "google_api_gateway_api" "app" {
 resource "google_api_gateway_api_config" "app" {
   provider      = google-beta
   api           = google_api_gateway_api.app.api_id
-  api_config_id = "${local.app_name}-config-${substr(data.archive_file.plants_function.output_md5, 0, 8)}"
+  api_config_id = "${local.app_name}-config-${substr(data.archive_file.plants_function.output_md5, 0, 6)}${substr(md5(file("${path.module}/openapi.yaml.tpl")), 0, 6)}"
   project       = var.project_id
 
   openapi_documents {
