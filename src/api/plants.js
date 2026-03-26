@@ -69,6 +69,13 @@ export const analyseApi = {
   },
 }
 
+export const recommendApi = {
+  get: (name, species) => request('/recommend', {
+    method: 'POST',
+    body: JSON.stringify({ name, species }),
+  }),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

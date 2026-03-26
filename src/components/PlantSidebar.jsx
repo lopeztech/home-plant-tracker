@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search } from 'lucide-react'
+import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon } from 'lucide-react'
 
 const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace'])
 
@@ -35,9 +35,13 @@ function WeatherSection({ weather, locationDenied, outdoorPlantCount }) {
           <span className="text-xl leading-none">{current.condition.emoji}</span>
           <div>
             <p className="text-xs font-medium text-white leading-tight">{current.condition.label}</p>
-            <p className="text-xs text-gray-600 leading-tight">
-              {current.isDay ? 'Daytime' : 'Night'}
-            </p>
+            <div className="flex items-center gap-1 mt-0.5">
+              {current.isDay
+                ? <Sun size={11} className="text-yellow-400" />
+                : <Moon size={11} className="text-indigo-400" />
+              }
+              <span className="text-xs text-gray-600">{current.isDay ? 'Day' : 'Night'}</span>
+            </div>
           </div>
         </div>
         <span className="text-xl font-light text-white">{current.temp}°</span>

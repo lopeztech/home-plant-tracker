@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { Loader2, Sparkles, AlertCircle, X, Camera } from 'lucide-react'
+import { Loader2, Sparkles, AlertCircle, X, Camera, Droplets } from 'lucide-react'
 import { analyseApi } from '../api/plants.js'
 
 const HEALTH_COLORS = {
@@ -48,7 +48,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
     setAnalysisResult(null)
     try {
       const result = await analyseApi.analyse(file)
-      if (!result.health || !result.maturity) throw new Error('Incomplete response from AI')
+      if (!result.health || !result.maturity || !result.frequencyDays) throw new Error('Incomplete response from AI')
       setAnalysisResult(result)
       onAnalysisComplete?.(result)
     } catch (err) {
@@ -200,12 +200,10 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
           <div className="flex flex-wrap gap-2">
             <Badge label="Health" value={analysisResult.health} colorMap={HEALTH_COLORS} />
             <Badge label="Maturity" value={analysisResult.maturity} colorMap={MATURITY_COLORS} />
-            {analysisResult.frequencyDays && (
-              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium bg-gray-700 text-gray-300 border-gray-600">
-                <span className="text-gray-500">Water every:</span>
-                <span>{analysisResult.frequencyDays}d</span>
-              </div>
-            )}
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium bg-blue-950 text-blue-300 border-blue-800">
+              <Droplets size={12} className="text-blue-400" />
+              <span>Every {analysisResult.frequencyDays}d</span>
+            </div>
           </div>
 
           {analysisResult.healthReason && (

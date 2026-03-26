@@ -144,6 +144,27 @@ Rules:
 - recommendations must have exactly 3 items
 - Respond with JSON only, no markdown or extra text`;
 
+const RECOMMEND_PROMPT = (name, species) =>
+  `You are a plant care expert. Provide detailed care guidance for: ${name}${species ? ` (${species})` : ''}.
+
+Respond ONLY with valid JSON:
+{
+  "summary": "One to two sentence overview of this plant's care needs",
+  "watering": "Watering frequency and technique",
+  "light": "Ideal light conditions",
+  "humidity": "Humidity preferences and tips",
+  "soil": "Recommended soil mix",
+  "temperature": "Preferred temperature range",
+  "fertilising": "Fertilising schedule and type",
+  "commonIssues": ["issue 1", "issue 2", "issue 3"],
+  "tips": ["tip 1", "tip 2", "tip 3"]
+}
+Rules:
+- All fields are required
+- commonIssues and tips must each have 2–4 items
+- Be concise and practical
+- Respond with JSON only, no markdown fences`;
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
@@ -215,6 +236,32 @@ app.post('/analyse', async (req, res) => {
         ],
       }],
       generationConfig: { maxOutputTokens: 512, temperature: 0.1 },
+    });
+
+    const text = result.response.text();
+    const jsonStr = extractJson(text);
+    if (!jsonStr) return res.status(500).json({ error: 'Could not parse Gemini response' });
+
+    const parsed = JSON.parse(jsonStr);
+    res.status(200).json(parsed);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Care recommendations via Gemini ──────────────────────────────────────────
+
+app.post('/recommend', async (req, res) => {
+  try {
+    const { name, species } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const result = await gemini.generateContent({
+      contents: [{
+        role: 'user',
+        parts: [{ text: RECOMMEND_PROMPT(name, species) }],
+      }],
+      generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
     });
 
     const text = result.response.text();

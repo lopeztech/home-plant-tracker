@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react'
-import { Home, ScanLine, Upload, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Home, ScanLine, Upload, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react'
 import PlantMarker from './PlantMarker.jsx'
 import WeatherSky, { SKY_BORDER_COLORS } from './WeatherSky.jsx'
 import FloorNav from './FloorNav.jsx'
@@ -120,7 +120,11 @@ export default function FloorplanView({
         )}
 
         {weather && (
-          <span className={`flex items-center gap-1 text-xs text-gray-400 flex-shrink-0 ${onToggleSidebar ? '' : 'ml-auto'}`}>
+          <span className={`flex items-center gap-1.5 text-xs text-gray-400 flex-shrink-0 ${onToggleSidebar ? '' : 'ml-auto'}`}>
+            {weather.current.isDay
+              ? <Sun size={13} className="text-yellow-400" />
+              : <Moon size={13} className="text-indigo-400" />
+            }
             <span className="text-base leading-none">{weather.current.condition.emoji}</span>
             <span>{weather.current.temp}°</span>
           </span>

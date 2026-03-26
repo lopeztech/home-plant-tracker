@@ -8,9 +8,22 @@ vi.mock('../components/ImageAnalyser.jsx', () => ({
   default: () => <div data-testid="image-analyser" />,
 }))
 
-// Stub imagesApi so no real uploads happen.
+// Stub imagesApi and recommendApi so no real network calls happen.
 vi.mock('../api/plants.js', () => ({
   imagesApi: { upload: vi.fn().mockResolvedValue('https://example.com/img.jpg') },
+  recommendApi: {
+    get: vi.fn().mockResolvedValue({
+      summary: 'A lovely fern.',
+      watering: 'Water weekly.',
+      light: 'Indirect light.',
+      humidity: 'High humidity.',
+      soil: 'Well-draining mix.',
+      temperature: '18–24°C',
+      fertilising: 'Monthly in spring.',
+      commonIssues: ['Brown tips', 'Root rot'],
+      tips: ['Mist leaves', 'Avoid cold drafts'],
+    }),
+  },
 }))
 
 const floors = [
@@ -60,9 +73,9 @@ describe('PlantModal', () => {
     expect(screen.getByRole('heading', { name: 'Add Plant' })).toBeInTheDocument()
   })
 
-  it('shows "Edit Plant" title when editing an existing plant', () => {
+  it('shows the plant name in the title when editing an existing plant', () => {
     renderModal({ plant: existingPlant })
-    expect(screen.getByRole('heading', { name: 'Edit Plant' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Fern' })).toBeInTheDocument()
   })
 
   it('pre-fills the name field when editing a plant', () => {
@@ -82,9 +95,7 @@ describe('PlantModal', () => {
 
   it('renders floor options from the floors prop', () => {
     renderModal()
-    // "Ground Floor" only appears as a floor option, not in the rooms list
     expect(screen.getByRole('option', { name: 'Ground Floor' })).toBeInTheDocument()
-    // "Garden" appears both as a floor option and a room option — at least two
     expect(screen.getAllByRole('option', { name: 'Garden' }).length).toBeGreaterThanOrEqual(2)
   })
 
@@ -101,6 +112,19 @@ describe('PlantModal', () => {
   it('renders the ImageAnalyser stub', () => {
     renderModal()
     expect(screen.getByTestId('image-analyser')).toBeInTheDocument()
+  })
+
+  it('shows tab bar when editing a plant', () => {
+    renderModal({ plant: existingPlant })
+    expect(screen.getByRole('button', { name: 'Edit Plant' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Watering' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Care' })).toBeInTheDocument()
+  })
+
+  it('does not show tab bar for a new plant', () => {
+    renderModal()
+    expect(screen.queryByRole('button', { name: 'Edit Plant' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Watering' })).not.toBeInTheDocument()
   })
 
   // ── User interactions ─────────────────────────────────────────────────────
@@ -153,19 +177,9 @@ describe('PlantModal', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('calls onClose when clicking the backdrop', () => {
-    const onClose = vi.fn()
-    renderModal({ onClose })
-    // The outermost div is the backdrop
-    const backdrop = screen.getByRole('button', { name: /cancel/i }).closest('[style]')
-    // Simulate clicking the backdrop itself (not a child)
-    fireEvent.click(backdrop.parentElement, { target: backdrop.parentElement })
-  })
-
   it('calls onClose when the X button is clicked', () => {
     const onClose = vi.fn()
     renderModal({ onClose })
-    // The X button is next to the title
     const closeButtons = screen.getAllByRole('button')
     const xBtn = closeButtons.find(b => b.querySelector('svg') && !b.textContent.trim())
     if (xBtn) fireEvent.click(xBtn)
@@ -186,31 +200,46 @@ describe('PlantModal', () => {
     expect(onDelete).toHaveBeenCalledWith('plant-1')
   })
 
-  // ── Watering log (issue #5) ───────────────────────────────────────────────
-
-  it('does not show Water Now button for a new plant', () => {
-    renderModal({ onWater: vi.fn() })
-    expect(screen.queryByRole('button', { name: /water now/i })).not.toBeInTheDocument()
-  })
-
-  it('shows Water Now button when editing and onWater is provided', () => {
-    renderModal({ plant: existingPlant, onWater: vi.fn() })
-    expect(screen.getByRole('button', { name: /water now/i })).toBeInTheDocument()
-  })
-
-  it('does not show Water Now button when editing but onWater is not provided', () => {
+  it('hides the Save button on the Watering tab', () => {
     renderModal({ plant: existingPlant })
-    expect(screen.queryByRole('button', { name: /water now/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Watering' }))
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
   })
 
-  it('calls onWater with the plant id when Water Now is clicked', () => {
+  it('hides the Save button on the Care tab', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('button', { name: 'Care' }))
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
+  })
+
+  // ── Watering tab ──────────────────────────────────────────────────────────
+
+  it('does not show Watered button for a new plant', () => {
+    renderModal({ onWater: vi.fn() })
+    expect(screen.queryByRole('button', { name: /watered/i })).not.toBeInTheDocument()
+  })
+
+  it('shows Watered button on the Watering tab when onWater is provided', () => {
+    renderModal({ plant: existingPlant, onWater: vi.fn() })
+    fireEvent.click(screen.getByRole('button', { name: 'Watering' }))
+    expect(screen.getByRole('button', { name: /watered/i })).toBeInTheDocument()
+  })
+
+  it('does not show Watered button on the Watering tab when onWater is not provided', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('button', { name: 'Watering' }))
+    expect(screen.queryByRole('button', { name: /watered/i })).not.toBeInTheDocument()
+  })
+
+  it('calls onWater with the plant id when Watered is clicked', () => {
     const onWater = vi.fn()
     renderModal({ plant: existingPlant, onWater })
-    fireEvent.click(screen.getByRole('button', { name: /water now/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'Watering' }))
+    fireEvent.click(screen.getByRole('button', { name: /watered/i }))
     expect(onWater).toHaveBeenCalledWith('plant-1')
   })
 
-  it('shows watering history when plant has a wateringLog', () => {
+  it('shows watering history on the Watering tab when plant has a wateringLog', () => {
     const plant = {
       ...existingPlant,
       wateringLog: [
@@ -219,10 +248,11 @@ describe('PlantModal', () => {
       ],
     }
     renderModal({ plant })
-    expect(screen.getByText(/recent waterings/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Watering' }))
+    expect(screen.getByText(/watering history/i)).toBeInTheDocument()
   })
 
-  it('shows at most the last 5 watering entries', () => {
+  it('shows all watering entries on the Watering tab', () => {
     const plant = {
       ...existingPlant,
       wateringLog: Array.from({ length: 7 }, (_, i) => ({
@@ -231,15 +261,43 @@ describe('PlantModal', () => {
       })),
     }
     renderModal({ plant })
-    // entries are reversed then sliced to 5 — entries 1 and 2 (oldest) should not appear
-    expect(screen.queryByText(/— entry 1/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/— entry 2/)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Watering' }))
+    // All entries should appear (no 5-entry cap)
+    expect(screen.getByText(/— entry 1/)).toBeInTheDocument()
     expect(screen.getByText(/— entry 7/)).toBeInTheDocument()
   })
 
-  it('does not show watering history when wateringLog is empty', () => {
+  it('shows empty state on the Watering tab when wateringLog is empty', () => {
     renderModal({ plant: existingPlant })
-    expect(screen.queryByText(/recent waterings/i)).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Watering' }))
+    expect(screen.getByText(/no watering history yet/i)).toBeInTheDocument()
+  })
+
+  // ── Care tab ──────────────────────────────────────────────────────────────
+
+  it('shows Get Recommendations button on the Care tab', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('button', { name: 'Care' }))
+    expect(screen.getByRole('button', { name: /get recommendations/i })).toBeInTheDocument()
+  })
+
+  it('calls recommendApi.get and shows results when Get Recommendations is clicked', async () => {
+    const { recommendApi } = await import('../api/plants.js')
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('button', { name: 'Care' }))
+    fireEvent.click(screen.getByRole('button', { name: /get recommendations/i }))
+    await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis'))
+    expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
+    expect(screen.getByText('Water weekly.')).toBeInTheDocument()
+  })
+
+  it('shows an error message if recommendApi.get fails', async () => {
+    const { recommendApi } = await import('../api/plants.js')
+    recommendApi.get.mockRejectedValueOnce(new Error('Network error'))
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('button', { name: 'Care' }))
+    fireEvent.click(screen.getByRole('button', { name: /get recommendations/i }))
+    expect(await screen.findByText(/network error/i)).toBeInTheDocument()
   })
 
   // ── Error states / missing props ──────────────────────────────────────────
