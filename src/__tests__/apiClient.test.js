@@ -168,7 +168,7 @@ describe('API client', () => {
       set onload(cb) { cb({ target: { result: 'data:image/jpeg;base64,abc123' } }) },
     }))
     global.FileReader = MockFileReader
-    global.crypto = { randomUUID: () => 'test-uuid' }
+    vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' })
 
     const file = new File(['content'], 'photo.jpg', { type: 'image/jpeg' })
     const result = await imagesApi.upload(file)
@@ -194,7 +194,7 @@ describe('API client', () => {
       readAsDataURL: vi.fn(),
       set onload(cb) { cb({ target: { result: 'data:image/jpeg;base64,test' } }) },
     }))
-    global.crypto = { randomUUID: () => 'uuid-2' }
+    vi.stubGlobal('crypto', { randomUUID: () => 'uuid-2' })
 
     const file = new File(['x'], 'photo.jpg', { type: 'image/jpeg' })
     await expect(imagesApi.upload(file)).rejects.toThrow('GCS upload failed')
