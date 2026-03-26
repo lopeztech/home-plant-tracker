@@ -305,6 +305,7 @@ export function generateFloorSvg(floor) {
   svg += `<rect width="${W}" height="${H}" fill="url(#${gridId})"/>`
 
   for (const room of rooms) {
+    if (room.hidden) continue
     const x = Math.round((room.x / 100) * W)
     const y = Math.round((room.y / 100) * H)
     const w = Math.round((room.width / 100) * W)

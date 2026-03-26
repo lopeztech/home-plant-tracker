@@ -8,7 +8,7 @@ function inputCls(extra = '') {
   return `w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors ${extra}`
 }
 
-function FloorRow({ floor, onToggleHidden, onNameChange, onTypeChange, onDelete, onUpdateRoom, onDeleteRoom, onAddRoom }) {
+function FloorRow({ floor, onToggleHidden, onNameChange, onTypeChange, onDelete, onUpdateRoom, onToggleRoom, onDeleteRoom, onAddRoom }) {
   const [expanded, setExpanded] = useState(false)
   const [newRoom, setNewRoom] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -98,9 +98,17 @@ function FloorRow({ floor, onToggleHidden, onNameChange, onTypeChange, onDelete,
           ) : (
             <div className="space-y-1">
               {rooms.map((room, i) => (
-                <div key={i} className="flex items-center gap-2">
+                <div key={i} className={`flex items-center gap-2 ${room.hidden ? 'opacity-50' : ''}`}>
+                  <button
+                    type="button"
+                    onClick={() => onToggleRoom(floor.id, i)}
+                    title={room.hidden ? 'Show room' : 'Hide room'}
+                    className="flex-shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
+                  >
+                    {room.hidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                  </button>
                   <input
-                    className="flex-1 min-w-0 px-2 py-1 rounded-md bg-gray-900 border border-gray-700 focus:border-emerald-600 focus:outline-none text-sm text-white placeholder-gray-600 transition-colors"
+                    className={`flex-1 min-w-0 px-2 py-1 rounded-md bg-gray-900 border border-gray-700 focus:border-emerald-600 focus:outline-none text-sm placeholder-gray-600 transition-colors ${room.hidden ? 'text-gray-500 line-through' : 'text-white'}`}
                     value={room.name}
                     onChange={e => onUpdateRoom(floor.id, i, e.target.value)}
                     placeholder="Room name"
@@ -165,6 +173,12 @@ function FloorsTab({ floors, onChange }) {
       return { ...f, rooms: (f.rooms || []).map((r, i) => i === idx ? { ...r, name } : r) }
     }))
 
+  const toggleRoom = (floorId, idx) =>
+    onChange(floors.map(f => {
+      if (f.id !== floorId) return f
+      return { ...f, rooms: (f.rooms || []).map((r, i) => i === idx ? { ...r, hidden: !r.hidden } : r) }
+    }))
+
   const deleteRoom = (floorId, idx) =>
     onChange(floors.map(f => {
       if (f.id !== floorId) return f
@@ -205,6 +219,7 @@ function FloorsTab({ floors, onChange }) {
             onTypeChange={updateType}
             onDelete={deleteFloor}
             onUpdateRoom={updateRoom}
+            onToggleRoom={toggleRoom}
             onDeleteRoom={deleteRoom}
             onAddRoom={addRoom}
           />
