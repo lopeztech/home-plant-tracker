@@ -8,5 +8,16 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/__tests__/setup.js'],
     css: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'lcov'],
+      include: ['src/**'],
+      exclude: ['src/__tests__/**', 'src/**/*.test.*', 'src/**/*.spec.*'],
+      thresholds: {
+        lines: 35,
+        functions: 58,
+        branches: 60,
+      },
+    },
   },
 })
