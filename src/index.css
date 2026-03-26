@@ -75,6 +75,7 @@
   position: relative;
   user-select: none;
   cursor: crosshair;
+  isolation: isolate; /* Scope Leaflet's z-indexes (200-700) inside this context */
 }
 
 .floorplan-container img {
