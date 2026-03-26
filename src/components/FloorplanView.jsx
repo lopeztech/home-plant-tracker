@@ -131,6 +131,13 @@ export default function FloorplanView({
         )}
       </div>
 
+      {/* Weather sky strip — between toolbar and floorplan canvas */}
+      {weather && (
+        <div className="flex-shrink-0 relative overflow-hidden" style={{ height: 80 }}>
+          <WeatherSky weather={weather} />
+        </div>
+      )}
+
       {/* Floor nav + canvas */}
       <div className="flex-1 overflow-hidden flex">
         <FloorNav
@@ -163,7 +170,6 @@ export default function FloorplanView({
                     style={{ width: '100%', height: '100%' }}
                     dangerouslySetInnerHTML={{ __html: svgForFloor(activeFloor) }}
                   />
-                  <WeatherSky weather={weather} />
                   {plantsOnFloor.map(plant => (
                     <PlantMarker
                       key={plant.id}

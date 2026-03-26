@@ -37,17 +37,6 @@ function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
 
-  // API key (stored in localStorage; passed to SettingsModal)
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('plant_tracker_api_key') || '')
-  const handleSaveApiKey = useCallback((key) => {
-    if (key) {
-      localStorage.setItem('plant_tracker_api_key', key)
-    } else {
-      localStorage.removeItem('plant_tracker_api_key')
-    }
-    setApiKey(key || '')
-  }, [])
-
   // Load plants and floors from API when authenticated
   useEffect(() => {
     if (!isAuthenticated) return
@@ -285,9 +274,7 @@ function AppContent() {
 
       {showSettings && (
         <SettingsModal
-          currentApiKey={apiKey}
           floors={floors}
-          onSave={handleSaveApiKey}
           onSaveFloors={handleSaveFloors}
           onClose={() => setShowSettings(false)}
         />
