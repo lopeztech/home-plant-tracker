@@ -1,0 +1,26 @@
+rules_version = '2';
+
+// All Firestore reads and writes go through the backend Cloud Function
+// (which uses the Admin SDK and bypasses these rules). These rules deny
+// all direct client access, preventing data leakage if a client key is
+// ever exposed.
+//
+// If you later add client-side Firestore access, replace the deny-all
+// rule for the relevant path with:
+//   allow read, write: if request.auth != null && request.auth.uid == userId;
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // User-scoped plant and config data
+    match /users/{userId}/{document=**} {
+      // Deny all direct client access — backend Cloud Function only
+      allow read, write: if false;
+    }
+
+    // Catch-all: deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

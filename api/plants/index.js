@@ -6,6 +6,14 @@ const { Storage } = require('@google-cloud/storage');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+
+// Structured JSON logger for Cloud Logging
+const log = {
+  info:  (msg, data) => console.log(JSON.stringify({ severity: 'INFO',    message: msg, ...data })),
+  warn:  (msg, data) => console.warn(JSON.stringify({ severity: 'WARNING', message: msg, ...data })),
+  error: (msg, data) => console.error(JSON.stringify({ severity: 'ERROR',  message: msg, ...data })),
+};
 
 const db = new Firestore();
 const storage = new Storage({
@@ -87,6 +95,17 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
   optionsSuccessStatus: 204
 }));
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' },
+}));
+app.use((req, _res, next) => {
+  log.info('request', { method: req.method, path: req.path, ip: req.ip });
+  next();
+});
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const gemini = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });

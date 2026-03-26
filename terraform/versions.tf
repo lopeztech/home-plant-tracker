@@ -16,10 +16,10 @@ terraform {
     }
   }
 
-  # Remote state in GCS — create this bucket manually first (see README),
-  # then uncomment before running terraform init.
-  # backend "gcs" {
-  #   bucket = "YOUR_PROJECT_ID-tf-state"
-  #   prefix = "plant-tracker"
-  # }
+  # Remote state in GCS.
+  # Create the bucket manually once: gsutil mb -l australia-southeast1 gs://YOUR_PROJECT_ID-tf-state
+  # Then initialise with: terraform init -backend-config="bucket=YOUR_PROJECT_ID-tf-state"
+  backend "gcs" {
+    prefix = "plant-tracker/state"
+  }
 }
