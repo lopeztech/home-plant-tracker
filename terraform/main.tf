@@ -41,6 +41,7 @@ resource "google_project_service" "apis" {
     "servicemanagement.googleapis.com",
     "apikeys.googleapis.com",
     "aiplatform.googleapis.com",
+    "secretmanager.googleapis.com",
   ])
 
   project            = var.project_id

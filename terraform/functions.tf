@@ -86,7 +86,13 @@ resource "google_cloudfunctions2_function" "plants" {
       PROJECT_ID            = var.project_id
       IMAGES_BUCKET         = google_storage_bucket.images.name
       SERVICE_ACCOUNT_EMAIL = google_service_account.plants_function.email
-      GEMINI_API_KEY        = var.gemini_api_key
+    }
+
+    secret_environment_variables {
+      key        = "GEMINI_API_KEY"
+      project_id = var.project_id
+      secret     = google_secret_manager_secret.gemini_api_key.secret_id
+      version    = "latest"
     }
   }
 
@@ -95,6 +101,7 @@ resource "google_cloudfunctions2_function" "plants" {
   depends_on = [
     google_project_service.apis,
     google_storage_bucket_object.plants_function_source,
+    google_secret_manager_secret_iam_member.plants_function_gemini_key,
   ]
 }
 

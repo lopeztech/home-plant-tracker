@@ -18,6 +18,7 @@ locals {
     "roles/compute.admin",                  # Load balancer, CDN, SSL certs, forwarding rules
     "roles/iam.serviceAccountAdmin",        # Create and manage service accounts
     "roles/iam.workloadIdentityPoolAdmin",  # Create WIF pools and providers
+    "roles/secretmanager.admin",            # Create and manage Secret Manager secrets
   ]
 }
 
