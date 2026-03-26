@@ -61,16 +61,45 @@ function renderModal(props = {}) {
   )
 }
 
+// Helper: simulate choosing a mode on the choice screen (new-plant flow only)
+function selectMode(mode) {
+  const label = mode === 'photo' ? /analyse with ai/i : /enter manually/i
+  fireEvent.click(screen.getByRole('button', { name: label }))
+}
+
 describe('PlantModal', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  // ── Initial render state ──────────────────────────────────────────────────
+  // ── Mode-choice screen (new plants) ───────────────────────────────────────
 
   it('shows "Add Plant" title when no plant is provided', () => {
     renderModal()
     expect(screen.getByRole('heading', { name: 'Add Plant' })).toBeInTheDocument()
+  })
+
+  it('shows mode-choice buttons for a new plant', () => {
+    renderModal()
+    expect(screen.getByRole('button', { name: /analyse with ai/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /enter manually/i })).toBeInTheDocument()
+  })
+
+  it('does not show the form until a mode is selected', () => {
+    renderModal()
+    expect(screen.queryByPlaceholderText(/living room fern/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the form after choosing Enter manually', () => {
+    renderModal()
+    selectMode('manual')
+    expect(screen.getByPlaceholderText(/living room fern/i)).toBeInTheDocument()
+  })
+
+  it('shows the ImageAnalyser after choosing Analyse with AI', () => {
+    renderModal()
+    selectMode('photo')
+    expect(screen.getByTestId('image-analyser')).toBeInTheDocument()
   })
 
   it('shows the plant name in the title when editing an existing plant', () => {
@@ -90,11 +119,13 @@ describe('PlantModal', () => {
 
   it('starts with an empty name field for a new plant', () => {
     renderModal()
+    selectMode('manual')
     expect(screen.getByPlaceholderText(/living room fern/i)).toHaveValue('')
   })
 
   it('renders floor options from the floors prop', () => {
     renderModal()
+    selectMode('manual')
     expect(screen.getByRole('option', { name: 'Ground Floor' })).toBeInTheDocument()
     expect(screen.getAllByRole('option', { name: 'Garden' }).length).toBeGreaterThanOrEqual(2)
   })
@@ -109,8 +140,8 @@ describe('PlantModal', () => {
     expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
   })
 
-  it('renders the ImageAnalyser stub', () => {
-    renderModal()
+  it('renders the ImageAnalyser stub when editing an existing plant', () => {
+    renderModal({ plant: existingPlant })
     expect(screen.getByTestId('image-analyser')).toBeInTheDocument()
   })
 
@@ -131,6 +162,7 @@ describe('PlantModal', () => {
 
   it('updates the name field as the user types', () => {
     renderModal()
+    selectMode('manual')
     const nameInput = screen.getByPlaceholderText(/living room fern/i)
     fireEvent.change(nameInput, { target: { value: 'My Monstera' } })
     expect(nameInput).toHaveValue('My Monstera')
@@ -138,19 +170,26 @@ describe('PlantModal', () => {
 
   it('updates the notes field as the user types', () => {
     renderModal()
+    selectMode('manual')
     const notes = screen.getByPlaceholderText(/special care/i)
     fireEvent.change(notes, { target: { value: 'Water twice a week' } })
     expect(notes).toHaveValue('Water twice a week')
   })
 
+  it('does not show the Save button on the mode-choice screen', () => {
+    renderModal()
+    expect(screen.queryByRole('button', { name: /add plant/i })).not.toBeInTheDocument()
+  })
+
   it('disables the Save button when name is empty', () => {
     renderModal()
-    const saveBtn = screen.getByRole('button', { name: /add plant/i })
-    expect(saveBtn).toBeDisabled()
+    selectMode('manual')
+    expect(screen.getByRole('button', { name: /add plant/i })).toBeDisabled()
   })
 
   it('enables the Save button once a name is entered', () => {
     renderModal()
+    selectMode('manual')
     fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
       target: { value: 'Fern' },
     })
@@ -160,6 +199,7 @@ describe('PlantModal', () => {
   it('calls onSave with the form data when Save is clicked', async () => {
     const onSave = vi.fn()
     renderModal({ onSave })
+    selectMode('manual')
     fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
       target: { value: 'My Fern' },
     })

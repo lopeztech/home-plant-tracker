@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
-import { X, Trash2, Save, Leaf, Loader2, Droplets, Sparkles } from 'lucide-react'
+import { X, Trash2, Save, Leaf, Loader2, Droplets, Sparkles, Camera, ClipboardList } from 'lucide-react'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi } from '../api/plants.js'
 
@@ -56,6 +56,9 @@ function CareSection({ label, children }) {
 
 export default function PlantModal({ plant, position, floors, activeFloorId, onSave, onDelete, onWater, onClose }) {
   const isEditing = !!plant
+
+  // null = show mode-choice screen (new plants only); 'photo' or 'manual' after choice
+  const [mode, setMode] = useState(() => plant ? 'edit' : null)
 
   const [activeTab, setActiveTab] = useState('edit')
 
@@ -182,7 +185,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
     return Math.ceil((next - new Date()) / 86400000)
   }, [form.lastWatered, form.frequencyDays])
 
-  const showSave = !isEditing || activeTab === 'edit'
+  const showSave = mode !== null && (!isEditing || activeTab === 'edit')
 
   return (
     <div
@@ -242,10 +245,61 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
           </div>
         )}
 
+        {/* ── Mode-choice screen (new plants only) ───────────────────── */}
+        {!isEditing && mode === null && (
+          <div className="flex-1 flex flex-col justify-center px-5 py-8 gap-3">
+            <p className="text-sm text-gray-400 text-center mb-2">How would you like to add it?</p>
+
+            <button
+              type="button"
+              onClick={() => setMode('photo')}
+              className="w-full flex items-center gap-4 p-4 rounded-xl bg-emerald-900/20 border border-emerald-800/40 hover:bg-emerald-900/35 hover:border-emerald-700 transition-colors text-left"
+            >
+              <div className="w-11 h-11 rounded-full bg-emerald-900/60 flex items-center justify-center flex-shrink-0">
+                <Camera size={20} className="text-emerald-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Analyse with AI</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Take or upload a photo — Gemini identifies the plant and fills in care details automatically
+                </p>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setMode('manual')}
+              className="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-800/50 border border-gray-700 hover:bg-gray-800 hover:border-gray-600 transition-colors text-left"
+            >
+              <div className="w-11 h-11 rounded-full bg-gray-700/50 flex items-center justify-center flex-shrink-0">
+                <ClipboardList size={20} className="text-gray-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Enter manually</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Fill in the plant name and care details yourself
+                </p>
+              </div>
+            </button>
+          </div>
+        )}
+
         {/* ── Edit tab (or new plant form) ───────────────────────────── */}
-        {(!isEditing || activeTab === 'edit') && (
+        {(mode !== null) && (!isEditing || activeTab === 'edit') && (
           <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto scrollbar-thin">
             <div className="px-5 py-4 space-y-4">
+              {/* Photo-first: show analyser at the top when in photo mode (new plant) */}
+              {!isEditing && mode === 'photo' && (
+                <>
+                  <ImageAnalyser
+                    initialImage={form.imageUrl}
+                    onAnalysisComplete={handleAnalysisComplete}
+                    onImageChange={handleImageChange}
+                  />
+                  <hr className="border-gray-800" />
+                </>
+              )}
+
               <FormField label="Plant Name *">
                 <input
                   className={InputClass()}
@@ -360,13 +414,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
                 />
               </FormField>
 
-              <hr className="border-gray-800" />
-
-              <ImageAnalyser
-                initialImage={form.imageUrl}
-                onAnalysisComplete={handleAnalysisComplete}
-                onImageChange={handleImageChange}
-              />
+              {/* Edit mode: show analyser at the bottom (secondary to the form fields) */}
+              {isEditing && (
+                <>
+                  <hr className="border-gray-800" />
+                  <ImageAnalyser
+                    initialImage={form.imageUrl}
+                    onAnalysisComplete={handleAnalysisComplete}
+                    onImageChange={handleImageChange}
+                  />
+                </>
+              )}
             </div>
           </form>
         )}
