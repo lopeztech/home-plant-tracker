@@ -101,12 +101,12 @@ describe('PlantSidebar', () => {
     expect(screen.getAllByRole('button', { name: /mark as watered/i })).toHaveLength(2)
   })
 
-  it('calls onWater with the plant when the water button is clicked', () => {
+  it('calls onWater with the plant id when the water button is clicked', () => {
     const onWater = vi.fn()
     const plant = makePlant('1', 'Fern', 3)
     render(<PlantSidebar plants={[plant]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} onWater={onWater} />)
     fireEvent.click(screen.getByRole('button', { name: /mark as watered/i }))
-    expect(onWater).toHaveBeenCalledWith(plant)
+    expect(onWater).toHaveBeenCalledWith(plant.id)
   })
 
   it('does not show water buttons when onWater is not provided', () => {

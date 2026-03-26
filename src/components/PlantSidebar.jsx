@@ -181,7 +181,7 @@ function PlantCard({ plant, onClick, onWater }) {
 
       {onWater && (
         <button
-          onClick={() => onWater(plant)}
+          onClick={() => onWater(plant.id)}
           className="flex-shrink-0 px-2.5 hover:bg-blue-900/30 text-gray-600 hover:text-blue-400 transition-colors border-l border-gray-700"
           aria-label="Mark as watered"
           title="Water now"
