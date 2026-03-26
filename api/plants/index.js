@@ -3,7 +3,7 @@
 const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const express = require('express');
 const cors = require('cors');
 
@@ -94,29 +94,47 @@ const gemini = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
 
-Respond ONLY with valid JSON:
-{
-  "floors": [
-    {
-      "name": "Ground Floor",
-      "type": "interior",
-      "order": 0,
-      "rooms": [
-        { "name": "Living Room", "x": 5, "y": 5, "width": 40, "height": 35 },
-        { "name": "Kitchen", "x": 50, "y": 5, "width": 45, "height": 30 }
-      ]
-    }
-  ]
-}
-
 Rules:
 - type must be exactly "interior" or "outdoor"
 - order: 0=ground floor, 1=first floor, 2=second floor, -1=outdoor/garden areas
-- x, y, width, height are integer percentages (0-100) relative to that floor's total area
-- All rooms must fit within 0-100 bounds with no overlaps
-- Room names: concise English (e.g. "Living Room", "Master Bedroom", "Kitchen", "Bathroom", "Hall", "Garage")
-- If outdoor/garden areas are visible include them as a separate floor with type "outdoor"
-- Respond with JSON only, no markdown fences`;
+- x, y, width, height are integer percentages (0-100) relative to that floor's bounding box
+- All rooms must fit within 0-100 bounds
+- Room names: concise English (e.g. "Living Room", "Kitchen", "Bathroom", "Hall", "Garage")
+- Include outdoor/garden areas as a separate floor with type "outdoor"`;
+
+// Strict response schema — Gemini structured output guarantees valid, complete JSON
+const FLOORPLAN_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    floors: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name:  { type: SchemaType.STRING },
+          type:  { type: SchemaType.STRING },
+          order: { type: SchemaType.INTEGER },
+          rooms: {
+            type: SchemaType.ARRAY,
+            items: {
+              type: SchemaType.OBJECT,
+              properties: {
+                name:   { type: SchemaType.STRING },
+                x:      { type: SchemaType.INTEGER },
+                y:      { type: SchemaType.INTEGER },
+                width:  { type: SchemaType.INTEGER },
+                height: { type: SchemaType.INTEGER },
+              },
+              required: ['name', 'x', 'y', 'width', 'height'],
+            },
+          },
+        },
+        required: ['name', 'type', 'order', 'rooms'],
+      },
+    },
+  },
+  required: ['floors'],
+};
 
 const ANALYSE_PROMPT = `Analyse this plant photo and respond ONLY with valid JSON matching this exact schema:
 {
@@ -178,7 +196,11 @@ app.post('/analyse-floorplan', async (req, res) => {
           { text: ANALYSE_FLOORPLAN_PROMPT },
         ],
       }],
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.1, responseMimeType: 'application/json' },
+      generationConfig: {
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+        responseSchema: FLOORPLAN_SCHEMA,
+      },
     });
 
     const text = result.response.text();
