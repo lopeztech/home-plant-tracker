@@ -260,3 +260,84 @@
   background: #10b981;
   box-shadow: 0 0 4px #10b981;
 }
+
+/* ── Leaflet dark-theme overrides ─────────────────────────── */
+
+.leaflet-container {
+  background: #070d18;
+  cursor: crosshair;
+  font-family: inherit;
+}
+
+/* Hide the default grey tile background */
+.leaflet-tile-pane { display: none; }
+
+/* Zoom control — dark style */
+.leaflet-control-zoom {
+  border: 1px solid #1f2937 !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+.leaflet-control-zoom a {
+  background: #111827 !important;
+  color: #9ca3af !important;
+  border-bottom: 1px solid #1f2937 !important;
+  line-height: 26px !important;
+}
+.leaflet-control-zoom a:hover {
+  background: #1f2937 !important;
+  color: #f9fafb !important;
+}
+.leaflet-control-zoom-in { border-radius: 0 !important; }
+.leaflet-control-zoom-out { border-radius: 0 !important; border-bottom: none !important; }
+
+/* Room permanent tooltip labels */
+.lf-room-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: #3b82f6;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none !important;
+}
+.lf-room-label::before { display: none !important; }
+
+/* Plant marker icon — reset Leaflet's default wrapper styles */
+.plant-lf-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Inner marker circle */
+.plant-lf-inner {
+  cursor: grab;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.plant-lf-inner:hover {
+  transform: scale(1.2);
+  filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
+}
+
+/* Overdue pulse — reuses the existing keyframe */
+.plant-lf-overdue {
+  animation: pulse-ring 1.5s ease-in-out infinite;
+}
+
+/* Plant hover tooltip */
+.lf-plant-tip-wrap.leaflet-tooltip {
+  background: rgba(17, 24, 39, 0.95) !important;
+  border: 1px solid #374151 !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+  color: white !important;
+}
+.lf-plant-tip-wrap.leaflet-tooltip::before { display: none !important; }
+
+.lf-plant-tip-name   { font-size: 12px; font-weight: 600; color: #fff; }
+.lf-plant-tip-species { font-size: 11px; color: #9ca3af; margin-top: 1px; }

@@ -9,16 +9,6 @@ vi.mock('../components/WeatherSky.jsx', () => ({
   SKY_BORDER_COLORS: { sunny: '#fde68a', night: '#1e3a5f' },
 }))
 
-vi.mock('../components/PlantMarker.jsx', () => ({
-  default: ({ plant, onClick }) => (
-    <div
-      className="plant-marker"
-      data-testid={`marker-${plant.id}`}
-      onClick={e => { e.stopPropagation(); onClick(plant) }}
-    />
-  ),
-}))
-
 vi.mock('../components/FloorNav.jsx', () => ({
   default: ({ floors, onChange }) => (
     <div data-testid="floor-nav">
@@ -29,11 +19,30 @@ vi.mock('../components/FloorNav.jsx', () => ({
   ),
 }))
 
-vi.mock('../data/defaultFloorSvgs.js', () => ({
-  GROUND_FLOOR_SVG: '<svg data-testid="ground-svg"></svg>',
-  UPPER_FLOOR_SVG:  '<svg data-testid="upper-svg"></svg>',
-  GARDEN_SVG:       '<svg data-testid="garden-svg"></svg>',
-  generateFloorSvg: vi.fn(() => '<svg data-testid="generated-svg"></svg>'),
+// LeafletFloorplan stub: renders plant markers as divs and forwards map clicks.
+vi.mock('../components/LeafletFloorplan.jsx', () => ({
+  default: ({ plants, onFloorplanClick, onMarkerClick }) => (
+    <div
+      data-testid="leaflet-floorplan"
+      onClick={(e) => {
+        if (e.target.closest('.plant-marker')) return
+        const rect = e.currentTarget.getBoundingClientRect()
+        onFloorplanClick(
+          Math.max(2, Math.min(98, ((e.clientX - rect.left) / rect.width)  * 100)),
+          Math.max(2, Math.min(98, ((e.clientY - rect.top)  / rect.height) * 100)),
+        )
+      }}
+    >
+      {(plants ?? []).map(p => (
+        <div
+          key={p.id}
+          className="plant-marker"
+          data-testid={`marker-${p.id}`}
+          onClick={e => { e.stopPropagation(); onMarkerClick(p) }}
+        />
+      ))}
+    </div>
+  ),
 }))
 
 const floors = [
@@ -64,7 +73,7 @@ function renderView(props = {}) {
 
 describe('FloorplanView', () => {
   beforeEach(() => {
-    // Give the floorplan container a non-zero size for click coordinate tests.
+    // Give containers a non-zero size for click coordinate tests.
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       left: 0, top: 0, width: 1000, height: 1000,
       right: 1000, bottom: 1000, x: 0, y: 0, toJSON: () => {},
@@ -79,7 +88,6 @@ describe('FloorplanView', () => {
 
   it('shows the active floor name in the toolbar', () => {
     renderView()
-    // "Ground Floor" appears in both the toolbar span and the stubbed FloorNav button
     const matches = screen.getAllByText('Ground Floor')
     expect(matches.length).toBeGreaterThanOrEqual(1)
   })
@@ -91,7 +99,6 @@ describe('FloorplanView', () => {
 
   it('does not render markers for plants on inactive floors', () => {
     renderView({ activeFloorId: 'ground' })
-    // marker-p2 is on the garden floor — not rendered when ground is active
     expect(screen.queryByTestId('marker-p2')).not.toBeInTheDocument()
   })
 
@@ -137,12 +144,11 @@ describe('FloorplanView', () => {
 
   // ── User interactions ─────────────────────────────────────────────────────
 
-  it('calls onFloorplanClick with normalised x/y when the canvas is clicked', () => {
+  it('calls onFloorplanClick with normalised x/y when the map is clicked', () => {
     const onFloorplanClick = vi.fn()
-    const { container } = renderView({ onFloorplanClick })
-    const canvas = container.querySelector('.floorplan-container')
-    // Click at (500, 500) on a 1000×1000 container → x=50, y=50
-    fireEvent.click(canvas, { clientX: 500, clientY: 500 })
+    renderView({ onFloorplanClick })
+    // Click is handled by the LeafletFloorplan stub
+    fireEvent.click(screen.getByTestId('leaflet-floorplan'), { clientX: 500, clientY: 500 })
     expect(onFloorplanClick).toHaveBeenCalledWith(50, 50)
   })
 
