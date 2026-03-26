@@ -136,6 +136,12 @@ const FLOORPLAN_SCHEMA = {
   required: ['floors'],
 };
 
+// Strip markdown code fences that Gemini occasionally wraps around JSON output.
+function parseGeminiJson(text) {
+  const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+  return JSON.parse(stripped);
+}
+
 const ANALYSE_SCHEMA = {
   type: SchemaType.OBJECT,
   properties: {
@@ -217,7 +223,7 @@ app.post('/analyse-floorplan', async (req, res) => {
     });
 
     const text = result.response.text();
-    const parsed = JSON.parse(text);
+    const parsed = parseGeminiJson(text);
     if (!Array.isArray(parsed.floors) || parsed.floors.length === 0) {
       return res.status(500).json({ error: 'No floors identified in floorplan' });
     }
@@ -258,7 +264,7 @@ app.post('/analyse', async (req, res) => {
       generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: ANALYSE_SCHEMA },
     });
 
-    const parsed = JSON.parse(result.response.text());
+    const parsed = parseGeminiJson(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
