@@ -136,6 +136,19 @@ const FLOORPLAN_SCHEMA = {
   required: ['floors'],
 };
 
+const ANALYSE_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    species:         { type: SchemaType.STRING },
+    frequencyDays:   { type: SchemaType.INTEGER },
+    health:          { type: SchemaType.STRING },
+    healthReason:    { type: SchemaType.STRING },
+    maturity:        { type: SchemaType.STRING },
+    recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+  },
+  required: ['species', 'frequencyDays', 'health', 'healthReason', 'maturity', 'recommendations'],
+};
+
 const ANALYSE_PROMPT = `Analyse this plant photo and respond ONLY with valid JSON matching this exact schema:
 {
   "species": "Common Name (Scientific name) or null if unidentifiable",
@@ -242,7 +255,7 @@ app.post('/analyse', async (req, res) => {
           { text: ANALYSE_PROMPT },
         ],
       }],
-      generationConfig: { maxOutputTokens: 512, temperature: 0.1, responseMimeType: 'application/json' },
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: ANALYSE_SCHEMA },
     });
 
     const parsed = JSON.parse(result.response.text());
