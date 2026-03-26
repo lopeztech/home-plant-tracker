@@ -80,7 +80,7 @@ async function signReadUrl(urlOrPath) {
 }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(cors({
   origin: ['https://plants.lopezcloud.dev', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
