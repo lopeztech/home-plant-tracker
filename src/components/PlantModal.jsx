@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { X, Trash2, Save, Leaf, Loader2, Droplets, Sparkles, Camera, ClipboardList } from 'lucide-react'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi } from '../api/plants.js'
+import { getWateringStatus } from '../utils/watering.js'
 
 const ROOMS = [
   'Living Room',
@@ -54,7 +55,7 @@ function CareSection({ label, children }) {
   )
 }
 
-export default function PlantModal({ plant, position, floors, activeFloorId, onSave, onDelete, onWater, onClose }) {
+export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onClose }) {
   const isEditing = !!plant
 
   // null = show mode-choice screen (new plants only); 'photo' or 'manual' after choice
@@ -178,12 +179,11 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
     }
   }, [form.name, form.species])
 
-  const daysUntil = React.useMemo(() => {
-    if (!form.lastWatered || !form.frequencyDays) return null
-    const last = new Date(form.lastWatered)
-    const next = new Date(last.getTime() + Number(form.frequencyDays) * 86400000)
-    return Math.ceil((next - new Date()) / 86400000)
-  }, [form.lastWatered, form.frequencyDays])
+  const wateringStatus = React.useMemo(() => {
+    if (!plant) return null
+    return getWateringStatus(plant, weather, floors)
+  }, [plant, weather, floors])
+  const daysUntil = wateringStatus?.daysUntil ?? null
 
   const showSave = mode !== null && (!isEditing || activeTab === 'edit')
 
@@ -205,15 +205,15 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
             <h2 className="text-base font-semibold text-white">
               {isEditing ? plant.name : 'Add Plant'}
             </h2>
-            {daysUntil !== null && (
+            {wateringStatus && (
               <span
                 className="text-xs px-2 py-0.5 rounded-full font-medium"
                 style={{
-                  background: daysUntil < 0 ? '#450a0a' : daysUntil === 0 ? '#431407' : daysUntil <= 2 ? '#422006' : '#052e16',
-                  color: daysUntil < 0 ? '#fca5a5' : daysUntil === 0 ? '#fdba74' : daysUntil <= 2 ? '#fde047' : '#86efac',
+                  background: wateringStatus.skippedRain ? '#0c1a2e' : daysUntil < 0 ? '#450a0a' : daysUntil === 0 ? '#431407' : daysUntil <= 2 ? '#422006' : '#052e16',
+                  color: wateringStatus.color,
                 }}
               >
-                {daysUntil < 0 ? `${Math.abs(daysUntil)}d overdue` : daysUntil === 0 ? 'Water today' : `${daysUntil}d left`}
+                {wateringStatus.label}
               </span>
             )}
           </div>
@@ -441,6 +441,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, onS
                 <Droplets size={15} />
                 Watered
               </button>
+            )}
+            {wateringStatus?.note && (
+              <p className="text-xs text-blue-400 text-center -mt-2">{wateringStatus.note}</p>
             )}
 
             {plant.wateringLog && plant.wateringLog.length > 0 ? (

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
+import { getWateringStatus } from '../utils/watering.js'
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
 // Gemini / stored coords: (x, y) percentages, y axis goes DOWN.
@@ -11,21 +12,10 @@ function fromLL({ lat, lng }) { return { x: lng, y: 100 - lat } }
 
 const BOUNDS = L.latLngBounds([[0, 0], [100, 100]])
 
-// ── Urgency helpers ───────────────────────────────────────────────────────────
-function urgencyInfo(plant) {
-  if (!plant.lastWatered) return { color: '#22c55e', label: 'No data', overdue: false }
-  const days = Math.ceil(
-    (new Date(plant.lastWatered).getTime() + plant.frequencyDays * 86400000 - Date.now()) / 86400000
-  )
-  if (days < 0)  return { color: '#ef4444', label: `${Math.abs(days)}d overdue`, overdue: true }
-  if (days === 0) return { color: '#f97316', label: 'Due today',     overdue: false }
-  if (days <= 2)  return { color: '#eab308', label: 'Due tomorrow',  overdue: false }
-  return { color: '#22c55e', label: `${days}d remaining`, overdue: false }
-}
-
 // ── Plant marker DivIcon ──────────────────────────────────────────────────────
-function makePlantIcon(plant) {
-  const { color, overdue } = urgencyInfo(plant)
+function makePlantIcon(plant, weather, floors) {
+  const { color, daysUntil } = getWateringStatus(plant, weather, floors)
+  const overdue = daysUntil < 0
   const letter = (plant.name || '?')[0].toUpperCase()
   const inner = plant.imageUrl
     ? `<img src="${plant.imageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />`
@@ -83,7 +73,9 @@ function makeResizeIcon(corner) {
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function LeafletFloorplan({
   floor,
+  floors,
   plants,
+  weather,
   onFloorplanClick,
   onMarkerClick,
   onMarkerDrag,
@@ -369,7 +361,7 @@ export default function LeafletFloorplan({
 
     for (const plant of plants) {
       const marker = L.marker(toLL(plant.x, plant.y), {
-        icon: makePlantIcon(plant),
+        icon: makePlantIcon(plant, weather, floors),
         draggable: true,
       })
 
@@ -387,7 +379,7 @@ export default function LeafletFloorplan({
         )
       })
 
-      const { color, label } = urgencyInfo(plant)
+      const { color, label } = getWateringStatus(plant, weather, floors)
       marker.bindTooltip(
         `<div class="lf-plant-tip">
            <div class="lf-plant-tip-name">${plant.name}</div>
@@ -399,7 +391,7 @@ export default function LeafletFloorplan({
 
       marker.addTo(markerLayerRef.current)
     }
-  }, [plants])
+  }, [plants, weather, floors])
 
   // ── Pending room name prompt ──────────────────────────────────────────────
   const handleConfirmRoom = () => {

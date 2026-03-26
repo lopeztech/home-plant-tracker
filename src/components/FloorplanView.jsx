@@ -150,7 +150,9 @@ export default function FloorplanView({
               <LeafletFloorplan
                 key={activeFloor.id}
                 floor={activeFloor}
+                floors={floors}
                 plants={plantsOnFloor}
+                weather={weather}
                 onFloorplanClick={onFloorplanClick}
                 onMarkerClick={onMarkerClick}
                 onMarkerDrag={onMarkerDrag}

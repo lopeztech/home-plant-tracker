@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon } from 'lucide-react'
-
-const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace'])
+import { getWateringStatus, urgencyColor, urgencyLabel, OUTDOOR_ROOMS } from '../utils/watering.js'
 
 function dayLabel(dateStr, index) {
   if (index === 0) return 'Today'
@@ -83,33 +82,12 @@ function WeatherSection({ weather, locationDenied, outdoorPlantCount }) {
   )
 }
 
-function getDaysUntilWatering(plant) {
-  if (!plant.lastWatered) return 0
-  const lastWatered = new Date(plant.lastWatered)
-  const nextWatering = new Date(lastWatered.getTime() + plant.frequencyDays * 86400000)
-  const today = new Date()
-  return Math.ceil((nextWatering - today) / 86400000)
-}
-
-function getUrgencyColor(days) {
-  if (days < 0) return '#ef4444'
-  if (days === 0) return '#f97316'
-  if (days <= 2) return '#eab308'
-  return '#22c55e'
-}
-
-function UrgencyIcon({ days }) {
-  if (days < 0) return <AlertCircle size={14} style={{ color: '#ef4444' }} />
+function UrgencyIcon({ days, skippedRain }) {
+  if (skippedRain) return <CloudRain size={14} style={{ color: '#60a5fa' }} />
+  if (days < 0)  return <AlertCircle size={14} style={{ color: '#ef4444' }} />
   if (days === 0) return <Droplets size={14} style={{ color: '#f97316' }} />
-  if (days <= 2) return <Clock size={14} style={{ color: '#eab308' }} />
+  if (days <= 2)  return <Clock size={14} style={{ color: '#eab308' }} />
   return <CheckCircle2 size={14} style={{ color: '#22c55e' }} />
-}
-
-function getUrgencyLabel(days) {
-  if (days < 0) return `${Math.abs(days)}d overdue`
-  if (days === 0) return 'Due today'
-  if (days === 1) return 'Tomorrow'
-  return `${days}d`
 }
 
 function HealthBadge({ health }) {
@@ -127,11 +105,10 @@ function HealthBadge({ health }) {
   )
 }
 
-function PlantCard({ plant, onClick, onWater }) {
+function PlantCard({ plant, onClick, onWater, weather, floors }) {
   const [imgError, setImgError] = useState(false)
-  const days = getDaysUntilWatering(plant)
-  const color = getUrgencyColor(days)
-  const label = getUrgencyLabel(days)
+  const status = getWateringStatus(plant, weather, floors)
+  const { daysUntil, color, label, note, skippedRain } = status
   const initial = plant.name ? plant.name.charAt(0).toUpperCase() : '?'
   const showPhoto = plant.imageUrl && !imgError
 
@@ -164,7 +141,7 @@ function PlantCard({ plant, onClick, onWater }) {
           <div className="flex items-center justify-between gap-1">
             <span className="text-sm font-medium text-white truncate">{plant.name}</span>
             <div className="flex items-center gap-1 flex-shrink-0">
-              <UrgencyIcon days={days} />
+              <UrgencyIcon days={daysUntil} skippedRain={skippedRain} />
               <span className="text-xs font-medium" style={{ color }}>
                 {label}
               </span>
@@ -181,6 +158,9 @@ function PlantCard({ plant, onClick, onWater }) {
               <span className="text-xs text-gray-600 truncate">{plant.room}</span>
             )}
           </div>
+          {note && (
+            <p className="text-xs text-blue-400 mt-0.5 truncate">{note}</p>
+          )}
           {plant.health && (
             <div className="mt-1">
               <HealthBadge health={plant.health} />
@@ -210,7 +190,7 @@ const LEGEND_ITEMS = [
   { color: '#22c55e', label: 'All good' },
 ]
 
-export default function PlantSidebar({ plants, activeFloorId, onPlantClick, onAddPlant, onWater, weather, locationDenied }) {
+export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, weather, locationDenied }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
 
@@ -222,11 +202,11 @@ export default function PlantSidebar({ plants, activeFloorId, onPlantClick, onAd
 
   const sortedPlants = useMemo(() => {
     return [...floorPlants].sort((a, b) => {
-      const daysA = getDaysUntilWatering(a)
-      const daysB = getDaysUntilWatering(b)
+      const daysA = getWateringStatus(a, weather, floors).daysUntil
+      const daysB = getWateringStatus(b, weather, floors).daysUntil
       return daysA - daysB
     })
-  }, [floorPlants])
+  }, [floorPlants, weather, floors])
 
   const rooms = useMemo(
     () => [...new Set(floorPlants.map(p => p.room).filter(Boolean))].sort(),
@@ -252,12 +232,12 @@ export default function PlantSidebar({ plants, activeFloorId, onPlantClick, onAd
   )
 
   const counts = useMemo(() => {
-    const overdue = filteredPlants.filter(p => getDaysUntilWatering(p) < 0).length
-    const today   = filteredPlants.filter(p => getDaysUntilWatering(p) === 0).length
-    const soon    = filteredPlants.filter(p => { const d = getDaysUntilWatering(p); return d > 0 && d <= 2 }).length
-    const good    = filteredPlants.filter(p => getDaysUntilWatering(p) > 2).length
+    const overdue = filteredPlants.filter(p => getWateringStatus(p, weather, floors).daysUntil < 0).length
+    const today   = filteredPlants.filter(p => { const s = getWateringStatus(p, weather, floors); return !s.skippedRain && s.daysUntil === 0 }).length
+    const soon    = filteredPlants.filter(p => { const d = getWateringStatus(p, weather, floors).daysUntil; return d > 0 && d <= 2 }).length
+    const good    = filteredPlants.filter(p => getWateringStatus(p, weather, floors).daysUntil > 2).length
     return { overdue, today, soon, good }
-  }, [filteredPlants])
+  }, [filteredPlants, weather, floors])
 
   const isFiltered = roomFilter !== null || searchTerm.trim() !== ''
 
@@ -376,7 +356,7 @@ export default function PlantSidebar({ plants, activeFloorId, onPlantClick, onAd
           </div>
         ) : (
           filteredPlants.map(plant => (
-            <PlantCard key={plant.id} plant={plant} onClick={onPlantClick} onWater={onWater} />
+            <PlantCard key={plant.id} plant={plant} onClick={onPlantClick} onWater={onWater} weather={weather} floors={floors} />
           ))
         )}
       </div>

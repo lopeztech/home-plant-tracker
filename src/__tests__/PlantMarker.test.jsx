@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import PlantMarker from '../components/PlantMarker.jsx'
 
@@ -111,5 +111,111 @@ describe('PlantMarker', () => {
     expect(() =>
       render(<PlantMarker plant={healthyPlant} onClick={vi.fn()} onDragEnd={vi.fn()} containerRef={{ current: null }} />)
     ).not.toThrow()
+  })
+
+  // ── Drag behaviour ────────────────────────────────────────────────────────
+
+  // Helper: dispatch a real PointerEvent (so clientX/clientY/pointerId are properly set)
+  function pointerDown(el, opts = {}) {
+    el.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, ...opts }))
+  }
+  function pointerMove(el, opts = {}) {
+    el.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, ...opts }))
+  }
+  function pointerUp(el, opts = {}) {
+    el.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, ...opts }))
+  }
+
+  it('calls setPointerCapture on pointer down', () => {
+    const { container } = renderMarker(healthyPlant)
+    const marker = container.querySelector('.plant-marker')
+    pointerDown(marker, { pointerId: 1 })
+    expect(Element.prototype.setPointerCapture).toHaveBeenCalledWith(1)
+  })
+
+  it('does not call onDragEnd when pointer is released without moving past the threshold', () => {
+    const onDragEnd = vi.fn()
+    const containerEl = document.createElement('div')
+    Object.defineProperty(containerEl, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }),
+    })
+    const { container } = render(
+      <PlantMarker
+        plant={healthyPlant}
+        onClick={vi.fn()}
+        onDragEnd={onDragEnd}
+        containerRef={{ current: containerEl }}
+      />
+    )
+    const marker = container.querySelector('.plant-marker')
+    pointerDown(marker, { clientX: 100, clientY: 100 })
+    pointerMove(marker, { clientX: 103, clientY: 100 }) // 3px < 5px threshold
+    pointerUp(marker)
+    expect(onDragEnd).not.toHaveBeenCalled()
+  })
+
+  it('calls onDragEnd with plant and clamped position after a drag', async () => {
+    const onDragEnd = vi.fn()
+    const containerEl = document.createElement('div')
+    Object.defineProperty(containerEl, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }),
+    })
+    const { container } = render(
+      <PlantMarker
+        plant={healthyPlant}
+        onClick={vi.fn()}
+        onDragEnd={onDragEnd}
+        containerRef={{ current: containerEl }}
+      />
+    )
+    const marker = container.querySelector('.plant-marker')
+    act(() => pointerDown(marker, { clientX: 0, clientY: 0 }))
+    // Flush state so dragPos is set before pointerUp handler reads it
+    await act(async () => pointerMove(marker, { clientX: 50, clientY: 50 }))
+    act(() => pointerUp(marker))
+    expect(onDragEnd).toHaveBeenCalledWith(healthyPlant, 5, 5)
+  })
+
+  it('clamps drag position to the 2–98% range', async () => {
+    const onDragEnd = vi.fn()
+    const containerEl = document.createElement('div')
+    Object.defineProperty(containerEl, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }),
+    })
+    const { container } = render(
+      <PlantMarker
+        plant={healthyPlant}
+        onClick={vi.fn()}
+        onDragEnd={onDragEnd}
+        containerRef={{ current: containerEl }}
+      />
+    )
+    const marker = container.querySelector('.plant-marker')
+    act(() => pointerDown(marker, { clientX: 500, clientY: 500 }))
+    await act(async () => pointerMove(marker, { clientX: -100, clientY: -100 }))
+    act(() => pointerUp(marker))
+    expect(onDragEnd).toHaveBeenCalledWith(healthyPlant, 2, 2)
+  })
+
+  it('does not fire onClick after a completed drag', () => {
+    const onClick = vi.fn()
+    const containerEl = document.createElement('div')
+    Object.defineProperty(containerEl, 'getBoundingClientRect', {
+      value: () => ({ left: 0, top: 0, width: 1000, height: 1000 }),
+    })
+    const { container } = render(
+      <PlantMarker
+        plant={healthyPlant}
+        onClick={onClick}
+        onDragEnd={vi.fn()}
+        containerRef={{ current: containerEl }}
+      />
+    )
+    const marker = container.querySelector('.plant-marker')
+    pointerDown(marker, { clientX: 0, clientY: 0 })
+    pointerMove(marker, { clientX: 50, clientY: 50 })
+    pointerUp(marker)
+    fireEvent.click(marker) // synthetic click that follows pointerup
+    expect(onClick).not.toHaveBeenCalled()
   })
 })
