@@ -1,5 +1,5 @@
-import React, { useCallback } from 'react'
-import { Home, ScanLine, Upload, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react'
+import React, { useCallback, useState } from 'react'
+import { Home, ScanLine, Upload, ChevronLeft, ChevronRight, Sun, Moon, Pencil } from 'lucide-react'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import WeatherSky, { SKY_BORDER_COLORS } from './WeatherSky.jsx'
 import FloorNav from './FloorNav.jsx'
@@ -10,6 +10,7 @@ export default function FloorplanView({
   onFloorplanClick,
   onMarkerClick,
   onMarkerDrag,
+  onRoomsChange,
   weather,
   floors,
   activeFloorId,
@@ -18,6 +19,7 @@ export default function FloorplanView({
   sidebarOpen,
   onToggleSidebar,
 }) {
+  const [editZones, setEditZones] = useState(false)
   const visibleFloors  = floors.filter(f => !f.hidden)
   const activeFloor    = visibleFloors.find(f => f.id === activeFloorId) ?? visibleFloors[0]
   const plantsOnFloor  = plants.filter(p => (p.floor || 'ground') === activeFloor?.id)
@@ -57,7 +59,25 @@ export default function FloorplanView({
         <span className="hidden md:inline text-sm text-gray-400 truncate">
           {activeFloor ? activeFloor.name : 'Floorplan'}
         </span>
-        <span className="hidden md:inline text-xs text-gray-600">(click to place plant)</span>
+        <span className="hidden md:inline text-xs text-gray-600">
+          {editZones ? '(drag to draw zone)' : '(click to place plant)'}
+        </span>
+
+        {/* Edit zones toggle — only when floor has rooms */}
+        {activeFloor?.rooms?.length > 0 && (
+          <button
+            onClick={() => setEditZones(z => !z)}
+            className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs border transition-colors flex-shrink-0 ${
+              editZones
+                ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
+                : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
+            }`}
+            title={editZones ? 'Exit zone editing' : 'Edit zones'}
+          >
+            <Pencil size={12} />
+            <span className="hidden lg:inline">{editZones ? 'Done' : 'Edit Zones'}</span>
+          </button>
+        )}
 
         {/* Mobile: floor selector dropdown */}
         {visibleFloors.length > 1 && (
@@ -134,6 +154,8 @@ export default function FloorplanView({
                 onFloorplanClick={onFloorplanClick}
                 onMarkerClick={onMarkerClick}
                 onMarkerDrag={onMarkerDrag}
+                editMode={editZones}
+                onRoomsChange={onRoomsChange}
               />
             )}
 

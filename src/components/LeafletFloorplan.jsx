@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 
@@ -54,6 +54,32 @@ const ROOM_STYLE = {
   outdoor:  { color: '#166534', weight: 2, fillColor: '#071a0a', fillOpacity: 1 },
 }
 
+// ── Edit mode icons ───────────────────────────────────────────────────────────
+function makeMoveIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:22px;height:22px;background:#10b981;border-radius:50%;border:2px solid #fff;cursor:move;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.5);" title="Drag to move zone">
+             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+               <polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/>
+               <polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/>
+               <line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>
+             </svg>
+           </div>`,
+    iconSize: [22, 22],
+    iconAnchor: [11, 11],
+  })
+}
+
+function makeResizeIcon(corner) {
+  const cursor = { nw: 'nw-resize', ne: 'ne-resize', sw: 'sw-resize', se: 'se-resize' }[corner]
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:12px;height:12px;background:#fff;border:2px solid #10b981;border-radius:2px;cursor:${cursor};box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
+    iconSize: [12, 12],
+    iconAnchor: [6, 6],
+  })
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function LeafletFloorplan({
   floor,
@@ -61,20 +87,33 @@ export default function LeafletFloorplan({
   onFloorplanClick,
   onMarkerClick,
   onMarkerDrag,
+  editMode = false,
+  onRoomsChange,
 }) {
-  const containerRef    = useRef(null)
-  const mapRef          = useRef(null)
-  const roomLayerRef    = useRef(null)
-  const imageLayerRef   = useRef(null)
-  const markerLayerRef  = useRef(null)
+  const containerRef   = useRef(null)
+  const mapRef         = useRef(null)
+  const roomLayerRef   = useRef(null)
+  const imageLayerRef  = useRef(null)
+  const markerLayerRef = useRef(null)
+  const editLayerRef   = useRef(null)
+  const drawRef        = useRef(null) // { startLL, tempRect }
+
+  const [pendingRoom, setPendingRoom]         = useState(null)
+  const [pendingRoomName, setPendingRoomName] = useState('')
 
   // Stable callback refs — avoid stale closures in Leaflet event handlers
-  const clickRef  = useRef(onFloorplanClick)
+  const clickRef       = useRef(onFloorplanClick)
   const markerClickRef = useRef(onMarkerClick)
   const markerDragRef  = useRef(onMarkerDrag)
-  useEffect(() => { clickRef.current = onFloorplanClick },  [onFloorplanClick])
-  useEffect(() => { markerClickRef.current = onMarkerClick }, [onMarkerClick])
-  useEffect(() => { markerDragRef.current  = onMarkerDrag  }, [onMarkerDrag])
+  const onRoomsRef     = useRef(onRoomsChange)
+  const editModeRef    = useRef(editMode)
+  const floorRef       = useRef(floor)
+  useEffect(() => { clickRef.current       = onFloorplanClick }, [onFloorplanClick])
+  useEffect(() => { markerClickRef.current = onMarkerClick    }, [onMarkerClick])
+  useEffect(() => { markerDragRef.current  = onMarkerDrag     }, [onMarkerDrag])
+  useEffect(() => { onRoomsRef.current     = onRoomsChange    }, [onRoomsChange])
+  useEffect(() => { editModeRef.current    = editMode         }, [editMode])
+  useEffect(() => { floorRef.current       = floor            }, [floor])
 
   // ── Initialise Leaflet once ───────────────────────────────────────────────
   useEffect(() => {
@@ -88,14 +127,15 @@ export default function LeafletFloorplan({
     })
 
     L.control.zoom({ position: 'bottomright' }).addTo(map)
-
     map.fitBounds(BOUNDS)
 
     roomLayerRef.current   = L.layerGroup().addTo(map)
     imageLayerRef.current  = L.layerGroup().addTo(map)
     markerLayerRef.current = L.layerGroup().addTo(map)
+    editLayerRef.current   = L.layerGroup().addTo(map)
 
     map.on('click', (e) => {
+      if (editModeRef.current) return
       const { x, y } = fromLL(e.latlng)
       clickRef.current?.(
         Math.max(2, Math.min(98, x)),
@@ -107,6 +147,78 @@ export default function LeafletFloorplan({
     return () => { map.remove(); mapRef.current = null }
   }, [])
 
+  // ── Draw mode (click-drag to create a new zone) ───────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    if (!editMode) {
+      if (drawRef.current?.tempRect) drawRef.current.tempRect.remove()
+      drawRef.current = null
+      return
+    }
+
+    const onMouseDown = (e) => {
+      drawRef.current = { startLL: e.latlng, tempRect: null }
+    }
+
+    const onMouseMove = (e) => {
+      const draw = drawRef.current
+      if (!draw?.startLL) return
+      if (!draw.tempRect) {
+        draw.tempRect = L.rectangle([draw.startLL, e.latlng], {
+          color: '#10b981',
+          weight: 2,
+          fillColor: '#10b981',
+          fillOpacity: 0.15,
+          dashArray: '6,4',
+          interactive: false,
+        }).addTo(map)
+      } else {
+        draw.tempRect.setBounds([draw.startLL, e.latlng])
+      }
+    }
+
+    const onMouseUp = () => {
+      const draw = drawRef.current
+      drawRef.current = null
+      if (!draw?.startLL || !draw.tempRect) return
+
+      draw.tempRect.remove()
+
+      const bounds = draw.tempRect.getBounds()
+      const sw = fromLL(bounds.getSouthWest())
+      const ne = fromLL(bounds.getNorthEast())
+
+      const x      = Math.min(sw.x, ne.x)
+      const y      = Math.min(sw.y, ne.y)
+      const width  = Math.abs(ne.x - sw.x)
+      const height = Math.abs(ne.y - sw.y)
+
+      if (width < 3 || height < 3) return // too small, ignore
+
+      setPendingRoom({
+        x:      Math.round(Math.max(0, Math.min(98, x))),
+        y:      Math.round(Math.max(0, Math.min(98, y))),
+        width:  Math.round(Math.min(width,  100 - x)),
+        height: Math.round(Math.min(height, 100 - y)),
+      })
+      setPendingRoomName('')
+    }
+
+    map.on('mousedown', onMouseDown)
+    map.on('mousemove', onMouseMove)
+    map.on('mouseup',   onMouseUp)
+
+    return () => {
+      map.off('mousedown', onMouseDown)
+      map.off('mousemove', onMouseMove)
+      map.off('mouseup',   onMouseUp)
+      if (drawRef.current?.tempRect) drawRef.current.tempRect.remove()
+      drawRef.current = null
+    }
+  }, [editMode])
+
   // ── Re-render rooms when floor changes ───────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
@@ -115,25 +227,21 @@ export default function LeafletFloorplan({
     roomLayerRef.current.clearLayers()
     imageLayerRef.current.clearLayers()
 
-    // Background colour reflects floor type
     map.getContainer().style.background =
       floor?.type === 'outdoor' ? '#040d06' : '#070d18'
 
-    // Uploaded image overlay (takes priority over generated rooms)
     if (floor?.imageUrl) {
       L.imageOverlay(floor.imageUrl, BOUNDS, { opacity: 0.9 })
         .addTo(imageLayerRef.current)
     }
 
-    // Gemini-analysed rooms — each as a labelled rectangle
     if (floor?.rooms?.length > 0) {
       const style = ROOM_STYLE[floor.type] ?? ROOM_STYLE.interior
       for (const room of floor.rooms) {
         if (room.hidden) continue
-        // Leaflet [lat,lng] bounds: SW corner = bottom-left, NE corner = top-right
         const sw = toLL(room.x,              room.y + room.height)
         const ne = toLL(room.x + room.width, room.y)
-        L.rectangle([sw, ne], style)
+        L.rectangle([sw, ne], { ...style, interactive: false })
           .bindTooltip(room.name, {
             permanent: true,
             direction: 'center',
@@ -143,6 +251,114 @@ export default function LeafletFloorplan({
       }
     }
   }, [floor])
+
+  // ── Edit handles (move + corner resize per room) ──────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    editLayerRef.current.clearLayers()
+    if (!editMode || !floor?.rooms?.length) return
+
+    for (const room of floor.rooms) {
+      if (room.hidden) continue
+      const roomIndex = floor.rooms.indexOf(room)
+      let currentRoom = { ...room }
+
+      // Edit overlay rect (visual indicator, non-interactive)
+      const rect = L.rectangle(
+        [toLL(room.x, room.y + room.height), toLL(room.x + room.width, room.y)],
+        { color: '#10b981', weight: 2, fillColor: '#10b981', fillOpacity: 0.08, dashArray: '6,3', interactive: false }
+      ).addTo(editLayerRef.current)
+
+      function cornerLL(r, c) {
+        if (c === 'nw') return toLL(r.x,              r.y)
+        if (c === 'ne') return toLL(r.x + r.width,    r.y)
+        if (c === 'sw') return toLL(r.x,              r.y + r.height)
+        return               toLL(r.x + r.width,    r.y + r.height) // se
+      }
+
+      function syncRect(r) {
+        rect.setBounds([toLL(r.x, r.y + r.height), toLL(r.x + r.width, r.y)])
+      }
+
+      function saveRoom() {
+        const newRooms = floor.rooms.map((r, i) => i === roomIndex ? { ...r, ...currentRoom } : r)
+        onRoomsRef.current?.(newRooms)
+      }
+
+      // ── Move handle ──────────────────────────────────────────────────────
+      const moveMarker = L.marker(
+        toLL(room.x + room.width / 2, room.y + room.height / 2),
+        { icon: makeMoveIcon(), draggable: true, zIndexOffset: 100 }
+      ).addTo(editLayerRef.current)
+
+      let moveStart = null
+
+      moveMarker.on('dragstart', (e) => {
+        moveStart = { ll: e.target.getLatLng(), room: { ...currentRoom } }
+        L.DomEvent.stopPropagation(e)
+      })
+      moveMarker.on('drag', (e) => {
+        if (!moveStart) return
+        const cur = fromLL(e.target.getLatLng())
+        const ori = fromLL(moveStart.ll)
+        currentRoom = {
+          ...moveStart.room,
+          x: moveStart.room.x + (cur.x - ori.x),
+          y: moveStart.room.y + (cur.y - ori.y),
+        }
+        syncRect(currentRoom)
+        for (const [c, m] of Object.entries(cornerMarkers)) m.setLatLng(cornerLL(currentRoom, c))
+        L.DomEvent.stopPropagation(e)
+      })
+      moveMarker.on('dragend', () => { moveStart = null; saveRoom() })
+      moveMarker.on('click',   (e) => L.DomEvent.stopPropagation(e))
+
+      // ── Corner resize handles ────────────────────────────────────────────
+      const cornerMarkers = {}
+
+      for (const corner of ['nw', 'ne', 'sw', 'se']) {
+        const marker = L.marker(cornerLL(room, corner), {
+          icon: makeResizeIcon(corner),
+          draggable: true,
+          zIndexOffset: 200,
+        }).addTo(editLayerRef.current)
+
+        cornerMarkers[corner] = marker
+
+        let cornerStart = null
+
+        marker.on('dragstart', () => { cornerStart = { ...currentRoom } })
+        marker.on('drag', (e) => {
+          if (!cornerStart) return
+          const pos = fromLL(e.target.getLatLng())
+          const opp = {
+            nw: { x: cornerStart.x + cornerStart.width,  y: cornerStart.y + cornerStart.height },
+            ne: { x: cornerStart.x,                       y: cornerStart.y + cornerStart.height },
+            sw: { x: cornerStart.x + cornerStart.width,  y: cornerStart.y },
+            se: { x: cornerStart.x,                       y: cornerStart.y },
+          }[corner]
+
+          currentRoom = {
+            ...cornerStart,
+            x:      Math.min(pos.x, opp.x),
+            y:      Math.min(pos.y, opp.y),
+            width:  Math.abs(pos.x - opp.x),
+            height: Math.abs(pos.y - opp.y),
+          }
+          syncRect(currentRoom)
+          for (const [c, m] of Object.entries(cornerMarkers)) {
+            if (c !== corner) m.setLatLng(cornerLL(currentRoom, c))
+          }
+          moveMarker.setLatLng(toLL(currentRoom.x + currentRoom.width / 2, currentRoom.y + currentRoom.height / 2))
+          L.DomEvent.stopPropagation(e)
+        })
+        marker.on('dragend', () => { cornerStart = null; saveRoom() })
+        marker.on('click',   (e) => L.DomEvent.stopPropagation(e))
+      }
+    }
+  }, [floor, editMode])
 
   // ── Re-render plant markers when plants list changes ──────────────────────
   useEffect(() => {
@@ -171,7 +387,6 @@ export default function LeafletFloorplan({
         )
       })
 
-      // Hover tooltip
       const { color, label } = urgencyInfo(plant)
       marker.bindTooltip(
         `<div class="lf-plant-tip">
@@ -186,5 +401,90 @@ export default function LeafletFloorplan({
     }
   }, [plants])
 
-  return <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+  // ── Pending room name prompt ──────────────────────────────────────────────
+  const handleConfirmRoom = () => {
+    if (!pendingRoom || !pendingRoomName.trim()) return
+    const rooms = floorRef.current?.rooms ?? []
+    onRoomsRef.current?.([...rooms, { ...pendingRoom, name: pendingRoomName.trim() }])
+    setPendingRoom(null)
+    setPendingRoomName('')
+  }
+
+  const handleCancelRoom = () => {
+    setPendingRoom(null)
+    setPendingRoomName('')
+  }
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+
+      {pendingRoom && (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 2000,
+          background: '#1f2937',
+          border: '1px solid #374151',
+          borderRadius: 12,
+          padding: '20px',
+          minWidth: 280,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+        }}>
+          <p style={{ color: '#e5e7eb', fontSize: 14, fontWeight: 600, margin: '0 0 4px 0' }}>Name this zone</p>
+          <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 12px 0' }}>
+            {pendingRoom.width}% wide × {pendingRoom.height}% tall
+          </p>
+          <input
+            autoFocus
+            value={pendingRoomName}
+            onChange={e => setPendingRoomName(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleConfirmRoom()
+              if (e.key === 'Escape') handleCancelRoom()
+            }}
+            placeholder="e.g. Living Room"
+            style={{
+              display: 'block',
+              width: '100%',
+              background: '#111827',
+              border: '1px solid #374151',
+              borderRadius: 8,
+              padding: '8px 12px',
+              color: '#fff',
+              fontSize: 14,
+              outline: 'none',
+              marginBottom: 12,
+              boxSizing: 'border-box',
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={handleCancelRoom}
+              style={{
+                padding: '6px 14px', borderRadius: 8,
+                background: 'transparent', border: '1px solid #374151',
+                color: '#9ca3af', cursor: 'pointer', fontSize: 13,
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleConfirmRoom}
+              disabled={!pendingRoomName.trim()}
+              style={{
+                padding: '6px 14px', borderRadius: 8, border: 'none',
+                fontSize: 13, fontWeight: 600,
+                background: pendingRoomName.trim() ? '#10b981' : '#374151',
+                color: pendingRoomName.trim() ? '#fff' : '#6b7280',
+                cursor: pendingRoomName.trim() ? 'pointer' : 'default',
+              }}
+            >
+              Add Zone
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
 }

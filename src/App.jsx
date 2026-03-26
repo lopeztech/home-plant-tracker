@@ -142,6 +142,18 @@ function AppContent() {
     setPendingPosition(null)
   }, [])
 
+  const handleFloorRoomsChange = useCallback(async (rooms) => {
+    const updatedFloors = floors.map(f =>
+      f.id === activeFloorId ? { ...f, rooms } : f
+    )
+    try {
+      const { floors: saved } = await floorsApi.save(updatedFloors)
+      setFloors(saved)
+    } catch (err) {
+      console.error('Failed to save rooms:', err)
+    }
+  }, [floors, activeFloorId])
+
   const handleSaveFloors = useCallback(async (updatedFloors) => {
     const { floors: saved } = await floorsApi.save(updatedFloors)
     setFloors(saved)
@@ -203,6 +215,7 @@ function AppContent() {
             onFloorplanClick={handleFloorplanClick}
             onMarkerClick={handleMarkerClick}
             onMarkerDrag={handleMarkerDrag}
+            onRoomsChange={handleFloorRoomsChange}
             loading={plantsLoading}
             weather={weather}
             floors={floors}
