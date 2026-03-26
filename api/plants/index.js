@@ -91,16 +91,6 @@ app.use(cors({
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const gemini = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
 
-function extractJson(text) {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fenced ? fenced[1] : text;
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-  return match[0]
-    .replace(/\/\/[^\n]*/g, '')           // strip // line comments
-    .replace(/\/\*[\s\S]*?\*\//g, '')     // strip /* block comments */
-    .replace(/,(\s*[}\]])/g, '$1');       // strip trailing commas
-}
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
 
@@ -188,16 +178,11 @@ app.post('/analyse-floorplan', async (req, res) => {
           { text: ANALYSE_FLOORPLAN_PROMPT },
         ],
       }],
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.1, responseMimeType: 'application/json' },
     });
 
     const text = result.response.text();
-    const jsonStr = extractJson(text);
-    if (!jsonStr) {
-      console.error('Raw Gemini response (no JSON found):', text.slice(0, 1000));
-      return res.status(500).json({ error: 'Could not parse Gemini response' });
-    }
-    const parsed = JSON.parse(jsonStr);
+    const parsed = JSON.parse(text);
     if (!Array.isArray(parsed.floors) || parsed.floors.length === 0) {
       return res.status(500).json({ error: 'No floors identified in floorplan' });
     }
@@ -235,14 +220,10 @@ app.post('/analyse', async (req, res) => {
           { text: ANALYSE_PROMPT },
         ],
       }],
-      generationConfig: { maxOutputTokens: 512, temperature: 0.1 },
+      generationConfig: { maxOutputTokens: 512, temperature: 0.1, responseMimeType: 'application/json' },
     });
 
-    const text = result.response.text();
-    const jsonStr = extractJson(text);
-    if (!jsonStr) return res.status(500).json({ error: 'Could not parse Gemini response' });
-
-    const parsed = JSON.parse(jsonStr);
+    const parsed = JSON.parse(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -261,14 +242,10 @@ app.post('/recommend', async (req, res) => {
         role: 'user',
         parts: [{ text: RECOMMEND_PROMPT(name, species) }],
       }],
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.3 },
+      generationConfig: { maxOutputTokens: 1024, temperature: 0.3, responseMimeType: 'application/json' },
     });
 
-    const text = result.response.text();
-    const jsonStr = extractJson(text);
-    if (!jsonStr) return res.status(500).json({ error: 'Could not parse Gemini response' });
-
-    const parsed = JSON.parse(jsonStr);
+    const parsed = JSON.parse(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
