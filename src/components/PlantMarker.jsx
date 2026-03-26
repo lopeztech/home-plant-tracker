@@ -32,11 +32,14 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
   // Mutable ref so handlers don't need to declare isDragging as a dependency
   const dragRef = useRef({ active: false, moved: false, startX: 0, startY: 0 })
 
+  const [imgError, setImgError] = useState(false)
+
   const days = getDaysUntilWatering(plant)
   const color = getUrgencyColor(days)
   const label = getUrgencyLabel(days)
   const isOverdue = days < 0
   const initial = plant.name ? plant.name.charAt(0).toUpperCase() : '?'
+  const showPhoto = plant.imageUrl && !imgError
 
   const handlePointerDown = useCallback((e) => {
     e.stopPropagation()
@@ -107,8 +110,8 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
           width: 32,
           height: 32,
           borderRadius: '50%',
-          backgroundColor: color,
-          border: '2px solid rgba(255,255,255,0.3)',
+          backgroundColor: showPhoto ? 'transparent' : color,
+          border: `2px solid ${color}`,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -117,9 +120,17 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
           fontWeight: 700,
           boxShadow: `0 2px 8px ${color}80, 0 0 0 3px ${color}30`,
           userSelect: 'none',
+          overflow: 'hidden',
         }}
       >
-        {initial}
+        {showPhoto ? (
+          <img
+            src={plant.imageUrl}
+            alt={plant.name}
+            onError={() => setImgError(true)}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%', display: 'block' }}
+          />
+        ) : initial}
       </div>
 
       {showTooltip && !isDragging && (

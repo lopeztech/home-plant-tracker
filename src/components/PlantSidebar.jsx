@@ -128,10 +128,12 @@ function HealthBadge({ health }) {
 }
 
 function PlantCard({ plant, onClick, onWater }) {
+  const [imgError, setImgError] = useState(false)
   const days = getDaysUntilWatering(plant)
   const color = getUrgencyColor(days)
   const label = getUrgencyLabel(days)
   const initial = plant.name ? plant.name.charAt(0).toUpperCase() : '?'
+  const showPhoto = plant.imageUrl && !imgError
 
   return (
     <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-600 transition-all group overflow-hidden">
@@ -139,15 +141,23 @@ function PlantCard({ plant, onClick, onWater }) {
         onClick={() => onClick(plant)}
         className="flex-1 flex items-center gap-2.5 text-left px-3 py-2.5 min-w-0"
       >
-        {/* Color dot */}
+        {/* Avatar: photo thumbnail or initial letter */}
         <div
-          className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold"
+          className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold overflow-hidden"
           style={{
-            backgroundColor: color,
-            boxShadow: `0 0 0 2px ${color}40`,
+            backgroundColor: showPhoto ? 'transparent' : color,
+            border: `2px solid ${color}`,
+            boxShadow: `0 0 0 1px ${color}40`,
           }}
         >
-          {initial}
+          {showPhoto ? (
+            <img
+              src={plant.imageUrl}
+              alt={plant.name}
+              onError={() => setImgError(true)}
+              className="w-full h-full object-cover"
+            />
+          ) : initial}
         </div>
 
         <div className="flex-1 min-w-0">
