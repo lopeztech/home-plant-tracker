@@ -145,6 +145,24 @@ describe('POST /analyse', () => {
     expect(res.body.recommendations).toHaveLength(3);
   });
 
+  it('parses Gemini response wrapped in markdown code fences', async () => {
+    const payload = { species: 'Ficus lyrata', frequencyDays: 10, health: 'Good', healthReason: 'Healthy', maturity: 'Young', recommendations: [] };
+    geminiGenerateFn = async () => ({ response: { text: () => '```json\n' + JSON.stringify(payload) + '\n```' } });
+    const res = await request(app).post('/analyse').send({ imageBase64: 'abc', mimeType: 'image/jpeg' });
+    expect(res.status).toBe(200);
+    expect(res.body.species).toBe('Ficus lyrata');
+  });
+
+  it('parses Gemini response with raw unescaped newlines in string values', async () => {
+    // Gemini sometimes emits literal newlines inside string fields instead of \n
+    const raw = '{"species":"Monstera","frequencyDays":7,"health":"Good","healthReason":"Healthy\nleaves","maturity":"Mature","recommendations":[]}';
+    geminiGenerateFn = async () => ({ response: { text: () => raw } });
+    const res = await request(app).post('/analyse').send({ imageBase64: 'abc', mimeType: 'image/jpeg' });
+    expect(res.status).toBe(200);
+    // Raw \n is sanitised to the \n escape sequence, which JSON.parse decodes back to a newline char
+    expect(res.body.healthReason).toBe('Healthy\nleaves');
+  });
+
   it('returns 500 if Gemini throws', async () => {
     geminiGenerateFn = async () => { throw new Error('Gemini unavailable'); };
     const res = await request(app).post('/analyse').send({ imageBase64: 'abc', mimeType: 'image/jpeg' });

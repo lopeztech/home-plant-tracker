@@ -155,10 +155,28 @@ const FLOORPLAN_SCHEMA = {
   required: ['floors'],
 };
 
-// Strip markdown code fences that Gemini occasionally wraps around JSON output.
+// Parse Gemini JSON responses, handling common quirks:
+//   • markdown code fences (```json ... ```)
+//   • surrounding prose before/after the JSON object
+//   • raw unescaped control characters (newlines, tabs) inside string values
 function parseGeminiJson(text) {
-  const stripped = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-  return JSON.parse(stripped);
+  let s = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+
+  // Fast path: direct parse
+  try { return JSON.parse(s); } catch (_) {}
+
+  // Extract the outermost {...} in case Gemini added surrounding prose
+  const start = s.indexOf('{');
+  const end   = s.lastIndexOf('}');
+  if (start !== -1 && end > start) s = s.slice(start, end + 1);
+
+  // Sanitize raw control characters that are illegal inside JSON strings.
+  // Only the 1-char ASCII controls are replaced; already-escaped sequences
+  // (e.g. the two-char "\n") are unaffected because the regex matches the
+  // actual byte value, not the escape.
+  s = s.replace(/[\n\r\t]/g, c => (c === '\n' ? '\\n' : c === '\r' ? '\\r' : '\\t'));
+
+  return JSON.parse(s);
 }
 
 const ANALYSE_SCHEMA = {
@@ -305,7 +323,7 @@ app.post('/recommend', async (req, res) => {
       generationConfig: { maxOutputTokens: 1024, temperature: 0.3, responseMimeType: 'application/json' },
     });
 
-    const parsed = JSON.parse(result.response.text());
+    const parsed = parseGeminiJson(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
     res.status(500).json({ error: err.message });
