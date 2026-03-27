@@ -153,14 +153,15 @@ describe('POST /analyse', () => {
     expect(res.body.species).toBe('Ficus lyrata');
   });
 
-  it('parses Gemini response with raw unescaped newlines in string values', async () => {
-    // Gemini sometimes emits literal newlines inside string fields instead of \n
-    const raw = '{"species":"Monstera","frequencyDays":7,"health":"Good","healthReason":"Healthy\nleaves","maturity":"Mature","recommendations":[]}';
+  it('parses Gemini response with raw unescaped control characters in string values', async () => {
+    // Gemini sometimes emits literal control chars inside string fields instead of escape sequences.
+    // \n (newline), \t (tab), and other U+0000-U+001F chars should all be handled.
+    const raw = '{"species":"Monstera","frequencyDays":7,"health":"Good","healthReason":"Healthy\nleaves","maturity":"Mat\x08ure","recommendations":[]}';
     geminiGenerateFn = async () => ({ response: { text: () => raw } });
     const res = await request(app).post('/analyse').send({ imageBase64: 'abc', mimeType: 'image/jpeg' });
     expect(res.status).toBe(200);
-    // Raw \n is sanitised to the \n escape sequence, which JSON.parse decodes back to a newline char
     expect(res.body.healthReason).toBe('Healthy\nleaves');
+    expect(res.body.maturity).toBe('Mat\x08ure'); // backspace char round-trips via \u0008
   });
 
   it('returns 500 if Gemini throws', async () => {

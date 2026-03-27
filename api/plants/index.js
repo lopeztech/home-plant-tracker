@@ -158,7 +158,7 @@ const FLOORPLAN_SCHEMA = {
 // Parse Gemini JSON responses, handling common quirks:
 //   • markdown code fences (```json ... ```)
 //   • surrounding prose before/after the JSON object
-//   • raw unescaped control characters (newlines, tabs) inside string values
+//   • raw unescaped control characters (U+0000–U+001F) inside string values
 function parseGeminiJson(text) {
   let s = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 
@@ -170,11 +170,12 @@ function parseGeminiJson(text) {
   const end   = s.lastIndexOf('}');
   if (start !== -1 && end > start) s = s.slice(start, end + 1);
 
-  // Sanitize raw control characters that are illegal inside JSON strings.
-  // Only the 1-char ASCII controls are replaced; already-escaped sequences
-  // (e.g. the two-char "\n") are unaffected because the regex matches the
-  // actual byte value, not the escape.
-  s = s.replace(/[\n\r\t]/g, c => (c === '\n' ? '\\n' : c === '\r' ? '\\r' : '\\t'));
+  // Sanitize ALL raw control characters (U+0000–U+001F) that are illegal
+  // inside JSON strings. Named escapes are used for the five that have them;
+  // everything else becomes a \uXXXX sequence. Already-escaped sequences are
+  // unaffected because the regex matches the actual byte, not the two-char \n.
+  const NAMED = { '\b': '\\b', '\t': '\\t', '\n': '\\n', '\f': '\\f', '\r': '\\r' };
+  s = s.replace(/[\x00-\x1f]/g, c => NAMED[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
   return JSON.parse(s);
 }
