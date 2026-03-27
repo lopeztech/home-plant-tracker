@@ -17,7 +17,8 @@
     "@google/generative-ai": "^0.21.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "express-rate-limit": "^8.3.1"
+    "express-rate-limit": "^8.3.1",
+    "jsonrepair": "^3.13.3"
   },
   "devDependencies": {
     "proxyquire": "^2.1.3",

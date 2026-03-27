@@ -4,6 +4,7 @@ const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
+const { jsonrepair } = require('jsonrepair');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -159,6 +160,7 @@ const FLOORPLAN_SCHEMA = {
 //   • markdown code fences (```json ... ```)
 //   • surrounding prose before/after the JSON object
 //   • raw unescaped control characters (U+0000–U+001F) inside string values
+//   • other malformed JSON (unescaped quotes, trailing commas, etc.) via jsonrepair
 function parseGeminiJson(text) {
   let s = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 
@@ -172,12 +174,15 @@ function parseGeminiJson(text) {
 
   // Sanitize ALL raw control characters (U+0000–U+001F) that are illegal
   // inside JSON strings. Named escapes are used for the five that have them;
-  // everything else becomes a \uXXXX sequence. Already-escaped sequences are
-  // unaffected because the regex matches the actual byte, not the two-char \n.
+  // everything else becomes a \uXXXX sequence.
   const NAMED = { '\b': '\\b', '\t': '\\t', '\n': '\\n', '\f': '\\f', '\r': '\\r' };
   s = s.replace(/[\x00-\x1f]/g, c => NAMED[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
-  return JSON.parse(s);
+  try { return JSON.parse(s); } catch (_) {}
+
+  // Last resort: jsonrepair handles unescaped quotes, trailing commas, etc.
+  log.warn('parseGeminiJson: falling back to jsonrepair', { raw: text.slice(0, 500) });
+  return JSON.parse(jsonrepair(s));
 }
 
 const ANALYSE_SCHEMA = {
