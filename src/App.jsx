@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
+import { GUEST_PLANTS, GUEST_FLOORS } from './data/guestData.js'
 
 const DEFAULT_FLOORS = [
   { id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null },
@@ -17,7 +18,7 @@ const DEFAULT_FLOORS = [
 ]
 
 function AppContent() {
-  const { isAuthenticated, isLoading } = useAuth()
+  const { isAuthenticated, isGuest, isLoading, logout } = useAuth()
   const { weather, locationDenied } = useWeather()
 
   const [plants, setPlants] = useState([])
@@ -37,9 +38,18 @@ function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
 
-  // Load plants and floors from API when authenticated
+  // Load plants and floors when authenticated
   useEffect(() => {
     if (!isAuthenticated) return
+
+    if (isGuest) {
+      // Use mock data for guest mode — no API calls
+      setPlants(GUEST_PLANTS)
+      setFloors(GUEST_FLOORS)
+      setActiveFloorId('ground')
+      return
+    }
+
     setPlantsLoading(true)
     setPlantsError(null)
     plantsApi.list()
@@ -56,7 +66,7 @@ function AppContent() {
         }
       })
       .catch(() => {}) // fall back to DEFAULT_FLOORS
-  }, [isAuthenticated])
+  }, [isAuthenticated, isGuest])
 
   const handleFloorplanClick = useCallback((x, y) => {
     setPendingPosition({ x, y })
@@ -79,13 +89,14 @@ function AppContent() {
 
   const handleMarkerDrag = useCallback(async (plant, x, y) => {
     setPlants(prev => prev.map(p => p.id === plant.id ? { ...p, x, y } : p))
+    if (isGuest) return
     try {
       await plantsApi.update(plant.id, { x, y })
     } catch (err) {
       console.error('Failed to update plant position:', err)
       setPlants(prev => prev.map(p => p.id === plant.id ? plant : p))
     }
-  }, [])
+  }, [isGuest])
 
   const handleSavePlant = useCallback(async (plantData) => {
     const data = {
@@ -93,6 +104,19 @@ function AppContent() {
       floor: plantData.floor ?? activeFloorId,
       x: pendingPosition?.x ?? editingPlant?.x ?? 50,
       y: pendingPosition?.y ?? editingPlant?.y ?? 50,
+    }
+    if (isGuest) {
+      // In guest mode, update local state only
+      if (editingPlant) {
+        setPlants(prev => prev.map(p => p.id === editingPlant.id ? { ...p, ...data } : p))
+      } else {
+        const newPlant = { ...data, id: `guest-new-${Date.now()}` }
+        setPlants(prev => [newPlant, ...prev])
+      }
+      setShowPlantModal(false)
+      setEditingPlant(null)
+      setPendingPosition(null)
+      return
     }
     try {
       if (editingPlant) {
@@ -110,9 +134,15 @@ function AppContent() {
     setShowPlantModal(false)
     setEditingPlant(null)
     setPendingPosition(null)
-  }, [editingPlant, pendingPosition, activeFloorId])
+  }, [editingPlant, pendingPosition, activeFloorId, isGuest])
 
   const handleWaterPlant = useCallback(async (plantId) => {
+    if (isGuest) {
+      const now = new Date().toISOString()
+      setPlants(prev => prev.map(p => p.id === plantId ? { ...p, lastWatered: now } : p))
+      setEditingPlant(prev => prev?.id === plantId ? { ...prev, lastWatered: now } : prev)
+      return
+    }
     try {
       const updated = await plantsApi.water(plantId)
       setPlants(prev => prev.map(p => p.id === plantId ? updated : p))
@@ -121,9 +151,15 @@ function AppContent() {
       console.error('Failed to water plant:', err)
       alert(`Failed to water plant: ${err.message}`)
     }
-  }, [])
+  }, [isGuest])
 
   const handleDeletePlant = useCallback(async (plantId) => {
+    if (isGuest) {
+      setPlants(prev => prev.filter(p => p.id !== plantId))
+      setShowPlantModal(false)
+      setEditingPlant(null)
+      return
+    }
     try {
       await plantsApi.delete(plantId)
       setPlants(prev => prev.filter(p => p.id !== plantId))
@@ -134,7 +170,7 @@ function AppContent() {
     }
     setShowPlantModal(false)
     setEditingPlant(null)
-  }, [])
+  }, [isGuest])
 
   const handleCloseModal = useCallback(() => {
     setShowPlantModal(false)
@@ -146,15 +182,25 @@ function AppContent() {
     const updatedFloors = floors.map(f =>
       f.id === activeFloorId ? { ...f, rooms } : f
     )
+    if (isGuest) { setFloors(updatedFloors); return }
     try {
       const { floors: saved } = await floorsApi.save(updatedFloors)
       setFloors(saved)
     } catch (err) {
       console.error('Failed to save rooms:', err)
     }
-  }, [floors, activeFloorId])
+  }, [floors, activeFloorId, isGuest])
 
   const handleSaveFloors = useCallback(async (updatedFloors) => {
+    if (isGuest) {
+      setFloors(updatedFloors)
+      const stillVisible = updatedFloors.find(f => f.id === activeFloorId && !f.hidden)
+      if (!stillVisible) {
+        const first = updatedFloors.find(f => !f.hidden && f.type === 'interior') ?? updatedFloors.find(f => !f.hidden) ?? updatedFloors[0]
+        if (first) setActiveFloorId(first.id)
+      }
+      return
+    }
     const { floors: saved } = await floorsApi.save(updatedFloors)
     setFloors(saved)
     // If the active floor is now hidden, switch to the first visible floor
@@ -163,9 +209,10 @@ function AppContent() {
       const first = saved.find(f => !f.hidden && f.type === 'interior') ?? saved.find(f => !f.hidden) ?? saved[0]
       if (first) setActiveFloorId(first.id)
     }
-  }, [activeFloorId])
+  }, [activeFloorId, isGuest])
 
   const handleFloorplanUpload = useCallback(async (file) => {
+    if (isGuest) { alert('Floorplan upload is not available in guest mode.'); return }
     setIsAnalysingFloorplan(true)
     try {
       const { floors: analysedFloors } = await analyseApi.analyseFloorplan(file)
@@ -178,7 +225,7 @@ function AppContent() {
     } finally {
       setIsAnalysingFloorplan(false)
     }
-  }, [])
+  }, [isGuest])
 
   if (isLoading) {
     return (
@@ -199,6 +246,18 @@ function AppContent() {
         isAnalysingFloorplan={isAnalysingFloorplan}
         onOpenSettings={() => setShowSettings(true)}
       />
+
+      {isGuest && (
+        <div className="bg-emerald-900/40 border-b border-emerald-800/60 text-emerald-300 text-xs px-4 py-2 text-center flex items-center justify-center gap-3">
+          <span>You are browsing in guest mode with sample data. Changes are not saved.</span>
+          <button
+            onClick={logout}
+            className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300 transition-colors"
+          >
+            Sign in
+          </button>
+        </div>
+      )}
 
       {plantsError && (
         <div className="bg-red-900/50 border border-red-700 text-red-300 text-sm px-4 py-2 text-center">

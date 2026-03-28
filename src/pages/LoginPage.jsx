@@ -5,7 +5,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, loginAsGuest } = useAuth()
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-950 px-4">
@@ -44,16 +44,25 @@ export default function LoginPage() {
                 Set <code className="font-mono bg-amber-900/50 px-1 py-0.5 rounded">VITE_GOOGLE_CLIENT_ID</code> in
                 your <code className="font-mono bg-amber-900/50 px-1 py-0.5 rounded">.env.local</code> file.
               </p>
-              <p className="mt-1 text-amber-400/70">
-                Get the value from:{' '}
-                <code className="font-mono">terraform output -raw iap_client_id</code>
-              </p>
             </div>
           )}
+
+          <div className="w-full flex items-center gap-3">
+            <div className="flex-1 h-px bg-gray-800" />
+            <span className="text-gray-600 text-xs">or</span>
+            <div className="flex-1 h-px bg-gray-800" />
+          </div>
+
+          <button
+            onClick={loginAsGuest}
+            className="w-full py-2.5 px-4 rounded-lg border border-gray-700 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-600 transition-colors"
+          >
+            Continue as Guest
+          </button>
         </div>
 
         <p className="text-gray-600 text-xs text-center">
-          Access is restricted to authorised accounts only.
+          Guest mode uses sample data and does not save changes.
         </p>
       </div>
     </div>

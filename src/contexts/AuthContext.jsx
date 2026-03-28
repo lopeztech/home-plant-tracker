@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 import { setApiCredential } from '../api/plants.js'
 
 const STORAGE_KEY = 'plant_tracker_user'
+const GUEST_USER = { name: 'Guest', email: '', picture: null, sub: 'guest', isGuest: true }
 
 const AuthContext = createContext(null)
 
@@ -14,8 +15,12 @@ export function AuthProvider({ children }) {
       const stored = localStorage.getItem(STORAGE_KEY)
       if (stored) {
         const parsed = JSON.parse(stored)
-        setApiCredential(parsed.credential ?? null)
-        setUser(parsed)
+        if (parsed.isGuest) {
+          setUser(GUEST_USER)
+        } else {
+          setApiCredential(parsed.credential ?? null)
+          setUser(parsed)
+        }
       }
     } catch {
       localStorage.removeItem(STORAGE_KEY)
@@ -48,13 +53,18 @@ export function AuthProvider({ children }) {
     }
   }
 
+  function loginAsGuest() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(GUEST_USER))
+    setUser(GUEST_USER)
+  }
+
   function logout() {
     localStorage.removeItem(STORAGE_KEY)
     setApiCredential(null)
     setUser(null)
 
-    // Redirect to IAP logout endpoint in production
-    if (window.location.hostname !== 'localhost') {
+    // Redirect to IAP logout endpoint in production (not for guests)
+    if (window.location.hostname !== 'localhost' && !user?.isGuest) {
       window.location.href = '/_gcp_iap/clear_login_cookie'
     }
   }
@@ -64,8 +74,10 @@ export function AuthProvider({ children }) {
       value={{
         user,
         login,
+        loginAsGuest,
         logout,
         isAuthenticated: !!user,
+        isGuest: !!user?.isGuest,
         isLoading,
       }}
     >
