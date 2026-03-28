@@ -19,7 +19,7 @@ ENV VITE_API_KEY=$VITE_API_KEY
 RUN npm run build
 
 # Stage 2: Serve with nginx
-FROM nginx:alpine@sha256:42d1d5b07c84257b55d409f4e6e3be3b55d42867afce975a5648a3f231bf7e81
+FROM nginx:alpine@sha256:e7257f1ef28ba17cf7c248cb8ccf6f0c6e0228ab9c315c152f9c203cd34cf6d1
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
