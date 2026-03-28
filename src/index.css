@@ -133,6 +133,30 @@
   border-top-color: rgba(55, 65, 81, 1);
 }
 
+/* Tooltip below marker (near top edge) */
+.tooltip.tooltip-below {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
+.tooltip.tooltip-below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: rgba(55, 65, 81, 1);
+}
+
+/* Tooltip to left of marker (near right edge) */
+.tooltip.tooltip-left {
+  left: auto;
+  right: 50%;
+  transform: translateX(50%);
+}
+.tooltip.tooltip-left::after {
+  left: auto;
+  right: 50%;
+  transform: translateX(50%);
+}
+
 .drag-active {
   border-color: #10b981 !important;
   background-color: rgba(16, 185, 129, 0.1) !important;

@@ -3,6 +3,7 @@ import { X, Trash2, Save, Leaf, Loader2, Droplets, Sparkles, Camera, ClipboardLi
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi } from '../api/plants.js'
 import { getWateringStatus } from '../utils/watering.js'
+import { useToast } from './Toast.jsx'
 
 const ROOMS = [
   'Living Room',
@@ -31,13 +32,14 @@ function today() {
 }
 
 function FormField({ label, children, hint }) {
+  const isError = hint && /required/i.test(hint)
   return (
     <div className="space-y-1">
       <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
         {label}
       </label>
       {children}
-      {hint && <p className="text-xs text-gray-600">{hint}</p>}
+      {hint && <p className={`text-xs ${isError ? 'text-red-400' : 'text-gray-600'}`}>{hint}</p>}
     </div>
   )
 }
@@ -56,6 +58,7 @@ function CareSection({ label, children }) {
 }
 
 export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onClose }) {
+  const toast = useToast()
   const isEditing = !!plant
 
   // null = show mode-choice screen (new plants only); 'photo' or 'manual' after choice
@@ -81,6 +84,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [nameTouched, setNameTouched] = useState(false)
 
   const [careData, setCareData] = useState(null)
   const [careLoading, setCareLoading] = useState(false)
@@ -136,7 +140,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       try {
         imageUrl = await imagesApi.upload(form.imageFile, 'plants')
       } catch (err) {
-        alert(`Image upload failed: ${err.message}`)
+        toast.error(`Image upload failed: ${err.message}`)
         setIsSaving(false)
         return
       }
@@ -325,13 +329,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 </>
               )}
 
-              <FormField label="Plant Name *">
+              <FormField label="Plant Name *" hint={nameTouched && !form.name.trim() ? 'Plant name is required' : undefined}>
                 <input
-                  className={InputClass()}
+                  className={InputClass(nameTouched && !form.name.trim() ? 'border-red-600 focus:border-red-500 focus:ring-red-500' : '')}
                   type="text"
                   placeholder="e.g. Living Room Fern"
                   value={form.name}
                   onChange={e => update('name', e.target.value)}
+                  onBlur={() => setNameTouched(true)}
                   required
                 />
               </FormField>
@@ -619,6 +624,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 form=""
                 onClick={handleSubmit}
                 disabled={!form.name.trim() || isSaving}
+                title={!form.name.trim() ? 'Enter a name to save' : undefined}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                   form.name.trim() && !isSaving
                     ? 'bg-emerald-600 hover:bg-emerald-500 text-white'

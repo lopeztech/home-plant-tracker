@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { Map, Leaf } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
@@ -8,8 +8,10 @@ import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
+import { ToastProvider, useToast } from './components/Toast.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
+import { getWateringStatus } from './utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from './data/guestData.js'
 
 const DEFAULT_FLOORS = [
@@ -20,6 +22,7 @@ const DEFAULT_FLOORS = [
 function AppContent() {
   const { isAuthenticated, isGuest, isLoading, logout } = useAuth()
   const { weather, locationDenied } = useWeather()
+  const toast = useToast()
 
   const [plants, setPlants] = useState([])
   const [plantsLoading, setPlantsLoading] = useState(false)
@@ -32,6 +35,11 @@ function AppContent() {
   const [editingPlant, setEditingPlant] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
+
+  const overdueCount = useMemo(
+    () => plants.filter(p => getWateringStatus(p, weather, floors).daysUntil < 0).length,
+    [plants, weather, floors]
+  )
 
   // Responsive layout state
   const [mobileTab, setMobileTab] = useState('floorplan')
@@ -122,13 +130,15 @@ function AppContent() {
       if (editingPlant) {
         const updated = await plantsApi.update(editingPlant.id, data)
         setPlants(prev => prev.map(p => p.id === editingPlant.id ? updated : p))
+        toast('Plant saved!')
       } else {
         const created = await plantsApi.create(data)
         setPlants(prev => [created, ...prev])
+        toast('Plant added!')
       }
     } catch (err) {
       console.error('Failed to save plant:', err)
-      alert(`Failed to save plant: ${err.message}`)
+      toast.error(`Failed to save plant: ${err.message}`)
       return
     }
     setShowPlantModal(false)
@@ -147,9 +157,10 @@ function AppContent() {
       const updated = await plantsApi.water(plantId)
       setPlants(prev => prev.map(p => p.id === plantId ? updated : p))
       setEditingPlant(prev => prev?.id === plantId ? updated : prev)
+      toast('Plant watered!')
     } catch (err) {
       console.error('Failed to water plant:', err)
-      alert(`Failed to water plant: ${err.message}`)
+      toast.error(`Failed to water plant: ${err.message}`)
     }
   }, [isGuest])
 
@@ -163,9 +174,10 @@ function AppContent() {
     try {
       await plantsApi.delete(plantId)
       setPlants(prev => prev.filter(p => p.id !== plantId))
+      toast('Plant deleted.')
     } catch (err) {
       console.error('Failed to delete plant:', err)
-      alert(`Failed to delete plant: ${err.message}`)
+      toast.error(`Failed to delete plant: ${err.message}`)
       return
     }
     setShowPlantModal(false)
@@ -212,7 +224,7 @@ function AppContent() {
   }, [activeFloorId, isGuest])
 
   const handleFloorplanUpload = useCallback(async (file) => {
-    if (isGuest) { alert('Floorplan upload is not available in guest mode.'); return }
+    if (isGuest) { toast.error('Floorplan upload is not available in guest mode.'); return }
     setIsAnalysingFloorplan(true)
     try {
       const { floors: analysedFloors } = await analyseApi.analyseFloorplan(file)
@@ -221,7 +233,7 @@ function AppContent() {
       const first = saved.find(f => f.type === 'interior') ?? saved[0]
       if (first) setActiveFloorId(first.id)
     } catch (err) {
-      alert(`Floorplan analysis failed: ${err.message}`)
+      toast.error(`Floorplan analysis failed: ${err.message}`)
     } finally {
       setIsAnalysingFloorplan(false)
     }
@@ -325,10 +337,26 @@ function AppContent() {
           role="tab"
           aria-selected={mobileTab === 'plants'}
           onClick={() => setMobileTab('plants')}
-          className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${mobileTab === 'plants' ? 'text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${
+            overdueCount > 0
+              ? (mobileTab === 'plants' ? 'text-red-400' : 'text-red-500')
+              : (mobileTab === 'plants' ? 'text-emerald-400' : 'text-gray-500 hover:text-gray-300')
+          }`}
         >
-          <Leaf size={20} />
-          <span>Plants{plants.length > 0 ? ` (${plants.length})` : ''}</span>
+          <div className="relative">
+            <Leaf size={20} />
+            {overdueCount > 0 && (
+              <span className="absolute -top-1 -right-2.5 w-4 h-4 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
+                {overdueCount > 9 ? '9+' : overdueCount}
+              </span>
+            )}
+          </div>
+          <span>
+            {overdueCount > 0
+              ? `${overdueCount} overdue`
+              : `Plants${plants.length > 0 ? ` (${plants.length})` : ''}`
+            }
+          </span>
         </button>
       </nav>
 
@@ -363,7 +391,9 @@ export default function App() {
   return (
     <GoogleOAuthProvider clientId={clientId}>
       <AuthProvider>
-        <AppContent />
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
   )

@@ -183,7 +183,20 @@ export default function FloorplanView({
               >
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-900/80 border border-gray-700 text-xs text-gray-500">
                   <Upload size={11} />
-                  Upload a floorplan image to generate your home layout
+                  <span className="hidden md:inline">Upload a floorplan image to generate your home layout</span>
+                  <span className="md:hidden">Tap anywhere to add a plant</span>
+                </div>
+              </div>
+            )}
+
+            {/* Mobile tap-to-add hint — shown when plants exist but hint is useful */}
+            {!isAnalysingFloorplan && hasAnalysedFloors && plantsOnFloor.length === 0 && (
+              <div
+                className="absolute bottom-3 left-1/2 -translate-x-1/2 pointer-events-none md:hidden"
+                style={{ zIndex: 1000 }}
+              >
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-900/80 border border-gray-700 text-xs text-gray-500">
+                  Tap anywhere to add a plant
                 </div>
               </div>
             )}

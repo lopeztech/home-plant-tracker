@@ -190,7 +190,19 @@ const LEGEND_ITEMS = [
   { color: '#22c55e', label: 'All good' },
 ]
 
-export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, weather, locationDenied }) {
+function SkeletonCard() {
+  return (
+    <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 animate-pulse">
+      <div className="w-7 h-7 rounded-full bg-gray-700 flex-shrink-0" />
+      <div className="flex-1 ml-2.5 space-y-2">
+        <div className="h-3 bg-gray-700 rounded w-24" />
+        <div className="h-2.5 bg-gray-700/60 rounded w-16" />
+      </div>
+    </div>
+  )
+}
+
+export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, loading, weather, locationDenied }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
 
@@ -330,7 +342,14 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
 
       {/* Plant list */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-2">
-        {filteredPlants.length === 0 ? (
+        {loading ? (
+          <>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </>
+        ) : filteredPlants.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center py-12 px-4">
             {plants.length === 0 ? (
               <>

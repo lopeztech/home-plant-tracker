@@ -107,6 +107,15 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
   const displayX = isDragging && dragPos ? dragPos.x : plant.x
   const displayY = isDragging && dragPos ? dragPos.y : plant.y
 
+  // Smart tooltip positioning: flip when near edges
+  const nearTop = displayY < 20
+  const nearRight = displayX > 80
+  const tooltipClass = [
+    'tooltip',
+    nearTop ? 'tooltip-below' : '',
+    nearRight ? 'tooltip-left' : '',
+  ].filter(Boolean).join(' ')
+
   return (
     <div
       role="button"
@@ -177,13 +186,13 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
 
       {/* Drag hint tooltip (touch long-press) */}
       {showDragHint && !isDragging && (
-        <div className="tooltip">
+        <div className={tooltipClass}>
           <div className="text-xs text-gray-300">Drag to reposition</div>
         </div>
       )}
 
       {showTooltip && !isDragging && !showDragHint && (
-        <div className="tooltip">
+        <div className={tooltipClass}>
           <div className="font-semibold">{plant.name}</div>
           {plant.species && (
             <div className="text-gray-400 text-xs">{plant.species}</div>

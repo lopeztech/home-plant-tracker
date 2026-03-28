@@ -2,6 +2,12 @@ import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Loader2, Sparkles, AlertCircle, X, Camera, Droplets } from 'lucide-react'
 import { analyseApi } from '../api/plants.js'
 
+const ANALYSIS_STAGES = [
+  'Identifying species…',
+  'Assessing health…',
+  'Calculating watering schedule…',
+]
+
 const HEALTH_COLORS = {
   Excellent: { bg: 'bg-emerald-900', text: 'text-emerald-300', border: 'border-emerald-700' },
   Good: { bg: 'bg-green-900', text: 'text-green-300', border: 'border-green-700' },
@@ -31,6 +37,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
   const [imageFile, setImageFile] = useState(null)
   const [analysisResult, setAnalysisResult] = useState(null)
   const [isAnalysing, setIsAnalysing] = useState(false)
+  const [stageIndex, setStageIndex] = useState(0)
   const [error, setError] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef(null)
@@ -41,6 +48,15 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
     }
   }, [])
+
+  // Cycle through analysis stage messages
+  useEffect(() => {
+    if (!isAnalysing) { setStageIndex(0); return }
+    const interval = setInterval(() => {
+      setStageIndex(i => (i + 1) % ANALYSIS_STAGES.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [isAnalysing])
 
   const runAnalysis = useCallback(async (file) => {
     setIsAnalysing(true)
@@ -157,9 +173,12 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
           </button>
           {isAnalysing && (
             <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60">
-              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-900/90 border border-gray-700">
-                <Loader2 size={14} className="animate-spin text-emerald-400" />
-                <span className="text-xs text-gray-300">Analysing with Gemini...</span>
+              <div className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-lg bg-gray-900/90 border border-gray-700">
+                <div className="flex items-center gap-2">
+                  <Loader2 size={14} className="animate-spin text-emerald-400" />
+                  <span className="text-xs text-gray-300">{ANALYSIS_STAGES[stageIndex]}</span>
+                </div>
+                <span className="text-[10px] text-gray-500">Usually takes 5–15 seconds</span>
               </div>
             </div>
           )}
