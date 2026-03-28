@@ -26,10 +26,9 @@ cd api/plants && npx vitest run index.test.js
 ```
 
 ### Infrastructure
-```bash
-cd terraform && terraform plan   # Preview infra changes
-cd terraform && terraform apply  # Deploy infrastructure
-```
+Infrastructure is managed via Terraform in the **`platform-infra` repository** (separate from this repo).
+Any changes to GCP resources (Cloud Run, API Gateway, Firestore, Cloud Storage, IAM, networking) must be made there.
+Do NOT modify Terraform files in this repository.
 
 ## Architecture
 
@@ -52,7 +51,7 @@ Browser (React SPA)
 
 **Auth** is Google OAuth via `@react-oauth/google`. `AuthContext.jsx` stores the credential and passes the ID token as `Authorization: Bearer` on every API request. The login gate is in `App.jsx`.
 
-**Infrastructure** is fully managed by Terraform (`terraform/`). Key resources: Cloud Run (frontend Docker container with nginx), Cloud Run Function (backend), API Gateway (OpenAPI 2.0 spec templated in `openapi.yaml.tpl`), Firestore, Cloud Storage, Secret Manager. GitHub Actions deploys on push to `main` using Workload Identity Federation.
+**Infrastructure** is managed by Terraform in the `platform-infra` repository. Key resources: Cloud Run (frontend Docker container with nginx), Cloud Run Function (backend), API Gateway (OpenAPI 2.0 spec), Firestore, Cloud Storage, Secret Manager. The GitHub Actions workflow (`deploy.yml`) in this repo only deploys the **frontend** (Docker image → Cloud Run `plant-tracker`). The **backend** Cloud Run Function (`plant-tracker-plants-api`) is deployed via `platform-infra`.
 
 ## Environment Variables
 
