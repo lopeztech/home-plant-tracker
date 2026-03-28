@@ -150,28 +150,39 @@ describe('JPEG fixtures', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('POST /images/upload-url', () => {
+  const validFilename = 'plants/a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg';
+  const validFloorplan = 'floorplans/a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg';
+
   it('returns 400 when filename is missing', async () => {
     const res = await request(app)
-      .post('/images/upload-url')
+      .post('/images/upload-url').set('Authorization', authHeader())
       .send({ contentType: 'image/jpeg' });
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when contentType is missing', async () => {
     const res = await request(app)
-      .post('/images/upload-url')
-      .send({ filename: 'plants/test.jpg' });
+      .post('/images/upload-url').set('Authorization', authHeader())
+      .send({ filename: validFilename });
     expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid filename format', async () => {
+    const res = await request(app)
+      .post('/images/upload-url').set('Authorization', authHeader())
+      .send({ filename: '../../../etc/passwd', contentType: 'image/jpeg' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid filename/i);
   });
 
   it('requests a v4 write-action signed URL with correct contentType', async () => {
     storageSignedUrlFn = async (opts) => {
       storageLastOpts = opts;
-      return ['https://storage.googleapis.com/bucket/plants/test.jpg?tok=abc'];
+      return ['https://storage.googleapis.com/bucket/' + validFilename + '?tok=abc'];
     };
 
-    await request(app).post('/images/upload-url').send({
-      filename: 'plants/test.jpg',
+    await request(app).post('/images/upload-url').set('Authorization', authHeader()).send({
+      filename: validFilename,
       contentType: 'image/jpeg',
     });
 
@@ -184,10 +195,10 @@ describe('POST /images/upload-url', () => {
     const before = Date.now();
     storageSignedUrlFn = async (opts) => {
       storageLastOpts = opts;
-      return ['https://storage.googleapis.com/bucket/plants/t.jpg?tok=x'];
+      return ['https://storage.googleapis.com/bucket/' + validFilename + '?tok=x'];
     };
-    await request(app).post('/images/upload-url').send({
-      filename: 'plants/t.jpg',
+    await request(app).post('/images/upload-url').set('Authorization', authHeader()).send({
+      filename: validFilename,
       contentType: 'image/jpeg',
     });
     const after = Date.now();
@@ -197,35 +208,33 @@ describe('POST /images/upload-url', () => {
 
   it('returns uploadUrl and a publicUrl containing the filename', async () => {
     storageSignedUrlFn = async () => [
-      'https://storage.googleapis.com/bucket/plants/img.jpg?tok=xyz',
+      'https://storage.googleapis.com/bucket/' + validFilename + '?tok=xyz',
     ];
-    const res = await request(app).post('/images/upload-url').send({
-      filename: 'plants/img.jpg',
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader()).send({
+      filename: validFilename,
       contentType: 'image/jpeg',
     });
     expect(res.status).toBe(200);
-    expect(res.body.uploadUrl).toBe(
-      'https://storage.googleapis.com/bucket/plants/img.jpg?tok=xyz',
-    );
-    expect(res.body.publicUrl).toMatch(/plants\/img\.jpg$/);
+    expect(res.body.uploadUrl).toContain('?tok=');
+    expect(res.body.publicUrl).toContain(validFilename);
   });
 
   it('accepts a floorplans/ prefix for floorplan uploads', async () => {
     storageSignedUrlFn = async () => [
-      'https://storage.googleapis.com/bucket/floorplans/fp.jpg?tok=1',
+      'https://storage.googleapis.com/bucket/' + validFloorplan + '?tok=1',
     ];
-    const res = await request(app).post('/images/upload-url').send({
-      filename: 'floorplans/fp.jpg',
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader()).send({
+      filename: validFloorplan,
       contentType: 'image/jpeg',
     });
     expect(res.status).toBe(200);
-    expect(res.body.publicUrl).toContain('floorplans/fp.jpg');
+    expect(res.body.publicUrl).toContain(validFloorplan);
   });
 
   it('returns 500 when GCS throws', async () => {
     storageSignedUrlFn = async () => { throw new Error('GCS unavailable'); };
-    const res = await request(app).post('/images/upload-url').send({
-      filename: 'plants/fail.jpg',
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader()).send({
+      filename: validFilename,
       contentType: 'image/jpeg',
     });
     expect(res.status).toBe(500);

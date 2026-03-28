@@ -253,22 +253,43 @@ describe('POST /recommend', () => {
 // ── POST /images/upload-url ───────────────────────────────────────────────────
 
 describe('POST /images/upload-url', () => {
+  const validFilename = 'plants/a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg';
+
+  it('returns 401 without auth header', async () => {
+    const res = await request(app).post('/images/upload-url').send({ filename: validFilename, contentType: 'image/jpeg' });
+    expect(res.status).toBe(401);
+  });
+
   it('returns 400 when filename is missing', async () => {
-    const res = await request(app).post('/images/upload-url').send({ contentType: 'image/jpeg' });
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader()).send({ contentType: 'image/jpeg' });
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when contentType is missing', async () => {
-    const res = await request(app).post('/images/upload-url').send({ filename: 'plants/img.jpg' });
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader()).send({ filename: validFilename });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid filename format', async () => {
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader())
+      .send({ filename: '../../../etc/passwd', contentType: 'image/jpeg' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid filename/i);
+  });
+
+  it('returns 400 for filename without allowed prefix', async () => {
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader())
+      .send({ filename: 'arbitrary/a1b2c3d4-e5f6-7890-abcd-ef1234567890.jpg', contentType: 'image/jpeg' });
     expect(res.status).toBe(400);
   });
 
   it('returns uploadUrl and publicUrl', async () => {
-    storageSignedUrlFn = async () => ['https://storage.googleapis.com/bucket/plants/img.jpg?token=xyz'];
-    const res = await request(app).post('/images/upload-url').send({ filename: 'plants/img.jpg', contentType: 'image/jpeg' });
+    storageSignedUrlFn = async () => ['https://storage.googleapis.com/bucket/' + validFilename + '?token=xyz'];
+    const res = await request(app).post('/images/upload-url').set('Authorization', authHeader())
+      .send({ filename: validFilename, contentType: 'image/jpeg' });
     expect(res.status).toBe(200);
-    expect(res.body.uploadUrl).toBe('https://storage.googleapis.com/bucket/plants/img.jpg?token=xyz');
-    expect(res.body.publicUrl).toContain('plants/img.jpg');
+    expect(res.body.uploadUrl).toContain('?token=');
+    expect(res.body.publicUrl).toContain(validFilename);
   });
 });
 

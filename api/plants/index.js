@@ -418,11 +418,16 @@ app.post('/recommend', async (req, res) => {
 
 // ── Image upload — returns a signed URL so the browser can PUT directly to GCS
 
-app.post('/images/upload-url', async (req, res) => {
+const VALID_FILENAME = /^(plants|floorplans)\/[a-f0-9-]{36}\.[a-z0-9]+$/i;
+
+app.post('/images/upload-url', requireUser, async (req, res) => {
   try {
     const { filename, contentType } = req.body;
     if (!filename || !contentType) {
       return res.status(400).json({ error: 'filename and contentType are required' });
+    }
+    if (!VALID_FILENAME.test(filename)) {
+      return res.status(400).json({ error: 'Invalid filename format' });
     }
 
     const [uploadUrl] = await storage
