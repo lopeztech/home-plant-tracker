@@ -146,6 +146,16 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'x-api-key', 'Authorization'],
   optionsSuccessStatus: 204
 }));
+// Security headers
+app.use((_req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'DENY');
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.set('X-XSS-Protection', '0');
+  res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 200,

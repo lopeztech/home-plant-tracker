@@ -119,6 +119,16 @@ describe('GET /health', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: 'ok' });
   });
+
+  it('includes security headers', async () => {
+    const res = await request(app).get('/health');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['x-frame-options']).toBe('DENY');
+    expect(res.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
+    expect(res.headers['x-xss-protection']).toBe('0');
+    expect(res.headers['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
+    expect(res.headers['permissions-policy']).toBe('camera=(), microphone=(), geolocation=()');
+  });
 });
 
 // ── POST /analyse ─────────────────────────────────────────────────────────────
