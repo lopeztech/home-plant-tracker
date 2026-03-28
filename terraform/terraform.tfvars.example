@@ -1,8 +1,0 @@
-project_id  = "your-gcp-project-id"
-region      = "australia-southeast1"
-domain      = "plants.yourdomain.com"
-environment = "prod"
-github_org  = "your-github-username-or-org"
-github_repo = "home-plant-tracker"
-
-terraform_operator_email = "you@example.com"  # or serviceAccount:name@project.iam.gserviceaccount.com
