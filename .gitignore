@@ -11,3 +11,8 @@ terraform/*.tfstate*
 
 # Terraform temporary files
 terraform/tmp/
+
+# Integration test sample images (user-provided, not committed)
+api/plants/integration/images/*.jpg
+api/plants/integration/images/*.jpeg
+api/plants/integration/images/*.png

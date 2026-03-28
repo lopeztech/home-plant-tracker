@@ -22,7 +22,14 @@ async function request(path, options = {}) {
     headers: { ...headers(), ...options.headers },
   })
   if (res.status === 204) return null
-  const body = await res.json()
+  const text = await res.text()
+  if (!text) throw new Error(`Empty response from server (HTTP ${res.status})`)
+  let body
+  try {
+    body = JSON.parse(text)
+  } catch {
+    throw new Error(`Unexpected response from server (HTTP ${res.status})`)
+  }
   if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`)
   return body
 }

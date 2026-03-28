@@ -11,7 +11,7 @@ function makeFetchMock(status = 200, body = {}) {
   return vi.fn().mockResolvedValue({
     ok: status >= 200 && status < 300,
     status,
-    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
   })
 }
 
@@ -64,7 +64,7 @@ describe('API client', () => {
   // ── HTTP 204 ──────────────────────────────────────────────────────────────
 
   it('returns null for 204 No Content responses', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204, json: vi.fn() })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 })
     const result = await plantsApi.delete('plant-1')
     expect(result).toBeNull()
   })
@@ -110,7 +110,7 @@ describe('API client', () => {
   })
 
   it('plantsApi.delete sends DELETE /plants/:id', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204, json: vi.fn() })
+    global.fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 })
     await plantsApi.delete('p1')
     const [url, opts] = global.fetch.mock.calls[0]
     expect(url).toContain('/plants/p1')
@@ -154,11 +154,11 @@ describe('API client', () => {
     global.fetch = vi.fn().mockImplementation((url) => {
       callCount++
       if (callCount === 1) {
-        // First call: get upload URL
-        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ uploadUrl, publicUrl }) })
+        // First call: get upload URL (goes through request() → uses text())
+        return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify({ uploadUrl, publicUrl })) })
       }
-      // Second call: PUT to GCS
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) })
+      // Second call: PUT directly to GCS (bypasses request(), only checks res.ok)
+      return Promise.resolve({ ok: true, status: 200 })
     })
 
     // FileReader mock
@@ -186,7 +186,7 @@ describe('API client', () => {
       .mockResolvedValueOnce({
         ok: true,
         status: 200,
-        json: () => Promise.resolve({ uploadUrl: 'https://storage.gcs.com/x', publicUrl: 'https://cdn/x.jpg' }),
+        text: () => Promise.resolve(JSON.stringify({ uploadUrl: 'https://storage.gcs.com/x', publicUrl: 'https://cdn/x.jpg' })),
       })
       .mockResolvedValueOnce({ ok: false, status: 403 })
 

@@ -9,6 +9,56 @@ const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 
+// ── Gemini API fetch patch ────────────────────────────────────────────────────
+// The Gemini API sometimes embeds generated text that contains raw control
+// characters (U+0000–U+001F) directly inside the JSON response envelope.
+// These are illegal in JSON string values and cause response.json() to throw
+// "Unterminated string in JSON at position N" before our parseGeminiJson ever runs.
+//
+// Fix: intercept every Gemini API response and run a state-machine sanitiser
+// over the body that escapes raw control chars inside string values only,
+// leaving structural whitespace untouched.
+(function patchFetchForGemini() {
+  const GEMINI_HOST = 'generativelanguage.googleapis.com';
+  const NAMED = { '\b': '\\b', '\t': '\\t', '\n': '\\n', '\f': '\\f', '\r': '\\r' };
+
+  /** Escape raw control characters that appear inside JSON string literals. */
+  function sanitiseJsonStrings(body) {
+    let out = '';
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < body.length; i++) {
+      const c = body[i];
+      if (escaped) {
+        out += c;
+        escaped = false;
+      } else if (c === '\\' && inString) {
+        out += c;
+        escaped = true;
+      } else if (c === '"') {
+        out += c;
+        inString = !inString;
+      } else if (inString && c.charCodeAt(0) < 0x20) {
+        out += NAMED[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`;
+      } else {
+        out += c;
+      }
+    }
+    return out;
+  }
+
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async function patchedFetch(url, init) {
+    const res = await origFetch(url, init);
+    if (typeof url === 'string' && url.includes(GEMINI_HOST)) {
+      const origText = res.text.bind(res);
+      res.text = async () => sanitiseJsonStrings(await origText());
+      res.json = async () => JSON.parse(await res.text());
+    }
+    return res;
+  };
+}());
+
 // Structured JSON logger for Cloud Logging
 const log = {
   info:  (msg, data) => console.log(JSON.stringify({ severity: 'INFO',    message: msg, ...data })),
@@ -162,6 +212,7 @@ const FLOORPLAN_SCHEMA = {
 //   • raw unescaped control characters (U+0000–U+001F) inside string values
 //   • other malformed JSON (unescaped quotes, trailing commas, etc.) via jsonrepair
 function parseGeminiJson(text) {
+  if (!text || !text.trim()) throw new Error('Empty response from AI');
   let s = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 
   // Fast path: direct parse

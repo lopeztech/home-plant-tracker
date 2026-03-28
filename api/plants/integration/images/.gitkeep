@@ -1,0 +1,5 @@
+# Drop your test images here:
+#   plant.jpg     — a photo of a real plant (used for /analyse tests)
+#   floorplan.jpg — a floor plan image     (used for /analyse-floorplan tests)
+#
+# These files are git-ignored so they won't be committed to the repo.
