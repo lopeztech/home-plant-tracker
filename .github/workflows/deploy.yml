@@ -52,6 +52,50 @@ jobs:
           path: coverage/
           retention-days: 7
 
+  deploy-function:
+    name: Deploy Cloud Function
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.HPT_FUNCTION_WIF_PROVIDER }}
+          service_account: ${{ secrets.HPT_FUNCTION_SA_EMAIL }}
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Package Cloud Function
+        run: |
+          ZIP_NAME="plants-${{ github.sha }}.zip"
+          cd api/plants
+          zip -r "../../${ZIP_NAME}" . \
+            --exclude "node_modules/*" \
+            --exclude "fixtures/*" \
+            --exclude "integration/*" \
+            --exclude "*.test.*" \
+            --exclude "vitest.config.*"
+          echo "ZIP_NAME=${ZIP_NAME}" >> $GITHUB_ENV
+
+      - name: Upload to GCS
+        run: gsutil cp "${{ env.ZIP_NAME }}" gs://${{ secrets.FUNCTION_SOURCE_BUCKET }}/${{ env.ZIP_NAME }}
+
+      - name: Trigger platform-infra Terraform apply
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_INFRA_TOKEN }}
+        run: |
+          gh workflow run terraform-apply.yml \
+            --repo lopeztech/platform-infra \
+            --field project=home-plant-tracker \
+            --field environment=prod \
+            --field function_source_object=${{ env.ZIP_NAME }}
+
   build-and-deploy:
     name: Build & Deploy
     runs-on: ubuntu-latest
