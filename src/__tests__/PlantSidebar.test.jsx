@@ -98,21 +98,21 @@ describe('PlantSidebar', () => {
   it('shows a water button on each card when onWater is provided', () => {
     const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
     render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} onWater={vi.fn()} />)
-    expect(screen.getAllByRole('button', { name: /mark as watered/i })).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /mark .+ as watered/i })).toHaveLength(2)
   })
 
   it('calls onWater with the plant id when the water button is clicked', () => {
     const onWater = vi.fn()
     const plant = makePlant('1', 'Fern', 3)
     render(<PlantSidebar plants={[plant]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} onWater={onWater} />)
-    fireEvent.click(screen.getByRole('button', { name: /mark as watered/i }))
+    fireEvent.click(screen.getByRole('button', { name: /mark .+ as watered/i }))
     expect(onWater).toHaveBeenCalledWith(plant.id)
   })
 
   it('does not show water buttons when onWater is not provided', () => {
     const plant = makePlant('1', 'Fern', 3)
     render(<PlantSidebar plants={[plant]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
-    expect(screen.queryByRole('button', { name: /mark as watered/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /mark .+ as watered/i })).not.toBeInTheDocument()
   })
 
   // ── Search + filter (issue #6) ────────────────────────────────────────────

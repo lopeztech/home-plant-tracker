@@ -173,8 +173,8 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
         <button
           onClick={() => onWater(plant.id)}
           className="flex-shrink-0 px-2.5 hover:bg-blue-900/30 text-gray-600 hover:text-blue-400 transition-colors border-l border-gray-700"
-          aria-label="Mark as watered"
-          title="Water now"
+          aria-label={`Mark ${plant.name} as watered`}
+          title={`Water ${plant.name} now`}
         >
           <Droplets size={13} />
         </button>
@@ -313,6 +313,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
                 <button
                   key={room}
                   onClick={() => setRoomFilter(f => f === room ? null : room)}
+                  aria-pressed={roomFilter === room}
                   className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${
                     roomFilter === room
                       ? 'bg-emerald-700 border-emerald-600 text-white'

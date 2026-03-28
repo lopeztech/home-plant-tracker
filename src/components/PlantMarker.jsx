@@ -1,6 +1,8 @@
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { Move } from 'lucide-react'
 
 const DRAG_THRESHOLD = 5 // px — minimum movement before treating as a drag
+const LONG_PRESS_MS = 400 // ms before showing drag hint on touch
 
 function getDaysUntilWatering(plant) {
   if (!plant.lastWatered) return 0
@@ -28,11 +30,16 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
   const [showTooltip, setShowTooltip] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
   const [dragPos, setDragPos] = useState(null)
+  const [showDragHint, setShowDragHint] = useState(false)
 
   // Mutable ref so handlers don't need to declare isDragging as a dependency
   const dragRef = useRef({ active: false, moved: false, startX: 0, startY: 0 })
+  const longPressTimer = useRef(null)
 
   const [imgError, setImgError] = useState(false)
+
+  // Clean up timer on unmount
+  useEffect(() => () => clearTimeout(longPressTimer.current), [])
 
   const days = getDaysUntilWatering(plant)
   const color = getUrgencyColor(days)
@@ -47,6 +54,12 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
     e.currentTarget.setPointerCapture(e.pointerId)
     dragRef.current = { active: true, moved: false, startX: e.clientX, startY: e.clientY }
     setShowTooltip(false)
+
+    // On touch, show drag hint after a long press
+    if (e.pointerType === 'touch') {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = setTimeout(() => setShowDragHint(true), LONG_PRESS_MS)
+    }
   }, [])
 
   const handlePointerMove = useCallback((e) => {
@@ -60,6 +73,8 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
 
     dragRef.current.moved = true
     setIsDragging(true)
+    setShowDragHint(false)
+    clearTimeout(longPressTimer.current)
 
     if (!containerRef?.current) return
     const rect = containerRef.current.getBoundingClientRect()
@@ -69,6 +84,8 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
   }, [containerRef])
 
   const handlePointerUp = useCallback(() => {
+    clearTimeout(longPressTimer.current)
+    setShowDragHint(false)
     if (!dragRef.current.active) return
     const { moved } = dragRef.current
     dragRef.current.active = false
@@ -92,6 +109,9 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
 
   return (
     <div
+      role="button"
+      aria-label={`${plant.name}${plant.species ? ` (${plant.species})` : ''} — ${label}`}
+      tabIndex={0}
       className={[
         'plant-marker',
         isOverdue ? 'plant-marker-overdue' : '',
@@ -102,6 +122,7 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onClick={handleClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(plant) } }}
       onMouseEnter={() => { if (!isDragging) setShowTooltip(true) }}
       onMouseLeave={() => setShowTooltip(false)}
     >
@@ -133,7 +154,35 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
         ) : initial}
       </div>
 
-      {showTooltip && !isDragging && (
+      {/* Move icon overlay shown during drag */}
+      {isDragging && (
+        <div
+          style={{
+            position: 'absolute',
+            top: -6,
+            right: -6,
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            backgroundColor: '#1f2937',
+            border: '1.5px solid #6b7280',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Move size={9} className="text-gray-300" />
+        </div>
+      )}
+
+      {/* Drag hint tooltip (touch long-press) */}
+      {showDragHint && !isDragging && (
+        <div className="tooltip">
+          <div className="text-xs text-gray-300">Drag to reposition</div>
+        </div>
+      )}
+
+      {showTooltip && !isDragging && !showDragHint && (
         <div className="tooltip">
           <div className="font-semibold">{plant.name}</div>
           {plant.species && (

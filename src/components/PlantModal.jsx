@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { X, Trash2, Save, Leaf, Loader2, Droplets, Sparkles, Camera, ClipboardList } from 'lucide-react'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi } from '../api/plants.js'
@@ -62,6 +62,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [mode, setMode] = useState(() => plant ? 'edit' : null)
 
   const [activeTab, setActiveTab] = useState('edit')
+  const tabRefs = useRef({})
 
   const [form, setForm] = useState({
     name: '',
@@ -159,8 +160,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   }, [form, onSave])
 
   const handleDelete = useCallback(() => {
-    if (confirmDelete && plant) {
+    if (confirmDelete) {
       onDelete(plant.id)
+      setConfirmDelete(false)
     } else {
       setConfirmDelete(true)
     }
@@ -194,7 +196,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="modal-enter w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl flex flex-col md:max-h-[calc(100vh-2rem)]"
+        className="modal-enter relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl flex flex-col md:max-h-[calc(100vh-2rem)]"
       >
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
@@ -228,10 +230,31 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
         {/* Tab bar — only when editing */}
         {isEditing && (
-          <div className="flex border-b border-gray-800 flex-shrink-0">
+          <div
+            role="tablist"
+            aria-label="Plant details"
+            className="flex border-b border-gray-800 flex-shrink-0"
+            onKeyDown={(e) => {
+              const idx = TABS.findIndex(t => t.id === activeTab)
+              let nextIdx
+              if (e.key === 'ArrowRight') nextIdx = (idx + 1) % TABS.length
+              else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + TABS.length) % TABS.length
+              else return
+              e.preventDefault()
+              const nextId = TABS[nextIdx].id
+              setActiveTab(nextId)
+              tabRefs.current[nextId]?.focus()
+            }}
+          >
             {TABS.map(tab => (
               <button
                 key={tab.id}
+                ref={el => { tabRefs.current[tab.id] = el }}
+                role="tab"
+                id={`tab-${tab.id}`}
+                aria-selected={activeTab === tab.id}
+                aria-controls={`tabpanel-${tab.id}`}
+                tabIndex={activeTab === tab.id ? 0 : -1}
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 py-2.5 text-xs font-medium transition-colors ${
                   activeTab === tab.id
@@ -286,7 +309,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
         {/* ── Edit tab (or new plant form) ───────────────────────────── */}
         {(mode !== null) && (!isEditing || activeTab === 'edit') && (
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto scrollbar-thin">
+          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto scrollbar-thin"
+            {...(isEditing ? { role: 'tabpanel', id: 'tabpanel-edit', 'aria-labelledby': 'tab-edit' } : {})}
+          >
             <div className="px-5 py-4 space-y-4">
               {/* Photo-first: show analyser at the top when in photo mode (new plant) */}
               {!isEditing && mode === 'photo' && (
@@ -366,6 +391,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                       max={30}
                       value={form.frequencyDays}
                       onChange={e => update('frequencyDays', e.target.value)}
+                      aria-label="Watering frequency"
+                      aria-valuetext={`Every ${form.frequencyDays} day${form.frequencyDays == 1 ? '' : 's'}`}
                       className="w-full h-2 accent-emerald-500 cursor-pointer mt-1"
                     />
                     <div className="flex justify-between text-xs text-gray-600">
@@ -431,7 +458,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
         {/* ── Watering tab ───────────────────────────────────────────── */}
         {isEditing && activeTab === 'watering' && (
-          <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-4">
+          <div role="tabpanel" id="tabpanel-watering" aria-labelledby="tab-watering" className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-4">
             {onWater && (
               <button
                 type="button"
@@ -469,7 +496,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
         {/* ── Care tab ───────────────────────────────────────────────── */}
         {isEditing && activeTab === 'care' && (
-          <div className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-4">
+          <div role="tabpanel" id="tabpanel-care" aria-labelledby="tab-care" className="flex-1 overflow-y-auto scrollbar-thin px-5 py-4 space-y-4">
             <button
               type="button"
               onClick={handleGetRecommendations}
@@ -534,21 +561,46 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           </div>
         )}
 
+        {/* Delete confirmation dialog */}
+        {confirmDelete && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 md:rounded-2xl">
+            <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 mx-6 max-w-xs w-full shadow-xl space-y-4">
+              <p className="text-sm text-white font-medium">
+                Delete {plant?.name || 'this plant'}?
+              </p>
+              <p className="text-xs text-gray-400">This cannot be undone.</p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  className="px-4 py-2 rounded-lg text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-colors"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Footer */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-gray-800 flex-shrink-0 gap-3">
           <div>
             {isEditing && (
               <button
                 type="button"
-                onClick={handleDelete}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  confirmDelete
-                    ? 'bg-red-600 hover:bg-red-500 text-white'
-                    : 'bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-gray-700'
-                }`}
+                onClick={() => setConfirmDelete(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-gray-700"
               >
                 <Trash2 size={14} />
-                {confirmDelete ? 'Confirm Delete' : 'Delete'}
+                Delete
               </button>
             )}
           </div>

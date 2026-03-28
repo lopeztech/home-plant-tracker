@@ -168,9 +168,11 @@ describe('App', () => {
     // Click on the plant card to open the modal
     fireEvent.click(screen.getByText('Fern').closest('button'))
 
-    // Delete with confirmation
+    // Delete with confirmation dialog
     fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
-    fireEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+    // Click the Delete button inside the confirmation dialog (first match in DOM)
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i })
+    fireEvent.click(deleteButtons[0])
 
     await waitFor(() => expect(plantsApi.delete).toHaveBeenCalledWith(samplePlant.id))
     expect(screen.queryByText('Fern')).not.toBeInTheDocument()
@@ -185,7 +187,7 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
 
     // Click the water button on the plant card
-    fireEvent.click(screen.getByRole('button', { name: /mark as watered/i }))
+    fireEvent.click(screen.getByRole('button', { name: /mark .+ as watered/i }))
 
     await waitFor(() => expect(plantsApi.water).toHaveBeenCalledWith(samplePlant.id))
   })
