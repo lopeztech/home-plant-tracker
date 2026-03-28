@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.0.0",
-    "@google-cloud/functions-framework": "^3.0.0",
+    "@google-cloud/functions-framework": "^5.0.2",
     "@google-cloud/storage": "^7.0.0",
     "@google/generative-ai": "^0.21.0",
     "cors": "^2.8.5",
