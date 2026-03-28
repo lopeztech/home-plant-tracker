@@ -42,10 +42,11 @@ function fetchFail(status, body = {}) {
 
 /** Stub FileReader to immediately fire onload with the given dataURL. */
 function stubFileReader(dataURL) {
-  global.FileReader = vi.fn(() => ({
-    readAsDataURL: vi.fn(),
-    set onload(cb) { cb({ target: { result: dataURL } }) },
-  }))
+  global.FileReader = class {
+    readAsDataURL() {
+      Promise.resolve().then(() => this.onload({ target: { result: dataURL } }))
+    }
+  }
 }
 
 /** Create a File backed by the real JPEG fixture bytes. */

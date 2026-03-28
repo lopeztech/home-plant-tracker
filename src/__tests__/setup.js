@@ -19,3 +19,16 @@ if (typeof PointerEvent === 'undefined') {
 
 // Suppress noisy React act() warnings in tests that don't need them
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+// jsdom 29 may not provide full localStorage API — polyfill if needed
+if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localStorage?.removeItem !== 'function') {
+  const store = new Map()
+  globalThis.localStorage = {
+    getItem: (key) => store.get(key) ?? null,
+    setItem: (key, value) => store.set(key, String(value)),
+    removeItem: (key) => store.delete(key),
+    clear: () => store.clear(),
+    get length() { return store.size },
+    key: (i) => [...store.keys()][i] ?? null,
+  }
+}

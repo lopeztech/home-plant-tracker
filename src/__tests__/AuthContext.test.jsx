@@ -45,12 +45,13 @@ function renderWithProvider() {
 
 describe('AuthContext', () => {
   beforeEach(() => {
-    localStorage.clear()
+    // jsdom 29 may not support localStorage.clear() — remove key directly
+    localStorage.removeItem('plant_tracker_user')
     vi.clearAllMocks()
   })
 
   afterEach(() => {
-    localStorage.clear()
+    localStorage.removeItem('plant_tracker_user')
   })
 
   // ── Initial state ─────────────────────────────────────────────────────────
