@@ -169,7 +169,20 @@ app.use((req, _res, next) => {
 });
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const gemini = genAI.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+const gemini = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+const MAX_RETRIES = 2;
+async function geminiWithRetry(request, retries = MAX_RETRIES) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await gemini.generateContent(request);
+    } catch (err) {
+      if (attempt === retries) throw err;
+      log.warn('gemini retry', { attempt: attempt + 1, error: err.message });
+      await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+}
 
 
 const ANALYSE_FLOORPLAN_PROMPT = `Analyse this architectural floor plan image. Identify every distinct floor or level visible and the rooms/spaces on each.
@@ -275,26 +288,27 @@ Rules:
 - recommendations must have exactly 3 items
 - Respond with JSON only, no markdown or extra text`;
 
+const RECOMMEND_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    summary:      { type: SchemaType.STRING },
+    watering:     { type: SchemaType.STRING },
+    light:        { type: SchemaType.STRING },
+    humidity:     { type: SchemaType.STRING },
+    soil:         { type: SchemaType.STRING },
+    temperature:  { type: SchemaType.STRING },
+    fertilising:  { type: SchemaType.STRING },
+    commonIssues: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+    tips:         { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+  },
+  required: ['summary', 'watering', 'light', 'humidity', 'soil', 'temperature', 'fertilising', 'commonIssues', 'tips'],
+};
+
 const RECOMMEND_PROMPT = (name, species) =>
   `You are a plant care expert. Provide detailed care guidance for: ${name}${species ? ` (${species})` : ''}.
-
-Respond ONLY with valid JSON:
-{
-  "summary": "One to two sentence overview of this plant's care needs",
-  "watering": "Watering frequency and technique",
-  "light": "Ideal light conditions",
-  "humidity": "Humidity preferences and tips",
-  "soil": "Recommended soil mix",
-  "temperature": "Preferred temperature range",
-  "fertilising": "Fertilising schedule and type",
-  "commonIssues": ["issue 1", "issue 2", "issue 3"],
-  "tips": ["tip 1", "tip 2", "tip 3"]
-}
 Rules:
-- All fields are required
 - commonIssues and tips must each have 2–4 items
-- Be concise and practical
-- Respond with JSON only, no markdown fences`;
+- Be concise and practical`;
 
 // ── Health ────────────────────────────────────────────────────────────────────
 
@@ -311,7 +325,7 @@ app.post('/analyse-floorplan', async (req, res) => {
       return res.status(400).json({ error: 'imageBase64 and mimeType are required' });
     }
 
-    const result = await gemini.generateContent({
+    const result = await geminiWithRetry({
       contents: [{
         role: 'user',
         parts: [
@@ -357,7 +371,7 @@ app.post('/analyse', async (req, res) => {
       return res.status(400).json({ error: 'imageBase64 and mimeType are required' });
     }
 
-    const result = await gemini.generateContent({
+    const result = await geminiWithRetry({
       contents: [{
         role: 'user',
         parts: [
@@ -382,12 +396,17 @@ app.post('/recommend', async (req, res) => {
     const { name, species } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
-    const result = await gemini.generateContent({
+    const result = await geminiWithRetry({
       contents: [{
         role: 'user',
         parts: [{ text: RECOMMEND_PROMPT(name, species) }],
       }],
-      generationConfig: { maxOutputTokens: 1024, temperature: 0.3, responseMimeType: 'application/json' },
+      generationConfig: {
+        maxOutputTokens: 1024,
+        temperature: 0.3,
+        responseMimeType: 'application/json',
+        responseSchema: RECOMMEND_SCHEMA,
+      },
     });
 
     const parsed = parseGeminiJson(result.response.text());

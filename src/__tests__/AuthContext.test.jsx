@@ -25,9 +25,11 @@ function TestConsumer() {
       <span data-testid="name">{auth.user?.name ?? 'null'}</span>
       <span data-testid="loading">{String(auth.isLoading)}</span>
       <span data-testid="authed">{String(auth.isAuthenticated)}</span>
+      <span data-testid="isGuest">{String(auth.isGuest)}</span>
       <button onClick={() => auth.login({ credential: makeCredential({ name: 'Alice', email: 'a@b.com', picture: '', sub: '1' }) })}>
         login
       </button>
+      <button onClick={auth.loginAsGuest}>guest</button>
       <button onClick={auth.logout}>logout</button>
     </div>
   )
@@ -174,6 +176,49 @@ describe('AuthContext', () => {
     act(() => { screen.getByText('logout').click() })
 
     expect(setApiCredential).toHaveBeenCalledWith(null)
+  })
+
+  // ── Guest login ───────────────────────────────────────────────────────────
+
+  it('sets user as guest after loginAsGuest', async () => {
+    renderWithProvider()
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
+
+    act(() => { screen.getByText('guest').click() })
+
+    expect(screen.getByTestId('name')).toHaveTextContent('Guest')
+    expect(screen.getByTestId('authed')).toHaveTextContent('true')
+    expect(screen.getByTestId('isGuest')).toHaveTextContent('true')
+  })
+
+  it('persists guest user to localStorage', async () => {
+    renderWithProvider()
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
+
+    act(() => { screen.getByText('guest').click() })
+
+    const stored = JSON.parse(localStorage.getItem('plant_tracker_user'))
+    expect(stored.isGuest).toBe(true)
+  })
+
+  it('does not call setApiCredential on guest login', async () => {
+    renderWithProvider()
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
+    vi.clearAllMocks()
+
+    act(() => { screen.getByText('guest').click() })
+
+    expect(setApiCredential).not.toHaveBeenCalled()
+  })
+
+  it('restores guest user from localStorage without calling setApiCredential', async () => {
+    const guest = { name: 'Guest', email: '', picture: null, sub: 'guest', isGuest: true }
+    localStorage.setItem('plant_tracker_user', JSON.stringify(guest))
+
+    renderWithProvider()
+    await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
+    expect(screen.getByTestId('isGuest')).toHaveTextContent('true')
+    expect(setApiCredential).not.toHaveBeenCalled()
   })
 
   // ── useAuth outside provider ───────────────────────────────────────────────

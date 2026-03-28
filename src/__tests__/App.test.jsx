@@ -205,4 +205,67 @@ describe('App', () => {
     expect(() => render(<App />)).not.toThrow()
     await waitFor(() => expect(floorsApi.get).toHaveBeenCalled())
   })
+
+  it('shows error banner when plantsApi.list fails', async () => {
+    plantsApi.list.mockRejectedValue(new Error('Server down'))
+    render(<App />)
+    await waitFor(() => expect(screen.getByText(/failed to load plants/i)).toBeInTheDocument())
+  })
+
+  it('shows error toast when watering fails', async () => {
+    plantsApi.list.mockResolvedValue([samplePlant])
+    plantsApi.water.mockRejectedValue(new Error('Water failed'))
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /mark .+ as watered/i }))
+
+    await waitFor(() => expect(screen.getByText(/failed to water plant/i)).toBeInTheDocument())
+  })
+
+  it('shows error toast when delete fails', async () => {
+    plantsApi.list.mockResolvedValue([samplePlant])
+    plantsApi.delete.mockRejectedValue(new Error('Delete failed'))
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Fern').closest('button'))
+    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i })
+    fireEvent.click(deleteButtons[0])
+
+    await waitFor(() => expect(screen.getByText(/failed to delete plant/i)).toBeInTheDocument())
+  })
+
+  // ── Guest mode ──────────────────────────────────────────────────────────
+
+  it('shows guest mode banner when user is a guest', async () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: true,
+      isGuest: true,
+      isLoading: false,
+      user: { name: 'Guest', isGuest: true },
+      login: vi.fn(),
+      logout: vi.fn(),
+    })
+    render(<App />)
+    await waitFor(() => expect(screen.getByText(/guest mode/i)).toBeInTheDocument())
+  })
+
+  it('does not call plantsApi.list in guest mode', async () => {
+    useAuth.mockReturnValue({
+      isAuthenticated: true,
+      isGuest: true,
+      isLoading: false,
+      user: { name: 'Guest', isGuest: true },
+      login: vi.fn(),
+      logout: vi.fn(),
+    })
+    render(<App />)
+    // Wait for initial render to settle
+    await waitFor(() => expect(screen.getByText(/guest mode/i)).toBeInTheDocument())
+    expect(plantsApi.list).not.toHaveBeenCalled()
+  })
 })
