@@ -10,7 +10,7 @@ npm run dev          # Vite dev server → http://localhost:5173
 npm run build        # Production build → dist/
 npm test             # Run tests once
 npm run test:watch   # Watch mode
-npm run test:coverage # Coverage report (thresholds: lines 35%, functions 58%, branches 60%)
+npm run test:coverage # Coverage report (thresholds: lines 35%, functions 50%, branches 50%)
 ```
 
 ### Backend (api/plants/)
