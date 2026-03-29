@@ -90,10 +90,8 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.PLATFORM_INFRA_TOKEN }}
         run: |
-          gh workflow run terraform-apply.yml \
+          gh workflow run home-plant-tracker-apply.yml \
             --repo lopeztech/platform-infra \
-            --field project=home-plant-tracker \
-            --field environment=prod \
             --field function_source_object=${{ env.ZIP_NAME }}
 
   build-and-deploy:
