@@ -2,8 +2,23 @@
 // Dates relative to 2026-03-28
 
 export const GUEST_FLOORS = [
-  { id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null },
-  { id: 'garden', name: 'Garden', order: -1, type: 'outdoor', imageUrl: null },
+  {
+    id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null,
+    rooms: [
+      { id: 'r1', name: 'Living Room', x: 5,  y: 5,  width: 40, height: 43 },
+      { id: 'r2', name: 'Bedroom',     x: 52, y: 5,  width: 43, height: 43 },
+      { id: 'r3', name: 'Hallway',     x: 20, y: 48, width: 60, height: 14 },
+      { id: 'r4', name: 'Kitchen',     x: 5,  y: 62, width: 40, height: 33 },
+      { id: 'r5', name: 'Office',      x: 52, y: 62, width: 43, height: 33 },
+    ],
+  },
+  {
+    id: 'garden', name: 'Garden', order: -1, type: 'outdoor', imageUrl: null,
+    rooms: [
+      { id: 'r6', name: 'Garden Bed', x: 10, y: 10, width: 40, height: 80 },
+      { id: 'r7', name: 'Herb Patch', x: 55, y: 10, width: 35, height: 80 },
+    ],
+  },
 ]
 
 export const GUEST_PLANTS = [
@@ -21,6 +36,11 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Mature',
+    wateringLog: [
+      { date: '2026-03-07T09:00:00Z', note: '' },
+      { date: '2026-03-14T09:00:00Z', note: '' },
+      { date: '2026-03-21T09:00:00Z', note: '' },
+    ],
   },
   {
     id: 'guest-2',
@@ -36,6 +56,11 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Mature',
+    wateringLog: [
+      { date: '2026-03-19T08:00:00Z', note: '' },
+      { date: '2026-03-22T08:00:00Z', note: '' },
+      { date: '2026-03-25T08:00:00Z', note: '' },
+    ],
   },
   {
     id: 'guest-3',
@@ -51,6 +76,10 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Excellent',
     maturity: 'Mature',
+    wateringLog: [
+      { date: '2026-03-01T10:00:00Z', note: '' },
+      { date: '2026-03-15T10:00:00Z', note: '' },
+    ],
   },
   {
     id: 'guest-4',
@@ -66,6 +95,11 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Young',
+    wateringLog: [
+      { date: '2026-03-04T11:00:00Z', note: '' },
+      { date: '2026-03-11T11:00:00Z', note: '' },
+      { date: '2026-03-18T11:00:00Z', note: '' },
+    ],
   },
   {
     id: 'guest-5',
@@ -81,6 +115,10 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Fair',
     maturity: 'Mature',
+    wateringLog: [
+      { date: '2026-03-10T09:30:00Z', note: '' },
+      { date: '2026-03-20T09:30:00Z', note: '' },
+    ],
   },
   {
     id: 'guest-6',
@@ -96,6 +134,10 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Young',
+    wateringLog: [
+      { date: '2026-02-17T14:00:00Z', note: '' },
+      { date: '2026-03-10T14:00:00Z', note: '' },
+    ],
   },
   {
     id: 'guest-7',
@@ -111,6 +153,11 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Mature',
+    wateringLog: [
+      { date: '2026-03-12T07:00:00Z', note: '' },
+      { date: '2026-03-17T07:00:00Z', note: '' },
+      { date: '2026-03-22T07:00:00Z', note: '' },
+    ],
   },
   {
     id: 'guest-8',
@@ -126,5 +173,10 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Excellent',
     maturity: 'Mature',
+    wateringLog: [
+      { date: '2026-03-06T08:00:00Z', note: '' },
+      { date: '2026-03-13T08:00:00Z', note: '' },
+      { date: '2026-03-20T08:00:00Z', note: '' },
+    ],
   },
 ]

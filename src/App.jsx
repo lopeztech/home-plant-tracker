@@ -149,8 +149,10 @@ function AppContent() {
   const handleWaterPlant = useCallback(async (plantId) => {
     if (isGuest) {
       const now = new Date().toISOString()
-      setPlants(prev => prev.map(p => p.id === plantId ? { ...p, lastWatered: now } : p))
-      setEditingPlant(prev => prev?.id === plantId ? { ...prev, lastWatered: now } : prev)
+      const entry = { date: now, note: '' }
+      const update = p => ({ ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] })
+      setPlants(prev => prev.map(p => p.id === plantId ? update(p) : p))
+      setEditingPlant(prev => prev?.id === plantId ? update(prev) : prev)
       return
     }
     try {
