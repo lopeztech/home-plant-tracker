@@ -3,6 +3,14 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import SettingsModal from '../components/SettingsModal.jsx'
 
+vi.mock('../contexts/AuthContext.jsx', () => ({
+  useAuth: () => ({ logout: vi.fn() }),
+}))
+
+vi.mock('../hooks/useTheme.js', () => ({
+  useTheme: () => 'dark',
+}))
+
 const baseFloors = [
   {
     id: 'ground',

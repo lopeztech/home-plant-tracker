@@ -8,6 +8,10 @@ vi.mock('../contexts/AuthContext.jsx', () => ({
   useAuth: vi.fn(),
 }))
 
+vi.mock('../hooks/useTheme.js', () => ({
+  useTheme: () => 'dark',
+}))
+
 const mockUser = {
   name: 'Jane Smith',
   email: 'jane@example.com',
@@ -27,18 +31,17 @@ describe('Header', () => {
     expect(screen.getByText('Plant Tracker')).toBeInTheDocument()
   })
 
-  it('does not show upload button or user info when not authenticated', () => {
+  it('does not show buttons when not authenticated', () => {
     render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} />)
-    expect(screen.queryByText(/upload floorplan/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /upload floorplan/i })).not.toBeInTheDocument()
   })
 
-  it('shows upload button, user name and sign out when authenticated', () => {
+  it('shows upload, calendar, and settings buttons when authenticated', () => {
     useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
     render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} />)
-    expect(screen.getByText(/upload floorplan/i)).toBeInTheDocument()
-    expect(screen.getByText('Jane Smith')).toBeInTheDocument()
-    expect(screen.getByTitle('Sign out')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /upload floorplan/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /care schedule/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument()
   })
 
   it('renders the user profile picture', () => {
@@ -49,14 +52,6 @@ describe('Header', () => {
   })
 
   // ── User interactions ─────────────────────────────────────────────────────
-
-  it('calls logout when the sign out button is clicked', () => {
-    const logout = vi.fn()
-    useAuth.mockReturnValue({ user: mockUser, logout })
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} />)
-    fireEvent.click(screen.getByTitle('Sign out'))
-    expect(logout).toHaveBeenCalledOnce()
-  })
 
   it('calls onFloorplanUpload with the selected file', () => {
     useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
@@ -77,26 +72,31 @@ describe('Header', () => {
     expect(onUpload).not.toHaveBeenCalled()
   })
 
+  it('calls onOpenSettings when settings button is clicked', () => {
+    useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
+    const onOpenSettings = vi.fn()
+    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} onOpenSettings={onOpenSettings} />)
+    fireEvent.click(screen.getByRole('button', { name: /settings/i }))
+    expect(onOpenSettings).toHaveBeenCalledOnce()
+  })
+
+  it('calls onOpenCalendar when calendar button is clicked', () => {
+    useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
+    const onOpenCalendar = vi.fn()
+    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} onOpenCalendar={onOpenCalendar} />)
+    fireEvent.click(screen.getByRole('button', { name: /care schedule/i }))
+    expect(onOpenCalendar).toHaveBeenCalledOnce()
+  })
+
   // ── Loading / error states ────────────────────────────────────────────────
 
   it('disables the upload button while analysing', () => {
     useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
     render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={true} />)
-    // The upload button contains the icon + span; find by its disabled state
-    const buttons = screen.getAllByRole('button')
-    const uploadBtn = buttons.find(b => b.disabled)
-    expect(uploadBtn).toBeDefined()
-    expect(uploadBtn).toBeDisabled()
-  })
-
-  it('shows "Analysing…" text while analysing', () => {
-    useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={true} />)
-    expect(screen.getByText('Analysing…')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /upload floorplan/i })).toBeDisabled()
   })
 
   it('renders without crashing when optional props are omitted', () => {
-    // isAnalysingFloorplan and onFloorplanUpload are not passed — should not throw
     expect(() => render(<Header />)).not.toThrow()
   })
 })

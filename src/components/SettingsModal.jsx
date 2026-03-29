@@ -2,7 +2,10 @@ import React, { useState, useCallback } from 'react'
 import {
   X, Eye, EyeOff, CheckCircle2,
   Layers, Plus, Trash2, ChevronDown, ChevronRight, Settings,
+  Sun, Moon, LogOut,
 } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext.jsx'
+import { useTheme } from '../hooks/useTheme.js'
 
 function inputCls(extra = '') {
   return `w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors ${extra}`
@@ -260,7 +263,9 @@ function FloorsTab({ floors, onChange }) {
   )
 }
 
-export default function SettingsModal({ floors: initialFloors, onSaveFloors, onClose }) {
+export default function SettingsModal({ floors: initialFloors, onSaveFloors, onClose, onToggleTheme }) {
+  const { logout } = useAuth()
+  const theme = useTheme()
   const [editableFloors, setEditableFloors] = useState(
     () => (initialFloors || []).map(f => ({ ...f, rooms: (f.rooms || []).map(r => ({ ...r })) }))
   )
@@ -330,6 +335,27 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
             }`}
           >
             {floorsSaved ? <><CheckCircle2 size={14} /> Saved!</> : 'Save Floors'}
+          </button>
+        </div>
+
+        {/* Preferences */}
+        <div className="px-5 py-4 border-t border-gray-800 flex-shrink-0 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-gray-400">Theme</span>
+            <button
+              onClick={onToggleTheme}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
+            >
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+            </button>
+          </div>
+          <button
+            onClick={logout}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm bg-gray-800 hover:bg-red-900/40 text-gray-400 hover:text-red-300 transition-colors border border-gray-700 hover:border-red-800"
+          >
+            <LogOut size={14} />
+            Sign out
           </button>
         </div>
       </div>

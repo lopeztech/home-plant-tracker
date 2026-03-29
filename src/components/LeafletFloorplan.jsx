@@ -220,7 +220,7 @@ export default function LeafletFloorplan({
     imageLayerRef.current.clearLayers()
 
     map.getContainer().style.background =
-      floor?.type === 'outdoor' ? '#040d06' : '#070d18'
+      floor?.type === 'outdoor' ? '#0a1a10' : '#111827'
 
     if (floor?.imageUrl) {
       L.imageOverlay(floor.imageUrl, BOUNDS, { opacity: 0.9 })

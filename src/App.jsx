@@ -303,7 +303,6 @@ function AppContent() {
         onFloorplanUpload={handleFloorplanUpload}
         isAnalysingFloorplan={isAnalysingFloorplan}
         onOpenSettings={() => setShowSettings(true)}
-        onToggleTheme={toggleTheme}
         onOpenCalendar={() => setShowCalendar(true)}
       />
 
@@ -439,6 +438,7 @@ function AppContent() {
           floors={floors}
           onSaveFloors={handleSaveFloors}
           onClose={() => setShowSettings(false)}
+          onToggleTheme={toggleTheme}
         />
       )}
 
