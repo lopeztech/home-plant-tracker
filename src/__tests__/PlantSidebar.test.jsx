@@ -1,7 +1,16 @@
 import React from 'react'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import PlantSidebar from '../components/PlantSidebar.jsx'
+import { ToastProvider } from '../components/Toast.jsx'
+
+function renderSidebar(props) {
+  return render(
+    <ToastProvider>
+      <PlantSidebar {...props} />
+    </ToastProvider>
+  )
+}
 
 // Helper: build a plant with a predictable watering status.
 // daysOverdue > 0  → plant is overdue
@@ -32,19 +41,19 @@ describe('PlantSidebar', () => {
   // ── Initial render state ──────────────────────────────────────────────────
 
   it('shows empty state message when there are no plants', () => {
-    render(<PlantSidebar plants={[]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByText(/no plants yet/i)).toBeInTheDocument()
   })
 
   it('shows the plant count in the header', () => {
     const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', -5)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByText('2 plants')).toBeInTheDocument()
   })
 
   it('renders a card for each plant', () => {
     const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByText('Fern')).toBeInTheDocument()
     expect(screen.getByText('Cactus')).toBeInTheDocument()
   })
@@ -52,7 +61,7 @@ describe('PlantSidebar', () => {
   it('sorts plants by urgency — overdue plants appear before healthy ones', () => {
     const healthy = makePlant('1', 'Healthy', -10)  // due in 10 days
     const overdue = makePlant('2', 'Overdue', 3)     // 3 days overdue
-    render(<PlantSidebar plants={[healthy, overdue]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [healthy, overdue], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     const cards = screen.getAllByRole('button', { name: /overdue|healthy/i })
     // The overdue plant should appear first (higher urgency)
     expect(cards[0]).toHaveTextContent('Overdue')
@@ -61,18 +70,18 @@ describe('PlantSidebar', () => {
 
   it('shows an "overdue" summary pill when there are overdue plants', () => {
     const plants = [makePlant('1', 'Fern', 3)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByText(/1 overdue/i)).toBeInTheDocument()
   })
 
   it('shows a "today" summary pill when a plant is due today', () => {
     const plants = [makePlant('1', 'Fern', 0)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByText(/1 today/i)).toBeInTheDocument()
   })
 
   it('renders the Add Plant button', () => {
-    render(<PlantSidebar plants={[]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByRole('button', { name: /add plant/i })).toBeInTheDocument()
   })
 
@@ -80,7 +89,7 @@ describe('PlantSidebar', () => {
 
   it('calls onAddPlant when the Add Plant button is clicked', () => {
     const onAddPlant = vi.fn()
-    render(<PlantSidebar plants={[]} onPlantClick={vi.fn()} onAddPlant={onAddPlant} />)
+    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant })
     fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
     expect(onAddPlant).toHaveBeenCalledOnce()
   })
@@ -88,48 +97,48 @@ describe('PlantSidebar', () => {
   it('calls onPlantClick with the plant when a plant card is clicked', () => {
     const onPlantClick = vi.fn()
     const plant = makePlant('1', 'Fern', 3)
-    render(<PlantSidebar plants={[plant]} onPlantClick={onPlantClick} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [plant], onPlantClick, onAddPlant: vi.fn() })
     fireEvent.click(screen.getByText('Fern').closest('button'))
     expect(onPlantClick).toHaveBeenCalledWith(plant)
   })
 
-  // ── Water Now (issue #5) ──────────────────────────────────────────────────
+  // ── Water Now ─────────────────────────────────────────────────────────────
 
   it('shows a water button on each card when onWater is provided', () => {
     const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} onWater={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onWater: vi.fn() })
     expect(screen.getAllByRole('button', { name: /mark .+ as watered/i })).toHaveLength(2)
   })
 
   it('calls onWater with the plant id when the water button is clicked', () => {
     const onWater = vi.fn()
     const plant = makePlant('1', 'Fern', 3)
-    render(<PlantSidebar plants={[plant]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} onWater={onWater} />)
+    renderSidebar({ plants: [plant], onPlantClick: vi.fn(), onAddPlant: vi.fn(), onWater })
     fireEvent.click(screen.getByRole('button', { name: /mark .+ as watered/i }))
     expect(onWater).toHaveBeenCalledWith(plant.id)
   })
 
   it('does not show water buttons when onWater is not provided', () => {
     const plant = makePlant('1', 'Fern', 3)
-    render(<PlantSidebar plants={[plant]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [plant], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.queryByRole('button', { name: /mark .+ as watered/i })).not.toBeInTheDocument()
   })
 
-  // ── Search + filter (issue #6) ────────────────────────────────────────────
+  // ── Search + filter ───────────────────────────────────────────────────────
 
   it('shows a search input when there are plants', () => {
-    render(<PlantSidebar plants={[makePlant('1', 'Fern', 3)]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [makePlant('1', 'Fern', 3)], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByPlaceholderText(/search plants/i)).toBeInTheDocument()
   })
 
   it('does not show the search input when there are no plants', () => {
-    render(<PlantSidebar plants={[]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.queryByPlaceholderText(/search plants/i)).not.toBeInTheDocument()
   })
 
   it('filters plants by name when a search term is typed', () => {
     const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     fireEvent.change(screen.getByPlaceholderText(/search plants/i), { target: { value: 'Fern' } })
     expect(screen.getByText('Fern')).toBeInTheDocument()
     expect(screen.queryByText('Cactus')).not.toBeInTheDocument()
@@ -138,7 +147,7 @@ describe('PlantSidebar', () => {
   it('filters plants by species (case-insensitive)', () => {
     const p1 = { ...makePlant('1', 'Plant A', 3), species: 'Nephrolepis' }
     const p2 = { ...makePlant('2', 'Plant B', 0), species: 'Mammillaria' }
-    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [p1, p2], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     fireEvent.change(screen.getByPlaceholderText(/search plants/i), { target: { value: 'nephrole' } })
     expect(screen.getByText('Plant A')).toBeInTheDocument()
     expect(screen.queryByText('Plant B')).not.toBeInTheDocument()
@@ -147,14 +156,14 @@ describe('PlantSidebar', () => {
   it('shows room filter chips when plants have multiple rooms', () => {
     const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
     const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
-    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [p1, p2], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByRole('button', { name: 'Living Room' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Kitchen' })).toBeInTheDocument()
   })
 
   it('does not show room chips when all plants are in one room', () => {
     const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     // makePlant defaults room to 'Living Room' — only 1 unique room
     expect(screen.queryByRole('button', { name: 'Living Room' })).not.toBeInTheDocument()
   })
@@ -162,7 +171,7 @@ describe('PlantSidebar', () => {
   it('filters plants to the selected room when a chip is clicked', () => {
     const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
     const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
-    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [p1, p2], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
     expect(screen.queryByText('Fern')).not.toBeInTheDocument()
     expect(screen.getByText('Cactus')).toBeInTheDocument()
@@ -171,7 +180,7 @@ describe('PlantSidebar', () => {
   it('deselects the room filter when the active chip is clicked again', () => {
     const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
     const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
-    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [p1, p2], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
     expect(screen.getByText('Fern')).toBeInTheDocument()
@@ -181,7 +190,7 @@ describe('PlantSidebar', () => {
   it('updates summary counts to reflect the filtered subset', () => {
     const p1 = { ...makePlant('1', 'Overdue Plant', 3), room: 'Living Room' }
     const p2 = { ...makePlant('2', 'Good Plant', -5), room: 'Kitchen' }
-    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [p1, p2], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     expect(screen.getByText(/1 overdue/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
     expect(screen.queryByText(/1 overdue/i)).not.toBeInTheDocument()
@@ -190,7 +199,7 @@ describe('PlantSidebar', () => {
 
   it('shows "No plants match" when no plants match the current search', () => {
     const plants = [makePlant('1', 'Fern', 3)]
-    render(<PlantSidebar plants={plants} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     fireEvent.change(screen.getByPlaceholderText(/search plants/i), { target: { value: 'xyz not found' } })
     expect(screen.getByText(/no plants match/i)).toBeInTheDocument()
   })
@@ -198,7 +207,7 @@ describe('PlantSidebar', () => {
   it('shows filtered count in header when a filter is active', () => {
     const p1 = { ...makePlant('1', 'Fern', 3), room: 'Living Room' }
     const p2 = { ...makePlant('2', 'Cactus', 0), room: 'Kitchen' }
-    render(<PlantSidebar plants={[p1, p2]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+    renderSidebar({ plants: [p1, p2], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     fireEvent.click(screen.getByRole('button', { name: 'Kitchen' }))
     expect(screen.getByText(/1 \/ 2 plants/i)).toBeInTheDocument()
   })
@@ -206,14 +215,7 @@ describe('PlantSidebar', () => {
   // ── Weather section ───────────────────────────────────────────────────────
 
   it('shows current conditions when weather is provided', () => {
-    render(
-      <PlantSidebar
-        plants={[]}
-        onPlantClick={vi.fn()}
-        onAddPlant={vi.fn()}
-        weather={mockWeather}
-      />
-    )
+    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn(), weather: mockWeather })
     // "Sunny" appears in both the current-conditions header and the forecast row
     expect(screen.getAllByText('Sunny').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('22°')).toBeInTheDocument()
@@ -221,26 +223,12 @@ describe('PlantSidebar', () => {
 
   it('shows a rain alert when rain is forecast and there are outdoor plants', () => {
     const outdoorPlant = { ...makePlant('1', 'Rose', 0), room: 'Garden' }
-    render(
-      <PlantSidebar
-        plants={[outdoorPlant]}
-        onPlantClick={vi.fn()}
-        onAddPlant={vi.fn()}
-        weather={mockWeather}
-      />
-    )
+    renderSidebar({ plants: [outdoorPlant], onPlantClick: vi.fn(), onAddPlant: vi.fn(), weather: mockWeather })
     expect(screen.getByText(/skip watering outdoor plants/i)).toBeInTheDocument()
   })
 
   it('shows "Enable location" prompt when location is denied', () => {
-    render(
-      <PlantSidebar
-        plants={[]}
-        onPlantClick={vi.fn()}
-        onAddPlant={vi.fn()}
-        locationDenied={true}
-      />
-    )
+    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn(), locationDenied: true })
     expect(screen.getByText(/enable location/i)).toBeInTheDocument()
   })
 
@@ -248,13 +236,118 @@ describe('PlantSidebar', () => {
 
   it('renders without crashing when weather is not provided', () => {
     expect(() =>
-      render(<PlantSidebar plants={[]} onPlantClick={vi.fn()} onAddPlant={vi.fn()} />)
+      renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
     ).not.toThrow()
   })
 
   it('renders without crashing when onAddPlant is not provided', () => {
     expect(() =>
-      render(<PlantSidebar plants={[]} onPlantClick={vi.fn()} />)
+      renderSidebar({ plants: [], onPlantClick: vi.fn() })
     ).not.toThrow()
+  })
+
+  // ── Card design (Issue #87) ───────────────────────────────────────────────
+
+  it('renders a colour bar on each plant card', () => {
+    const plant = makePlant('1', 'Fern', 3)
+    renderSidebar({ plants: [plant], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
+    const card = screen.getByText('Fern').closest('[style]')
+    expect(card.style.borderTop).toContain('3px solid')
+  })
+
+  it('renders health badge on the card', () => {
+    const plant = { ...makePlant('1', 'Fern', 3), health: 'Good' }
+    renderSidebar({ plants: [plant], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
+    expect(screen.getByText('Good')).toBeInTheDocument()
+  })
+
+  it('renders maturity badge on the card when maturity is set', () => {
+    const plant = { ...makePlant('1', 'Fern', 3), maturity: 'Seedling' }
+    renderSidebar({ plants: [plant], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
+    expect(screen.getByText('Seedling')).toBeInTheDocument()
+  })
+
+  it('does not render maturity badge when plant has no maturity', () => {
+    const plant = makePlant('1', 'Fern', 3)
+    renderSidebar({ plants: [plant], onPlantClick: vi.fn(), onAddPlant: vi.fn() })
+    expect(screen.queryByText(/seedling|young|mature|established/i)).not.toBeInTheDocument()
+  })
+
+  // ── Batch watering (Issue #92) ────────────────────────────────────────────
+
+  it('shows a Select button when onBatchWater is provided', () => {
+    const plants = [makePlant('1', 'Fern', 3)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onBatchWater: vi.fn() })
+    expect(screen.getByRole('button', { name: /select/i })).toBeInTheDocument()
+  })
+
+  it('does not show Select button when onBatchWater is not provided', () => {
+    const plants = [makePlant('1', 'Fern', 3)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn() })
+    expect(screen.queryByRole('button', { name: /^select$/i })).not.toBeInTheDocument()
+  })
+
+  it('entering select mode shows batch action bar', () => {
+    const plants = [makePlant('1', 'Fern', 3)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onBatchWater: vi.fn() })
+    fireEvent.click(screen.getByRole('button', { name: /select/i }))
+    expect(screen.getByText('0 selected')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /water selected/i })).toBeInTheDocument()
+  })
+
+  it('clicking a card in select mode toggles selection instead of opening modal', () => {
+    const onPlantClick = vi.fn()
+    const plants = [makePlant('1', 'Fern', 3)]
+    renderSidebar({ plants, onPlantClick, onAddPlant: vi.fn(), onBatchWater: vi.fn() })
+    fireEvent.click(screen.getByRole('button', { name: /select/i }))
+    fireEvent.click(screen.getByText('Fern').closest('button'))
+    expect(onPlantClick).not.toHaveBeenCalled()
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+  })
+
+  it('Water Selected calls onBatchWater with selected plant IDs', async () => {
+    const onBatchWater = vi.fn().mockResolvedValue(1)
+    const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onBatchWater })
+    fireEvent.click(screen.getByRole('button', { name: /select/i }))
+    fireEvent.click(screen.getByText('Fern').closest('button'))
+    fireEvent.click(screen.getByRole('button', { name: /water selected/i }))
+    await waitFor(() => expect(onBatchWater).toHaveBeenCalledWith(['1']))
+  })
+
+  it('Select All selects all filtered plants', () => {
+    const plants = [makePlant('1', 'Fern', 3), makePlant('2', 'Cactus', 0)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onBatchWater: vi.fn() })
+    fireEvent.click(screen.getByRole('button', { name: /select/i }))
+    fireEvent.click(screen.getByText('Select All'))
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+  })
+
+  it('Deselect All clears selection', () => {
+    const plants = [makePlant('1', 'Fern', 3)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onBatchWater: vi.fn() })
+    fireEvent.click(screen.getByRole('button', { name: /select/i }))
+    fireEvent.click(screen.getByText('Fern').closest('button'))
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Deselect All'))
+    expect(screen.getByText('0 selected')).toBeInTheDocument()
+  })
+
+  it('exiting select mode clears selection and shows legend', () => {
+    const plants = [makePlant('1', 'Fern', 3)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onBatchWater: vi.fn() })
+    fireEvent.click(screen.getByRole('button', { name: /select/i }))
+    fireEvent.click(screen.getByText('Fern').closest('button'))
+    fireEvent.click(screen.getByText('Cancel'))
+    expect(screen.queryByText(/selected/i)).not.toBeInTheDocument()
+    expect(screen.getByText('Legend')).toBeInTheDocument()
+  })
+
+  it('hides individual water buttons in select mode', () => {
+    const plants = [makePlant('1', 'Fern', 3)]
+    renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onWater: vi.fn(), onBatchWater: vi.fn() })
+    expect(screen.getByRole('button', { name: /mark .+ as watered/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /select/i }))
+    expect(screen.queryByRole('button', { name: /mark .+ as watered/i })).not.toBeInTheDocument()
   })
 })

@@ -166,6 +166,28 @@ function AppContent() {
     }
   }, [isGuest])
 
+  const handleBatchWater = useCallback(async (plantIds) => {
+    if (isGuest) {
+      const now = new Date().toISOString()
+      const entry = { date: now, note: '' }
+      setPlants(prev => prev.map(p =>
+        plantIds.includes(p.id)
+          ? { ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] }
+          : p
+      ))
+      return plantIds.length
+    }
+    const results = await Promise.allSettled(plantIds.map(id => plantsApi.water(id)))
+    let count = 0
+    results.forEach((result, i) => {
+      if (result.status === 'fulfilled') {
+        count++
+        setPlants(prev => prev.map(p => p.id === plantIds[i] ? result.value : p))
+      }
+    })
+    return count
+  }, [isGuest])
+
   const handleDeletePlant = useCallback(async (plantId) => {
     if (isGuest) {
       setPlants(prev => prev.filter(p => p.id !== plantId))
@@ -313,6 +335,7 @@ function AppContent() {
             onPlantClick={handleMarkerClick}
             onAddPlant={handleAddPlant}
             onWater={handleWaterPlant}
+            onBatchWater={handleBatchWater}
             loading={plantsLoading}
             weather={weather}
             locationDenied={locationDenied}

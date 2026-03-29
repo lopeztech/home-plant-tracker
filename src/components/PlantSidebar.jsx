@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react'
-import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon } from 'lucide-react'
+import React, { useMemo, useState, useCallback } from 'react'
+import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon, Check, Leaf, ListChecks } from 'lucide-react'
 import { getWateringStatus, urgencyColor, urgencyLabel, OUTDOOR_ROOMS } from '../utils/watering.js'
+import { useToast } from './Toast.jsx'
 
 function dayLabel(dateStr, index) {
   if (index === 0) return 'Today'
@@ -105,7 +106,22 @@ function HealthBadge({ health }) {
   )
 }
 
-function PlantCard({ plant, onClick, onWater, weather, floors }) {
+function MaturityBadge({ maturity }) {
+  if (!maturity) return null
+  const colors = {
+    Seedling: 'bg-cyan-900 text-cyan-300',
+    Young: 'bg-blue-900 text-blue-300',
+    Mature: 'bg-violet-900 text-violet-300',
+    Established: 'bg-purple-900 text-purple-300',
+  }
+  return (
+    <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${colors[maturity] || 'bg-gray-800 text-gray-400'}`}>
+      {maturity}
+    </span>
+  )
+}
+
+function PlantCard({ plant, onClick, onWater, weather, floors, selectMode, selected, onSelect }) {
   const [imgError, setImgError] = useState(false)
   const status = getWateringStatus(plant, weather, floors)
   const { daysUntil, color, label, note, skippedRain } = status
@@ -113,14 +129,32 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
   const showPhoto = plant.imageUrl && !imgError
 
   return (
-    <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 hover:border-gray-600 transition-all group overflow-hidden">
+    <div
+      className={`w-full flex rounded-lg bg-gray-800 border transition-all duration-150 group overflow-hidden hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg hover:shadow-black/20 ${
+        selected ? 'border-emerald-500 bg-emerald-950/20' : 'border-gray-700 hover:border-gray-600'
+      }`}
+      style={{ borderTop: `3px solid ${color}` }}
+    >
       <button
-        onClick={() => onClick(plant)}
+        onClick={() => selectMode ? onSelect(plant.id) : onClick(plant)}
         className="flex-1 flex items-center gap-2.5 text-left px-3 py-2.5 min-w-0"
       >
-        {/* Avatar: photo thumbnail or initial letter */}
+        {/* Checkbox in select mode */}
+        {selectMode && (
+          <div
+            className={`w-5 h-5 rounded flex-shrink-0 flex items-center justify-center border transition-colors ${
+              selected
+                ? 'bg-emerald-600 border-emerald-500'
+                : 'bg-gray-800 border-gray-600'
+            }`}
+          >
+            {selected && <Check size={12} className="text-white" />}
+          </div>
+        )}
+
+        {/* Avatar: photo thumbnail or initial with leaf icon */}
         <div
-          className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-bold overflow-hidden"
+          className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold overflow-hidden relative"
           style={{
             backgroundColor: showPhoto ? 'transparent' : color,
             border: `2px solid ${color}`,
@@ -134,7 +168,12 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
               onError={() => setImgError(true)}
               className="w-full h-full object-cover"
             />
-          ) : initial}
+          ) : (
+            <>
+              <Leaf size={16} className="absolute opacity-15" />
+              <span className="relative">{initial}</span>
+            </>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
@@ -161,15 +200,16 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
           {note && (
             <p className="text-xs text-blue-400 mt-0.5 truncate">{note}</p>
           )}
-          {plant.health && (
-            <div className="mt-1">
+          {(plant.health || plant.maturity) && (
+            <div className="mt-1 flex items-center gap-1">
               <HealthBadge health={plant.health} />
+              <MaturityBadge maturity={plant.maturity} />
             </div>
           )}
         </div>
       </button>
 
-      {onWater && (
+      {onWater && !selectMode && (
         <button
           onClick={() => onWater(plant.id)}
           className="flex-shrink-0 px-2.5 hover:bg-blue-900/30 text-gray-600 hover:text-blue-400 transition-colors border-l border-gray-700"
@@ -179,6 +219,49 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
           <Droplets size={13} />
         </button>
       )}
+    </div>
+  )
+}
+
+function BatchActionBar({ selectedCount, onWaterSelected, onWaterAllDue, onSelectAll, onDeselectAll, onCancel, dueCount }) {
+  return (
+    <div className="px-4 py-3 border-t border-gray-800 bg-gray-900 flex-shrink-0 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-gray-400 font-medium">{selectedCount} selected</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={selectedCount > 0 ? onDeselectAll : onSelectAll}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            {selectedCount > 0 ? 'Deselect All' : 'Select All'}
+          </button>
+          <button
+            onClick={onCancel}
+            className="text-xs text-gray-400 hover:text-white transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button
+          onClick={onWaterSelected}
+          disabled={selectedCount === 0}
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <Droplets size={12} />
+          Water Selected
+        </button>
+        {dueCount > 0 && (
+          <button
+            onClick={onWaterAllDue}
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-600 hover:bg-orange-500 text-white transition-colors"
+          >
+            <AlertCircle size={12} />
+            Water All Due ({dueCount})
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -193,7 +276,7 @@ const LEGEND_ITEMS = [
 function SkeletonCard() {
   return (
     <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 animate-pulse">
-      <div className="w-7 h-7 rounded-full bg-gray-700 flex-shrink-0" />
+      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0" />
       <div className="flex-1 ml-2.5 space-y-2">
         <div className="h-3 bg-gray-700 rounded w-24" />
         <div className="h-2.5 bg-gray-700/60 rounded w-16" />
@@ -202,9 +285,12 @@ function SkeletonCard() {
   )
 }
 
-export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, loading, weather, locationDenied }) {
+export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, onBatchWater, loading, weather, locationDenied }) {
+  const toast = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(new Set())
 
   // Filter to only plants on the active floor (if a floor is selected)
   const floorPlants = useMemo(() => {
@@ -251,7 +337,43 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
     return { overdue, today, soon, good }
   }, [filteredPlants, weather, floors])
 
+  const duePlantIds = useMemo(() =>
+    filteredPlants
+      .filter(p => getWateringStatus(p, weather, floors).daysUntil <= 0)
+      .map(p => p.id),
+    [filteredPlants, weather, floors]
+  )
+
   const isFiltered = roomFilter !== null || searchTerm.trim() !== ''
+
+  const toggleSelect = useCallback((id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false)
+    setSelectedIds(new Set())
+  }, [])
+
+  const handleWaterSelected = useCallback(async () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    const count = await onBatchWater(ids)
+    toast(`Watered ${count} plant${count !== 1 ? 's' : ''}`)
+    exitSelectMode()
+  }, [selectedIds, onBatchWater, toast, exitSelectMode])
+
+  const handleWaterAllDue = useCallback(async () => {
+    if (duePlantIds.length === 0) return
+    const count = await onBatchWater(duePlantIds)
+    toast(`Watered ${count} plant${count !== 1 ? 's' : ''}`)
+    exitSelectMode()
+  }, [duePlantIds, onBatchWater, toast, exitSelectMode])
 
   return (
     <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full">
@@ -270,6 +392,19 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
             <span className="text-xs text-gray-500">
               {isFiltered ? `${filteredPlants.length} / ${floorPlants.length}` : floorPlants.length} plants
             </span>
+            {onBatchWater && floorPlants.length > 0 && (
+              <button
+                onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-colors font-medium ${
+                  selectMode
+                    ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
+                    : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
+                }`}
+              >
+                <ListChecks size={12} />
+                {selectMode ? 'Done' : 'Select'}
+              </button>
+            )}
             <button
               onClick={onAddPlant}
               className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium"
@@ -376,26 +511,48 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
           </div>
         ) : (
           filteredPlants.map(plant => (
-            <PlantCard key={plant.id} plant={plant} onClick={onPlantClick} onWater={onWater} weather={weather} floors={floors} />
+            <PlantCard
+              key={plant.id}
+              plant={plant}
+              onClick={onPlantClick}
+              onWater={onWater}
+              weather={weather}
+              floors={floors}
+              selectMode={selectMode}
+              selected={selectedIds.has(plant.id)}
+              onSelect={toggleSelect}
+            />
           ))
         )}
       </div>
 
-      {/* Legend */}
-      <div className="px-4 py-3 border-t border-gray-800 flex-shrink-0">
-        <p className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wider">Legend</p>
-        <div className="space-y-1.5">
-          {LEGEND_ITEMS.map(({ color, label }) => (
-            <div key={label} className="flex items-center gap-2">
-              <div
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: color }}
-              />
-              <span className="text-xs text-gray-400">{label}</span>
-            </div>
-          ))}
+      {/* Batch action bar or Legend */}
+      {selectMode ? (
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          onWaterSelected={handleWaterSelected}
+          onWaterAllDue={handleWaterAllDue}
+          onSelectAll={() => setSelectedIds(new Set(filteredPlants.map(p => p.id)))}
+          onDeselectAll={() => setSelectedIds(new Set())}
+          onCancel={exitSelectMode}
+          dueCount={duePlantIds.length}
+        />
+      ) : (
+        <div className="px-4 py-3 border-t border-gray-800 flex-shrink-0">
+          <p className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wider">Legend</p>
+          <div className="space-y-1.5">
+            {LEGEND_ITEMS.map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-2">
+                <div
+                  className="w-3 h-3 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: color }}
+                />
+                <span className="text-xs text-gray-400">{label}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
