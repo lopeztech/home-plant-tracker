@@ -20,6 +20,20 @@ if (typeof PointerEvent === 'undefined') {
 // Suppress noisy React act() warnings in tests that don't need them
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
+// jsdom doesn't implement matchMedia — needed by useTheme
+if (typeof window.matchMedia !== 'function') {
+  window.matchMedia = vi.fn().mockImplementation(query => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }))
+}
+
 // jsdom 29 may not provide full localStorage API — polyfill if needed
 if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localStorage?.removeItem !== 'function') {
   const store = new Map()

@@ -23,6 +23,30 @@
   }
 }
 
+/* ── Light theme overrides ──────────────────────────────────── */
+html.light-theme body {
+  background: #f8fafc;
+  color: #1e293b;
+}
+html.light-theme .bg-gray-950 { background-color: #f8fafc !important; }
+html.light-theme .bg-gray-900 { background-color: #ffffff !important; }
+html.light-theme .bg-gray-800 { background-color: #f1f5f9 !important; }
+html.light-theme .bg-gray-700 { background-color: #e2e8f0 !important; }
+html.light-theme .border-gray-800 { border-color: #e2e8f0 !important; }
+html.light-theme .border-gray-700 { border-color: #cbd5e1 !important; }
+html.light-theme .text-white { color: #0f172a !important; }
+html.light-theme .text-gray-100 { color: #1e293b !important; }
+html.light-theme .text-gray-200 { color: #334155 !important; }
+html.light-theme .text-gray-300 { color: #475569 !important; }
+html.light-theme .text-gray-400 { color: #64748b !important; }
+html.light-theme .text-gray-500 { color: #94a3b8 !important; }
+html.light-theme .text-gray-600 { color: #94a3b8 !important; }
+html.light-theme .shadow-md { box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+html.light-theme .shadow-lg { box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important; }
+html.light-theme .scrollbar-thin { scrollbar-color: #cbd5e1 #f1f5f9; }
+html.light-theme .scrollbar-thin::-webkit-scrollbar-track { background: #f1f5f9; }
+html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; }
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
@@ -347,6 +371,10 @@
   transform: scale(1.2);
   filter: drop-shadow(0 2px 8px rgba(0,0,0,0.5));
 }
+/* Larger touch target on mobile */
+@media (pointer: coarse) {
+  .plant-lf-inner { min-width: 36px; min-height: 36px; }
+}
 
 /* Overdue pulse — reuses the existing keyframe */
 .plant-lf-overdue {
@@ -366,3 +394,18 @@
 
 .lf-plant-tip-name   { font-size: 12px; font-weight: 600; color: #fff; }
 .lf-plant-tip-species { font-size: 11px; color: #9ca3af; margin-top: 1px; }
+
+/* ── Water button ripple ────────────────────────────────────── */
+@keyframes water-ripple {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.water-ripple::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(96, 165, 250, 0.3);
+  animation: water-ripple 0.4s ease-out forwards;
+  pointer-events: none;
+}

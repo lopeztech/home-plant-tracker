@@ -280,11 +280,11 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="modal-enter w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
+      <div className="animate-fade-in-up w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2">

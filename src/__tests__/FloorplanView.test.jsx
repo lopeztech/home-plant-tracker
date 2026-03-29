@@ -130,7 +130,7 @@ describe('FloorplanView', () => {
 
   it('shows the upload hint when no floors have rooms analysed', () => {
     renderView({ isAnalysingFloorplan: false })
-    expect(screen.getByText(/upload a floorplan image/i)).toBeInTheDocument()
+    expect(screen.getByText(/upload a floorplan to get started/i)).toBeInTheDocument()
   })
 
   it('hides the upload hint when at least one floor has rooms', () => {
@@ -139,7 +139,7 @@ describe('FloorplanView', () => {
         rooms: [{ name: 'Living Room', x: 10, y: 10, width: 40, height: 40 }] },
     ]
     renderView({ floors: floorsWithRooms, isAnalysingFloorplan: false })
-    expect(screen.queryByText(/upload a floorplan image/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/upload a floorplan to get started/i)).not.toBeInTheDocument()
   })
 
   // ── User interactions ─────────────────────────────────────────────────────

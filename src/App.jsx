@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { GoogleOAuthProvider } from '@react-oauth/google'
-import { Map, Leaf } from 'lucide-react'
+import { Map, Leaf, Plus, Keyboard } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import Header from './components/Header.jsx'
 import FloorplanView from './components/FloorplanView.jsx'
@@ -8,11 +8,15 @@ import PlantSidebar from './components/PlantSidebar.jsx'
 import PlantModal from './components/PlantModal.jsx'
 import LoginPage from './pages/LoginPage.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
+import Onboarding from './components/Onboarding.jsx'
+import CareCalendar from './components/CareCalendar.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
 import { getWateringStatus } from './utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from './data/guestData.js'
+import { useKeyboardShortcuts, SHORTCUTS } from './hooks/useKeyboardShortcuts.js'
+import { useThemeProvider } from './hooks/useTheme.js'
 
 const DEFAULT_FLOORS = [
   { id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null },
@@ -23,6 +27,7 @@ function AppContent() {
   const { isAuthenticated, isGuest, isLoading, logout } = useAuth()
   const { weather, locationDenied } = useWeather()
   const toast = useToast()
+  const { theme, toggleTheme, ThemeContext } = useThemeProvider()
 
   const [plants, setPlants] = useState([])
   const [plantsLoading, setPlantsLoading] = useState(false)
@@ -45,6 +50,19 @@ function AppContent() {
   const [mobileTab, setMobileTab] = useState('floorplan')
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
+  const [showCalendar, setShowCalendar] = useState(false)
+
+  const { showHelp, setShowHelp } = useKeyboardShortcuts({
+    onAddPlant: () => { if (!showPlantModal && !showSettings) handleAddPlant() },
+    onToggleSettings: () => setShowSettings(s => !s),
+    onEscape: () => {
+      if (showHelp) setShowHelp(false)
+      else if (showCalendar) setShowCalendar(false)
+      else if (showSettings) setShowSettings(false)
+      else if (showPlantModal) { setShowPlantModal(false); setEditingPlant(null); setPendingPosition(null) }
+    },
+    onToggleSidebar: () => setSidebarOpen(o => !o),
+  })
 
   // Load plants and floors when authenticated
   useEffect(() => {
@@ -276,11 +294,17 @@ function AppContent() {
   }
 
   return (
+    <ThemeContext.Provider value={theme}>
     <div className="flex flex-col h-screen bg-gray-950">
+      <a href="#plant-sidebar" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-1.5 focus:rounded-lg focus:bg-emerald-600 focus:text-white focus:text-sm">
+        Skip to plant list
+      </a>
       <Header
         onFloorplanUpload={handleFloorplanUpload}
         isAnalysingFloorplan={isAnalysingFloorplan}
         onOpenSettings={() => setShowSettings(true)}
+        onToggleTheme={toggleTheme}
+        onOpenCalendar={() => setShowCalendar(true)}
       />
 
       {isGuest && (
@@ -342,6 +366,17 @@ function AppContent() {
           />
         </div>
       </div>
+
+      {/* Mobile FAB — add plant on floorplan view */}
+      {mobileTab === 'floorplan' && (
+        <button
+          onClick={handleAddPlant}
+          className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-lg shadow-emerald-900/40 flex items-center justify-center transition-all"
+          aria-label="Add new plant"
+        >
+          <Plus size={24} />
+        </button>
+      )}
 
       {/* Mobile tab bar */}
       <nav
@@ -406,7 +441,43 @@ function AppContent() {
           onClose={() => setShowSettings(false)}
         />
       )}
+
+      {showCalendar && (
+        <CareCalendar
+          plants={plants}
+          weather={weather}
+          floors={floors}
+          onClose={() => setShowCalendar(false)}
+        />
+      )}
+
+      {!isGuest && <Onboarding />}
+
+      {showHelp && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+          onClick={() => setShowHelp(false)}
+        >
+          <div className="animate-fade-in-up bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-4">
+              <Keyboard size={18} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-white">Keyboard Shortcuts</h2>
+            </div>
+            <div className="space-y-2">
+              {SHORTCUTS.map(s => (
+                <div key={s.key} className="flex items-center justify-between">
+                  <span className="text-sm text-gray-400">{s.description}</span>
+                  <kbd className="px-2 py-0.5 rounded bg-gray-800 border border-gray-700 text-xs text-gray-300 font-mono">{s.key}</kbd>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-600 mt-4 text-center">Press <kbd className="px-1 py-0.5 rounded bg-gray-800 border border-gray-700 text-xs font-mono">?</kbd> or <kbd className="px-1 py-0.5 rounded bg-gray-800 border border-gray-700 text-xs font-mono">Esc</kbd> to close</p>
+          </div>
+        </div>
+      )}
     </div>
+    </ThemeContext.Provider>
   )
 }
 

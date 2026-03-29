@@ -20,8 +20,10 @@ function ToastItem({ toast, onDismiss }) {
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg border text-sm max-w-xs transition-all duration-300 ${
-        exiting ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0'
+        exiting ? 'animate-slide-out' : 'animate-slide-in'
       } ${
         isError
           ? 'bg-red-950 border-red-800 text-red-200'

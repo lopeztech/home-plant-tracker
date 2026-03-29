@@ -195,12 +195,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col md:items-center md:justify-center md:p-4"
+      className="fixed inset-0 z-50 flex flex-col md:items-center md:justify-center md:p-4 animate-fade-in"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="modal-enter relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl flex flex-col md:max-h-[calc(100vh-2rem)]"
+        className="animate-fade-in-up relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl flex flex-col md:max-h-[calc(100vh-2rem)]"
       >
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">

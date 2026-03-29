@@ -82,6 +82,6 @@ describe('Toast', () => {
     // After duration - 300ms, the exit animation should start
     act(() => { vi.advanceTimersByTime(3200) })
     const toast = screen.getByText('Success message').closest('div[class*="transition"]')
-    expect(toast.className).toContain('opacity-0')
+    expect(toast.className).toContain('animate-slide-out')
   })
 })

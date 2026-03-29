@@ -275,11 +275,11 @@ const LEGEND_ITEMS = [
 
 function SkeletonCard() {
   return (
-    <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5 animate-pulse">
-      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0" />
+    <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5">
+      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, transparent 0%, #374151 50%, transparent 100%)', backgroundSize: '200% 100%' }} />
       <div className="flex-1 ml-2.5 space-y-2">
-        <div className="h-3 bg-gray-700 rounded w-24" />
-        <div className="h-2.5 bg-gray-700/60 rounded w-16" />
+        <div className="h-3 bg-gray-700 rounded w-24 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, #374151 0%, #4b5563 50%, #374151 100%)', backgroundSize: '200% 100%' }} />
+        <div className="h-2.5 bg-gray-700/60 rounded w-16 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, #374151 0%, #4b5563 50%, #374151 100%)', backgroundSize: '200% 100%', animationDelay: '0.2s' }} />
       </div>
     </div>
   )
@@ -485,27 +485,43 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
             <SkeletonCard />
           </>
         ) : filteredPlants.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center py-12 px-4">
+          <div className="flex flex-col items-center justify-center h-full text-center py-12 px-4 animate-fade-in-up">
             {plants.length === 0 ? (
               <>
-                <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
-                  <Droplets size={20} className="text-gray-600" />
+                <div className="w-16 h-16 rounded-2xl bg-emerald-950/50 border border-emerald-900/50 flex items-center justify-center mb-4">
+                  <Leaf size={28} className="text-emerald-600" />
                 </div>
-                <p className="text-sm text-gray-500 font-medium">No plants yet</p>
-                <p className="text-xs text-gray-600 mt-1">Click on the floorplan to add your first plant</p>
+                <p className="text-sm text-gray-400 font-medium">No plants yet</p>
+                <p className="text-xs text-gray-600 mt-1 max-w-[200px]">Click on the floorplan or tap the button below to add your first plant</p>
+                <button
+                  onClick={onAddPlant}
+                  className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium"
+                >
+                  <Plus size={12} />
+                  Get started
+                </button>
               </>
             ) : floorPlants.length === 0 ? (
               <>
-                <div className="w-12 h-12 rounded-full bg-gray-800 flex items-center justify-center mb-3">
-                  <Droplets size={20} className="text-gray-600" />
+                <div className="w-16 h-16 rounded-2xl bg-gray-800/50 border border-gray-700/50 flex items-center justify-center mb-4">
+                  <MapPin size={28} className="text-gray-600" />
                 </div>
-                <p className="text-sm text-gray-500 font-medium">No plants on this floor</p>
+                <p className="text-sm text-gray-400 font-medium">No plants on this floor</p>
                 <p className="text-xs text-gray-600 mt-1">Click on the floorplan to add a plant here</p>
               </>
             ) : (
               <>
-                <p className="text-sm text-gray-500 font-medium">No plants match</p>
+                <div className="w-16 h-16 rounded-2xl bg-gray-800/50 border border-gray-700/50 flex items-center justify-center mb-4">
+                  <Search size={28} className="text-gray-600" />
+                </div>
+                <p className="text-sm text-gray-400 font-medium">No plants match</p>
                 <p className="text-xs text-gray-600 mt-1">Try a different search or filter</p>
+                <button
+                  onClick={() => { setSearchTerm(''); setRoomFilter(null) }}
+                  className="mt-3 text-xs text-emerald-500 hover:text-emerald-400 transition-colors"
+                >
+                  Clear filters
+                </button>
               </>
             )}
           </div>

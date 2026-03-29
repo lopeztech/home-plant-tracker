@@ -1,9 +1,11 @@
 import React, { useRef } from 'react'
-import { Upload, Leaf, LogOut, Settings } from 'lucide-react'
+import { Upload, Leaf, LogOut, Settings, Sun, Moon, Calendar } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import { useTheme } from '../hooks/useTheme.js'
 
-export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpenSettings }) {
+export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpenSettings, onToggleTheme, onOpenCalendar }) {
   const { user, logout } = useAuth()
+  const theme = useTheme()
   const fileInputRef = useRef(null)
 
   const handleFileChange = (e) => {
@@ -46,6 +48,16 @@ export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpen
               onChange={handleFileChange}
             />
 
+            <button
+              onClick={onOpenCalendar}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
+              title="Care schedule"
+              aria-label="Care schedule"
+            >
+              <Calendar size={14} />
+              <span className="hidden sm:inline">Schedule</span>
+            </button>
+
             <div className="flex items-center gap-2 pl-2 border-l border-gray-700">
               {user.picture && (
                 <img
@@ -58,6 +70,14 @@ export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpen
               <span className="hidden md:inline text-sm text-gray-300 max-w-[120px] truncate">
                 {user.name}
               </span>
+              <button
+                onClick={onToggleTheme}
+                className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors border border-gray-700"
+                title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                aria-label={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              </button>
               <button
                 onClick={onOpenSettings}
                 className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white transition-colors border border-gray-700"
