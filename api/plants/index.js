@@ -316,6 +316,98 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// ── ML feature engineering ────────────────────────────────────────────────────
+
+function getSeason(dateStr) {
+  const month = new Date(dateStr).getMonth(); // 0-indexed
+  if (month >= 2 && month <= 4) return 'spring';
+  if (month >= 5 && month <= 7) return 'summer';
+  if (month >= 8 && month <= 10) return 'autumn';
+  return 'winter';
+}
+
+function buildFeatureRows(plant) {
+  const log = (plant.wateringLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (log.length < 2) return [];
+
+  const healthLog = (plant.healthLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  function healthAt(date) {
+    const t = new Date(date).getTime();
+    let h = null;
+    for (const entry of healthLog) {
+      if (new Date(entry.date).getTime() <= t) h = entry.health;
+    }
+    return h;
+  }
+
+  function healthAfter(date, days) {
+    const target = new Date(date).getTime() + days * 86400000;
+    return healthAt(new Date(target).toISOString());
+  }
+
+  const rows = [];
+  for (let i = 1; i < log.length; i++) {
+    const gap = (new Date(log[i].date) - new Date(log[i - 1].date)) / 86400000;
+    const freq = plant.frequencyDays || 7;
+    const adherence = +(gap / freq).toFixed(3);
+    const health = healthAt(log[i].date);
+    const health7d = healthAfter(log[i].date, 7);
+
+    // Consecutive overdue: count how many previous gaps exceeded freq
+    let consecutive = 0;
+    for (let j = i; j >= 1; j--) {
+      const g = (new Date(log[j].date) - new Date(log[j - 1].date)) / 86400000;
+      if (g > freq) consecutive++;
+      else break;
+    }
+
+    rows.push({
+      species: plant.species || plant.name || '',
+      days_between_waterings: +gap.toFixed(1),
+      recommended_frequency: freq,
+      adherence_ratio: adherence,
+      health_at_watering: health || '',
+      health_7d_after: health7d || '',
+      season: getSeason(log[i].date),
+      consecutive_overdue_days: consecutive,
+      pot_size: plant.potSize || '',
+      room: plant.room || '',
+    });
+  }
+  return rows;
+}
+
+// Admin-gated ML export — produces NDJSON feature table
+app.get('/ml/export', async (req, res) => {
+  const adminToken = req.headers['x-admin-token'];
+  const expectedToken = process.env.ML_ADMIN_TOKEN;
+  if (!expectedToken || adminToken !== expectedToken) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    // Stream all users' plant data
+    const usersSnap = await db.collection('users').get();
+    res.setHeader('Content-Type', 'application/x-ndjson');
+    res.setHeader('Content-Disposition', `attachment; filename="features-${new Date().toISOString().slice(0, 10)}.ndjson"`);
+
+    for (const userDoc of usersSnap.docs) {
+      const plantsSnap = await db.collection('users').doc(userDoc.id).collection('plants').get();
+      for (const plantDoc of plantsSnap.docs) {
+        const rows = buildFeatureRows(plantDoc.data());
+        for (const row of rows) {
+          res.write(JSON.stringify(row) + '\n');
+        }
+      }
+    }
+    res.end();
+  } catch (err) {
+    if (!res.headersSent) res.status(500).json({ error: err.message });
+    else res.end();
+  }
+});
+
 // ── Floorplan analysis via Gemini (Vertex AI) ────────────────────────────────
 
 app.post('/analyse-floorplan', async (req, res) => {

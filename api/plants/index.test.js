@@ -59,6 +59,8 @@ function makeCollRef(prefix) {
 
 let geminiGenerateFn;
 let storageSignedUrlFn;
+let storageDeleteFn;
+let storageDeletedPaths;
 
 // ── Load the express app via proxyquire ───────────────────────────────────────
 
@@ -80,7 +82,14 @@ beforeAll(() => {
     '@google-cloud/storage': {
       Storage: class {
         bucket(_b) {
-          return { file: function(_f) { return { getSignedUrl: function() { return storageSignedUrlFn.apply(this, arguments); } }; } };
+          return {
+            file: function(f) {
+              return {
+                getSignedUrl: function() { return storageSignedUrlFn.apply(this, arguments); },
+                delete: function() { storageDeletedPaths.push(f); return storageDeleteFn(f); },
+              };
+            },
+          };
         }
       },
     },
@@ -96,6 +105,8 @@ beforeEach(() => {
   clearStore();
   geminiGenerateFn = async () => { throw new Error('geminiGenerateFn not configured'); };
   storageSignedUrlFn = async () => ['https://signed.example.com/img.jpg'];
+  storageDeleteFn = async () => {};
+  storageDeletedPaths = [];
 });
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -528,5 +539,230 @@ describe('DELETE /plants/:id', () => {
     store[plantPath('p1')] = { name: 'Fern' };
     await request(app).delete('/plants/p1').set('Authorization', authHeader());
     expect(store[plantPath('p1')]).toBeUndefined();
+  });
+
+  it('deletes the GCS image when the plant has an imageUrl', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/fern.jpg' };
+    const res = await request(app).delete('/plants/p1').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(storageDeletedPaths).toContain('plants/fern.jpg');
+  });
+
+  it('does not attempt GCS delete when plant has no imageUrl', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    await request(app).delete('/plants/p1').set('Authorization', authHeader());
+    expect(storageDeletedPaths).toHaveLength(0);
+  });
+
+  it('still deletes the plant even if GCS delete fails', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/fern.jpg' };
+    storageDeleteFn = async () => { throw new Error('GCS error'); };
+    const res = await request(app).delete('/plants/p1').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(store[plantPath('p1')]).toBeUndefined();
+  });
+});
+
+// ── PUT /plants/:id — GCS image cleanup on replacement ──────────────────────
+
+describe('PUT /plants/:id — image replacement', () => {
+  it('deletes old GCS image when imageUrl changes', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/old.jpg', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/new.jpg' });
+    expect(res.status).toBe(200);
+    expect(storageDeletedPaths).toContain('plants/old.jpg');
+  });
+
+  it('does not delete GCS image when imageUrl stays the same', async () => {
+    const url = 'https://storage.googleapis.com/undefined/plants/same.jpg';
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: url, createdAt: '2026-01-01T00:00:00.000Z' };
+    await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ name: 'Updated Fern', imageUrl: url });
+    expect(storageDeletedPaths).toHaveLength(0);
+  });
+
+  it('does not delete GCS image when update has no imageUrl field', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/keep.jpg', createdAt: '2026-01-01T00:00:00.000Z' };
+    await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ name: 'Updated Fern' });
+    expect(storageDeletedPaths).toHaveLength(0);
+  });
+
+  it('still updates the plant even if old image GCS delete fails', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/old.jpg', createdAt: '2026-01-01T00:00:00.000Z' };
+    storageDeleteFn = async () => { throw new Error('GCS error'); };
+    const res = await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ name: 'Updated Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/new.jpg' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Updated Fern');
+  });
+});
+
+// ── PUT /plants/:id — health log tracking ────────────────────────────────────
+
+describe('PUT /plants/:id — health log', () => {
+  it('appends to healthLog when health changes', async () => {
+    store[plantPath('p1')] = { name: 'Fern', health: 'Good', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ health: 'Poor', healthReason: 'Wilting leaves' });
+    expect(res.status).toBe(200);
+    expect(res.body.healthLog).toHaveLength(1);
+    expect(res.body.healthLog[0].health).toBe('Poor');
+    expect(res.body.healthLog[0].reason).toBe('Wilting leaves');
+  });
+
+  it('does not append to healthLog when health stays the same', async () => {
+    store[plantPath('p1')] = { name: 'Fern', health: 'Good', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ health: 'Good' });
+    expect(res.status).toBe(200);
+    expect(res.body.healthLog).toBeUndefined();
+  });
+
+  it('accumulates multiple health changes in healthLog', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', health: 'Good', createdAt: '2026-01-01T00:00:00.000Z',
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good', reason: '' }],
+    };
+    const res = await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ health: 'Fair', healthReason: 'Yellowing' });
+    expect(res.status).toBe(200);
+    expect(res.body.healthLog).toHaveLength(2);
+    expect(res.body.healthLog[1].health).toBe('Fair');
+  });
+
+  it('defaults healthReason to empty string when not provided', async () => {
+    store[plantPath('p1')] = { name: 'Fern', health: 'Good', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ health: 'Excellent' });
+    expect(res.body.healthLog[0].reason).toBe('');
+  });
+});
+
+// ── GET /plants/:id/watering-pattern ─────────────────────────────────────────
+
+describe('GET /plants/:id/watering-pattern', () => {
+  it('returns 404 for a non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns insufficient_data when wateringLog has fewer than 3 entries', async () => {
+    store[plantPath('p1')] = { name: 'Fern', wateringLog: [{ date: '2026-01-01T00:00:00.000Z' }] };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).toBe('insufficient_data');
+    expect(res.body.confidence).toBe(0);
+  });
+
+  it('returns insufficient_data when wateringLog is missing', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.body.pattern).toBe('insufficient_data');
+  });
+
+  it('returns optimal when watering matches recommended frequency', async () => {
+    const base = new Date('2026-01-01');
+    const wateringLog = Array.from({ length: 5 }, (_, i) => ({
+      date: new Date(base.getTime() + i * 7 * 86400000).toISOString(),
+    }));
+    store[plantPath('p1')] = { name: 'Fern', frequencyDays: 7, wateringLog };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).toBe('optimal');
+    expect(res.body.confidence).toBeGreaterThan(0.5);
+  });
+
+  it('returns over_watered when watering far more often than recommended', async () => {
+    const base = new Date('2026-01-01');
+    // Water every 2 days but recommended is 14 days (adherence = 2/14 = 0.14)
+    const wateringLog = Array.from({ length: 5 }, (_, i) => ({
+      date: new Date(base.getTime() + i * 2 * 86400000).toISOString(),
+    }));
+    store[plantPath('p1')] = { name: 'Cactus', frequencyDays: 14, wateringLog };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.body.pattern).toBe('over_watered');
+  });
+
+  it('returns under_watered when watering far less often than recommended', async () => {
+    const base = new Date('2026-01-01');
+    // Water every 21 days but recommended is 7 (adherence = 21/7 = 3.0)
+    const wateringLog = Array.from({ length: 4 }, (_, i) => ({
+      date: new Date(base.getTime() + i * 21 * 86400000).toISOString(),
+    }));
+    store[plantPath('p1')] = { name: 'Fern', frequencyDays: 7, wateringLog };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.body.pattern).toBe('under_watered');
+  });
+
+  it('returns inconsistent when watering gaps vary wildly', async () => {
+    const wateringLog = [
+      { date: '2026-01-01T00:00:00.000Z' },
+      { date: '2026-01-02T00:00:00.000Z' },  // 1 day gap
+      { date: '2026-01-22T00:00:00.000Z' },  // 20 day gap
+      { date: '2026-01-23T00:00:00.000Z' },  // 1 day gap
+    ];
+    store[plantPath('p1')] = { name: 'Fern', frequencyDays: 7, wateringLog };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.body.pattern).toBe('inconsistent');
+  });
+
+  it('increases over_watered confidence when health has declined', async () => {
+    const base = new Date('2026-01-01');
+    const wateringLog = Array.from({ length: 5 }, (_, i) => ({
+      date: new Date(base.getTime() + i * 2 * 86400000).toISOString(),
+    }));
+    const healthLog = [
+      { date: '2026-01-01T00:00:00.000Z', health: 'Excellent' },
+      { date: '2026-01-10T00:00:00.000Z', health: 'Poor' },
+    ];
+    store[plantPath('p1')] = { name: 'Fern', frequencyDays: 14, wateringLog, healthLog };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.body.pattern).toBe('over_watered');
+    expect(res.body.confidence).toBeGreaterThan(0.5);
+    expect(res.body.contributingFactors.some(f => f.includes('Health'))).toBe(true);
+  });
+
+  it('returns contributingFactors array with at least one entry', async () => {
+    const base = new Date('2026-01-01');
+    const wateringLog = Array.from({ length: 4 }, (_, i) => ({
+      date: new Date(base.getTime() + i * 7 * 86400000).toISOString(),
+    }));
+    store[plantPath('p1')] = { name: 'Fern', frequencyDays: 7, wateringLog };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(Array.isArray(res.body.contributingFactors)).toBe(true);
+    expect(res.body.contributingFactors.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ── requireUser — x-apigateway-api-userinfo header ───────────────────────────
+
+describe('requireUser — API Gateway auth path', () => {
+  it('authenticates via x-apigateway-api-userinfo header', async () => {
+    const payload = Buffer.from(JSON.stringify({ sub: USER_SUB })).toString('base64');
+    store[plantPath('p1')] = { name: 'Fern', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app)
+      .get('/plants')
+      .set('x-apigateway-api-userinfo', payload);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+  });
+
+  it('falls back to Bearer token when x-apigateway-api-userinfo has no sub', async () => {
+    const gatewayPayload = Buffer.from(JSON.stringify({ email: 'no-sub@example.com' })).toString('base64');
+    const res = await request(app)
+      .get('/plants')
+      .set('x-apigateway-api-userinfo', gatewayPayload)
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
   });
 });
