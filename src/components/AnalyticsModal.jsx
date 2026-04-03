@@ -97,7 +97,7 @@ function SectionTitle({ children }) {
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-gray-800/60 border border-gray-700/50 rounded-xl p-4 ${className}`}>
+    <div className={`bg-gray-800/40 border border-gray-700/40 rounded-xl p-4 shadow-sm shadow-black/10 ${className}`} style={{ background: 'linear-gradient(135deg, rgba(30, 42, 58, 0.5) 0%, rgba(20, 30, 48, 0.5) 100%)' }}>
       {children}
     </div>
   )
@@ -107,7 +107,7 @@ function Card({ children, className = '' }) {
 function DarkTooltip({ active, payload, label, unit = '' }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-lg">
+    <div className="bg-gray-900/95 border border-gray-700/60 rounded-lg px-3 py-2 text-xs shadow-xl shadow-black/30" style={{ backdropFilter: 'blur(8px)' }}>
       <p className="text-gray-400 mb-1">{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color || p.fill }}>{p.name}: <strong>{p.value}{unit}</strong></p>

@@ -373,7 +373,7 @@ function AppContent() {
           {mobileTab === 'floorplan' && (
             <button
               onClick={handleAddPlant}
-              className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-lg shadow-emerald-900/40 flex items-center justify-center transition-all"
+              className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 active:scale-90 text-white shadow-lg shadow-emerald-900/50 flex items-center justify-center transition-all duration-200"
               aria-label="Add new plant"
             >
               <Plus size={24} />
@@ -386,7 +386,8 @@ function AppContent() {
       <nav
         role="tablist"
         aria-label="App navigation"
-        className="md:hidden flex-shrink-0 flex border-t border-gray-800 bg-gray-900"
+        className="md:hidden flex-shrink-0 flex border-t border-gray-800 bg-gray-900/95"
+        style={{ backdropFilter: 'blur(12px)' }}
       >
         <button
           role="tab"
@@ -470,7 +471,7 @@ function AppContent() {
       {!isGuest && <Onboarding />}
 
       {isGuest && (
-        <div className="bg-emerald-900/40 border-t border-emerald-800/60 text-emerald-300 text-xs px-4 py-2 text-center flex items-center justify-center gap-3">
+        <div className="bg-emerald-900/30 border-t border-emerald-800/40 text-emerald-300 text-xs px-4 py-2 text-center flex items-center justify-center gap-3" style={{ backdropFilter: 'blur(8px)' }}>
           <span>You are browsing in guest mode with sample data. Changes are not saved.</span>
           <button
             onClick={logout}
@@ -487,7 +488,7 @@ function AppContent() {
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           onClick={() => setShowHelp(false)}
         >
-          <div className="animate-fade-in-up bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+          <div className="animate-fade-in-up bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 p-6 max-w-sm w-full" onClick={e => e.stopPropagation()} style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
             <div className="flex items-center gap-2 mb-4">
               <Keyboard size={18} className="text-emerald-400" />
               <h2 className="text-sm font-semibold text-white">Keyboard Shortcuts</h2>

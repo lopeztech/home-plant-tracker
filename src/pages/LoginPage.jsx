@@ -27,10 +27,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-950 px-4">
-      <div className="flex flex-col items-center gap-6 w-full max-w-sm">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-950 px-4 relative overflow-hidden">
+      {/* Background ambient glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)' }} />
+      <div className="flex flex-col items-center gap-6 w-full max-w-sm relative z-10">
         {/* Icon */}
-        <div className="w-20 h-20 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-900/40">
+        <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-900/40">
           <span role="img" aria-label="plant" className="text-4xl select-none">
             🌿
           </span>
@@ -39,11 +41,11 @@ export default function LoginPage() {
         {/* Title */}
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white tracking-tight">Plant Tracker</h1>
-          <p className="mt-1 text-gray-400 text-sm">Your personal plant care companion</p>
+          <p className="mt-1.5 text-gray-400 text-sm">Your personal plant care companion</p>
         </div>
 
         {/* Sign-in card */}
-        <div className="w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-xl">
+        <div className="w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-xl shadow-black/30" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
           <p className="text-gray-400 text-sm text-center">Sign in to access your plants</p>
 
           {loginError && (
@@ -89,7 +91,7 @@ export default function LoginPage() {
 
           <button
             onClick={loginAsGuest}
-            className="w-full py-2.5 px-4 rounded-lg border border-gray-700 text-gray-300 text-sm font-medium hover:bg-gray-800 hover:border-gray-600 transition-colors"
+            className="w-full py-2.5 px-4 rounded-lg border border-gray-700 text-gray-300 text-sm font-medium hover:bg-gray-800/60 hover:border-gray-600 transition-all duration-200 active:scale-[0.98]"
           >
             Continue as Guest
           </button>

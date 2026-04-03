@@ -45,7 +45,7 @@ function FormField({ label, children, hint }) {
 }
 
 function InputClass(extra = '') {
-  return `w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors ${extra}`
+  return `w-full px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/30 focus:bg-gray-800 transition-all ${extra}`
 }
 
 function CareSection({ label, children }) {
@@ -200,12 +200,13 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="animate-fade-in-up relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl flex flex-col md:max-h-[calc(100vh-2rem)]"
+        className="animate-fade-in-up relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 flex flex-col md:max-h-[calc(100vh-2rem)]"
+        style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}
       >
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-emerald-700 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm shadow-emerald-900/30">
               <Leaf size={14} className="text-white" />
             </div>
             <h2 className="text-base font-semibold text-white">
@@ -280,14 +281,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <button
               type="button"
               onClick={() => setMode('photo')}
-              className="w-full flex items-center gap-4 p-4 rounded-xl bg-emerald-900/20 border border-emerald-800/40 hover:bg-emerald-900/35 hover:border-emerald-700 transition-colors text-left"
+              className="w-full flex items-center gap-4 p-4 rounded-xl bg-emerald-900/15 border border-emerald-800/30 hover:bg-emerald-900/30 hover:border-emerald-700/60 hover:shadow-lg hover:shadow-emerald-950/30 transition-all duration-200 text-left group"
             >
-              <div className="w-11 h-11 rounded-full bg-emerald-900/60 flex items-center justify-center flex-shrink-0">
+              <div className="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-800/60 to-emerald-900/60 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                 <Camera size={20} className="text-emerald-400" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">Analyse with AI</p>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
                   Take or upload a photo — Gemini identifies the plant and fills in care details automatically
                 </p>
               </div>
@@ -296,14 +297,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <button
               type="button"
               onClick={() => setMode('manual')}
-              className="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-800/50 border border-gray-700 hover:bg-gray-800 hover:border-gray-600 transition-colors text-left"
+              className="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-800/30 border border-gray-700/60 hover:bg-gray-800/60 hover:border-gray-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200 text-left group"
             >
-              <div className="w-11 h-11 rounded-full bg-gray-700/50 flex items-center justify-center flex-shrink-0">
+              <div className="w-11 h-11 rounded-full bg-gray-700/40 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                 <ClipboardList size={20} className="text-gray-400" />
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">Enter manually</p>
-                <p className="text-xs text-gray-400 mt-0.5">
+                <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
                   Fill in the plant name and care details yourself
                 </p>
               </div>
@@ -625,9 +626,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 onClick={handleSubmit}
                 disabled={!form.name.trim() || isSaving}
                 title={!form.name.trim() ? 'Enter a name to save' : undefined}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                   form.name.trim() && !isSaving
-                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-md shadow-emerald-900/30'
                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                 }`}
               >

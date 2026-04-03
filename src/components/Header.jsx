@@ -17,12 +17,14 @@ export default function Header({ onOpenSettings, onOpenAnalytics, analyticsActiv
   }, [menuOpen])
 
   return (
-    <header className="flex items-center justify-between px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex-shrink-0">
-      <div className="flex items-center gap-2">
-        <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+    <header className="flex items-center justify-between px-4 py-2.5 bg-gray-900 border-b border-gray-800 flex-shrink-0 relative overflow-hidden">
+      {/* Subtle gradient accent line at top */}
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-emerald-600/0 via-emerald-500/60 to-emerald-600/0" />
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-lg flex items-center justify-center shadow-md shadow-emerald-900/30">
           <Leaf size={18} className="text-white" />
         </div>
-        <h1 className="text-base font-bold text-white leading-tight">Plant Tracker</h1>
+        <h1 className="text-base font-bold text-white leading-tight tracking-tight">Plant Tracker</h1>
       </div>
 
       {user && (
@@ -59,8 +61,8 @@ export default function Header({ onOpenSettings, onOpenAnalytics, analyticsActiv
             </button>
 
             {menuOpen && (
-              <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-xl py-1 z-50">
-                <div className="px-3 py-2 border-b border-gray-800">
+              <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-700 rounded-xl shadow-xl shadow-black/30 py-1 z-50" style={{ backdropFilter: 'blur(16px)' }}>
+                <div className="px-3 py-2.5 border-b border-gray-800">
                   <p className="text-sm font-medium text-white truncate">{user.name}</p>
                   <p className="text-xs text-gray-500 truncate">{user.email}</p>
                 </div>
