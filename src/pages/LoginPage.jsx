@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
@@ -6,6 +6,25 @@ const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
 export default function LoginPage() {
   const { login, loginAsGuest } = useAuth()
+  const [loginError, setLoginError] = useState(false)
+
+  const handleError = () => {
+    console.error('Google Sign-In failed')
+    setLoginError(true)
+  }
+
+  const handleSuccess = (response) => {
+    setLoginError(false)
+    login(response)
+  }
+
+  const handleTryDifferentAccount = () => {
+    // Revoke Google's cached account selection so the picker appears fresh
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.disableAutoSelect()
+    }
+    setLoginError(false)
+  }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-950 px-4">
@@ -27,10 +46,25 @@ export default function LoginPage() {
         <div className="w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-xl">
           <p className="text-gray-400 text-sm text-center">Sign in to access your plants</p>
 
+          {loginError && (
+            <div className="w-full p-3 rounded-lg bg-red-900/30 border border-red-700/50 text-center space-y-2">
+              <p className="text-red-300 text-sm font-medium">Sign-in failed</p>
+              <p className="text-red-400/80 text-xs leading-relaxed">
+                Your account may not have access. Try signing in with a different account.
+              </p>
+              <button
+                onClick={handleTryDifferentAccount}
+                className="text-xs text-red-300 underline underline-offset-2 hover:text-red-200 transition-colors"
+              >
+                Try a different account
+              </button>
+            </div>
+          )}
+
           {CLIENT_ID ? (
             <GoogleLogin
-              onSuccess={login}
-              onError={() => console.error('Google Sign-In failed')}
+              onSuccess={handleSuccess}
+              onError={handleError}
               theme="filled_black"
               shape="rectangular"
               size="large"

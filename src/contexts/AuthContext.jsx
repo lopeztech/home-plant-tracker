@@ -61,6 +61,12 @@ export function AuthProvider({ children }) {
   function logout() {
     localStorage.removeItem(STORAGE_KEY)
     setApiCredential(null)
+
+    // Clear Google's cached account selection so the account picker appears on next login
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.disableAutoSelect()
+    }
+
     setUser(null)
 
     // Redirect to IAP logout endpoint in production (not for guests)
