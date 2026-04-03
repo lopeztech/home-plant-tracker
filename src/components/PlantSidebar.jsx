@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react'
-import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon, Check, Leaf, ListChecks, Calendar } from 'lucide-react'
+import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon, Check, Leaf, ListChecks, Calendar, ChevronRight, X } from 'lucide-react'
 import { getWateringStatus, urgencyColor, urgencyLabel, OUTDOOR_ROOMS } from '../utils/watering.js'
 import { useToast } from './Toast.jsx'
 
@@ -9,7 +9,52 @@ function dayLabel(dateStr, index) {
   return new Date(dateStr + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' })
 }
 
+function ForecastModal({ weather, onClose }) {
+  const { days } = weather
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+      style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+          <h2 className="text-base font-semibold text-gray-900">7-Day Forecast</h2>
+          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="px-5 py-3 divide-y divide-gray-100">
+          {days.map((day, i) => {
+            const hasRain = day.precipitation >= 2
+            return (
+              <div key={day.date} className="flex items-center gap-3 py-2.5 text-sm">
+                <span className="w-10 text-gray-500 font-medium flex-shrink-0">{dayLabel(day.date, i)}</span>
+                <span className="text-lg leading-none flex-shrink-0">{day.condition.emoji}</span>
+                <span className="flex-1 text-gray-700 truncate">{day.condition.label}</span>
+                {hasRain && (
+                  <span className="text-blue-500 text-xs font-medium flex-shrink-0 tabular-nums">
+                    {day.precipitation.toFixed(1)}mm
+                  </span>
+                )}
+                <span className="text-gray-800 font-medium flex-shrink-0 tabular-nums">
+                  {day.maxTemp}°<span className="text-gray-400 font-normal">/</span>{day.minTemp}°
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function WeatherSection({ weather, locationDenied, outdoorPlantCount }) {
+  const [showForecast, setShowForecast] = useState(false)
+
   if (locationDenied) {
     return (
       <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
@@ -23,62 +68,43 @@ function WeatherSection({ weather, locationDenied, outdoorPlantCount }) {
   if (!weather) return null
 
   const { current, days } = weather
-  const forecast = days.slice(0, 3)
   const nearRain  = days.slice(0, 3).filter(d => d.precipitation >= 2)
   const showAlert = outdoorPlantCount > 0 && nearRain.length > 0
 
   return (
     <div className="border-b border-gray-800 flex-shrink-0">
-      {/* Current conditions */}
+      {/* Current conditions + forecast button */}
       <div className="px-4 pt-3 pb-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xl leading-none">{current.condition.emoji}</span>
-          <div>
-            <p className="text-xs font-medium text-white leading-tight">{current.condition.label}</p>
-            <div className="flex items-center gap-1 mt-0.5">
-              {current.isDay
-                ? <Sun size={11} className="text-yellow-400" />
-                : <Moon size={11} className="text-indigo-400" />
-              }
-              <span className="text-xs text-gray-600">{current.isDay ? 'Day' : 'Night'}</span>
-            </div>
+          <div className="flex items-center gap-1">
+            {current.isDay
+              ? <Sun size={14} className="text-yellow-500" />
+              : <Moon size={14} className="text-indigo-500" />
+            }
+            <span className="text-xl leading-none">{current.condition.emoji}</span>
           </div>
+          <span className="text-xl font-light text-gray-900">{current.temp}°{weather.unit === 'fahrenheit' ? 'F' : 'C'}</span>
         </div>
-        <span className="text-xl font-light text-white">{current.temp}°{weather.unit === 'fahrenheit' ? 'F' : 'C'}</span>
-      </div>
-
-      {/* 3-day forecast */}
-      <div className="px-4 pb-2 space-y-1">
-        {forecast.map((day, i) => {
-          const hasRain = day.precipitation >= 2
-          return (
-            <div key={day.date} className="flex items-center gap-2 text-xs">
-              <span className="w-8 text-gray-500 font-medium flex-shrink-0">{dayLabel(day.date, i)}</span>
-              <span className="text-sm leading-none flex-shrink-0">{day.condition.emoji}</span>
-              <span className="flex-1 text-gray-500 truncate">{day.condition.label}</span>
-              <span className="text-gray-500 flex-shrink-0 tabular-nums">
-                {day.maxTemp}°<span className="text-gray-700">/</span>{day.minTemp}°
-              </span>
-              {hasRain && (
-                <span className="text-blue-400 font-medium flex-shrink-0 tabular-nums">
-                  {day.precipitation.toFixed(1)}mm
-                </span>
-              )}
-            </div>
-          )
-        })}
+        <button
+          onClick={() => setShowForecast(true)}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+        >
+          Forecast
+          <ChevronRight size={14} />
+        </button>
       </div>
 
       {/* Outdoor watering alert */}
       {showAlert && (
-        <div className="mx-4 mb-3 flex items-start gap-2 px-2.5 py-2 rounded-lg bg-blue-950/60 border border-blue-900/60">
-          <CloudRain size={12} className="text-blue-400 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-blue-300 leading-snug">
-            Rain forecast ({nearRain.map(d => dayLabel(d.date, forecast.indexOf(d))).join(', ')})
-            {' '}— skip watering outdoor plants
+        <div className="mx-4 mb-3 flex items-start gap-2 px-2.5 py-2 rounded-lg bg-blue-100 border border-blue-200">
+          <CloudRain size={12} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-700 leading-snug">
+            Rain forecast — skip watering outdoor plants
           </p>
         </div>
       )}
+
+      {showForecast && <ForecastModal weather={weather} onClose={() => setShowForecast(false)} />}
     </div>
   )
 }
@@ -285,7 +311,7 @@ function SkeletonCard() {
   )
 }
 
-export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, onBatchWater, loading, weather, locationDenied, onOpenCalendar }) {
+export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, onBatchWater, loading, weather, locationDenied, onOpenCalendar, onToggleSidebar }) {
   const toast = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
@@ -377,17 +403,21 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
 
   return (
     <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full min-h-0" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--tw-gray-950) 100%)' }}>
-      {/* Weather */}
-      <WeatherSection
-        weather={weather}
-        locationDenied={locationDenied}
-        outdoorPlantCount={outdoorPlantCount}
-      />
-
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-100">Plant List</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-100">Plant List</h2>
+            {onToggleSidebar && (
+              <button
+                onClick={onToggleSidebar}
+                className="hidden md:flex items-center gap-1 px-2 py-0.5 rounded text-xs text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+                aria-label="Hide plant list"
+              >
+                Hide
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">
               {isFiltered ? `${filteredPlants.length} / ${floorPlants.length}` : floorPlants.length} plants
@@ -501,8 +531,8 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
                 <div className="w-16 h-16 rounded-2xl bg-emerald-950/50 border border-emerald-900/50 flex items-center justify-center mb-4">
                   <Leaf size={28} className="text-emerald-600" />
                 </div>
-                <p className="text-sm text-gray-400 font-medium">No plants yet</p>
-                <p className="text-xs text-gray-600 mt-1 max-w-[200px]">Click on the floorplan or tap the button below to add your first plant</p>
+                <p className="text-sm text-gray-200 font-medium">No plants yet</p>
+                <p className="text-xs text-gray-400 mt-1 max-w-[200px]">Click on the floorplan or tap the button below to add your first plant</p>
                 <button
                   onClick={onAddPlant}
                   className="mt-4 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium"
@@ -552,8 +582,8 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
         )}
       </div>
 
-      {/* Batch action bar or Legend */}
-      {selectMode ? (
+      {/* Batch action bar */}
+      {selectMode && (
         <BatchActionBar
           selectedCount={selectedIds.size}
           onWaterSelected={handleWaterSelected}
@@ -563,21 +593,6 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
           onCancel={exitSelectMode}
           dueCount={duePlantIds.length}
         />
-      ) : (
-        <div className="px-4 py-3 border-t border-gray-800 flex-shrink-0">
-          <p className="text-xs text-gray-500 font-medium mb-2 uppercase tracking-wider">Legend</p>
-          <div className="space-y-1.5">
-            {LEGEND_ITEMS.map(({ color, label }) => (
-              <div key={label} className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-full flex-shrink-0"
-                  style={{ backgroundColor: color }}
-                />
-                <span className="text-xs text-gray-400">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       )}
     </div>
   )

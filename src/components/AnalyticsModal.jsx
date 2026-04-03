@@ -93,12 +93,12 @@ function heatCell(count) {
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
 function SectionTitle({ children }) {
-  return <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">{children}</h3>
+  return <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-600 mb-3">{children}</h3>
 }
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-gray-800/40 border border-gray-700/40 rounded-xl p-4 shadow-soft ${className}`}>
+    <div className={`bg-white/80 border border-gray-200 rounded-xl p-4 shadow-sm ${className}`}>
       {children}
     </div>
   )
@@ -188,7 +188,7 @@ function OverviewTab({ plants }) {
         <Card>
           <SectionTitle>Health Distribution</SectionTitle>
           {plants.length === 0 ? (
-            <p className="text-gray-500 text-sm">No plants yet.</p>
+            <p className="text-gray-600 text-sm">No plants yet.</p>
           ) : (
             <div className="flex items-center gap-4">
               <ResponsiveContainer width={110} height={110}>
@@ -240,7 +240,7 @@ function OverviewTab({ plants }) {
                     <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-gray-100 truncate">{p.name}</p>
-                      <p className="text-[11px] text-gray-400">
+                      <p className="text-[11px] text-gray-600">
                         {isHealthRisk && <span className="text-amber-400">{p.health} health</span>}
                         {isHealthRisk && daysOverdue > 3 && ' · '}
                         {daysOverdue > 3 && <span className="text-red-400">{daysOverdue}d overdue</span>}
@@ -368,7 +368,7 @@ function PerPlantTab({ plants }) {
   const patternResult = useMemo(() => plant ? analyseWateringPattern(plant) : null, [plant])
 
   if (!plant) {
-    return <p className="text-gray-500 text-sm">No plants yet.</p>
+    return <p className="text-gray-600 text-sm">No plants yet.</p>
   }
 
   const gaugeMax = plant.frequencyDays ? Math.max(plant.frequencyDays * 2, 1) : 14
@@ -391,7 +391,7 @@ function PerPlantTab({ plants }) {
     <div className="space-y-5">
       {/* Plant selector */}
       <div>
-        <label className="block text-xs text-gray-400 mb-1.5">Select plant</label>
+        <label className="block text-xs text-gray-600 mb-1.5">Select plant</label>
         <select
           value={selectedId}
           onChange={e => setSelectedId(e.target.value)}
@@ -442,7 +442,7 @@ function PerPlantTab({ plants }) {
             <>
               <div className="flex items-baseline gap-1 mb-3">
                 <span className="text-3xl font-bold text-gray-100">{daysSinceLast}</span>
-                <span className="text-sm text-gray-400">days ago</span>
+                <span className="text-sm text-gray-600">days ago</span>
               </div>
               {plant.frequencyDays && (
                 <>
@@ -487,7 +487,7 @@ function PerPlantTab({ plants }) {
               </div>
               <ul className="space-y-0.5">
                 {patternResult.contributingFactors.map((f, i) => (
-                  <li key={i} className="text-xs text-gray-400">{f}</li>
+                  <li key={i} className="text-xs text-gray-600">{f}</li>
                 ))}
               </ul>
             </div>
@@ -609,9 +609,9 @@ export default function AnalyticsPage({ plants }) {
   const [tab, setTab] = useState('overview')
 
   return (
-    <div className="flex flex-col h-full min-h-0 bg-gray-950">
+    <div className="flex flex-col h-full min-h-0 bg-transparent">
       {/* Tabs */}
-      <div className="flex border-b border-gray-800 flex-shrink-0 px-4">
+      <div className="flex border-b border-gray-300 flex-shrink-0 px-4">
         {[
           { id: 'overview', label: 'Overview' },
           { id: 'plant',    label: 'Per Plant' },
@@ -621,15 +621,15 @@ export default function AnalyticsPage({ plants }) {
             onClick={() => setTab(t.id)}
             className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
               tab === t.id
-                ? 'text-emerald-400 border-emerald-500'
-                : 'text-gray-400 border-transparent hover:text-gray-200'
+                ? 'text-emerald-600 border-emerald-500'
+                : 'text-gray-500 border-transparent hover:text-gray-700'
             }`}
           >
             {t.label}
           </button>
         ))}
         <div className="flex-1" />
-        <span className="self-center text-xs text-gray-500">{plants.length} plant{plants.length !== 1 ? 's' : ''}</span>
+        <span className="self-center text-xs text-gray-600">{plants.length} plant{plants.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Body */}
@@ -641,7 +641,7 @@ export default function AnalyticsPage({ plants }) {
       </div>
 
       {/* Footer */}
-      <div className="px-5 py-3 border-t border-gray-800 flex-shrink-0">
+      <div className="px-5 py-3 border-t border-gray-300 flex-shrink-0">
         <p className="text-[11px] text-gray-600 flex items-center justify-center gap-1">
           <Droplets size={10} />
           Analytics computed from watering and health log data.

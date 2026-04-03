@@ -18,6 +18,7 @@ export default function FloorplanView({
   isAnalysingFloorplan,
   sidebarOpen,
   onToggleSidebar,
+  onOpenSettings,
 }) {
   const [editZones, setEditZones] = useState(false)
   const touchStartX = useRef(null)
@@ -107,30 +108,7 @@ export default function FloorplanView({
           </select>
         )}
 
-        {/* Sidebar toggle — tablet and desktop */}
-        {onToggleSidebar && (
-          <button
-            onClick={onToggleSidebar}
-            className="hidden md:flex ml-auto items-center gap-1.5 px-2 py-1 rounded-lg text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 transition-colors flex-shrink-0"
-            aria-label={sidebarOpen ? 'Hide plant list' : 'Show plant list'}
-            aria-expanded={sidebarOpen}
-            aria-controls="plant-sidebar"
-          >
-            {sidebarOpen ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-            <span className="hidden lg:inline">{sidebarOpen ? 'Hide' : 'Plants'}</span>
-          </button>
-        )}
-
-        {weather && (
-          <span className={`flex items-center gap-1.5 text-xs text-gray-400 flex-shrink-0 ${onToggleSidebar ? '' : 'ml-auto'}`}>
-            {weather.current.isDay
-              ? <Sun size={13} className="text-yellow-400" />
-              : <Moon size={13} className="text-indigo-400" />
-            }
-            <span className="text-base leading-none">{weather.current.condition.emoji}</span>
-            <span>{weather.current.temp}°{weather.unit === 'fahrenheit' ? 'F' : 'C'}</span>
-          </span>
-        )}
+        <div className="ml-auto" />
       </div>
 
       {/* ── Weather sky strip ─────────────────────────────────────────────── */}
@@ -202,9 +180,32 @@ export default function FloorplanView({
                 <div className="w-16 h-16 rounded-2xl bg-gray-800/60 border border-gray-700/50 flex items-center justify-center mb-4">
                   <Upload size={24} className="text-gray-500" />
                 </div>
-                <p className="hidden md:block text-sm text-gray-400 font-medium">Upload a floorplan to get started</p>
-                <p className="hidden md:block text-xs text-gray-600 mt-1">Drag an image here or use the Upload button</p>
+                <p className="hidden md:block text-sm text-gray-400 font-medium">No floorplan uploaded yet</p>
+                <p className="hidden md:block text-xs text-gray-600 mt-1">Go to <button onClick={onOpenSettings} className="pointer-events-auto text-emerald-400 hover:text-emerald-300 underline underline-offset-2 transition-colors">Settings</button> to upload a floorplan</p>
                 <p className="md:hidden text-xs text-gray-500">Tap anywhere to add a plant</p>
+              </div>
+            )}
+
+            {/* Legend overlay */}
+            {plantsOnFloor.length > 0 && (
+              <div
+                className="absolute bottom-3 left-3 pointer-events-none z-[999] hidden md:block"
+              >
+                <div className="bg-gray-900/80 border border-gray-700/50 rounded-lg px-3 py-2 backdrop-blur-sm">
+                  <div className="flex items-center gap-3">
+                    {[
+                      { color: '#ef4444', label: 'Overdue' },
+                      { color: '#f97316', label: 'Due today' },
+                      { color: '#eab308', label: '1–2 days' },
+                      { color: '#22c55e', label: 'All good' },
+                    ].map(({ color, label }) => (
+                      <div key={label} className="flex items-center gap-1.5">
+                        <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                        <span className="text-[10px] text-gray-400">{label}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             )}
 

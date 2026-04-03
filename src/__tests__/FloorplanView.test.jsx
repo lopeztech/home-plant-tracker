@@ -107,13 +107,13 @@ describe('FloorplanView', () => {
     expect(screen.getByTestId('floor-nav')).toBeInTheDocument()
   })
 
-  it('shows the weather emoji and temperature when weather is provided', () => {
+  it('renders the weather sky strip when weather is provided', () => {
     const weather = {
       current: { temp: 18, condition: { label: 'Sunny', emoji: '☀️', sky: 'sunny' }, isDay: true },
       days: [],
     }
     renderView({ weather })
-    expect(screen.getByText('18°C')).toBeInTheDocument()
+    expect(screen.getByTestId('weather-sky')).toBeInTheDocument()
   })
 
   // ── Loading / analysing state ─────────────────────────────────────────────
@@ -130,7 +130,7 @@ describe('FloorplanView', () => {
 
   it('shows the upload hint when no floors have rooms analysed', () => {
     renderView({ isAnalysingFloorplan: false })
-    expect(screen.getByText(/upload a floorplan to get started/i)).toBeInTheDocument()
+    expect(screen.getByText(/no floorplan uploaded yet/i)).toBeInTheDocument()
   })
 
   it('hides the upload hint when at least one floor has rooms', () => {
@@ -139,7 +139,7 @@ describe('FloorplanView', () => {
         rooms: [{ name: 'Living Room', x: 10, y: 10, width: 40, height: 40 }] },
     ]
     renderView({ floors: floorsWithRooms, isAnalysingFloorplan: false })
-    expect(screen.queryByText(/upload a floorplan to get started/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/no floorplan uploaded yet/i)).not.toBeInTheDocument()
   })
 
   // ── User interactions ─────────────────────────────────────────────────────

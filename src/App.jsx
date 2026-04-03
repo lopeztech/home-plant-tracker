@@ -307,7 +307,7 @@ function AppContent() {
 
   return (
     <ThemeContext.Provider value={theme}>
-    <div className="flex flex-col h-[100dvh] bg-gray-950">
+    <div className="flex flex-col h-[100dvh] bg-emerald-900">
       <a href="#plant-sidebar" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-1.5 focus:rounded-lg focus:bg-emerald-600 focus:text-white focus:text-sm">
         Skip to plant list
       </a>
@@ -315,6 +315,7 @@ function AppContent() {
         onOpenSettings={() => setShowSettings(true)}
         onOpenAnalytics={toggleAnalytics}
         analyticsActive={showAnalytics}
+        weather={weather}
       />
 
       {plantsError && (
@@ -328,9 +329,9 @@ function AppContent() {
         <AnalyticsPage plants={plants} />
       ) : (
         <>
-          <div className="flex flex-1 overflow-hidden">
+          <div className="flex flex-col flex-1 overflow-hidden">
             {/* Floorplan panel — hidden on mobile when Plants tab is active */}
-            <div className={mobileTab === 'plants' ? 'hidden md:flex md:flex-1 md:flex-col md:min-w-0' : 'flex flex-1 flex-col min-w-0'}>
+            <div className={mobileTab === 'plants' ? 'hidden md:flex md:flex-[2] md:flex-col md:min-w-0' : 'flex flex-[2] flex-col min-w-0'}>
               <FloorplanView
                 plants={plants}
                 onFloorplanUpload={handleFloorplanUpload}
@@ -346,14 +347,15 @@ function AppContent() {
                 isAnalysingFloorplan={isAnalysingFloorplan}
                 sidebarOpen={sidebarOpen}
                 onToggleSidebar={() => setSidebarOpen(o => !o)}
+                onOpenSettings={() => setShowSettings(true)}
               />
             </div>
 
-            {/* Sidebar panel — controlled by mobileTab on mobile, sidebarOpen on md+ */}
+            {/* Plant list panel — below floorplan on desktop, tab-controlled on mobile */}
             <div className={[
               'flex-col min-h-0',
               mobileTab === 'floorplan' ? 'hidden' : 'flex w-full overflow-hidden',
-              sidebarOpen ? 'md:flex md:flex-shrink-0 md:w-72' : 'md:hidden',
+              sidebarOpen ? 'md:flex md:flex-1 md:min-h-[200px]' : 'md:hidden',
             ].join(' ')}>
               <PlantSidebar
                 plants={plants}
@@ -367,6 +369,7 @@ function AppContent() {
                 weather={weather}
                 locationDenied={locationDenied}
                 onOpenCalendar={() => setShowCalendar(true)}
+                onToggleSidebar={() => setSidebarOpen(o => !o)}
               />
             </div>
           </div>

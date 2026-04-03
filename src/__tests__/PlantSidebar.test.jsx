@@ -212,24 +212,10 @@ describe('PlantSidebar', () => {
     expect(screen.getByText(/1 \/ 2 plants/i)).toBeInTheDocument()
   })
 
-  // ── Weather section ───────────────────────────────────────────────────────
+  // ── Weather (moved to Header) ──────────────────────────────────────────────
 
-  it('shows current conditions when weather is provided', () => {
-    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn(), weather: mockWeather })
-    // "Sunny" appears in both the current-conditions header and the forecast row
-    expect(screen.getAllByText('Sunny').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('22°C')).toBeInTheDocument()
-  })
-
-  it('shows a rain alert when rain is forecast and there are outdoor plants', () => {
-    const outdoorPlant = { ...makePlant('1', 'Rose', 0), room: 'Garden' }
-    renderSidebar({ plants: [outdoorPlant], onPlantClick: vi.fn(), onAddPlant: vi.fn(), weather: mockWeather })
-    expect(screen.getByText(/skip watering outdoor plants/i)).toBeInTheDocument()
-  })
-
-  it('shows "Enable location" prompt when location is denied', () => {
-    renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn(), locationDenied: true })
-    expect(screen.getByText(/enable location/i)).toBeInTheDocument()
+  it('renders without crashing when weather is provided', () => {
+    expect(() => renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn(), weather: mockWeather })).not.toThrow()
   })
 
   // ── Error states / missing props ──────────────────────────────────────────
@@ -333,14 +319,13 @@ describe('PlantSidebar', () => {
     expect(screen.getByText('0 selected')).toBeInTheDocument()
   })
 
-  it('exiting select mode clears selection and shows legend', () => {
+  it('exiting select mode clears selection', () => {
     const plants = [makePlant('1', 'Fern', 3)]
     renderSidebar({ plants, onPlantClick: vi.fn(), onAddPlant: vi.fn(), onBatchWater: vi.fn() })
     fireEvent.click(screen.getByRole('button', { name: /select/i }))
     fireEvent.click(screen.getByText('Fern').closest('button'))
     fireEvent.click(screen.getByText('Cancel'))
     expect(screen.queryByText(/selected/i)).not.toBeInTheDocument()
-    expect(screen.getByText('Legend')).toBeInTheDocument()
   })
 
   it('hides individual water buttons in select mode', () => {
