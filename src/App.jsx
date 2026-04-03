@@ -305,7 +305,7 @@ function AppContent() {
 
   return (
     <ThemeContext.Provider value={theme}>
-    <div className="flex flex-col h-screen bg-gray-950">
+    <div className="flex flex-col h-[100dvh] bg-gray-950">
       <a href="#plant-sidebar" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-1.5 focus:rounded-lg focus:bg-emerald-600 focus:text-white focus:text-sm">
         Skip to plant list
       </a>
@@ -349,8 +349,8 @@ function AppContent() {
 
             {/* Sidebar panel — controlled by mobileTab on mobile, sidebarOpen on md+ */}
             <div className={[
-              'flex-col',
-              mobileTab === 'floorplan' ? 'hidden' : 'flex w-full',
+              'flex-col min-h-0',
+              mobileTab === 'floorplan' ? 'hidden' : 'flex w-full overflow-hidden',
               sidebarOpen ? 'md:flex md:flex-shrink-0 md:w-72' : 'md:hidden',
             ].join(' ')}>
               <PlantSidebar
@@ -484,11 +484,11 @@ function AppContent() {
 
       {showHelp && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in"
+          className="fixed inset-0 z-50 flex flex-col md:items-center md:justify-center md:p-4 animate-fade-in"
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           onClick={() => setShowHelp(false)}
         >
-          <div className="animate-fade-in-up bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 p-6 max-w-sm w-full" onClick={e => e.stopPropagation()} style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
+          <div className="animate-fade-in-up bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 p-6 max-w-sm w-full mx-auto my-auto" onClick={e => e.stopPropagation()} style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
             <div className="flex items-center gap-2 mb-4">
               <Keyboard size={18} className="text-emerald-400" />
               <h2 className="text-sm font-semibold text-white">Keyboard Shortcuts</h2>

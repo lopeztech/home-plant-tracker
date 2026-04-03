@@ -376,7 +376,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
   }, [duePlantIds, onBatchWater, toast, exitSelectMode])
 
   return (
-    <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--tw-gray-950) 100%)' }}>
+    <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full min-h-0" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--tw-gray-950) 100%)' }}>
       {/* Weather */}
       <WeatherSection
         weather={weather}
