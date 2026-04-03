@@ -307,18 +307,6 @@ function AppContent() {
         onOpenAnalytics={() => setShowAnalytics(true)}
       />
 
-      {isGuest && (
-        <div className="bg-emerald-900/40 border-b border-emerald-800/60 text-emerald-300 text-xs px-4 py-2 text-center flex items-center justify-center gap-3">
-          <span>You are browsing in guest mode with sample data. Changes are not saved.</span>
-          <button
-            onClick={logout}
-            className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300 transition-colors"
-          >
-            Sign in
-          </button>
-        </div>
-      )}
-
       {plantsError && (
         <div className="bg-red-900/50 border border-red-700 text-red-300 text-sm px-4 py-2 text-center">
           Failed to load plants: {plantsError}
@@ -463,6 +451,18 @@ function AppContent() {
       )}
 
       {!isGuest && <Onboarding />}
+
+      {isGuest && (
+        <div className="bg-emerald-900/40 border-t border-emerald-800/60 text-emerald-300 text-xs px-4 py-2 text-center flex items-center justify-center gap-3">
+          <span>You are browsing in guest mode with sample data. Changes are not saved.</span>
+          <button
+            onClick={logout}
+            className="text-emerald-400 underline underline-offset-2 hover:text-emerald-300 transition-colors"
+          >
+            Sign in
+          </button>
+        </div>
+      )}
 
       {showHelp && (
         <div
