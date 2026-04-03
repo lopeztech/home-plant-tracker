@@ -1,0 +1,7 @@
+.icon-link {
+  text-decoration-color: rgba(var(--#{$prefix}link-color-rgb), var(--#{$prefix}link-opacity, .5));
+
+  > .bi {
+    fill: currentcolor;
+  }
+}

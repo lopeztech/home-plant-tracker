@@ -1,0 +1,147 @@
+// Override Bootstrap's CSS variables
+:root, [data-bs-theme=light] {
+    // Main colors
+    --bs-blue: #{$bs-blue};
+    --bs-indigo: #{$bs-indigo};
+    --bs-purple: #{$bs-purple};
+    --bs-pink: #{$bs-pink};
+    --bs-red: #{$bs-red};
+    --bs-orange: #{$bs-orange};
+    --bs-yellow: #{$bs-yellow};
+    --bs-green: #{$bs-green};
+    --bs-teal: #{$bs-teal};
+    --bs-cyan: #{$bs-cyan};
+    --bs-black: #{$color-black};
+    --bs-white: #{$color-white};
+  
+    // Color shade variations
+    @each $color-name, $color-value in $theme-colors {
+      --#{$color-name}-50: #{lighten($color-value, 25%)};
+      --#{$color-name}-100: #{lighten($color-value, 20%)};
+      --#{$color-name}-200: #{lighten($color-value, 15%)};
+      --#{$color-name}-300: #{lighten($color-value, 10%)};
+      --#{$color-name}-400: #{lighten($color-value, 5%)};
+      --#{$color-name}-500: #{$color-value};
+      --#{$color-name}-600: #{darken($color-value, 5%)};
+      --#{$color-name}-700: #{darken($color-value, 10%)};
+      --#{$color-name}-800: #{darken($color-value, 15%)};
+      --#{$color-name}-900: #{darken($color-value, 20%)};
+    }
+  
+    // Theme Colors
+    @each $name, $value in $theme-colors {
+      // Base color
+      --bs-#{$name}: #{$value};
+      
+      // RGB values for rgba() usage
+      --bs-#{$name}-rgb: #{red($value)}, #{green($value)}, #{blue($value)};
+      
+      // Text emphasis colors
+      --bs-#{$name}-text-emphasis: #{darken($value, 30%)};
+      
+      // Subtle background colors
+      --bs-#{$name}-bg-subtle: #{lighten($value, 30%)};
+      
+      // Subtle border colors
+      --bs-#{$name}-border-subtle: #{lighten($value, 20%)};
+    }
+  
+    // Grays
+    @each $level, $value in $grays {
+      --bs-gray-#{$level}: #{$value};
+    }
+  
+    // Forms
+    --bs-form-valid-color: #{$color-success};
+    --bs-form-valid-border-color: #{$color-success};
+    --bs-form-invalid-color: #{$color-danger};
+    --bs-form-invalid-border-color: #{$color-danger};
+  
+    // App navigation link colors
+    --app-nav-link-color: var(--bs-gray-800);
+    --app-nav-link-hover-color: #{darken($color-primary, 5%)};
+    --app-nav-link-active-color: #{darken($color-primary, 5%)};
+    --app-nav-title-color: #666666;
+    --app-nav-border-color: rgba(var(--secondary), 0.3);
+    --app-nav-item-hover-bg: #{rgba(red($color-primary), green($color-primary), blue($color-primary), 0.045)};
+    --app-nav-item-active-bg: rgba(var(--secondary), 0.07);
+    --app-nav-item-active-indicator: var(--app-nav-link-active-color);
+    --app-nav-collapse-sign-color: var(--bs-body-color);
+  
+    // Links
+    --bs-link-color: #{$color-primary};
+    --bs-link-color-rgb: #{red($color-primary)}, #{green($color-primary)}, #{blue($color-primary)};
+    --bs-link-hover-color-rgb: #{red(darken($color-primary, 10%))}, #{green(darken($color-primary, 10%))}, #{blue(darken($color-primary, 10%))};
+    --bs-link-hover-color: #{darken($color-primary, 10%)};
+    --bs-code-color: #{darken($color-danger, 15%)};
+    --bs-highlight-color: #212529;
+    --bs-highlight-bg: #fff3cd;
+  
+    // Border colors
+    --bs-border-color-translucent: rgba(0, 0, 0, 0.1);
+    --bs-border-color: #dee2e6;
+    --app-layout-border-color: rgba(0, 0, 0, 0.07);
+  
+    // Collapse icon colors
+    --collapse-icon-border: rgba(0, 0, 0, 0.3);
+    --collapse-icon-border-hover: rgba(var(--primary), 0.8);
+  
+    // RGB versions of theme colors
+    --primary: #{red($color-primary)}, #{green($color-primary)}, #{blue($color-primary)};
+    --secondary: #{red(map-get($grays, 600))}, #{green(map-get($grays, 600))}, #{blue(map-get($grays, 600))};
+    --success: #{red($color-success)}, #{green($color-success)}, #{blue($color-success)};
+    --warning: #{red($color-warning)}, #{green($color-warning)}, #{blue($color-warning)};
+    --info: #{red($color-info)}, #{green($color-info)}, #{blue($color-info)};
+    --danger: #{red($color-danger)}, #{green($color-danger)}, #{blue($color-danger)};
+    --fusion: #{red($color-fusion)}, #{green($color-fusion)}, #{blue($color-fusion)};
+    --disable: #{red(map-get($grays, 500))}, #{green(map-get($grays, 500))}, #{blue(map-get($grays, 500))};
+    --white: #{red($color-white)}, #{green($color-white)}, #{blue($color-white)};
+  
+    // Body and text colors
+    --bs-body-color: #505050;
+    --bs-secondary-color: rgba(70, 79, 87, 0.70);
+    --input-placeholder-color: rgba(112, 112, 112, 0.5);
+  
+    // Scrollbar colors
+    --scrollbar-color: #f1f1f1;
+    --scrollbar-thumb: #888;
+    --scrollbar-thumb-hover: #555;
+}
+  
+// Component-specific colors
+.nav-pills {
+  --bs-nav-pills-link-active-bg: #{$color-primary};
+}
+
+.progress,
+.progress-stacked {
+  --bs-progress-bar-bg: #{$color-primary};
+}
+
+.list-group {
+  --bs-list-group-active-bg: #{$color-primary};
+  --bs-list-group-active-border-color: #{$color-primary};
+}
+
+.form-check-input:checked {
+  background-color: #{$color-primary};
+  border-color: #{$color-primary};
+}
+
+.form-check-input[type=checkbox]:indeterminate {
+  background-color: #{$color-primary};
+  border-color: #{$color-primary};
+}
+
+// List group colors
+.list-group-item.active {
+  background-color: var(--app-nav-item-active-bg);
+  color: var(--bs-body-color);
+}
+
+.list-group-item:hover {
+  color: var(--app-nav-link-hover-color);
+  background-color: var(--app-nav-item-hover-bg);
+}
+  
+  

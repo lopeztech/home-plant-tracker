@@ -1,0 +1,48 @@
+/* 	CSS RESET 
+	Documentation: This CSS sets the font size to 1rem on the HTML element, sets the 
+	font family to the variable --font-family on the body element, removes text decoration, 
+	color, and list style on any a, ol, or ul elements, sets the width of any images to 100% 
+	and the height to auto, and sets the margin and padding to 0 on all elements, as well 
+	as making all elements use the border-box box sizing.
+*/
+html,
+body {
+    height: 100%;
+}
+
+body {
+    font-family: var(--font-family);
+    --bs-body-font-size: 0.875rem;
+}
+
+a {
+    text-decoration: none;
+    //color: inherit;
+}
+
+// ol, ul {
+//     list-style: none;
+// }
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+button:focus:not(.focus-ring),
+input:focus:not(.focus-ring),
+textarea:focus:not(.focus-ring),
+select:focus:not(.focus-ring),
+a:focus:not(.focus-ring) {
+    //outline: none !important;
+    box-shadow: none !important;
+}
+
+p {
+    margin-bottom: 1.5rem;
+}

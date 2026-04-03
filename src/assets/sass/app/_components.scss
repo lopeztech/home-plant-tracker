@@ -1,0 +1,61 @@
+//
+.badge.badge-icon {
+    position: absolute;
+    display: inline-block;
+    background-color: var(--danger-500);
+    color: #fff;
+    box-shadow: 0 0 0 1px var(--bs-body-bg);
+    cursor: default;
+    border: 1px solid transparent;
+    font-size: 0.625rem; //10px
+    min-width: 1.25rem; //20px
+    max-width: 2rem; //32px
+    padding: 0 0.3125rem; //5px
+    border-radius: 1.25rem; //20px
+    font-weight: 600;
+    line-height: 1rem; //16px
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    vertical-align: middle;
+    transform: translate(10%, -10%);
+}
+
+.nav-link {
+    font-size: 0.875rem;
+}
+
+//saving indicator
+.saving-indicator {
+    position: fixed;
+    top: 6.5625rem; //105px
+    right: 0.9375rem; //15px
+    font-size: 0.75rem; //12px
+    width: 1.5rem; //24px
+    height: 1.5rem; //24px
+    color: inherit;
+    opacity: 0;
+    transition: all 0.3s ease-out;
+    z-index: calc(var(--z-index-master) + 3);
+
+    &.show {
+        opacity: 1;
+    }
+
+    &.success {
+        color: var(--success-500);
+    }
+}
+
+.hide-page-scrollbar {
+    .saving-indicator {
+        right: calc(var(--drawer-width) + 1.5rem);
+    }
+}
+
+
+
+
+.carousel-indicators {
+    list-style: none;
+}

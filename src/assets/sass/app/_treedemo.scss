@@ -1,0 +1,101 @@
+.tree-view-container {
+    background: #011627;
+    padding: 1rem;
+    border-radius: 1rem;
+    color: #fff;
+}
+
+.tree-view {
+    font-family: monospace;
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+.tree-item {
+    margin: 2px 0;
+    position: relative;
+}
+
+.tree-item-content {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+}
+
+.tree-item-content:hover {
+    background-color: rgba(var(--primary), 0.1);
+}
+
+.tree-item-icon {
+    margin-right: 5px;
+    width: 16px;
+    text-align: center;
+}
+
+// .tree-item-name {
+//   flex: 1;
+// }
+
+.tree-item-children {
+    padding-left: 20px;
+    border-left: 1px dotted #ccc;
+    margin-left: 7px;
+}
+
+.directory-icon {
+    color: #e8a317;
+}
+
+.file-icon {
+    color: #6c757d;
+}
+
+.collapsed .tree-item-children {
+    display: none;
+}
+
+.expanded .toggle-icon:before {
+    content: "▼";
+    font-size: 10px;
+}
+
+.collapsed .toggle-icon:before {
+    content: "►";
+    font-size: 10px;
+}
+
+.toggle-icon {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    margin-right: 5px;
+    text-align: center;
+    line-height: 12px;
+}
+
+.file-item .toggle-icon {
+    visibility: hidden;
+}
+
+.path {
+    color: var(--success-700);
+    font-size: 0.825rem;
+    margin-left: 1rem;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    font-style: italic;
+    color: #666;
+}
+
+.error {
+    color: #d9534f;
+    padding: 10px;
+    border: 1px solid #d9534f;
+    border-radius: 4px;
+    margin-top: 20px;
+}

@@ -1,0 +1,9 @@
+//
+// Theme overrides for Bootstrap badge colors
+//
+
+.badge {
+  --#{$prefix}badge-color: #{$badge-color};
+  color: var(--#{$prefix}badge-color);
+  @include gradient-bg();
+}

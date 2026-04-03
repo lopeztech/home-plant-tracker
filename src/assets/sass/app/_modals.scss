@@ -1,0 +1,187 @@
+.modal-content {
+    -webkit-box-shadow: 0 0 20px 0 rgba(0, 0, 0, .2);
+    box-shadow: 0 0 20px 0 rgba(0, 0, 0, .2)
+}
+
+.modal.show .modal-dialog {
+    -webkit-transform: none;
+    transform: none
+}
+
+.modal-alert {
+    padding: 0 !important
+}
+
+.modal-alert .modal-dialog {
+    max-width: 100% !important;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    min-height: calc(100% - 3.5rem);
+    -webkit-transform: none !important;
+    transform: none !important
+}
+
+.modal-alert .modal-content {
+    background-color: rgba(0, 0, 0, .8);
+    border-radius: 0;
+    padding: 1.5rem 1rem 1rem
+}
+
+.modal-alert .modal-title {
+    font-size: 1.5rem;
+    font-weight: 300;
+    display: -webkit-box;
+    display: -ms-flexbox;
+    display: flex;
+    -webkit-box-align: center;
+    -ms-flex-align: center;
+    align-items: center;
+    -ms-flex-wrap: wrap;
+    flex-wrap: wrap
+}
+
+.modal-alert .modal-body,
+.modal-alert .modal-footer,
+.modal-alert .modal-header {
+    width: 100%;
+    max-width: 992px;
+    margin: 0 auto;
+    padding: 0;
+    color: #fff;
+    position: relative
+}
+
+.modal-alert .close {
+    color: #fff;
+    text-shadow: 0 1px 0 #000
+}
+
+// .modal-transparent .modal-content {
+//     -webkit-box-shadow: 0 1px 15px 1px rgba(86,61,124,.3);
+//     box-shadow: 0 1px 15px 1px rgba(86,61,124,.3)
+// }
+
+// .modal-transparent .modal-content {
+//     background: rgba(40,36,47,.85)
+// }
+
+.modal-backdrop-transparent {
+    background: 0 0
+}
+
+// .modal-fullscreen {
+//     padding: 0!important;
+
+//     .btn-close-position {
+//         position: absolute;
+//         top: 0;
+//         right: 0;
+//         margin: 0.5rem;
+//         z-index: 1000;
+//     }
+// }
+
+// .modal-fullscreen .modal-content {
+//     border-radius: 0;
+//     border-width: 0
+// }
+
+// .modal-fullscreen .modal-dialog {
+//     max-width: calc(100vw - 40px);
+//     max-height: calc(100vh - 80px)
+// }
+
+// .modal-fullscreen .modal-dialog .modal-content {
+//     height: calc(100vh - 80px)
+// }
+
+.modal-dialog-bottom,
+.modal-dialog-top {
+    position: absolute;
+    top: 0;
+    margin: 0;
+    min-width: 100%
+}
+
+.modal-dialog-bottom .modal-dialog,
+.modal-dialog-top .modal-dialog {
+    width: 100%;
+    max-width: 100%;
+    margin: 0
+}
+
+.modal-dialog-bottom .modal-content,
+.modal-dialog-top .modal-content {
+    border-radius: 0;
+    border: 0
+}
+
+.modal-dialog-bottom {
+    top: auto;
+    bottom: 0
+}
+
+.modal.fade .modal-dialog-bottom {
+    transform: translate(0, 25%)
+}
+
+.modal-dialog-start {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0 !important
+}
+
+.modal-dialog-start .modal-content {
+    min-height: 100%;
+    border-width: 0;
+    border-radius: 0
+}
+
+.modal.fade .modal-dialog-start {
+    transform: translate(-25%, 0)
+}
+
+.modal-dialog-end {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0 !important;
+    border-width: 0
+}
+
+.modal-dialog-end .modal-content {
+    min-height: 100%;
+    border-width: 0;
+    border-radius: 0
+}
+
+.modal.fade .modal-dialog-end {
+    transform: translate(25%, 0)
+}
+
+.modal.show .modal-dialog {
+    transform: translate(0, 0)
+}
+
+.modal-md {
+    max-width: 21.875rem; //350px
+}
+
+//modal backdrop
+.modal-backdrop {
+    --bs-backdrop-opacity: 0.4;
+}
+
+//it's a hack... not very proud of it... but it works
+.modal.modal-static .modal-dialog {
+    transform: scale(1.02) !important;
+}

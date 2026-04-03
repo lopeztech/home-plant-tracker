@@ -1,0 +1,48 @@
+//
+// Theme overrides for Bootstrap card colors
+//
+
+.card {
+  --#{$prefix}card-title-color: #{$card-title-color};
+  --#{$prefix}card-subtitle-color: #{$card-subtitle-color};
+  --#{$prefix}card-border-color: #{$card-border-color};
+  --#{$prefix}card-cap-bg: #{$card-cap-bg};
+  --#{$prefix}card-cap-color: #{$card-cap-color};
+  --#{$prefix}card-color: #{$card-color};
+  --#{$prefix}card-bg: #{$card-bg};
+
+  color: var(--#{$prefix}body-color);
+  background-color: var(--#{$prefix}card-bg);
+  border-color: var(--#{$prefix}card-border-color);
+}
+
+.card-body {
+  color: var(--#{$prefix}card-color);
+}
+
+.card-title {
+  color: var(--#{$prefix}card-title-color);
+}
+
+.card-subtitle {
+  color: var(--#{$prefix}card-subtitle-color);
+}
+
+.card-header {
+  color: var(--#{$prefix}card-cap-color);
+  background-color: var(--#{$prefix}card-cap-bg);
+  border-color: var(--#{$prefix}card-border-color);
+}
+
+.card-footer {
+  color: var(--#{$prefix}card-cap-color);
+  background-color: var(--#{$prefix}card-cap-bg);
+  border-color: var(--#{$prefix}card-border-color);
+}
+
+.card-header-tabs {
+  .nav-link.active {
+    background-color: var(--#{$prefix}card-bg);
+    border-bottom-color: var(--#{$prefix}card-bg);
+  }
+}

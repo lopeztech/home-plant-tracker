@@ -1,0 +1,9 @@
+.set-rtl {
+	--direction: rtl;
+	direction: var(--direction);
+}
+
+[dir="rtl"] {
+	--direction: rtl;
+	direction: var(--direction);
+}

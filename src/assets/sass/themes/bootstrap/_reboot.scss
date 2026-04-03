@@ -1,0 +1,56 @@
+// Root color variables
+:root {
+  // Color variables are typically defined elsewhere in Bootstrap
+}
+
+// Body colors
+body {
+  color: var(--#{$prefix}body-color);
+  background-color: var(--#{$prefix}body-bg);
+}
+
+// Horizontal rule color
+hr {
+  color: $hr-color;
+  border-top-color: $hr-border-color;
+  opacity: $hr-opacity;
+}
+
+// Headings color
+%heading {
+  color: var(--#{$prefix}heading-color);
+}
+
+// Mark element colors
+mark {
+  color: var(--#{$prefix}highlight-color);
+  background-color: var(--#{$prefix}highlight-bg);
+}
+
+// Link colors
+a {
+  color: rgba(var(--#{$prefix}link-color-rgb), var(--#{$prefix}link-opacity, 1));
+  
+  &:hover {
+    --#{$prefix}link-color-rgb: var(--#{$prefix}link-hover-color-rgb);
+  }
+}
+
+// Code elements
+code {
+  color: var(--#{$prefix}code-color);
+}
+
+pre {
+  color: $pre-color;
+}
+
+kbd {
+  color: $kbd-color;
+  background-color: $kbd-bg;
+}
+
+// Table caption color
+caption {
+  color: $table-caption-color;
+}

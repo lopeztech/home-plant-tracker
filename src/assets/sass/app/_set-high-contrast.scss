@@ -1,0 +1,87 @@
+.set-high-contrast-mode[data-bs-theme="light"] {
+    --bs-body-color: #000;
+    --input-placeholder-color: #000;
+    --app-nav-link-color: #000;
+    --app-nav-link-hover-color: #000;
+    --app-nav-border-color: #000;
+
+    --bs-primary-text-emphasis: #000;
+    --bs-success-text-emphasis: #000;
+    --bs-danger-text-emphasis: #000;
+    --bs-warning-text-emphasis: #000;
+    --bs-info-text-emphasis: #000;
+    --bs-light-text-emphasis: #fff;
+    --bs-dark-text-emphasis: #000;
+
+    .panel.panel-icon .panel-toolbar .btn-panel .sa-icon {
+        stroke: #000 !important;
+    }
+
+    .panel.panel-icon .panel-toolbar .btn-panel {
+        --sa-icon-hover-fill-opacity: 1;
+    }
+
+    .primary-nav {
+        --app-nav-link-active-color: #fff;
+        --app-nav-item-active-indicator: #fff;
+        --app-nav-item-active-bg: #000;
+    }
+
+    --bs-border-color: #b1b1b1;
+    --app-layout-border-color: rgba(0, 0, 0, 0.17);
+    --app-panel-border-color: #b1b1b1;
+    --app-panel-border-bottom: #b1b1b1;
+    --bs-info-border-color: #b1b1b1;
+    --collapse-icon-border: #000;
+
+    .list-group {
+        --bs-list-group-border-color: #b1b1b1;
+    }
+
+    
+    --row-grid-line-rgb: 0, 0, 0;
+    --row-grid-opacity: 0.17;
+    
+
+    .chat-segment-get .chat-message {
+        background: #000 !important;
+        color: #fff;
+    }
+
+    table {
+        --bs-table-border-color: #000;
+    }
+
+    .sa-icon {
+        --sa-icon-color: #000;
+    }
+
+    .text-muted,
+    .frame-heading {
+        color: #000 !important;
+    }
+    
+    .btn-default {
+        --btn-color: #000;
+        --btn-border-color: #000;
+        --btn-hover-border-color: #000;
+    }
+
+    [class^="bg-opacity-"],
+    [class*=" bg-opacity-"] {
+        --bs-bg-opacity: 1;
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+

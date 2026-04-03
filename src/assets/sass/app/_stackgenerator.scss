@@ -1,0 +1,272 @@
+.grid-background,
+.grid-background-dark {
+    --background-color: #ffffff;
+    --background-image-color: 0, 0, 0;
+    --background-size: 40px;
+
+    background: var(--background-color);
+    background-image: linear-gradient(rgba(var(--background-image-color), .1) 1px, transparent 1px), linear-gradient(90deg, rgba(var(--background-image-color), .1) 1px, transparent 1px);
+    background-size: var(--background-size) var(--background-size);
+    background-position: center center;
+}
+
+.grid-background-dark {
+    --background-color: #333333;
+    --background-image-color: 255, 255, 255;
+}
+
+
+#my-icon {
+    &:empty {
+        display: none;
+
+        &+.empty-msg {
+            display: block !important;
+        }
+    }
+}
+
+#stackgenerator-container {
+    //border: 1px solid #d2d2d2;
+
+    &.icon-zoom-1 {
+        --background-size: 42px;
+
+        #my-icon {
+            scale: 1.5;
+        }
+    }
+
+    &.icon-zoom-2 {
+        --background-size: 44px;
+
+        #my-icon {
+            scale: 2;
+        }
+    }
+
+    &.icon-zoom-3 {
+        --background-size: 46px;
+
+        #my-icon {
+            scale: 2.5;
+        }
+    }
+
+    &.icon-zoom-4 {
+        --background-size: 48px;
+
+        #my-icon {
+            scale: 3;
+        }
+    }
+
+    &.icon-zoom-5 {
+        --background-size: 50px;
+
+        #my-icon {
+            scale: 3.5;
+        }
+    }
+
+    &.icon-zoom-6 {
+        --background-size: 52px;
+
+        #my-icon {
+            scale: 4;
+        }
+    }
+
+    &.icon-zoom-7 {
+        --background-size: 54px;
+
+        #my-icon {
+            scale: 4.5;
+        }
+    }
+
+    &.icon-zoom-8 {
+        --background-size: 56px;
+
+        #my-icon {
+            scale: 5;
+        }
+    }
+
+    &.icon-zoom-9 {
+        --background-size: 58px;
+
+        #my-icon {
+            scale: 5.5;
+        }
+    }
+
+    &.icon-zoom-10 {
+        --background-size: 60px;
+
+        #my-icon {
+            scale: 6;
+        }
+    }
+
+    &.icon-zoom-11 {
+        --background-size: 62px;
+
+        #my-icon {
+            scale: 6.5;
+        }
+    }
+
+    &.icon-zoom-12 {
+        --background-size: 64px;
+
+        #my-icon {
+            scale: 7;
+        }
+    }
+
+    &.icon-zoom-13 {
+        --background-size: 66px;
+
+        #my-icon {
+            scale: 7.5;
+        }
+    }
+
+    &.icon-zoom-14 {
+        --background-size: 68px;
+
+        #my-icon {
+            scale: 8;
+        }
+    }
+
+    &.icon-zoom-15 {
+        --background-size: 70px;
+
+        #my-icon {
+            scale: 8.5;
+        }
+    }
+
+    #my-icon {
+        font-size: 4.1em;
+    }
+
+    // #my-icon {
+    //     position: relative;
+    //     background: #ed1c24;
+    //     width: auto;
+    //     height: auto;
+    //     display: flex;
+    //     align-items: center;
+    //     justify-content: center;
+
+    //     .icon-layers {
+    //         position: absolute;
+    //     }
+
+    // }
+
+
+
+    .icon-settings {
+        .badge-icon {
+            font-size: 10px;
+            min-width: unset;
+            max-width: unset;
+            width: 60px;
+            height: 16px;
+            overflow: hidden;
+            padding: 0;
+            position: absolute;
+            left: -6px;
+            bottom: -2px;
+            border-radius: 0;
+            opacity: 1;
+            background: none;
+            color: var(--bs-body-color);
+            font-weight: 300;
+            text-align: center;
+            border: none;
+            box-shadow: none;
+        }
+
+        .drag-handle {
+            position: absolute;
+            width: 15px;
+            height: 100%;
+            top: 0;
+            right: 0;
+            border-radius: 0;
+            border: 0;
+            border-left: 1px solid rgba(0, 0, 0, 0.1);
+            background: var(--warning-50);
+        }
+    }
+}
+
+#iconList {
+    overflow-y: auto;
+
+    .js-showcase-icon {
+        min-height: 90px;
+    }
+
+    .js-showcase-icon.has-svg {
+        .sa-icon {
+            width: 40px;
+            height: 40px;
+        }
+
+        &:not(:hover) {
+            .sa-icon {
+                fill: rgba(var(--bs-emphasis-color-rgb), 0.1);
+                stroke: rgba(var(--bs-emphasis-color-rgb), 0.8);
+            }
+        }
+
+    }
+}
+
+#iconList.stack-demo {
+
+    small,
+    .small {
+        font-size: 0.755em;
+    }
+
+    .js-showcase-icon.has-svg {
+        height: 85px;
+    }
+
+    .js-showcase-icon {
+        height: 85px;
+        min-height: 90px;
+    }
+}
+
+#stack-control {
+    position: absolute;
+    right: 20px;
+    top: 70px;
+    width: 286px;
+
+    .stack-icon-preview {
+        width: 58px;
+        height: 58px;
+        font-size: 2.25rem;
+        color: #d1d1d1;
+        padding-bottom: 10px;
+
+        .sa-icon {
+            width: 2.25rem;
+            height: 2.25rem;
+        }
+    }
+
+    .control-panel-content {
+        background: var(--bs-body-bg, #fcfcfc);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+}

@@ -1,0 +1,42 @@
+.js-filter-hide {
+    display: none;
+}
+
+.js-filter-show {
+    display: block;
+}
+
+//demo
+.suggestions-container {
+    font-size: 0.9rem;
+    color: #666;
+}
+.suggest-title {
+    color: #999;
+    margin-right: 0.5rem;
+}
+.suggestion {
+    color: rgba(var(--bs-link-color-rgb));
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background-color 0.2s;
+}
+.suggestion:hover {
+    background-color: rgba(33, 150, 243, 0.1);
+    color: rgba(var(--bs-link-hover-color-rgb));
+}
+
+.did-you-mean {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 0.25rem;
+    
+    a {
+        color: #2196F3;
+        text-decoration: none;
+        
+        &:hover {
+            text-decoration: underline;
+        }
+    }
+}

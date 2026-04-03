@@ -1,0 +1,20 @@
+.toast {
+  // scss-docs-start toast-css-vars
+  --#{$prefix}toast-color: #{$toast-color};
+  --#{$prefix}toast-bg: #{$toast-background-color};
+  --#{$prefix}toast-border-color: #{$toast-border-color};
+  --#{$prefix}toast-header-color: #{$toast-header-color};
+  --#{$prefix}toast-header-bg: #{$toast-header-background-color};
+  --#{$prefix}toast-header-border-color: #{$toast-header-border-color};
+  // scss-docs-end toast-css-vars
+
+  color: var(--#{$prefix}toast-color);
+  background-color: var(--#{$prefix}toast-bg);
+  border-color: var(--#{$prefix}toast-border-color);
+}
+
+.toast-header {
+  color: var(--#{$prefix}toast-header-color);
+  background-color: var(--#{$prefix}toast-header-bg);
+  border-bottom-color: var(--#{$prefix}toast-header-border-color);
+}

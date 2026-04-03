@@ -1,0 +1,18 @@
+//
+// Type color styles only
+//
+
+//
+// Mark color
+//
+.mark {
+  color: var(--#{$prefix}highlight-color);
+  background-color: var(--#{$prefix}highlight-bg);
+}
+
+//
+// Blockquote color
+//
+.blockquote-footer {
+  color: $blockquote-footer-color;
+}

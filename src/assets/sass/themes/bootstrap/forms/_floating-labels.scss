@@ -1,0 +1,29 @@
+.form-floating {
+  > .form-control:focus,
+  > .form-control:not(:placeholder-shown),
+  > .form-control-plaintext,
+  > .form-select {
+    ~ label {
+      color: rgba(var(--#{$prefix}body-color-rgb), #{$form-floating-label-opacity});
+
+      &::after {
+        background-color: $input-bg;
+      }
+    }
+  }
+
+  > .form-control:-webkit-autofill {
+    ~ label {
+      color: rgba(var(--#{$prefix}body-color-rgb), #{$form-floating-label-opacity});
+    }
+  }
+
+  > :disabled ~ label,
+  > .form-control:disabled ~ label {
+    color: $form-floating-label-disabled-color;
+
+    &::after {
+      background-color: $input-disabled-bg;
+    }
+  }
+}

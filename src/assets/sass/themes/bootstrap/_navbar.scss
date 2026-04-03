@@ -1,0 +1,83 @@
+// Navbar
+.navbar {
+  // scss-docs-start navbar-css-vars
+  --#{$prefix}navbar-color: #{$navbar-light-color};
+  --#{$prefix}navbar-hover-color: #{$navbar-light-hover-color};
+  --#{$prefix}navbar-disabled-color: #{$navbar-light-disabled-color};
+  --#{$prefix}navbar-active-color: #{$navbar-light-active-color};
+  --#{$prefix}navbar-brand-color: #{$navbar-light-brand-color};
+  --#{$prefix}navbar-brand-hover-color: #{$navbar-light-brand-hover-color};
+  --#{$prefix}navbar-toggler-border-color: #{$navbar-light-toggler-border-color};
+  --#{$prefix}navbar-toggler-icon-bg: #{escape-svg($navbar-light-toggler-icon-bg)};
+  // scss-docs-end navbar-css-vars
+}
+
+// Navbar brand
+.navbar-brand {
+  color: var(--#{$prefix}navbar-brand-color);
+
+  &:hover,
+  &:focus {
+    color: var(--#{$prefix}navbar-brand-hover-color);
+  }
+}
+
+// Navbar nav
+.navbar-nav {
+  // scss-docs-start navbar-nav-css-vars
+  --#{$prefix}nav-link-color: var(--#{$prefix}navbar-color);
+  --#{$prefix}nav-link-hover-color: var(--#{$prefix}navbar-hover-color);
+  --#{$prefix}nav-link-disabled-color: var(--#{$prefix}navbar-disabled-color);
+  // scss-docs-end navbar-nav-css-vars
+
+  .nav-link {
+    &.active,
+    &.show {
+      color: var(--#{$prefix}navbar-active-color);
+    }
+  }
+}
+
+// Navbar text
+.navbar-text {
+  color: var(--#{$prefix}navbar-color);
+
+  a,
+  a:hover,
+  a:focus  {
+    color: var(--#{$prefix}navbar-active-color);
+  }
+}
+
+// Navbar toggler
+.navbar-toggler {
+  color: var(--#{$prefix}navbar-color);
+  border-color: var(--#{$prefix}navbar-toggler-border-color);
+}
+
+.navbar-toggler-icon {
+  background-image: var(--#{$prefix}navbar-toggler-icon-bg);
+}
+
+// Navbar themes
+.navbar-dark,
+.navbar[data-bs-theme="dark"] {
+  // scss-docs-start navbar-dark-css-vars
+  --#{$prefix}navbar-color: #{$navbar-dark-color};
+  --#{$prefix}navbar-hover-color: #{$navbar-dark-hover-color};
+  --#{$prefix}navbar-disabled-color: #{$navbar-dark-disabled-color};
+  --#{$prefix}navbar-active-color: #{$navbar-dark-active-color};
+  --#{$prefix}navbar-brand-color: #{$navbar-dark-brand-color};
+  --#{$prefix}navbar-brand-hover-color: #{$navbar-dark-brand-hover-color};
+  --#{$prefix}navbar-toggler-border-color: #{$navbar-dark-toggler-border-color};
+  --#{$prefix}navbar-toggler-icon-bg: #{escape-svg($navbar-dark-toggler-icon-bg)};
+  // scss-docs-end navbar-dark-css-vars
+}
+
+@if $enable-dark-mode {
+  @include color-mode(dark) {
+    .navbar-toggler-icon {
+      --#{$prefix}navbar-toggler-icon-bg: #{escape-svg($navbar-dark-toggler-icon-bg)};
+    }
+  }
+}

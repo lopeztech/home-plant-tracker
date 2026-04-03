@@ -1,0 +1,55 @@
+@mixin form-validation-state-selector($state) {
+  @if ($state == "valid" or $state == "invalid") {
+    .was-validated #{if(&, "&", "")}:#{$state},
+    #{if(&, "&", "")}.is-#{$state} {
+      @content;
+    }
+  } @else {
+    #{if(&, "&", "")}.is-#{$state} {
+      @content;
+    }
+  }
+}
+
+@mixin form-validation-state(
+  $state,
+  $color,
+  $tooltip-color: color-contrast($color),
+  $tooltip-bg-color: rgba($color, $form-feedback-tooltip-opacity),
+  $border-color: $color
+) {
+  .#{$state}-feedback {
+    color: $color;
+  }
+
+  .#{$state}-tooltip {
+    color: $tooltip-color;
+    background-color: $tooltip-bg-color;
+  }
+
+  .form-control {
+    @include form-validation-state-selector($state) {
+      border-color: $border-color;
+    }
+  }
+
+  .form-select {
+    @include form-validation-state-selector($state) {
+      border-color: $border-color;
+    }
+  }
+
+  .form-check-input {
+    @include form-validation-state-selector($state) {
+      border-color: $border-color;
+
+      &:checked {
+        background-color: $color;
+      }
+
+      ~ .form-check-label {
+        color: $color;
+      }
+    }
+  }
+}

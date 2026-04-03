@@ -1,0 +1,79 @@
+//
+// Theme overrides for Bootstrap carousel colors
+//
+
+.carousel-control-prev,
+.carousel-control-next {
+    color: $carousel-control-color;
+
+    &:hover,
+    &:focus {
+        color: $carousel-control-color;
+    }
+}
+
+.carousel-control-prev {
+    background-image: if($enable-gradients, linear-gradient(90deg, rgba($black, .25), rgba($black, .001)), null);
+}
+
+.carousel-control-next {
+    background-image: if($enable-gradients, linear-gradient(270deg, rgba($black, .25), rgba($black, .001)), null);
+}
+
+.carousel-control-prev-icon {
+    background-image: escape-svg($carousel-control-prev-icon-bg) #{"/*rtl:" + escape-svg($carousel-control-next-icon-bg) + "*/"};
+}
+
+.carousel-control-next-icon {
+    background-image: escape-svg($carousel-control-next-icon-bg) #{"/*rtl:" + escape-svg($carousel-control-prev-icon-bg) + "*/"};
+}
+
+.carousel-indicators {    
+
+    [data-bs-target] {
+        background-color: $carousel-indicator-active-bg;
+    }
+}
+
+.carousel-caption {
+    color: $carousel-caption-color;
+}
+
+// Dark mode carousel
+@mixin carousel-dark() {
+
+    .carousel-control-prev-icon,
+    .carousel-control-next-icon {
+        filter: $carousel-dark-control-icon-filter;
+    }
+
+    .carousel-indicators [data-bs-target] {
+        background-color: $carousel-dark-indicator-active-bg;
+    }
+
+    .carousel-caption {
+        color: $carousel-dark-caption-color;
+    }
+}
+
+.carousel-dark {
+    @include carousel-dark();
+}
+
+@if $enable-dark-mode {
+    @include color-mode(dark) {
+        @if $color-mode-type =="media-query" {
+            .carousel {
+                @include carousel-dark();
+            }
+        }
+
+        @else {
+
+            .carousel,
+            &.carousel {
+                @include carousel-dark();
+            }
+        }
+    }
+}

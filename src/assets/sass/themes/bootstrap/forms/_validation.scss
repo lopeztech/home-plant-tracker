@@ -1,0 +1,22 @@
+@each $state, $data in $form-validation-states {
+  $color: map-get($data, color);
+  $icon: map-get($data, icon);
+
+  .#{$state}-feedback {
+    color: $color;
+  }
+
+  .form-control {
+    .was-validated &:#{$state},
+    &.is-#{$state} {
+      border-color: $color;
+    }
+  }
+
+  .form-check-input {
+    .was-validated &:#{$state},
+    &.is-#{$state} {
+      border-color: $color;
+    }
+  }
+}

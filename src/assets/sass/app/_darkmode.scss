@@ -1,0 +1,379 @@
+
+// Bootstrap's color definitions (used for form validation, etc.)
+$green-300: #75b798;
+$red-300: #ea868f;
+$yellow-800: #ffda6a;
+
+// Additional variables required by Bootstrap
+$link-shade-percentage: 20%; // Used for $link-hover-color-dark
+
+
+// Dark theme variables (replacing Bootstrap's dark mode vars)
+
+// Theme text variables
+$primary-text-emphasis-dark: tint-color($color-primary, 40%);
+$secondary-text-emphasis-dark: tint-color(map-get($theme-colors, 'secondary'), 40%);
+$success-text-emphasis-dark: tint-color($color-success, 40%);
+$info-text-emphasis-dark: tint-color($color-info, 40%);
+$warning-text-emphasis-dark: tint-color($color-warning, 40%);
+$danger-text-emphasis-dark: tint-color($color-danger, 40%);
+$light-text-emphasis-dark: map-get($grays, 100);
+$dark-text-emphasis-dark: map-get($grays, 300);
+
+// Theme background subtle variables
+$primary-bg-subtle-dark: shade-color($color-primary, 80%);
+$secondary-bg-subtle-dark: shade-color(map-get($theme-colors, 'secondary'), 80%);
+$success-bg-subtle-dark: shade-color($color-success, 80%);
+$info-bg-subtle-dark: shade-color($color-info, 80%);
+$warning-bg-subtle-dark: shade-color($color-warning, 80%);
+$danger-bg-subtle-dark: shade-color($color-danger, 80%);
+$light-bg-subtle-dark: map-get($grays, 800);
+$dark-bg-subtle-dark: mix(map-get($grays, 800), $color-black);
+
+// Theme border subtle variables
+$primary-border-subtle-dark: shade-color($color-primary, 40%);
+$secondary-border-subtle-dark: shade-color(map-get($theme-colors, 'secondary'), 40%);
+$success-border-subtle-dark: shade-color($color-success, 40%);
+$info-border-subtle-dark: shade-color($color-info, 40%);
+$warning-border-subtle-dark: shade-color($color-warning, 40%);
+$danger-border-subtle-dark: shade-color($color-danger, 40%);
+$light-border-subtle-dark: map-get($grays, 700);
+$dark-border-subtle-dark: map-get($grays, 800);
+
+// Body and global variables
+$body-color-dark: map-get($grays, 300);
+$body-bg-dark: map-get($grays, 900);
+$body-secondary-color-dark: rgba($body-color-dark, 0.75);
+$body-secondary-bg-dark: map-get($grays, 800);
+$body-tertiary-color-dark: rgba($body-color-dark, 0.5);
+$body-tertiary-bg-dark: mix(map-get($grays, 800), map-get($grays, 900), 50%);
+$body-emphasis-color-dark: $color-white;
+$border-color-dark: map-get($grays, 700);
+$border-color-translucent-dark: rgba($color-white, 0.15);
+$headings-color-dark: inherit;
+$link-color-dark: tint-color($color-primary, 40%);
+$link-hover-color-dark: shift-color($link-color-dark, -$link-shade-percentage);
+$code-color-dark: tint-color(map-get($grays, 600), 40%);
+$mark-color-dark: $body-color-dark;
+$mark-bg-dark: $yellow-800;
+
+// Forms
+$form-text-color-dark: map-get($grays, 400);
+$form-label-color-dark: $body-color-dark;
+
+$input-bg-dark: map-get($grays, 800);
+$input-disabled-bg-dark: map-get($grays, 700);
+$input-color-dark: $body-color-dark;
+$input-border-color-dark: map-get($grays, 600);
+$input-focus-bg-dark: map-get($grays, 800);
+$input-focus-border-color-dark: tint-color($color-primary, 50%);
+$input-focus-color-dark: $input-color-dark;
+$input-placeholder-color-dark: map-get($grays, 500);
+$input-plaintext-color-dark: $body-color-dark;
+$input-group-addon-color-dark: $body-color-dark;
+$input-group-addon-bg-dark: map-get($grays, 700);
+$input-group-addon-border-color-dark: $input-border-color-dark;
+
+$form-check-input-bg-dark: map-get($grays, 800);
+$form-check-input-border-dark: 1px solid map-get($grays, 600);
+$form-check-input-color-dark: $body-color-dark;
+$form-check-input-checked-color-dark: $color-white;
+$form-check-input-checked-bg-color-dark: $color-primary;
+$form-check-input-checked-bg-image-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='none' stroke='#{$form-check-input-checked-color-dark}' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='m6 10 3 3 6-6'/></svg>");
+$form-check-input-indeterminate-color-dark: $color-white;
+$form-check-input-indeterminate-bg-color-dark: $color-primary;
+$form-check-input-indeterminate-bg-image-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'><path fill='none' stroke='#{$form-check-input-indeterminate-color-dark}' stroke-linecap='round' stroke-linejoin='round' stroke-width='3' d='M6 10h8'/></svg>");
+$form-check-label-color-dark: $body-color-dark;
+$form-switch-color-dark: rgba($color-white, 0.25);
+$form-switch-bg-image-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'><circle r='3' fill='#{$form-switch-color-dark}'/></svg>");
+$form-switch-bg-dark: map-get($grays, 700);
+$form-switch-checked-color-dark: $color-white;
+$form-switch-checked-bg-image-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'><circle r='3' fill='#{$form-switch-checked-color-dark}'/></svg>");
+$form-switch-checked-bg-dark: $color-primary;
+$form-select-color-dark: $input-color-dark;
+$form-select-bg-dark: $input-bg-dark;
+$form-select-border-color-dark: $input-border-color-dark;
+$form-select-indicator-color-dark: $body-color-dark;
+$form-select-indicator-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='none' stroke='#{$form-select-indicator-color-dark}' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/></svg>");
+$form-select-bg-disabled-dark: map-get($grays, 700);
+$form-range-track-bg-dark: map-get($grays, 700);
+$form-range-track-border-dark: $border-color-dark;
+$form-range-thumb-bg-dark: $color-primary;
+$form-range-thumb-border-dark: $border-color-dark;
+$form-range-thumb-active-bg-dark: tint-color($color-primary, 20%);
+$form-file-button-color-dark: $input-color-dark;
+$form-file-button-bg-dark: map-get($grays, 700);
+$form-file-button-hover-bg-dark: map-get($grays, 600);
+
+$form-valid-color-dark: $green-300;
+$form-valid-border-color-dark: $green-300;
+$form-invalid-color-dark: $red-300;
+$form-invalid-border-color-dark: $red-300;
+
+
+//////
+// Accordion
+$accordion-color-dark: $body-color-dark;
+$accordion-bg-dark: $body-bg-dark;
+$accordion-border-color-dark: $border-color-dark;
+$accordion-button-color-dark: $body-color-dark;
+$accordion-button-bg-dark: $body-secondary-bg-dark;
+$accordion-button-active-bg-dark: $primary-bg-subtle-dark;
+$accordion-button-active-color-dark: $primary-text-emphasis-dark;
+$accordion-icon-color-dark: $primary-text-emphasis-dark;
+$accordion-icon-active-color-dark: $primary-text-emphasis-dark;
+$accordion-icon-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='#{$accordion-icon-color-dark}'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>");
+$accordion-button-icon-dark: $accordion-icon-dark;
+$accordion-button-active-icon-dark: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='#{$accordion-icon-active-color-dark}'><path fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/></svg>");
+
+// Additional variables that might be used by Bootstrap components
+$btn-link-color-dark: $link-color-dark;
+$btn-link-hover-color-dark: $link-hover-color-dark;
+$nav-tabs-border-color-dark: $border-color-dark;
+$nav-tabs-link-hover-border-color-dark: $border-color-dark;
+$nav-tabs-link-active-color-dark: $primary-text-emphasis-dark;
+$nav-tabs-link-active-bg-dark: $body-bg-dark;
+$nav-tabs-link-active-border-color-dark: $border-color-dark;
+
+
+// Dark theme overrides
+[data-bs-theme=dark] {
+    // Base theme colors
+    color-scheme: dark;
+    --bs-body-color: #{$body-color-dark};
+    --bs-body-color-rgb: #{red($body-color-dark)}, #{green($body-color-dark)}, #{blue($body-color-dark)};
+    --bs-body-bg: #{$body-bg-dark};
+    --bs-body-bg-rgb: #{red($body-bg-dark)}, #{green($body-bg-dark)}, #{blue($body-bg-dark)};
+    --bs-emphasis-color: #{$body-emphasis-color-dark};
+    --bs-emphasis-color-rgb: #{red($body-emphasis-color-dark)}, #{green($body-emphasis-color-dark)}, #{blue($body-emphasis-color-dark)};
+    --bs-secondary-color: #{$body-secondary-color-dark};
+    --bs-secondary-color-rgb: #{red($body-secondary-color-dark)}, #{green($body-secondary-color-dark)}, #{blue($body-secondary-color-dark)};
+    --bs-secondary-bg: #{$body-secondary-bg-dark};
+    --bs-secondary-bg-rgb: #{red($body-secondary-bg-dark)}, #{green($body-secondary-bg-dark)}, #{blue($body-secondary-bg-dark)};
+    --bs-tertiary-color: #{$body-tertiary-color-dark};
+    --bs-tertiary-color-rgb: #{red($body-tertiary-color-dark)}, #{green($body-tertiary-color-dark)}, #{blue($body-tertiary-color-dark)};
+    --bs-tertiary-bg: #{$body-tertiary-bg-dark};
+    --bs-tertiary-bg-rgb: #{red($body-tertiary-bg-dark)}, #{green($body-tertiary-bg-dark)}, #{blue($body-tertiary-bg-dark)};
+    --bs-primary-text-emphasis: #{$primary-text-emphasis-dark};
+    --bs-secondary-text-emphasis: #{$secondary-text-emphasis-dark};
+    --bs-success-text-emphasis: #{$success-text-emphasis-dark};
+    --bs-info-text-emphasis: #{$info-text-emphasis-dark};
+    --bs-warning-text-emphasis: #{$warning-text-emphasis-dark};
+    --bs-danger-text-emphasis: #{$danger-text-emphasis-dark};
+    --bs-light-text-emphasis: #{$light-text-emphasis-dark};
+    --bs-dark-text-emphasis: #{$dark-text-emphasis-dark};
+    --bs-primary-bg-subtle: #{$primary-bg-subtle-dark};
+    --bs-secondary-bg-subtle: #{$secondary-bg-subtle-dark};
+    --bs-success-bg-subtle: #{$success-bg-subtle-dark};
+    --bs-info-bg-subtle: #{$info-bg-subtle-dark};
+    --bs-warning-bg-subtle: #{$warning-bg-subtle-dark};
+    --bs-danger-bg-subtle: #{$danger-bg-subtle-dark};
+    --bs-light-bg-subtle: #{$light-bg-subtle-dark};
+    --bs-dark-bg-subtle: #{$dark-bg-subtle-dark};
+    --bs-primary-border-subtle: #{$primary-border-subtle-dark};
+    --bs-secondary-border-subtle: #{$secondary-border-subtle-dark};
+    --bs-success-border-subtle: #{$success-border-subtle-dark};
+    --bs-info-border-subtle: #{$info-border-subtle-dark};
+    --bs-warning-border-subtle: #{$warning-border-subtle-dark};
+    --bs-danger-border-subtle: #{$danger-border-subtle-dark};
+    --bs-light-border-subtle: #{$light-border-subtle-dark};
+    --bs-dark-border-subtle: #{$dark-border-subtle-dark};
+    --bs-border-color: #{$border-color-dark};
+    --bs-border-color-translucent: #{$border-color-translucent-dark};
+    --bs-headings-color: #{$headings-color-dark};
+    --bs-link-color: #{$link-color-dark};
+    --bs-link-hover-color: #{$link-hover-color-dark};
+    --bs-code-color: #{$code-color-dark};
+    --bs-mark-color: #{$mark-color-dark};
+    --bs-mark-bg: #{$mark-bg-dark};
+    --bs-form-select-indicator-color: #{$form-select-indicator-color-dark};
+    --bs-form-select-indicator: #{$form-select-indicator-dark};
+    --bs-form-switch-color: #{$form-switch-color-dark};
+    --bs-form-switch-bg-image: #{$form-switch-bg-image-dark};
+    --bs-form-valid-color: #{$form-valid-color-dark};
+    --bs-form-valid-border-color: #{$form-valid-border-color-dark};
+    --bs-form-invalid-color: #{$form-invalid-color-dark};
+    --bs-form-invalid-border-color: #{$form-invalid-border-color-dark};
+    --bs-accordion-icon-color: #{$accordion-icon-color-dark};
+    --bs-accordion-icon-active-color: #{$accordion-icon-active-color-dark};
+    --bs-accordion-button-icon: #{$accordion-button-icon-dark};
+    --bs-accordion-button-active-icon: #{$accordion-button-active-icon-dark};
+
+    // Component specific colors
+    --bs-border-color: #495057;
+    --bs-border-color-translucent: rgba(255, 255, 255, 0.15);
+    
+    // Navigation specific
+    --app-nav-link-color: #adb5bd;
+    --app-nav-link-hover-color: #59adff;
+    --app-nav-link-active-color: #fff;
+    --app-nav-title-color: #6c757d;
+    --app-nav-border-color: #495057;
+    --app-nav-item-hover-bg: rgba(255, 255, 255, 0.05);
+    --app-nav-item-active-bg: rgba(255, 255, 255, 0.05);
+    --app-nav-item-active-indicator: rgba(255, 255, 255, 0.9);
+    --app-nav-collapse-sign-color: var(--app-nav-link-color);
+
+    //app layout
+    --app-header-background: #272b30;
+    --app-nav-background: var(--app-header-background);
+    --app-drawer-background: var(--app-header-background);
+    --app-layout-border-color: var(--bs-border-color);
+    --app-content-background: #363c41; //#22262a
+
+    // Panel specific
+	--app-panel-bg: var(--app-header-background);
+    --app-panel-border-color: var(--bs-border-color);
+    --app-panel-border-bottom: var(--bs-border-color);  
+    --panel-tag-background: rgb(43 68 62);  
+    --panel-drag-bg: var(--app-content-background);
+
+    // Form elements
+    --bs-input-bg: #2b3035;
+    --bs-input-border-color: #495057;
+    --bs-input-color: var(--bs-body-color);
+    --bs-input-focus-bg: #2b3035;
+    --bs-input-focus-border-color: #86b7fe;
+    --bs-input-focus-color: var(--bs-emphasis-color);
+
+    // Scrollbar (for webkit browsers)
+    --app-scrollbar-bg: var(--bs-tertiary-bg);
+    --app-scrollbar-thumb: var(--bs-secondary-bg);
+    --app-scrollbar-thumb-hover: var(--bs-border-color);
+
+    // Additional UI elements
+    --app-card-bg: var(--bs-tertiary-bg);
+    --app-dropdown-bg: var(--bs-tertiary-bg);
+    --app-dropdown-border-color: var(--bs-border-color);
+    --app-dropdown-link-color: var(--bs-body-color);
+    --app-dropdown-link-hover-bg: var(--bs-secondary-bg);
+    --app-dropdown-link-hover-color: var(--bs-emphasis-color);
+
+    // Shadows
+    --app-shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.25);
+    --app-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.3);
+    --app-shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.35);
+
+    //breadcrumbs & header
+    --page-breadcrumbs-text-shadow: #000;
+    --page-subheader-text-shadow: #000;
+    --page-subheader-color: var(--bs-emphasis-color);
+
+    //info container
+    --bs-info-bg: rgb(69 59 31);
+    //--bs-info-color: #fff;
+    --bs-info-border-color: rgb(147 126 70);
+
+    //buttons
+    --btn-system-bg-opacity: 0.07;
+
+
+	//collapse icon
+	--collapse-icon-border: rgba(255, 255, 255, 0.3);
+    --collapse-icon-border-hover: rgba(var(--primary), 0.8);
+    --collapse-icon-width: 2.5rem;
+    --collapse-icon-height: 1.8rem;
+
+    //default link color
+    --bs-link-color-rgb: 110, 168, 254;
+    --bs-link-hover-color-rgb: 139, 185, 254;
+
+    .dropdown-menu {
+        --bs-dropdown-link-hover-color: var(--app-nav-link-hover-color);
+    }
+
+    //delete panel
+    #panelDeleteModal .modal-content {
+        border-color: var(--bs-border-color);
+    }
+    
+    //demo 
+    .grid-background {
+        --background-color: #333333;
+        --background-image-color: 255, 255, 255;
+    }
+    .grid-background-dark {
+        --background-color: #ffffff;
+        --background-image-color: 0, 0, 0;
+    }
+
+    .form-check-input {
+        --bs-form-check-bg: #727374;
+    }
+
+    .pagination {
+		--bs-pagination-focus-color: var(--bs-emphasis-color);
+		--bs-pagination-color: var(--bs-emphasis-color);
+	}
+
+    .app-logo {
+        &::before {
+            background-color: var(--bs-body-bg);
+        }
+        & > svg {
+            --logo-color: var(--primary-500);
+            color: rgb(225, 227, 229);
+        }
+    }
+
+    .card {
+        --bs-card-bg: var(--app-panel-bg);
+    }
+
+    .dropdown-menu {
+        --bs-dropdown-bg: #373b3f;
+        border: 1px solid var(--bs-border-color);
+    }
+
+    .accordion-button {
+        --bs-accordion-active-bg: rgba(var(--white), 0.04);
+
+        &::after {
+            filter: invert(90%) hue-rotate(180deg) brightness(1.2);
+        }
+    }
+
+    .nav-tabs {
+        --bs-nav-tabs-link-active-bg: var(--app-panel-bg);
+        --bs-nav-tabs-link-active-border-color: var(--bs-border-color) var(--bs-border-color) transparent;
+    }
+
+    .tooltip {
+        --bs-tooltip-color: #fff;
+    }
+
+
+    .modal-content {
+        --bs-modal-bg: #373b3f;
+        --bs-modal-border-color: var(--bs-border-color);
+        --bs-modal-header-color: #fff;
+        //box-shadow: 0 0 20px 0 rgb(0 0 0 / 50%);
+    }
+
+    .inverse-color {
+        filter: invert(90%) hue-rotate(180deg) brightness(1.2);
+    }
+
+    .popover:not([class*="primary-"],[class*="secondary-"],[class*="success-"],[class*="danger-"],[class*="warning-"],[class*="info-"],[class*="dark-"],[class*="light-"]) {
+        --bs-popover-border-color: rgba(0, 0, 0, 0.5);
+        --bs-popover-header-color: var(--bs-light);
+        --bs-popover-bg: rgba(0, 0, 0, 0.5);
+        --bs-popover-arrow-border: rgba(0, 0, 0, 0.5);
+    }
+
+    .btn-outline-secondary {
+        --bs-btn-color: var(--bs-body-color);
+    }
+
+    .btn-default {
+        --btn-background-color:  var(--bs-gray-300);
+        --btn-default-bg-top: rgba(var(--bs-body-bg-rgb), 0.85);
+        --btn-default-bg-bottom: rgba(var(--bs-body-bg-rgb), 1);
+        --btn-border-color: var(--fusion-700);
+        --btn-hover-border-color: var(--fusion-900);
+        --btn-color: rgba(var(--bs-light-rgb), 0.85);
+        --btn-hover-color: rgba(var(--bs-light-rgb), 1);
+        --btn-focus-color: rgba(var(--bs-light-rgb), 1);
+    }
+}
+  

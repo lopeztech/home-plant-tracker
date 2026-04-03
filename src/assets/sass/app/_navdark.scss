@@ -1,0 +1,148 @@
+//dark navigation
+.set-nav-dark:not([data-bs-theme="dark"]) {
+
+    // --app-nav-link-hover-color: #0d8aee;
+    //--app-nav-link-active-color: #0d8aee;
+    --app-nav-bg: var(--primary-900);
+    --app-nav-active-indicator: var(--warning-500);
+    --app-nav-collapse-sign-color: rgba(255, 255, 255, 0.5);
+    --app-nav-item-active-indicator: rgba(255, 255, 255, 0.5);
+    --app-nav-background: var(--app-nav-bg);
+    --app-content-background: rgba(var(--bs-primary-rgb), 0.04);
+
+    --app-nav-parent-fw: 500;
+
+
+
+    //confined in this scope to avoid affecting the default styles
+    .app-sidebar {
+        --app-nav-item-hover-bg: rgba(245, 245, 245, 0.045);
+        --app-nav-item-active-bg: rgba(255, 255, 255, 0.09);
+        --app-nav-link-active-color: rgba(255, 255, 255, 1);
+        --app-nav-border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .app-header,
+    .app-sidebar {
+        .app-logo {
+            --app-header-background: var(--app-nav-bg);
+
+            .custom-logo {
+                --logo-color: rgba(var(--white), 1);
+                --logo-color-fill: none;
+                color: #fff;
+            }
+
+            .logo-backdrop {
+                --bg-0: var(--app-nav-bg);
+                --bg-1: var(--app-nav-bg);
+                --blob-1: var(--info-500);
+                --blob-2: #f882e6;
+                --blob-3: var(--app-nav-bg);
+                --blob-4: var(--app-nav-bg);
+                opacity: 0.7;
+            }
+
+            &::before {
+                background: #2b3362;
+                color: #fff;
+            }
+        }
+    }
+
+    .app-header {
+        .app-logo {
+            //background: var(--app-nav-bg);
+            background-image: linear-gradient(270deg, rgba(var(--bs-info-rgb), 0.18), transparent);
+            background-color: var(--app-nav-bg);
+            background-repeat: repeat-y;
+            background-size: auto;
+            background-position: left top;
+        }
+    }
+
+    .app-sidebar {
+        //background: var(--app-nav-bg) !important;
+        background-image: linear-gradient(270deg, rgba(var(--bs-info-rgb), 0.18), transparent);
+        background-color: var(--app-nav-bg);
+        background-repeat: repeat-y;
+        background-size: auto;
+        background-position: left top;
+
+        #searchInput {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.9);
+            border-color: rgba(255, 255, 255, 0.3);
+            --bs-secondary-color: rgb(255 255 255 / 40%);
+
+            &:focus {
+                background-color: rgba(255, 255, 255, 0.08);
+                border-color: rgba(255, 255, 255, 0.5);
+                outline: 4px solid rgba(255, 255, 255, 0.1);
+            }
+        }
+
+        .info-container {
+            --bs-info-border-color: rgba(255, 255, 255, 0.3);
+            --bs-info-bg: rgba(255, 255, 255, 0.05);
+            --bs-info-color: rgba(255, 255, 255, 0.9);
+        }
+
+        .primary-nav {
+            .nav-title {
+                color: rgba(255, 255, 255, 0.6);
+            }
+
+            ul li a {
+                color: rgba(255, 255, 255, 0.6);
+
+                .sa-icon {
+                    fill: rgba(255, 255, 255, 0.2);
+                    stroke: rgba(255, 255, 255, 0.4);
+                    flex-shrink: 0;
+                }
+
+                &:hover {
+                    color: rgba(255, 255, 255, 0.9);
+
+                    .sa-icon {
+                        fill: rgba(255, 255, 255, 0.3);
+                        stroke: rgb(229, 232, 252);
+                    }
+                }
+
+            }
+
+            li.active.has-ul:not(.open)>a {
+                color: rgba(255, 255, 255, 0.9);
+            }
+
+            .nav-show-more .nav-more-link.showing-more,
+            .nav-show-more .nav-more-link {
+                color: rgba(255, 255, 255, 0.65);
+
+                &:hover {
+                    color: rgba(255, 255, 255, 0.9) !important;
+                }
+            }
+        }
+
+        .slimScrollBar {
+            --scrollbar-color: rgba(255, 255, 255, 0.8);
+            --scrollbar-hover-color: rgba(255, 255, 255, 1);
+        }
+
+
+    }
+}
+
+// .set-nav-dark:not([data-bs-theme="light"]) {
+//     .app-sidebar {
+//         --app-nav-background: var(--bs-primary-bg-subtle)
+//     }
+
+//     .app-header .app-logo {
+//         //--app-header-background: var(--bs-primary-bg-subtle);
+//         background-color: var(--bs-primary-bg-subtle);
+//     }
+// }

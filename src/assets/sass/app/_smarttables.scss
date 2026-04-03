@@ -1,0 +1,607 @@
+/* Sort indicators */
+
+.st-expand-btn {
+	display: inline-flex;
+    height: 20px;
+    width: 20px;
+    align-items: center;
+    justify-content: center;
+    line-height: 20px !important;
+    font-size: 1.4em !important;
+}
+
+// .expanded {
+// 	.st-expand-btn {
+// 		border-color: var(--danger-500) !important;
+// 		color: var(--danger-500) !important;
+
+// 		&:hover {
+// 			background-color: var(--danger-500) !important;
+// 			color: #fff !important;
+// 		}
+// 	}
+// }
+
+.st-wrapper { 
+	width:100%; 
+
+	.st-table {
+		border:1px solid var(--bs-border-color);
+	}
+
+	.pagination {
+		--bs-pagination-active-bg: var(--primary-500);
+		--bs-pagination-active-border-color: var(--primary-700);
+		--bs-pagination-focus-color: var(--bs-emphasis-color);
+		--bs-pagination-hover-color: var(--primary-500);
+		--bs-pagination-color: var(--bs-emphasis-color);
+	}
+
+	.st-search-wrapper {
+		position: relative;
+
+        .sa-icon {
+            --sa-icon-size: 1.1rem;
+            --sa-icon-color: rgb(155 155 155);
+            --sa-fill-opacity: 0.7;
+            --sa-icon-fill: rgb(255 255 255 / var(--sa-fill-opacity));
+            margin: 0 0.25rem;
+        }
+
+        .input-group:focus-within .input-group-text {
+            .sa-icon {
+                --sa-icon-color: rgb(255, 255, 255);
+                --sa-fill-opacity: 0.3;
+            }
+        }
+
+		// &::before {
+		// 	font-family: "smartadmin-icons";
+		// 	-moz-osx-font-smoothing: grayscale;
+		// 	-webkit-font-smoothing: antialiased;
+		// 	display: inline-block;
+		// 	font-style: normal;
+		// 	font-variant: normal;
+		// 	text-rendering: auto;
+		// 	line-height: 1;
+
+		// 	content: "\e090";
+		// 	position: absolute;
+		// 	top: 4px;
+		// 	left: 0;
+		// 	bottom: 0;
+		// 	width: 40px;
+		// 	font-size: 0.85rem;
+		// 	display: flex;
+		// 	align-items: center;
+		// 	justify-content: center;
+
+		// 	z-index: 1;
+			
+		// }
+		// &::after {
+		// 	content: "";
+		// 	position: absolute;
+		// 	top: 0;
+		// 	left: 0;
+		// 	bottom: 0;
+		// 	background-color: rgba(var(--bs-secondary-color-rgb), 0.07);
+		// 	width: 40px;
+		// 	border-radius: var(--bs-border-radius) 0 0 var(--bs-border-radius);
+		// 	border: 1px solid var(--bs-border-color);
+		// 	transition: border-color 0.15s ease-in-out, background-color 0.15s ease-in-out;
+		// }
+
+		// .st-search {
+		// 	padding-left: calc(40px + 0.75rem);
+		// 	line-height: 1.5rem;
+		// }
+
+		// &:has(.st-search:focus) {
+		// 	&::after {
+		// 		background-color: var(--primary-500);
+		// 		border-color: transparent;
+		// 	}
+		// 	&::before {
+		// 		color: #fff;
+		// 	}
+		// }
+	}
+
+}
+// .dtr-details { 
+// 	list-style: none; 
+// 	padding: 0; 
+// 	margin: 0;
+
+// 	display:flex;
+// 	flex-direction: column;
+// 	gap: 0.25rem;
+// }
+// .dtr-title { 
+// 	font-weight: 500; 
+// 	margin-right: 10px; 
+// 	min-width: 130px;
+//     display: inline-block;
+// }
+
+.st-wrapper .table { 
+	width: 100%; 
+}
+.st-wrapper .table td, 
+.st-wrapper .table th { 
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+
+
+//
+.st-sort-neutral,
+.st-sort-asc,
+.st-sort-desc {
+    position: relative;
+    padding-right: 1.5em !important;
+}
+
+// .st-sort-neutral::after,
+// .st-sort-asc::after,
+// .st-sort-desc::after {
+//     position: absolute;
+//     right: 0.5em;
+//     top: 50%;
+//     transform: translateY(-50%);
+//     content: '';
+//     width: 0;
+//     height: 0;
+// }
+
+.st-sort-neutral,
+.st-sort-asc,
+.st-sort-desc {
+    position: relative; /* Needed for positioning pseudo-elements */
+}
+
+.st-sort-asc,
+.st-sort-desc {
+	background-color: rgba(var(--primary), 0.05) !important;
+	border-bottom-color: var(--primary-500);
+}
+
+
+/* Down Arrow (pointing downward) using ::before */
+.st-sort-neutral::before,
+.st-sort-asc::before,
+.st-sort-desc::before {
+    content: "";
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+    border-top: 7px solid #ccc;
+    top: 55%;
+    right: 7px;
+}
+
+/* Up Arrow (pointing upward) using ::after */
+.st-sort-neutral::after,
+.st-sort-asc::after,
+.st-sort-desc::after {
+    content: "";
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 3px solid transparent;
+    border-right: 3px solid transparent;
+    border-bottom: 7px solid #ccc;
+    bottom: 55%;
+    right: 7px;
+}
+
+.st-sort-asc::after {
+	border-bottom-color: var(--primary-500);
+}
+
+.st-sort-desc::before {
+	border-top-color: var(--primary-500);
+}
+
+/* Sort column highlight */
+.st-sort-column {
+    background-color: rgba(var(--primary), 0.05) !important;
+}
+
+/* If you want to style alternating rows differently */
+.table-striped > tbody > tr:nth-of-type(odd) .st-sort-column {
+    background-color: rgba(var(--primary), 0.09) !important;
+}
+
+/* Loading overlay */
+.st-loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100%;
+    background-color: var(--app-content-background);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    transition: opacity 0.3s ease-out;
+}
+
+/* Loading state */
+.st-wrapper {
+    position: relative;
+    width: 100%;
+
+    &.st-loading {
+        min-height: 550px;
+        max-height: 550px;
+        overflow: hidden;
+        pointer-events: none;
+        
+        /* Background overlay */
+        &::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: var(--app-content-background);
+            z-index: 1000;
+        }
+        
+        /* Loading text */
+        &::before {
+            content: 'Initializing table, just a second...';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1001;
+            font-size: 0.875rem;
+            color: var(--bs-body-color);
+            white-space: nowrap;
+            padding-top: 40px; /* Space for the spinner */
+        }
+
+        /* Spinner - using a new element instead of pseudo-element */
+        .st-loading-spinner {
+            content: '';
+            position: absolute;
+            top: calc(50% - 30px);
+            left: 50%;
+            width: 30px;
+            height: 30px;
+            //margin: -15px 0 0 -15px;
+            border: 3px solid var(--primary-500);
+            border-top-color: transparent;
+            border-radius: 50%;
+            z-index: 1001;
+            animation: st-spin 0.6s linear infinite;
+        }
+
+        &.st-ajax-loading {
+            max-height: unset;
+            pointer-events: unset;
+
+            .st-loading-spinner {
+                width: 30px;
+                height: 30px;
+                // border: 3px solid transparent;
+                // border-top-color: var(--primary-600);
+                top: 50%;
+                left: 50%;
+                //transform: translate(-50%, -50%);
+            }
+
+            &::before {
+                content: none;
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                z-index: 1001;
+                font-size: 0.875rem;
+                color: var(--bs-body-color);
+                white-space: nowrap;
+                width: 200px;
+                height: 100px;
+                padding-top: 40px;
+                background: rgba(255, 255, 255, 0.5);
+                border: 1px solid #333;
+                border-radius: 0.25rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            &::after {
+                content: none;
+            }
+        }
+
+        .table {
+            opacity: 0.3;
+        }
+    }
+
+    .table {
+        transition: opacity 0.3s ease;
+    }
+}
+
+.st-spinner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes st-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* No results message */
+.st-no-results {
+    text-align: center;
+    padding: 2rem;
+    background-color: rgba(var(--info), 0.1);
+    border: none;
+    border-radius: 0.5rem;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+    justify-content: center;
+    
+    b {
+        color: var(--info-400);
+        font-weight: 600 !important;
+
+        word-wrap: break-word;
+        word-break: break-word;
+    }
+}
+
+//
+.st-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.st-table th, .st-table td {
+    padding: 0.5rem 0.75rem; /* Reduced padding */
+    white-space: nowrap; /* Prevent text wrapping */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.st-table th {
+    position: relative;
+    font-weight: 600;
+}
+
+.st-table td:first-child {
+    position: relative;
+
+    &:has(.st-expand) {
+        cursor: pointer;
+    }
+
+}
+
+.st-table td:first-child.st-expand::before,
+.st-table td:first-child.st-expand-active::before {
+    content: '+';
+    font-weight: 300;
+    font-size: 12px;
+    position: absolute;
+    color: var(--bs-body-color);
+    background-color: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    top: 6px;
+    left: 0.5rem;
+    bottom: 6px;
+    width: 1rem;
+    border-radius: 0.25rem;
+    box-shadow: 0 1px 2px 0 rgba(var(--bs-body-color-rgb), 0.1);
+}
+
+.st-table td:first-child.st-expand-active::before {
+    content: '-';
+    background: var(--primary-500);
+    border-color: var(--primary-700);
+    color: #fff;
+    box-shadow: 0 1px 2px 0 rgba(var(--bs-primary-rgb), 0.1);
+}
+
+.st-expand {
+    padding-left: calc(0.5rem + 1rem + 0.75rem) !important;
+}
+
+.st-child-row {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+.st-child-content {
+    padding: 0 !important;
+}
+
+.st-hidden-columns {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem 0.5rem 0.5rem calc(0.5rem + 1rem + 0.75rem);
+    position: relative;
+
+    &::before {
+        content: '';
+        position: absolute;
+        border-left: 1px dashed var(--primary-700);
+        display: block;
+        top: 0;
+        bottom: 0;
+        left: 1rem;
+        z-index: 1;
+    }
+}
+
+
+// hover effect to show both row and child row connection
+
+// tr.expanded > * {
+//     border-bottom-width: 0 !important;
+// }
+
+/* if table hover is active, show child row hover */
+
+.table-hover {
+    tr.expanded:hover {
+       & + .st-child-row {
+            --bs-table-bg-state: var(--bs-table-hover-bg);
+       }
+    }
+}
+
+.table-hover tr.expanded:has(+ .st-child-row:hover) {
+    --bs-table-bg-state: var(--bs-table-hover-bg);
+}
+
+
+//.set-nav-minified:not(.set-nav-collapsed) .app-header:has(+ .app-sidebar:hover) .app-logo 
+
+.st-hidden-column-item {
+    display: flex;
+    align-items: baseline;
+}
+
+.st-hidden-column-label {
+    font-weight: 600;
+    min-width: 140px;
+    display: inline-block;
+}
+
+.st-hidden-column-value {
+    flex: 1;
+}
+
+.st-loading {
+    position: relative;
+    min-height: 200px;
+}
+
+.st-loading-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    border-top-color: var(--primary-500);
+    animation: st-spin 1s linear infinite;
+    z-index: 1000;
+}
+
+@keyframes st-spin {
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+/* Optimize table for better space usage */
+.st-table.st-compact th, .st-table.st-compact td {
+    padding: 0.35rem 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Add truncation for long text */
+.st-table .st-truncate {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+//custom popovers inside table
+//remove padding
+.popover-body-p-0 {
+    .popover-body {
+        padding: 0;
+
+        img {
+            border-radius: var(--border-radius-uniform);
+        }
+    }
+}
+
+/* Date management css */
+.st-wrapper {
+    // tr.editing {
+    //     //background-color: rgba(0, 123, 255, 0.15) !important;
+    //     //transition: background-color 0.3s ease;
+    //     //box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5) !important;
+    // }
+
+    tr.editing td {
+        font-weight: bold;
+    }
+
+    tr.deleting {
+        background-color: var(--danger-900) !important;
+        opacity: 0.6;
+        transition: background-color 0.3s ease, opacity 0.3s ease;
+
+        td {
+            background: transparent !important;
+            color: #fff;
+        }
+    }
+
+    tr.saved {
+        background-image: linear-gradient(250deg, rgba(121, 250, 237, 0.7), transparent);
+        background-color: var(--success-50) !important;
+
+        td {
+            background: transparent !important;
+        }
+    }
+
+    tr.new-record {
+        animation: highlightNewRow 3s ease-in-out;
+
+        td {
+            background: transparent !important;
+        }
+    }
+}
+
+
+@keyframes highlightNewRow {
+    0%, 100% { background-color: transparent; }
+    30% { background-color: rgba(221, 233, 63, 0.2); }
+}
+
+@keyframes highlightSaved {
+    0%, 100% { background-color: transparent; }
+    30% { background-color: rgba(221, 233, 63, 0.2); }
+}

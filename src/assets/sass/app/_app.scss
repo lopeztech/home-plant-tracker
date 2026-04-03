@@ -1,0 +1,31 @@
+// content stuff
+.subheader-title {
+	font-size: 1rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	color: var(--page-subheader-color, var(--bs-body-color));
+	text-shadow: var(--page-subheader-text-shadow, #fff) 0 1px;
+	margin: 0;
+
+	&:not(:has(*)) {
+		margin-bottom: 2rem;
+	}
+
+	small {
+		color: var(--bs-body-color);
+		display: block;
+		margin: 0.25rem 0 2rem;
+		line-height: 2;
+		font-size: 1rem;
+		font-weight: 300;
+		align-items: center;
+	}
+
+	.badge-subheader {
+		font-size: 0.325em;
+		font-weight: 400;
+		text-shadow: none;
+		margin-left: 0.25rem;
+		margin-top: 0.25rem;
+	}
+}

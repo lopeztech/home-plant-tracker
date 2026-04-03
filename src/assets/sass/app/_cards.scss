@@ -1,0 +1,23 @@
+// cards
+.card, .card-group {
+    box-shadow: 0 0 13px 0 rgba(var(--bs-primary-rgb), .08);
+}
+//cards
+.card {
+    --bs-card-cap-padding-y: 1rem;
+    --bs-card-cap-padding-x: 1rem;
+    --bs-card-title-spacer-y: 0rem;
+    // .card-footer {
+    //     background: inherit;
+    // }
+
+}
+
+.card-group>.card {
+    box-shadow: none;
+}
+
+.list-group-item {
+    --bs-list-group-item-padding-x: 1.25rem;
+    --bs-list-group-item-padding-y: 0.75rem;
+}

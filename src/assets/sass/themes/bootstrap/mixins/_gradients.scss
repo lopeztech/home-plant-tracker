@@ -1,0 +1,42 @@
+// Base gradient background
+@mixin gradient-bg($color: null) {
+  background-color: $color;
+  @if $enable-gradients {
+    background-image: var(--#{$prefix}gradient);
+  }
+}
+
+// Horizontal gradient
+@mixin gradient-x($start-color, $end-color, $start-percent: 0%, $end-percent: 100%) {
+  background-image: linear-gradient(to right, $start-color $start-percent, $end-color $end-percent);
+}
+
+// Vertical gradient
+@mixin gradient-y($start-color, $end-color, $start-percent: null, $end-percent: null) {
+  background-image: linear-gradient(to bottom, $start-color $start-percent, $end-color $end-percent);
+}
+
+// Directional gradient
+@mixin gradient-directional($start-color, $end-color, $deg: 45deg) {
+  background-image: linear-gradient($deg, $start-color, $end-color);
+}
+
+// Three-color horizontal gradient
+@mixin gradient-x-three-colors($start-color, $mid-color, $color-stop: 50%, $end-color) {
+  background-image: linear-gradient(to right, $start-color, $mid-color $color-stop, $end-color);
+}
+
+// Three-color vertical gradient
+@mixin gradient-y-three-colors($start-color, $mid-color, $color-stop: 50%, $end-color) {
+  background-image: linear-gradient($start-color, $mid-color $color-stop, $end-color);
+}
+
+// Radial gradient
+@mixin gradient-radial($inner-color, $outer-color) {
+  background-image: radial-gradient(circle, $inner-color, $outer-color);
+}
+
+// Striped gradient
+@mixin gradient-striped($color: rgba($white, .15), $angle: 45deg) {
+  background-image: linear-gradient($angle, $color 25%, transparent 25%, transparent 50%, $color 50%, $color 75%, transparent 75%, transparent);
+}

@@ -1,0 +1,87 @@
+//
+// Theme overrides for Bootstrap colors
+//
+
+// Accordion color styles
+.accordion {
+  --#{$prefix}accordion-color: #{$accordion-color};
+  --#{$prefix}accordion-bg: #{$accordion-bg};
+  --#{$prefix}accordion-border-color: #{$accordion-border-color};
+  --#{$prefix}accordion-btn-color: #{$accordion-button-color};
+  --#{$prefix}accordion-btn-bg: #{$accordion-button-bg};
+  --#{$prefix}accordion-btn-icon: #{escape-svg($accordion-button-icon)};
+  --#{$prefix}accordion-btn-active-icon: #{escape-svg($accordion-button-active-icon)};
+  --#{$prefix}accordion-active-color: #{$accordion-button-active-color};
+  --#{$prefix}accordion-active-bg: #{$accordion-button-active-bg};
+}
+
+.accordion-button {
+  color: var(--#{$prefix}accordion-btn-color);
+  background-color: var(--#{$prefix}accordion-btn-bg);
+
+  &:not(.collapsed) {
+    color: var(--#{$prefix}accordion-active-color);
+    background-color: var(--#{$prefix}accordion-active-bg);
+  }
+
+  &::after {
+    background-image: var(--#{$prefix}accordion-btn-icon);
+  }
+
+  &:not(.collapsed)::after {
+    background-image: var(--#{$prefix}accordion-btn-active-icon);
+  }
+}
+
+.accordion-item {
+  color: var(--#{$prefix}accordion-color);
+  background-color: var(--#{$prefix}accordion-bg);
+  border-color: var(--#{$prefix}accordion-border-color);
+}
+
+// Alert color styles
+.alert {
+  --#{$prefix}alert-bg: transparent;
+  --#{$prefix}alert-color: inherit;
+  --#{$prefix}alert-border-color: transparent;
+  --#{$prefix}alert-link-color: inherit;
+
+  color: var(--#{$prefix}alert-color);
+  background-color: var(--#{$prefix}alert-bg);
+  border-color: var(--#{$prefix}alert-border-color);
+}
+
+.alert-heading {
+  color: inherit;
+}
+
+.alert-link {
+  color: var(--#{$prefix}alert-link-color);
+}
+
+// Alert contextual modifiers
+@each $state in map-keys($theme-colors) {
+  .alert-#{$state} {
+    --#{$prefix}alert-color: var(--#{$prefix}#{$state}-text-emphasis);
+    --#{$prefix}alert-bg: var(--#{$prefix}#{$state}-bg-subtle);
+    --#{$prefix}alert-border-color: var(--#{$prefix}#{$state}-border-subtle);
+    --#{$prefix}alert-link-color: var(--#{$prefix}#{$state}-text-emphasis);
+  }
+}
+
+// Badge color styles
+.badge {
+  --#{$prefix}badge-color: #{$badge-color};
+  color: var(--#{$prefix}badge-color);
+  @include gradient-bg();
+}
+
+// Dark mode accordion icon colors
+@if $enable-dark-mode {
+  @include color-mode(dark) {
+    .accordion-button::after {
+      --#{$prefix}accordion-btn-icon: #{escape-svg($accordion-button-icon-dark)};
+      --#{$prefix}accordion-btn-active-icon: #{escape-svg($accordion-button-active-icon-dark)};
+    }
+  }
+}

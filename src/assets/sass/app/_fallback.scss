@@ -1,0 +1,42 @@
+//this css targets contiues basic functionality of the design elements if user chooses to ditch Bootstrap CSS
+.button {
+	background-color: rgba(var(--primary), 1);
+    border: none;
+    color: white;
+    padding: 0.9375rem 1.25rem; //15px 20px
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 1rem; //16px
+    cursor: pointer;
+    width: 100%;
+    font-weight: 500;
+    border-radius: 0.625rem; //10px
+
+    &:hover {
+        background-color: rgba(var(--primary), 0.9);
+    }
+
+    &:active {
+        scale: .98;
+    }
+}
+
+//kind of like an alert
+.info-container {
+	padding: 1rem;
+    border: 1px dashed var(--bs-info-border-color, rgba(0,0,0, 0.1));
+    border-radius: 0.625rem; //10px
+    margin-bottom: 2rem;
+    font-size: 0.875rem; //14px
+    background: var(--bs-info-bg, rgba(var(--warning), 0.1));
+    color: var(--bs-info-color, var(--bs-body-color));
+}
+
+ol {
+	margin: 0; /* removes the default margin */
+	padding: 0; /* removes the default padding */
+	margin-left: 2.5rem; /* adds a left margin of 40px */
+}
+
+//

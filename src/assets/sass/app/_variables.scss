@@ -1,0 +1,283 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+
+//@import url('https://fonts.googleapis.com/css?family=Roboto:300,400,500,700,900');
+
+//theme colors
+//need some ideas? check out https://coolors.co/palettes/popular/5%20colors
+
+$color-primary: #886ab5;
+$color-success: #1dc9b7;
+$color-info: #2196F3;
+$color-warning: #ffc241;
+$color-danger: #fd3995;
+$color-fusion: darken(desaturate(adjust-hue($color-primary, 5), 80%), 25%) !default;
+$color-white: #fff;
+$color-black: #000;
+
+// Color Maps
+$theme-colors: (
+	'primary': $color-primary,
+	'success': $color-success,
+	'info': $color-info,
+	'warning': $color-warning,
+	'danger': $color-danger,
+	'fusion': $color-fusion,
+	'dark': $color-black,
+	'light': $color-white,
+	'secondary': #6c757d
+);
+
+
+$grid-breakpoints: (
+	xs: 0,
+	sm: 576px,
+	md: 768px,
+	lg: 992px,
+	xl: 1399px
+);
+
+$mobile-breakpoint-size: map-get($grid-breakpoints, lg) !default;
+
+// Grays
+$grays: (
+	100: #f8f9fa,
+	200: #e9ecef,
+	300: #dee2e6,
+	400: #ced4da,
+	500: #adb5bd,
+	600: #6c757d,
+	700: #495057,
+	800: #343a40,
+	900: #212529
+);
+
+
+// Mixed Bootstrap-like colors  
+$bs-blue: mix($color-info, $color-primary, 70%); // Dominantly blue with a hint of purple  
+$bs-indigo: adjust-hue($color-primary, 15deg); // Slightly adjusted purple  
+$bs-purple: mix($color-primary, $color-danger, 60%); // Balanced mix of purple and pink  
+$bs-pink: mix($color-danger, $color-success, 75%); // Mostly pink with a touch of green to soften it  
+$bs-red: mix($color-danger, $color-warning, 80%); // Mostly red, slightly warm tone  
+$bs-orange: mix($color-warning, $color-danger, 50%); // True mix of warm yellow and red  
+$bs-yellow: lighten($color-warning, 10%); // Slightly lighter yellow  
+$bs-green: mix($color-success, $color-warning, 60%); // Green with a warm touch  
+$bs-teal: mix($color-success, $color-info, 50%); // True teal by blending cyan-green and blue  
+$bs-cyan: mix($color-info, $color-success, 80%); // Dominantly blue but leans towards cyan  
+
+
+// Override Bootstrap's CSS variables
+:root {
+
+	// Main colors
+	--bs-blue: #{$bs-blue};
+	--bs-indigo: #{$bs-indigo};
+	--bs-purple: #{$bs-purple};
+	--bs-pink: #{$bs-pink};
+	--bs-red: #{$bs-red};
+	--bs-orange: #{$bs-orange};
+	--bs-yellow: #{$bs-yellow};
+	--bs-green: #{$bs-green};
+	--bs-teal: #{$bs-teal};
+	--bs-cyan: #{$bs-cyan};
+	--bs-black: #{$color-black};
+	--bs-white: #{$color-white};
+
+
+	@each $color-name, $color-value in $theme-colors {
+		--#{$color-name}-50: #{lighten($color-value, 25%)};
+		--#{$color-name}-100: #{lighten($color-value, 20%)};
+		--#{$color-name}-200: #{lighten($color-value, 15%)};
+		--#{$color-name}-300: #{lighten($color-value, 10%)};
+		--#{$color-name}-400: #{lighten($color-value, 5%)};
+		--#{$color-name}-500: #{$color-value};
+		--#{$color-name}-600: #{darken($color-value, 5%)};
+		--#{$color-name}-700: #{darken($color-value, 10%)};
+		--#{$color-name}-800: #{darken($color-value, 15%)};
+		--#{$color-name}-900: #{darken($color-value, 20%)};
+	}
+
+
+	// Theme Colors
+	@each $name, $value in $theme-colors {
+		// Base color
+		--bs-#{$name}: #{$value};
+
+		// RGB values for rgba() usage
+		--bs-#{$name}-rgb: #{red($value)},
+		#{green($value)},
+		#{blue($value)};
+
+		// Text emphasis colors
+		--bs-#{$name}-text-emphasis: #{darken($value, 30%)};
+
+		// Subtle background colors
+		--bs-#{$name}-bg-subtle: #{lighten($value, 30%)};
+
+		// Subtle border colors
+		--bs-#{$name}-border-subtle: #{lighten($value, 20%)};
+	}
+
+	// Grays
+	@each $level, $value in $grays {
+		--bs-gray-#{$level}: #{$value};
+	}
+
+	// Forms
+	--bs-form-valid-color: $color-success;
+	--bs-form-valid-border-color: $color-success;
+	--bs-form-invalid-color: $color-danger;
+	--bs-form-invalid-border-color: $color-danger;
+
+	// App navigation link colors
+	--app-nav-link-color: var(--bs-gray-800);
+	--app-nav-link-hover-color: #{darken($color-primary, 5%)};
+	--app-nav-link-active-color: #{darken($color-primary, 5%)};
+	--app-nav-title-color: #666666;
+	--app-nav-border-color: rgba(var(--secondary), 0.3);
+	--app-nav-item-hover-bg: #{rgba(red($color-primary), green($color-primary), blue($color-primary), 0.045)};
+	--app-nav-item-active-bg: rgba(var(--secondary), 0.07);
+	--app-nav-item-active-indicator: var(--app-nav-link-active-color);
+	--app-nav-collapse-sign-color: var(--bs-body-color);
+
+	// Links
+	--bs-link-color: #{$color-primary};
+	--bs-link-color-rgb: #{red($color-primary)},
+	#{green($color-primary)},
+	#{blue($color-primary)};
+	--bs-link-hover-color-rgb: #{red(darken($color-primary, 10%))},
+	#{green(darken($color-primary, 10%))},
+	#{blue(darken($color-primary, 10%))};
+	--bs-link-decoration: underline;
+	--bs-link-hover-color: darken($color-primary, 10%);
+	--bs-code-color: #{darken($color-danger, 15%)};
+	--bs-highlight-color: #212529;
+	--bs-highlight-bg: #fff3cd;
+
+
+
+	// App stuff
+	--app-header-height: 5.5rem;
+	--menu-width: 18rem;
+	--right-content-width: 20rem;
+	--menu-width-minified: 4.4rem;
+	--menu-top-height-minified: 4rem;
+	--menu-top-height: 6rem;
+	--drawer-width: 24rem;
+	--app-header-fixed: 0; //set value to --app-header-height if true
+	--app-nav-full: 0; //set value to --menu-width if true
+	--app-header-background: var(--bs-body-bg);
+	--app-nav-background: var(--bs-body-bg);
+	--app-drawer-background: var(--bs-body-bg);
+	--app-content-background: #fdfdfd;
+	--logo-width: 11rem; //176px
+	--logo-height: 2rem; //32px
+	--app-layout-border-color: rgba(0, 0, 0, 0.07);
+	// border colors
+	--bs-border-color-translucent: rgba(0, 0, 0, 0.1);
+	--bs-border-color: #dee2e6;
+
+	--app-nav-svgicon-size: 1.25rem;
+
+	//collapse icon
+	--collapse-icon-border: rgba(0, 0, 0, 0.3);
+	--collapse-icon-border-hover: rgba(var(--primary), 0.8);
+	--collapse-icon-width: 2.5rem;
+	--collapse-icon-height: 1.8rem;
+
+	// Convert theme colors to RGB values
+	--primary: #{red($color-primary)},
+	#{green($color-primary)},
+	#{blue($color-primary)};
+	--secondary: #{red(map-get($grays, 600))},
+	#{green(map-get($grays, 600))},
+	#{blue(map-get($grays, 600))};
+	--success: #{red($color-success)},
+	#{green($color-success)},
+	#{blue($color-success)};
+	--warning: #{red($color-warning)},
+	#{green($color-warning)},
+	#{blue($color-warning)};
+	--info: #{red($color-info)},
+	#{green($color-info)},
+	#{blue($color-info)};
+	--danger: #{red($color-danger)},
+	#{green($color-danger)},
+	#{blue($color-danger)};
+	--fusion: #{red($color-fusion)},
+	#{green($color-fusion)},
+	#{blue($color-fusion)};
+	--disable: #{red(map-get($grays, 500))},
+	#{green(map-get($grays, 500))},
+	#{blue(map-get($grays, 500))};
+	--white: #{red($color-white)},
+	#{green($color-white)},
+	#{blue($color-white)};
+
+	--font-family: 'Public Sans',
+	sans-serif;
+	--direction: ltr;
+	--transition: transform 470ms cubic-bezier(.34, 1.25, .3, 1);
+	--z-index-master: 999;
+	--z-index-slave: 2;
+
+	--content-padding: 1.25rem;
+	--menu-icon-size: 1.625rem;
+	--settings-disabled: 0.3;
+	--bs-body-color: #505050;
+	--bs-body-font-size: 0.925rem;
+
+	//forms
+	--bs-form-valid-border-color: #{$color-success};
+	--bs-form-invalid-border-color: #{$color-danger};
+	--bs-form-valid-color: #{$color-success};
+	--bs-form-invalid-color: #{$color-danger};
+	--input-placeholder-color: rgba(112, 112, 112, 0.5);
+	--bs-secondary-color: rgba(70, 79, 87, 0.70);
+
+	//custom non-js scrollbar width
+	--scrollbar-width: 8px;
+	--scrollbar-color: #f1f1f1;
+	--scrollbar-thumb: #888;
+	--scrollbar-thumb-hover: #555;
+
+	//icons buttons
+	--border-radius-uniform: 0.375rem; //button border radius 6px
+	--border-radius-uniform-sm: 0.25rem; //button border radius 4px
+	--border-radius-uniform-xs: 0.125rem; //button border radius 2px
+}
+
+.nav-pills {
+	--bs-nav-pills-link-active-bg: #{$color-primary};
+}
+
+.progress,
+.progress-stacked {
+	--bs-progress-bar-bg: #{$color-primary};
+}
+
+.list-group {
+	--bs-list-group-active-bg: #{$color-primary};
+	--bs-list-group-active-border-color: #{$color-primary};
+}
+
+.form-check-input:checked {
+	background-color: #{$color-primary};
+	border-color: #{$color-primary};
+}
+
+.form-check-input[type=checkbox]:indeterminate {
+	background-color: #{$color-primary};
+	border-color: #{$color-primary};
+}
+
+//list group
+.list-group-item.active {
+	background-color: var(--app-nav-item-active-bg);
+	color: var(--bs-body-color);
+}
+
+.list-group-item:hover {
+	color: var(--app-nav-link-hover-color);
+	background-color: var(--app-nav-item-hover-bg);
+}

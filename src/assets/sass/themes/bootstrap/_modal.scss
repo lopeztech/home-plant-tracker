@@ -1,0 +1,32 @@
+//
+// Theme overrides for Bootstrap modal colors
+//
+
+.modal {
+  --#{$prefix}modal-color: #{$modal-content-color};
+  --#{$prefix}modal-bg: #{$modal-content-bg};
+  --#{$prefix}modal-border-color: #{$modal-content-border-color};
+  --#{$prefix}modal-header-border-color: #{$modal-header-border-color};
+  --#{$prefix}modal-footer-bg: #{$modal-footer-bg};
+  --#{$prefix}modal-footer-border-color: #{$modal-footer-border-color};
+}
+
+.modal-content {
+  color: var(--#{$prefix}modal-color);
+  background-color: var(--#{$prefix}modal-bg);
+  border-color: var(--#{$prefix}modal-border-color);
+}
+
+.modal-header {
+  border-bottom-color: var(--#{$prefix}modal-header-border-color);
+}
+
+.modal-footer {
+  background-color: var(--#{$prefix}modal-footer-bg);
+  border-top-color: var(--#{$prefix}modal-footer-border-color);
+}
+
+.modal-backdrop {
+  --#{$prefix}backdrop-bg: #{$modal-backdrop-bg};
+  background-color: var(--#{$prefix}backdrop-bg);
+}

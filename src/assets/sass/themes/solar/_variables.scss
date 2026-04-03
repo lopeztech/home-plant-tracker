@@ -1,0 +1,60 @@
+// Theme color definitions
+$color-primary: #da8319;
+$color-success: #609b14;
+$color-info: #45afa6;
+$color-warning: #aaac59;
+$color-danger: #ff0000;
+$color-fusion: darken(desaturate(adjust-hue($color-primary, 5), 80%), 25%) !default; 
+$color-white: #fff;
+$color-black: #000; 
+
+
+// Color Maps
+$theme-colors: (
+  'primary': $color-primary,
+  'success': $color-success,
+  'info': $color-info,
+  'warning': $color-warning,
+  'danger': $color-danger,
+  'fusion': $color-fusion,
+  'dark': $color-black,
+  'light': $color-white,
+  'secondary': #6c757d
+);
+
+// Table variants
+$table-variants: (
+  "primary":    shift-color(map-get($theme-colors, 'primary'), -80%),
+  "secondary":  shift-color(map-get($theme-colors, 'secondary'), -80%),
+  "success":    shift-color(map-get($theme-colors, 'success'), -80%),
+  "info":       shift-color(map-get($theme-colors, 'info'), -80%),
+  "warning":    shift-color(map-get($theme-colors, 'warning'), -80%),
+  "danger":     shift-color(map-get($theme-colors, 'danger'), -80%),
+  "light":      map-get($theme-colors, 'light'),
+  "dark":       map-get($theme-colors, 'dark'),
+);
+
+// Grays
+$grays: (
+  100: #f8f9fa,
+  200: #e9ecef,
+  300: #dee2e6,
+  400: #ced4da,
+  500: #adb5bd,
+  600: #6c757d,
+  700: #495057,
+  800: #343a40,
+  900: #212529
+);
+
+// Mixed Bootstrap-like colors  
+$bs-blue: mix($color-info, $color-primary, 70%);
+$bs-indigo: adjust-hue($color-primary, 15deg);
+$bs-purple: mix($color-primary, $color-danger, 60%);
+$bs-pink: mix($color-danger, $color-success, 75%);
+$bs-red: mix($color-danger, $color-warning, 80%);
+$bs-orange: mix($color-warning, $color-danger, 50%);
+$bs-yellow: lighten($color-warning, 10%);
+$bs-green: mix($color-success, $color-warning, 60%);
+$bs-teal: mix($color-success, $color-info, 50%);
+$bs-cyan: mix($color-info, $color-success, 80%);

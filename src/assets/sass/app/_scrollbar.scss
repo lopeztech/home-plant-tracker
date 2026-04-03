@@ -1,0 +1,184 @@
+ // Global scrollbar design
+/* width */
+::-webkit-scrollbar {
+	width: var(--scrollbar-width, 8px); 
+}
+
+/* Track */
+::-webkit-scrollbar-track {
+	background: var(--scrollbar-color, var(--bs-body-bg));
+}
+
+/* Handle */
+::-webkit-scrollbar-thumb {
+	background: var(--scrollbar-thumb, rgba(var(--bs-body-color-rgb), 0.8));
+}
+
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+	background: var(--scrollbar-thumb-hover, rgba(var(--bs-body-color-rgb), 1));
+}
+
+
+//
+
+
+
+//slimscroll
+
+// .custom-scroll {
+// 	-webkit-overflow-scrolling: touch;
+//     scroll-behavior: smooth;
+// }
+
+.slimScrollBar {
+
+	--scrollbar-color: rgba(var(--bs-body-color-rgb), 0.8);
+	--scrollbar-hover-color: rgba(var(--bs-body-color-rgb), 1);
+
+
+	background: var(--scrollbar-color) !important;
+	cursor: default !important;
+	// -webkit-user-select: none;
+	// -moz-user-select: none;
+	// -ms-user-select: none;
+	user-select: none;
+	outline: 0.5px solid transparent;
+
+	transition: opacity 0.2s linear;
+    //-webkit-transition: opacity 0.2s linear;
+
+	//box-shadow: 0px 0px 2px 1px rgba(0, 0, 0, 0.15);
+	
+	&:hover {
+		//box-shadow: 0px 0px 4px 1px rgba(0, 0, 0, 0.25);
+		outline-color: var(--scrollbar-color);
+	}
+
+	&.dragging {
+		background: var(--scrollbar-hover-color) !important;
+		outline-color: var(--scrollbar-hover-color);
+	}
+
+	&::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: calc(100% + 10px);
+		height: calc(100% + 2px);
+		left: -5px;
+		opacity: 0;
+	}
+	
+}
+.slimScrollRail {
+	background: var(--bs-body-bg) !important;
+	cursor: default !important;
+	// -webkit-user-select: none;
+	// -moz-user-select: none;
+	// -ms-user-select: none;
+	user-select: none;
+	outline: 1px solid rgba(var(--bs-body-bg-rgb), 0.3);
+
+	&:hover {
+		opacity: 0.5 !important;
+	}
+	
+	&::after {
+		content: "";
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: calc(100% + 8px);
+		height: calc(100% + 2px);
+		left: -3px;
+		opacity: 0;
+	}
+}
+
+.slimScrollDiv {
+	// -webkit-user-select: none;
+	// -moz-user-select: none;
+	// -ms-user-select: none;
+	user-select: none;
+}
+
+
+
+/* slimscroll bug */
+.app-sidebar {
+	.slimScrollDiv {
+		width: var(--menu-width) !important;
+	}
+}
+//
+
+$trackPieceColor:                var(--bs-body-bg);
+$handleBar:                      rgba(var(--bs-body-color-rgb), 0.5);
+$handleBarHover:                 rgba(var(--bs-body-color-rgb), 0.8);
+$modalScrollSize:                4px;
+
+body:not(.no-slimscroll) .custom-scroll {
+    overflow: hidden;
+}
+
+.custom-scroll, 
+.custom-scrollbar {
+    overflow: hidden;
+    overflow-y: scroll;
+    -webkit-overflow-scrolling: touch;
+
+    &::-webkit-scrollbar {
+        height: $modalScrollSize;
+        width: $modalScrollSize;
+    }
+
+    &::-webkit-scrollbar:hover{
+    	background-color: $handleBarHover;
+    }
+
+    &::-webkit-scrollbar-track-piece {
+        background-color: $trackPieceColor;
+    }
+
+    &::-webkit-scrollbar-track-piece:hover {
+        background-color: var(--bs-body-bg);
+    }
+
+    &::-webkit-scrollbar-thumb:vertical {
+        background-color: $handleBar;
+    }
+
+    &::-webkit-scrollbar-thumb:vertical:hover {
+        background-color: $handleBarHover;
+    }
+}
+
+/* 
+ * Left Panel custom scroll
+ */
+
+.primary-nav::-webkit-scrollbar-track-piece {
+    background-color: var(--bs-body-bg);
+}
+
+.primary-nav::-webkit-scrollbar-thumb:vertical {
+    background-color: rgba(var(--bs-body-color-rgb), 0.8);
+}
+
+.primary-nav::-webkit-scrollbar-thumb:vertical:hover {
+	background-color: $handleBar;
+}
+
+.primary-nav::-webkit-scrollbar {
+    height: $modalScrollSize;
+    width: $modalScrollSize;
+}
+
+.primary-nav:hover::-webkit-scrollbar-corner {
+    width: 40px;
+}
+
+
+

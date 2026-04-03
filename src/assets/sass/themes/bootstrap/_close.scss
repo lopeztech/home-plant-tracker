@@ -1,0 +1,32 @@
+//
+// Theme overrides for Bootstrap close button colors
+//
+
+.btn-close {
+  --#{$prefix}btn-close-color: #{$btn-close-color};
+  --#{$prefix}btn-close-bg: #{escape-svg($btn-close-bg)};
+  --#{$prefix}btn-close-white-filter: #{$btn-close-white-filter};
+
+  color: var(--#{$prefix}btn-close-color);
+  background: transparent var(--#{$prefix}btn-close-bg) center / $btn-close-width auto no-repeat;
+
+  &:hover {
+    color: var(--#{$prefix}btn-close-color);
+  }
+}
+
+@mixin btn-close-white() {
+  filter: var(--#{$prefix}btn-close-white-filter);
+}
+
+.btn-close-white {
+  @include btn-close-white();
+}
+
+@if $enable-dark-mode {
+  @include color-mode(dark) {
+    .btn-close {
+      @include btn-close-white();
+    }
+  }
+}

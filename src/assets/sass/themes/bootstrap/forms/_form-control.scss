@@ -1,0 +1,36 @@
+.form-control {
+  color: $input-color;
+  background-color: $input-bg;
+  border-color: $input-border-color;
+
+  &:focus {
+    color: $input-focus-color;
+    background-color: $input-focus-bg;
+    border-color: $input-focus-border-color;
+    box-shadow: $input-focus-box-shadow;
+  }
+
+  &::placeholder {
+    color: $input-placeholder-color;
+  }
+
+  &:disabled {
+    color: $input-disabled-color;
+    background-color: $input-disabled-bg;
+    border-color: $input-disabled-border-color;
+  }
+
+  &::file-selector-button {
+    color: $form-file-button-color;
+    background-color: $form-file-button-bg;
+    border-color: inherit;
+    
+    &:hover {
+      background-color: $form-file-button-hover-bg;
+    }
+  }
+}
+
+.form-control-plaintext {
+  color: $input-plaintext-color;
+}

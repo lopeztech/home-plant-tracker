@@ -1,0 +1,85 @@
+// Core files
+
+
+
+@import "bootstrap/scss/functions";
+@import "bootstrap/scss/variables";
+
+@import "variables";
+@import "variables-dark";
+
+@import "bootstrap/scss/bootstrap";
+
+
+@import 'app/variables';
+
+@import 'app/mixins';
+@import 'app/misc';
+@import 'app/keyframes';
+@import 'app/reset';
+@import 'app/bootstrap';
+@import 'app/app';
+@import 'app/layout';
+@import 'app/logo';
+@import 'app/nav';
+@import 'app/infocard';
+@import 'app/navfilter';
+@import 'app/navdark';
+@import 'app/smartfilter';
+@import 'app/utilities';
+@import 'app/components';
+@import 'app/sidepanels';
+@import 'app/rightcontent';
+@import 'app/drawer';
+@import 'app/forms';
+@import 'app/toasts';
+@import 'app/alerts';
+@import 'app/modals';
+@import 'app/breadcrumbs';
+@import 'app/dropdowns';
+@import 'app/cards';
+@import 'app/pagination';
+@import 'app/popovers';
+@import 'app/progressbars';
+@import 'app/tables';
+@import 'app/smarttables';
+@import 'app/tabs';
+@import 'app/buttons';
+@import 'app/tooltips';
+@import 'app/icons';
+@import 'app/scrollbar';
+@import 'app/accordions';
+@import 'app/panels';
+@import 'app/notifications';
+@import 'app/set-color-blind';
+@import 'app/set-high-contrast';
+@import 'app/settings';
+@import 'app/demo';
+@import 'app/fallback';
+@import 'app/darkmode';
+@import 'app/rtl';
+@import 'app/apexchart';
+@import 'app/simplebar';
+
+// Extra Files
+@import 'app/authentication';
+@import 'app/blank';
+@import 'app/demo-docs';
+@import 'app/fullcalendar';
+@import 'app/jsvectormap';
+@import 'app/landing';
+@import 'app/messenger';
+@import 'app/profilepage';
+@import 'app/search';
+
+// Demo Files
+@import 'app/iconsdemo';
+@import 'app/stackgenerator';
+@import 'app/treedemo';
+
+// App
+@import 'app/mail';
+
+
+
+

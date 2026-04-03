@@ -1,0 +1,405 @@
+// sa icon with sizes
+.sa-icon {
+    --sa-icon-color: rgb(155 155 155);
+    --sa-fill-opacity: 0.3;
+    --sa-icon-fill: rgb(219 219 219 / var(--sa-fill-opacity));
+    --sa-icon-size: 1.25rem; //20px
+
+	width: var(--sa-icon-size); //20px
+    height: var(--sa-icon-size); //20px
+    stroke: var(--sa-icon-color);
+    stroke-width: 1px;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: var(--sa-icon-fill);
+    display: block;
+	
+    //thickness
+    &.sa-nofill {
+        fill: none !important;
+    }
+
+    &.sa-thin {
+        stroke-width: 0.5px !important;
+    }
+    &.sa-regular {
+        stroke-width: 0.8px !important;
+    }
+    &.sa-medium {
+        stroke-width: 1.2px !important;
+    }
+    &.sa-bold {
+        stroke-width: 1.5px !important;
+    }
+
+    //sizes 1x - 10x
+    &.sa-icon-1x {
+        width: 1.125rem; //18px
+        height: 1.125rem; //18px
+    }
+
+	&.sa-icon-2x {
+		width: 1.5rem; //24px
+		height: 1.5rem; //24px	
+	}
+
+    &.sa-icon-3x {
+        width: 2.1875rem; //35px
+        height: 2.1875rem; //35px
+    }
+
+    &.sa-icon-4x {
+        width: 2.8125rem; //45px
+        height: 2.8125rem; //45px
+    }
+
+    &.sa-icon-5x {
+        width: 3.4375rem; //55px
+        height: 3.4375rem; //55px
+        stroke-width: 0.5px;
+    }
+
+    &.sa-icon-6x {
+        width: 4.0625rem; //65px
+        height: 4.0625rem; //65px
+    }
+
+    &.sa-icon-7x {
+        width: 4.6875rem; //75px
+        height: 4.6875rem; //75px
+    }
+
+    &.sa-icon-8x {  
+        width: 5.3125rem; //85px
+        height: 5.3125rem; //85px
+    }
+
+    &.sa-icon-9x {
+        width: 5.9375rem; //95px        
+        height: 5.9375rem; //95px
+    }
+
+    &.sa-icon-10x {
+        width: 6.5625rem; //105px
+        height: 6.5625rem; //105px
+    }
+    
+    //icon colors 
+    &.sa-icon-primary {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--primary), var(--sa-fill-opacity));
+        stroke: rgba(var(--primary), 0.8);
+    }
+    &.sa-icon-success {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--success), var(--sa-fill-opacity));
+        stroke: rgba(var(--success), 0.8);
+    }
+    &.sa-icon-warning {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--warning), var(--sa-fill-opacity));
+        stroke: rgba(var(--warning), 0.8);
+    }
+    &.sa-icon-danger {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--danger), var(--sa-fill-opacity));
+        stroke: rgba(var(--danger), 0.8);
+    }
+    &.sa-icon-info {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--info), var(--sa-fill-opacity));
+        stroke: rgba(var(--info), 0.8);
+    }
+    &.sa-icon-light {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--bs-light-rgb), var(--sa-fill-opacity)) !important;
+        stroke: rgba(var(--bs-light-rgb), 1) !important;
+    }
+    &.sa-icon-dark {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--bs-dark-rgb), var(--sa-fill-opacity)) !important;
+        stroke: rgba(var(--bs-dark-rgb), 1) !important;
+    }
+    &.sa-icon-subtlelight {
+        --sa-fill-opacity: 0.1;
+        fill: rgba(var(--bs-body-color-rgb), var(--sa-fill-opacity)) !important;
+        stroke: rgba(var(--bs-body-color-rgb), 1) !important;
+    }
+
+}
+
+// collapse icon
+.collapse-icon {
+    border-radius: var(--border-radius-uniform);
+    border: 1px solid var(--collapse-icon-border);
+    height: var(--collapse-icon-height);
+    width: var(--collapse-icon-width);
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+
+	background: var(--app-header-background);
+
+    cursor: pointer;
+
+	> svg {
+		height: 0.6875rem; //11px
+    	margin-left: 0.5625rem; //9px
+		//z-index: 2;
+
+		transition: all 100ms ease-in-out;
+		
+		polygon {
+			fill:  var(--collapse-icon-border);
+		}
+	}
+
+	&::after {
+		content: "";
+		position: absolute;
+		border-right: 1px solid var(--collapse-icon-border);
+		width: 1.25rem; //20px
+		height: var(--collapse-icon-height);
+		left: 0;
+		top: 0;
+		background: rgba(var(--bs-emphasis-color-rgb), 0.05);
+		border-radius: 0;
+		//z-index: 1;
+
+    	transition: all 200ms cubic-bezier(0.34, 1.25, 0.3, 1);
+	}
+
+	&:hover {
+		border-color: var(--collapse-icon-border-hover);
+		background: var(--bs-body-bg);
+
+		> svg {
+			//transform: scaleX(-1);
+			margin-left: 0.75rem; //12px
+			polygon {
+				fill: var(--collapse-icon-border-hover);
+			}
+		}
+
+		&::after {
+			border-right-color: var(--collapse-icon-border-hover);
+			background: rgba(var(--primary), 0.1);
+			width: 0.5625rem; //9px
+		}
+	}
+
+	&:active {
+		scale: 0.95;
+	}
+}
+
+// ellipsis icon used in toolbar of Panel
+.ellipsis-icon {
+    --ellipsis-icon-color: currentColor;
+    --ellipsis-icon-width: 0.25rem; //4px
+    --ellipsis-icon-height: 0.25rem; //4px
+    --ellipsis-icon-spacing: 0.5rem; //8px
+    --ellipsis-icon-border-radius: 50%;
+
+	width: var(--ellipsis-icon-width);
+    height: var(--ellipsis-icon-height);
+    background-color: var(--ellipsis-icon-color);	
+    border-radius: var(--ellipsis-icon-border-radius);
+
+    overflow: visible;
+
+    position: relative;
+    display: inline-block;
+
+    scale: 0.8;
+
+    transition: all 200ms cubic-bezier(0.34, 1.25, 0.3, 1);
+
+    &::before,
+    &::after {
+        content: "";
+        position: absolute;
+        width: var(--ellipsis-icon-width);
+        height: var(--ellipsis-icon-height);
+        background-color: var(--ellipsis-icon-color);
+        display: block;
+        border-radius: var(--ellipsis-icon-border-radius);
+    }
+
+    &::before {
+        top: calc(var(--ellipsis-icon-spacing) * -1);
+        transition: all 100ms cubic-bezier(0.34, 1.25, 0.3, 1);
+        transform: rotate(45deg);
+    }
+
+    &::after {
+        bottom: calc(var(--ellipsis-icon-spacing) * -1);
+        transition: all 300ms cubic-bezier(0.34, 1.25, 0.3, 1);
+        transform: rotate(-45deg);
+    }
+}
+
+// goes inside panel header
+.btn-toolbar-master.show .ellipsis-icon {
+    --ellipsis-icon-spacing: 0px;
+    --ellipsis-icon-border-radius: 0px;
+    --ellipsis-icon-width: 0.9375rem; //15px
+    --ellipsis-icon-height: 0.125rem; //2px
+
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+
+    background: transparent;
+}
+
+// mobile menu
+.mobile-menu-icon {
+    --mobile-menu-icon-width: 4rem; //68px
+    --mobile-menu-icon-height: 2.5rem; //44px
+
+    width: var(--mobile-menu-icon-width);
+    height: var(--mobile-menu-icon-height);
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border-radius: var(--border-radius-uniform);
+    background: rgba(var(--danger), 0.9);
+    border: 1px solid var(--bs-body-bg);
+
+    .sa-icon {
+        width: 1.8rem;
+        height: 1.8rem;
+        stroke-width: 1.5px;
+        fill: rgba(var(--bs-light-rgb), 0.1);
+        stroke: rgba(var(--bs-light-rgb), 1);
+    }
+
+    &:active {
+        background: rgba(var(--primary), 0.9);
+        //border-color: rgba(var(--primary), 1);
+
+        scale: 0.95;
+    }
+
+    &::before {
+        content: "";
+        position: absolute;
+        width: 100%;
+    }
+}
+
+ 
+
+// stack icons
+.icon-stack {
+    position: relative;
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    line-height: 1em;
+    vertical-align: middle;
+    text-align: center
+}
+
+.icon-stack-1x,.icon-stack-2x,.icon-stack-3x {
+    position: absolute!important;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    text-align: center;
+    line-height: inherit!important
+}
+
+.icon-stack-1x {
+    font-size: .5em
+}
+
+.icon-stack-2x {
+	font-size: 0.7em;
+    margin-left: 1px;
+}
+
+.icon-stack-3x {
+    font-size: 1em
+}
+
+.icon-stack-xl {
+    font-size: 3.125rem
+}
+
+.icon-stack-lg {
+    font-size: 2.5rem
+}
+
+.icon-stack-md {
+    font-size: 2.125rem
+}
+
+.icon-stack-sm {
+    font-size: 1.875rem
+}
+
+
+.stack-icon,
+#my-icon {
+    position: relative;
+    display: inline-block;
+    width: 1.1em;
+    height: 1.1em;
+    font-size: 1.25em;
+    vertical-align: middle;
+    text-align: center;
+    overflow: hidden;
+
+    .icon-layers {
+
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        top: 0;
+        right: 0;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .stack-3x {
+            font-size: 100%;
+
+            &.sa-icon {
+                width: 100%;
+                height: 100%;
+            }
+        }
+        .stack-2x {
+            font-size: 80%;
+
+            &.sa-icon {
+                width: 75%;
+                height: 75%;
+            }
+        }
+        .stack-1x {
+            font-size: 60%;
+
+            &.sa-icon {
+                width: 57%;
+                height: 57%;
+            }
+        }
+        .stack-0x {
+            font-size: 50%;
+
+            &.sa-icon {
+                width: 45%;
+                height: 45%;
+            }
+        }
+    }
+}

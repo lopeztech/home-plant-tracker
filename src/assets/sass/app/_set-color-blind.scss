@@ -1,0 +1,60 @@
+// color blind
+.set-colorblind-mode .alert-danger,
+.set-colorblind-mode .btn-danger,
+.set-colorblind-mode .btn-outline-danger,
+//.set-colorblind-mode .page-sidebar .primary-nav .nav-menu>li.active>a,
+.set-colorblind-mode [class*=bg-danger-],
+.set-colorblind-mode .bg-danger,
+.pattern-0 {
+    background-size: 10px 10px;
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, .07) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .07) 50%, rgba(255, 255, 255, .05) 75%, transparent 75%, transparent);
+}
+
+//.set-colorblind-mode .page-sidebar .primary-nav .nav-menu>li.active>a+ul>li.active>a,
+.pattern-1 {
+    background-size: 5px 5px;
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, .04) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, .04) 50%, rgba(255, 255, 255, .04) 75%, transparent 75%, transparent);
+}
+
+.set-colorblind-mode .alert-primary,
+.set-colorblind-mode .btn-outline-primary,
+.set-colorblind-mode .btn-primary,
+.set-colorblind-mode [class*=bg-primary-],
+.set-colorblind-mode .bg-primary,
+.pattern-2 {
+    background-size: 15px 15px;
+    background-image: -webkit-gradient(linear, left top, left bottom, color-stop(50%, rgba(255, 255, 255, .2)), color-stop(50%, transparent), to(transparent));
+    background-image: linear-gradient(rgba(255, 255, 255, .2) 50%, transparent 50%, transparent);
+}
+
+.set-colorblind-mode .alert-success,
+.set-colorblind-mode .btn-outline-success,
+.set-colorblind-mode .btn-success,
+.set-colorblind-mode [class*=bg-success-],
+.set-colorblind-mode .bg-success,
+.pattern-3 {
+    background-size: 15px 15px;
+    background-image: -webkit-gradient(linear, left top, right top, color-stop(50%, rgba(255, 255, 255, .2)), color-stop(50%, transparent), to(transparent));
+    background-image: linear-gradient(90deg, rgba(255, 255, 255, .2) 50%, transparent 50%, transparent);
+}
+
+.set-colorblind-mode .alert-info,
+.set-colorblind-mode .btn-info,
+.set-colorblind-mode .btn-outline-info,
+.set-colorblind-mode [class*=bg-info-],
+.set-colorblind-mode .bg-info,
+.pattern-4 {
+    background-size: 37px 37px;
+    background-position: 0 0, 18.5px 18.5px;
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, .2) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, .2) 75%, rgba(255, 255, 255, .2)), linear-gradient(45deg, rgba(255, 255, 255, .2) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, .2) 75%, rgba(255, 255, 255, .2));
+}
+
+.set-colorblind-mode .alert-warning,
+.set-colorblind-mode .btn-outline-warning,
+.set-colorblind-mode .btn-warning,
+.set-colorblind-mode [class*=bg-warning-],
+.set-colorblind-mode .bg-warning,
+.pattern-5 {
+    background-size: 37px 37px;
+    background-image: linear-gradient(45deg, rgba(255, 255, 255, .2) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, .2) 75%, rgba(255, 255, 255, .2)), linear-gradient(135deg, rgba(255, 255, 255, .2) 25%, transparent 25%, transparent 75%, rgba(255, 255, 255, .2) 75%, rgba(255, 255, 255, .2));
+}

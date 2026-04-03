@@ -1,0 +1,34 @@
+.tooltip {
+  // scss-docs-start tooltip-css-vars
+  --#{$prefix}tooltip-color: #{$tooltip-color};
+  --#{$prefix}tooltip-bg: #{$tooltip-bg};
+  --#{$prefix}tooltip-opacity: #{$tooltip-opacity};
+  // scss-docs-end tooltip-css-vars
+
+  &.show {
+    opacity: var(--#{$prefix}tooltip-opacity);
+  }
+}
+
+// Tooltip arrow colors for all positions
+.bs-tooltip-top .tooltip-arrow::before {
+  border-top-color: var(--#{$prefix}tooltip-bg);
+}
+
+.bs-tooltip-end .tooltip-arrow::before {
+  border-right-color: var(--#{$prefix}tooltip-bg);
+}
+
+.bs-tooltip-bottom .tooltip-arrow::before {
+  border-bottom-color: var(--#{$prefix}tooltip-bg);
+}
+
+.bs-tooltip-start .tooltip-arrow::before {
+  border-left-color: var(--#{$prefix}tooltip-bg);
+}
+
+// Tooltip content
+.tooltip-inner {
+  color: var(--#{$prefix}tooltip-color);
+  background-color: var(--#{$prefix}tooltip-bg);
+}

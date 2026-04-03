@@ -1,0 +1,48 @@
+.form-range {
+  background-color: transparent;
+
+  &:focus {
+    &::-webkit-slider-thumb { box-shadow: $form-range-thumb-focus-box-shadow; }
+    &::-moz-range-thumb     { box-shadow: $form-range-thumb-focus-box-shadow; }
+  }
+
+  &::-webkit-slider-thumb {
+    @include gradient-bg($form-range-thumb-bg);
+    border: $form-range-thumb-border;
+    box-shadow: $form-range-thumb-box-shadow;
+
+    &:active {
+      @include gradient-bg($form-range-thumb-active-bg);
+    }
+  }
+
+  &::-webkit-slider-runnable-track {
+    background-color: $form-range-track-bg;
+    box-shadow: $form-range-track-box-shadow;
+  }
+
+  &::-moz-range-thumb {
+    @include gradient-bg($form-range-thumb-bg);
+    border: $form-range-thumb-border;
+    box-shadow: $form-range-thumb-box-shadow;
+
+    &:active {
+      @include gradient-bg($form-range-thumb-active-bg);
+    }
+  }
+
+  &::-moz-range-track {
+    background-color: $form-range-track-bg;
+    box-shadow: $form-range-track-box-shadow;
+  }
+
+  &:disabled {
+    &::-webkit-slider-thumb {
+      background-color: $form-range-thumb-disabled-bg;
+    }
+
+    &::-moz-range-thumb {
+      background-color: $form-range-thumb-disabled-bg;
+    }
+  }
+}

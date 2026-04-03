@@ -1,0 +1,10 @@
+@mixin alert-variant($background, $border, $color) {
+  --#{$prefix}alert-color: #{$color};
+  --#{$prefix}alert-bg: #{$background};
+  --#{$prefix}alert-border-color: #{$border};
+  --#{$prefix}alert-link-color: #{shade-color($color, 20%)};
+
+  .alert-link {
+    color: var(--#{$prefix}alert-link-color);
+  }
+}

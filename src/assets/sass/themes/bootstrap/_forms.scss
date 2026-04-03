@@ -1,0 +1,76 @@
+.form-control {
+    &:focus {
+        & + .input-group-text {
+            background-color: var(--primary-500);
+            color: var(--bs-white);
+            border-color: var(--primary-500);
+
+            .form-check-input:checked {
+                background-color: var(--primary-700);
+                border-color: var(--primary-900);
+            }
+        }
+
+        border-color: var(--primary-500);
+    }
+}
+
+.input-group:focus-within {
+    .input-group-text {
+        background-color: var(--primary-500);
+        color: var(--bs-white) !important;
+        border-color: var(--primary-500);
+
+        .form-check-input:checked {
+            background-color: var(--primary-700);
+            border-color: var(--primary-900);
+        }
+    }
+
+    .form-select {
+        border-color: var(--primary-500);
+    }
+
+    .input-group-text + .input-group-text {
+        border-left: 1px solid var(--primary-700);
+    }
+}
+
+/* Validation */
+.was-validated .input-group.has-validation:has(> .form-control:invalid) .input-group-text,
+.was-validated .input-group:has(> .form-control:invalid) .input-group-text,
+.input-group:has(> .form-control.is-invalid) .input-group-text {
+    background-color: var(--bs-form-invalid-color);
+    border-color: var(--bs-form-invalid-border-color); 
+    color: #ffffff; 
+}
+
+.was-validated .input-group.has-validation:has(> .form-control:valid) .input-group-text,
+.was-validated .input-group:has(> .form-control:valid) .input-group-text,
+.input-group:has(> .form-control.is-valid) .input-group-text {
+    background-color: var(--bs-form-valid-color);
+    border-color: var(--bs-form-valid-border-color); 
+    color: #ffffff; 
+}
+
+.form-check-hitbox {
+    .form-check-input {
+        &:focus {
+            & + .form-check-label {
+                background: rgba(var(--bs-body-color-rgb), 0.03);
+            }
+        }
+    }
+
+    &:hover:has(.form-check-input):hover .form-check-label {
+        background: rgba(var(--bs-body-color-rgb), 0.05);
+    }
+
+    .form-check-label {
+        background: transparent;
+
+        &:hover {
+            background: rgba(var(--bs-body-color-rgb), 0.05);
+        }
+    }
+}

@@ -1,0 +1,192 @@
+.app-logo {
+	padding: 0 1.5rem;
+	position: relative;
+	height: var(--app-header-height);
+	width: var(--menu-width);
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: flex-start;
+
+	>img,
+	>svg {
+		z-index: 2; //add this only if .logo-backdrop is present	
+
+		width: var(--logo-width);
+		height: var(--logo-height);
+		min-width: var(--logo-width);
+	}
+
+	>svg {
+		fill: none;
+		color: currentColor;
+		stroke-width: 1px !important;
+		--logo-color: rgba(var(--primary), 0.8);
+		--logo-color-fill: rgba(var(--white), 0.01);
+	}
+
+	&[data-prefix]::before {
+		content: attr(data-prefix);
+		position: absolute;
+		display: block;
+		background: #fafafa;
+		//border: 1px dotted #9e9e9e;
+		padding: 0.0625rem 0.25rem; //1px 4px
+		border-radius: 0.3125rem; //5px
+		left: 13.4375rem; //215px
+		font-size: 0.6rem;
+		top: 50%;
+		transform: translate(0, -50%);
+		line-height: 1.08375rem;
+
+	}
+}
+
+.app-logo:hover>.logo-backdrop {
+	height: 4.375rem; //70px
+	top: 0.625rem; //10px
+	left: 0.1875rem; //3px
+	opacity: 0.4;
+	transition: all 150ms cubic-bezier(.34, 1.25, .3, 1);
+}
+
+.app-logo:active>.logo-backdrop {
+	height: 5rem; //80px
+	top: 0.3125rem; //5px
+	left: -0.125rem; //-2px
+	opacity: 0.2;
+	transition: all 550ms cubic-bezier(.34, 5.25, .3, 1);
+}
+
+
+.logo-backdrop {
+	--bg-0: var(--bs-body-bg);
+	--bg-1: var(--bs-body-bg);
+	--blob-1: var(--primary-500);
+	--blob-2: var(--primary-200);
+	--blob-3: var(--bs-body-bg);
+	--blob-4: var(--bs-body-bg);
+
+	width: 3.75rem; //60px
+	height: 3.5rem; //56px
+	position: absolute;
+	opacity: 0.6;
+	top: 1.0625rem; //17px
+	left: 0.625rem; //10px;
+	transition: all 750ms cubic-bezier(.34, 1.25, .3, 1);
+	z-index: 1;
+}
+
+
+.palette-5 {
+	--bg-0: #ffffff;
+	--bg-1: #d3f7ff;
+	--blob-1: #bb74ff;
+	--blob-2: #7c7dff;
+	--blob-3: #a0f8ff;
+	--blob-4: #ffffff;
+}
+
+
+.blobs {
+	width: min(60vw, 60vh);
+	height: min(60vw, 60vh);
+	max-height: 100%;
+	max-width: 100%;
+
+	svg {
+		position: relative;
+		height: 100%;
+		z-index: 2;
+	}
+
+	.blob {
+		animation: rotate 25s infinite alternate ease-in-out;
+		transform-origin: 50% 50%;
+		opacity: 0.7;
+
+		path {
+			animation: blob-anim-1 5s infinite alternate cubic-bezier(0.45, 0.2, 0.55, 0.8);
+			transform-origin: 50% 50%;
+			transform: scale(0.8);
+
+			transition: fill 800ms ease;
+		}
+
+		&.alt {
+			animation-direction: alternate-reverse;
+			opacity: 0.3;
+		}
+	}
+
+	.blob-1 {
+		path {
+			fill: var(--blob-1);
+			filter: blur(1rem);
+		}
+	}
+
+	.blob-2 {
+		animation-duration: 18s;
+		animation-direction: alternate-reverse;
+
+		path {
+			fill: var(--blob-2);
+			animation-name: blob-anim-2;
+			animation-duration: 7s;
+			filter: blur(0.75rem);
+			transform: scale(0.78);
+		}
+
+		&.alt {
+			animation-direction: alternate;
+		}
+	}
+
+	.blob-3 {
+		animation-duration: 23s;
+
+		path {
+			fill: var(--blob-3);
+			animation-name: blob-anim-3;
+			animation-duration: 6s;
+			filter: blur(0.5rem);
+			transform: scale(0.76);
+		}
+	}
+
+	.blob-4 {
+		animation-duration: 31s;
+		animation-direction: alternate-reverse;
+		opacity: 0.9;
+
+		path {
+			fill: var(--blob-4);
+			animation-name: blob-anim-4;
+			animation-duration: 10s;
+			filter: blur(10rem);
+			transform: scale(0.5);
+		}
+
+		&.alt {
+			animation-direction: alternate;
+			opacity: 0.8;
+		}
+	}
+
+}
+
+html[dir="rtl"] {
+	.app-logo {
+		transform: scaleX(-1);
+
+		&::before {
+			transform: scaleX(-1) translate(0, -50%);
+
+		}
+
+		.custom-logo {
+			transform: scaleX(-1);
+		}
+	}
+}

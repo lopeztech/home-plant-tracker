@@ -1,0 +1,97 @@
+.slide-on-mobile {
+    --sidepanel-width: 15rem;
+    --sidepanel-z-index: 10;
+    width: var(--sidepanel-width, 15rem);
+}
+
+// @media only screen and ( max-width: 1280px ){
+//     .slide-early.slide-on-mobile {
+//         transform: translate3d(0,0,0);
+//         z-index: var(--sidepanel-z-index, 10);
+//         position: absolute !important;
+//         top: 0;
+//         bottom: 0;
+//         background-color: var(--bs-body-bg, #f8f9fa);
+//         transition: all 470ms cubic-bezier(.34,1.25,.3,1)
+//     }
+
+//     .slide-backdrop {
+//         background: 0 0;
+//         transition: background .3s;
+//     }
+
+//     .slide-early.slide-on-mobile-left {
+//         border-right: 1px solid rgba(0,0,0,.09);
+//         left: calc(-1 * var(--sidepanel-width, 15rem));
+//     }
+
+//     .slide-early.slide-on-mobile-left-show {
+//         left: 0;
+//     }
+
+//     .slide-early.slide-on-mobile-right {
+//         border-left: 1px solid rgba(0,0,0,.09);
+//         right: calc(-1 * var(--sidepanel-width, 15rem));
+//     }
+
+//     .slide-early.slide-on-mobile-right-show {
+//         right: 0;
+//     }
+
+//     .slide-early.slide-on-mobile-left-show+.slide-backdrop,
+//     .slide-early.slide-on-mobile-right-show+.slide-backdrop {
+//         background: rgba(var(--bs-body-color-rgb),.09);
+//         position: absolute;
+//         z-index: 9;
+//         left: 0;
+//         right: 0;
+//         bottom: 0;
+//         top: 0;
+//     }
+// }
+
+@media only screen and ( max-width: #{($mobile-breakpoint-size) - 0.02px} ) {
+    .slide-on-mobile {
+        transform: translate3d(0,0,0);
+        z-index: var(--sidepanel-z-index, 10);
+        position: absolute !important;
+        top: 0;
+        bottom: 0;
+        background-color: var(--bs-body-bg, #f8f9fa);
+        transition: all 470ms cubic-bezier(.34,1.25,.3,1)
+    }
+
+    .slide-backdrop {
+        background: 0 0;
+        transition: background .3s;
+    }
+
+    .slide-on-mobile-left {
+        border-right: 1px solid rgba(0,0,0,.09);
+        left: calc(-1 * var(--sidepanel-width, 15rem));
+    }
+
+    .slide-on-mobile-left-show {
+        left: 0;
+    }
+
+    .slide-on-mobile-right {
+        border-left: 1px solid rgba(0,0,0,.09);
+        right: calc(-1 * var(--sidepanel-width, 15rem));
+    }
+
+    .slide-on-mobile-right-show {
+        right: 0;
+    }
+
+    .slide-on-mobile-left-show+.slide-backdrop,
+    .slide-on-mobile-right-show+.slide-backdrop {
+        background: rgba(var(--bs-body-color-rgb),.09);
+        position: absolute;
+        z-index: 9;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        top: 0;
+    }
+}

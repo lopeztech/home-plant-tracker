@@ -1,0 +1,30 @@
+/* Base pagination styles */
+.pagination {
+  --bs-pagination-active-bg: var(--primary-900);
+  --bs-pagination-active-bg: var(--primary-500);
+  --bs-pagination-active-border-color: var(--primary-700);
+  --bs-pagination-color: var(--bs-body-color);
+  --bs-pagination-focus-color: var(--bs-body-color);
+  --bs-pagination-hover-color: var(--primary-500);
+  --bs-pagination-disabled-border-color: rgba(var(--bs-emphasis-color-rgb), 0.2);
+}
+
+/* Page link styles */
+.page-link {
+  background-color: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+
+  &:hover {
+    background-color: var(--primary-500) !important;
+    color: #fff;
+    border-color: var(--primary-700);
+  }
+}
+
+/* Page item styles */
+.page-item {
+  &.active .page-link {
+    color: #fff;
+  }
+}
+

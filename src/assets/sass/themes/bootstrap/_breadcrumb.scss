@@ -1,0 +1,21 @@
+//
+// Theme overrides for Bootstrap breadcrumb colors
+//
+
+.breadcrumb {
+  --#{$prefix}breadcrumb-bg: #{$breadcrumb-bg};
+  --#{$prefix}breadcrumb-divider-color: #{$breadcrumb-divider-color};
+  --#{$prefix}breadcrumb-item-active-color: #{$breadcrumb-active-color};
+
+  background-color: var(--#{$prefix}breadcrumb-bg);
+}
+
+.breadcrumb-item {
+  + .breadcrumb-item::before {
+    color: var(--#{$prefix}breadcrumb-divider-color);
+  }
+
+  &.active {
+    color: var(--#{$prefix}breadcrumb-item-active-color);
+  }
+}

@@ -1,0 +1,384 @@
+// .content-wrapper:has(> .profile-page) {
+//     padding: 0 !important;
+// }
+
+.profile-page {
+    //margin-top: -1rem;
+}
+
+.profile-page-header-underlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 200px;
+    z-index: 0;
+}
+
+.profile-page-header {
+    position: relative;
+    z-index: 1;
+    margin-top: 3rem;
+}
+
+.profile-page-header-avatar {
+    img {
+        width: 160px;
+        height: 160px;
+        object-fit: cover;
+    }
+
+    .btn-icon {
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .sa-icon {
+            width: 18px;
+            height: 18px;
+        }
+    }
+}
+
+.profile-page-nav {
+    padding: 0 1rem;
+
+    .nav-tabs-clean {
+        margin: 0 -1rem;
+
+        .nav-link {
+            padding: 1rem;
+            color: var(--bs-gray-600);
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease-in-out;
+
+            &:hover {
+                color: var(--bs-primary);
+            }
+
+            &.active {
+                color: var(--bs-primary);
+                border-bottom-color: var(--bs-primary);
+            }
+
+            .sa-icon {
+                width: 18px;
+                height: 18px;
+            }
+        }
+    }
+}
+
+// Timeline styling
+.timeline {
+    position: relative;
+    padding: 0;
+    margin: 0;
+
+    &::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 7px;
+        height: 100%;
+        width: 2px;
+        background: var(--bs-gray-200);
+    }
+}
+
+.timeline-item {
+    position: relative;
+    padding-left: 30px;
+    padding-bottom: 1.5rem;
+
+    &:last-child {
+        padding-bottom: 0;
+    }
+}
+
+.timeline-marker {
+    position: absolute;
+    left: 0;
+    top: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid var(--bs-body-bg);
+    box-shadow: 0 0 0 2px var(--bs-primary);
+}
+
+// Edit mode styling
+.profile-edit-mode {
+    display: none;
+}
+
+html.profile-edit-mode {
+    .profile-view-mode {
+        display: none;
+    }
+
+    .profile-edit-mode {
+        display: block;
+    }
+}
+
+// News Feed Styling
+.news-item {
+    transition: all 0.2s ease-in-out;
+
+    &:hover {
+        background-color: var(--bs-gray-100);
+    }
+}
+
+// Project Carousel Styling
+.profile-page {
+    .carousel {
+        border-radius: 0.5rem;
+        overflow: hidden;
+
+        .carousel-item {
+            img {
+                height: 400px;
+                object-fit: cover;
+            }
+        }
+
+        .carousel-caption {
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
+            left: 0;
+            right: 0;
+            bottom: 0;
+            padding: 2rem;
+            text-align: left;
+        }
+    }
+}
+
+// Project Grid Styling
+.project-card {
+    transition: transform 0.2s ease-in-out;
+
+    &:hover {
+        transform: translateY(-5px);
+    }
+
+    .project-image {
+        height: 200px;
+        object-fit: cover;
+    }
+}
+
+// Contact Form Styling
+.contact-form {
+    .form-control {
+        &:focus {
+            box-shadow: none;
+            border-color: var(--bs-primary);
+        }
+    }
+}
+
+.social-links {
+    .btn-icon {
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease-in-out;
+
+        &:hover {
+            background-color: var(--bs-primary);
+            color: white;
+        }
+
+        .sa-icon {
+            width: 20px;
+            height: 20px;
+        }
+    }
+}
+
+// Office Hours Styling
+.office-hours {
+    .day {
+        font-weight: 500;
+    }
+
+    .time {
+        color: var(--bs-gray-600);
+    }
+}
+
+// Comments Styling
+.comments-section {
+    .comment {
+        transition: background-color 0.2s ease-in-out;
+
+        &:hover {
+            background-color: var(--bs-gray-50);
+        }
+
+        .btn-link {
+            color: var(--bs-gray-600);
+            text-decoration: none;
+            padding: 0;
+
+            &:hover {
+                color: var(--bs-primary);
+            }
+        }
+    }
+
+    .comment-reply {
+        margin-left: 2.5rem;
+        padding-left: 1rem;
+        border-left: 2px solid var(--bs-gray-200);
+    }
+
+    .btn-icon {
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+// Profile Views Styling
+.profile-views {
+    .viewer {
+        transition: transform 0.2s ease-in-out;
+
+        &:hover {
+            transform: translateX(5px);
+        }
+    }
+}
+
+// People You Might Know Styling
+.people-suggestions {
+    .suggestion-item {
+        transition: all 0.2s ease-in-out;
+
+        &:hover {
+            background-color: var(--bs-gray-50);
+        }
+
+        .btn-connect {
+            opacity: 0.8;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        &:hover .btn-connect {
+            opacity: 1;
+        }
+    }
+}
+
+// Contacts List Styling
+.contacts-list {
+    .list-group-item {
+        border: none;
+        border-radius: 0.5rem;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s ease-in-out;
+
+        &:hover {
+            background-color: var(--bs-gray-100);
+        }
+
+        .btn-icon {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.7;
+            transition: all 0.2s ease-in-out;
+
+            &:hover {
+                opacity: 1;
+                background-color: var(--bs-gray-200);
+            }
+
+            .sa-icon {
+                width: 16px;
+                height: 16px;
+            }
+        }
+    }
+}
+
+// Search Bar Styling
+.contacts-search {
+    .form-control {
+        border-right: none;
+
+        &:focus {
+            box-shadow: none;
+            border-color: var(--bs-gray-300);
+
+            &+.btn {
+                border-color: var(--bs-gray-300);
+            }
+        }
+    }
+
+    .btn {
+        border-left: none;
+
+        &:hover {
+            background-color: var(--bs-gray-100);
+        }
+    }
+}
+
+// Responsive adjustments
+@media (max-width: 767.98px) {
+    .profile-page-header {
+        margin-top: 2rem;
+    }
+
+    .profile-page-header-avatar {
+        img {
+            width: 120px;
+            height: 120px;
+        }
+    }
+
+    .profile-page-nav {
+        .nav-tabs-clean {
+            .nav-link {
+                padding: 0.75rem;
+                font-size: 0.875rem;
+            }
+        }
+    }
+}
+
+.comment-input-wrapper {
+    position: relative;
+
+    .sa-icon {
+        width: 16px;
+        height: 16px;
+    }
+}
+
+.comment-input-wrapper input:focus+.comment-actions {
+    display: flex !important;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.comment-content {
+    background-color: var(--bs-body-bg);
+}

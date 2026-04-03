@@ -1,0 +1,63 @@
+//app breadcrumb
+.app-breadcrumb .breadcrumb {
+    padding: 0;
+    background: 0 0;
+    margin: 0 0 1.5rem;
+    position: relative;
+    //text-shadow: var(--page-breadcrumbs-text-shadow, #fff) 0 1px;
+
+    --bs-breadcrumb-item-active-color: rgba(var(--bs-body-color-rgb), 0.75);
+
+    font-size: 0.875rem;
+
+    .breadcrumb-item {
+        max-width: 10.625rem; //150px
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        overflow: hidden;
+        display: block;
+
+        transition: all .3s ease-in-out;
+
+        &:hover {
+            max-width: 12.5rem !important; //200px
+            cursor: default;
+        }
+    }
+}
+
+.app-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
+    color: rgba(var(--bs-body-color-rgb), 0.3);
+    text-shadow: none;
+}
+
+
+//general breadcrumb
+.breadcrumb {
+    margin: 0;
+    --bs-breadcrumb-divider-color: rgba(var(--bs-dark-rgb), 0.2);
+
+    &[class^="bg-"] .breadcrumb-item+.breadcrumb-item::before,
+    &[class*=" bg-"] .breadcrumb-item+.breadcrumb-item::before {
+        color: currentColor;
+        opacity: 0.7;
+    }
+}
+
+.breadcrumb>li.breadcrumb-item {
+    max-width: 130px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+    display: block
+}
+
+.breadcrumb>li.breadcrumb-item:hover {
+    max-width: 200px !important;
+    cursor: default
+}
+
+[data-breadcrumb-seperator]+[data-breadcrumb-seperator]::before {
+    content: attr(data-breadcrumb-seperator);
+    color: currentColor;
+}

@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import { Card, Button, Alert } from 'react-bootstrap'
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
@@ -19,7 +20,6 @@ export default function LoginPage() {
   }
 
   const handleTryDifferentAccount = () => {
-    // Revoke Google's cached account selection so the picker appears fresh
     if (window.google?.accounts?.id) {
       window.google.accounts.id.disableAutoSelect()
     }
@@ -27,77 +27,69 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-950 px-4 relative overflow-hidden">
-      {/* Background ambient glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full opacity-20 pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%)' }} />
-      <div className="flex flex-col items-center gap-6 w-full max-w-sm relative z-10">
+    <div className="d-flex flex-column align-items-center justify-content-center vh-100 px-3" style={{ background: 'var(--bs-body-bg)' }}>
+      <div className="d-flex flex-column align-items-center gap-4 w-100" style={{ maxWidth: 400 }}>
         {/* Icon */}
-        <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-soft-xl flex items-center justify-center shadow-soft-lg">
-          <span role="img" aria-label="plant" className="text-4xl select-none">
-            🌿
-          </span>
+        <div
+          className="d-flex align-items-center justify-content-center rounded-3 bg-primary text-white"
+          style={{ width: 80, height: 80, fontSize: '2.5rem' }}
+        >
+          <span role="img" aria-label="plant">🌿</span>
         </div>
 
         {/* Title */}
         <div className="text-center">
-          <h1 className="text-3xl font-medium text-gray-100">Plant Tracker</h1>
-          <p className="mt-1.5 text-gray-400 text-sm">Your personal plant care companion</p>
+          <h1 className="h2 fw-500 mb-1">Plant Tracker</h1>
+          <p className="text-muted">Your personal plant care companion</p>
         </div>
 
         {/* Sign-in card */}
-        <div className="w-full bg-gray-900 border border-gray-800 rounded-soft-xl p-8 flex flex-col items-center gap-5 shadow-soft-lg" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
-          <p className="text-gray-400 text-sm text-center">Sign in to access your plants</p>
+        <Card className="w-100">
+          <Card.Body className="d-flex flex-column align-items-center gap-4 p-4">
+            <p className="text-muted text-center mb-0">Sign in to access your plants</p>
 
-          {loginError && (
-            <div className="w-full p-3 rounded-lg bg-red-900/30 border border-red-700/50 text-center space-y-2">
-              <p className="text-red-300 text-sm font-medium">Sign-in failed</p>
-              <p className="text-red-400/80 text-xs leading-relaxed">
-                Your account may not have access. Try signing in with a different account.
-              </p>
-              <button
-                onClick={handleTryDifferentAccount}
-                className="text-xs text-red-300 underline underline-offset-2 hover:text-red-200 transition-colors"
-              >
-                Try a different account
-              </button>
+            {loginError && (
+              <Alert variant="danger" className="w-100 text-center">
+                <p className="fw-500 mb-1">Sign-in failed</p>
+                <p className="fs-sm mb-2">Your account may not have access. Try signing in with a different account.</p>
+                <button onClick={handleTryDifferentAccount} className="btn btn-link btn-sm text-danger p-0">
+                  Try a different account
+                </button>
+              </Alert>
+            )}
+
+            {CLIENT_ID ? (
+              <GoogleLogin
+                onSuccess={handleSuccess}
+                onError={handleError}
+                theme="outline"
+                shape="rectangular"
+                size="large"
+                text="signin_with"
+                width="280"
+              />
+            ) : (
+              <Alert variant="warning" className="w-100 text-center fs-sm">
+                <p className="fw-500 mb-1">Configuration required</p>
+                <p className="mb-0">
+                  Set <code>VITE_GOOGLE_CLIENT_ID</code> in your <code>.env.local</code> file.
+                </p>
+              </Alert>
+            )}
+
+            <div className="d-flex align-items-center gap-3 w-100">
+              <hr className="flex-grow-1" />
+              <span className="text-muted fs-sm">or</span>
+              <hr className="flex-grow-1" />
             </div>
-          )}
 
-          {CLIENT_ID ? (
-            <GoogleLogin
-              onSuccess={handleSuccess}
-              onError={handleError}
-              theme="filled_black"
-              shape="rectangular"
-              size="large"
-              text="signin_with"
-              width="280"
-            />
-          ) : (
-            <div className="text-center p-4 rounded-lg bg-amber-900/30 border border-amber-700/50 text-amber-300 text-xs leading-relaxed">
-              <p className="font-semibold mb-1">Configuration required</p>
-              <p>
-                Set <code className="font-mono bg-amber-900/50 px-1 py-0.5 rounded">VITE_GOOGLE_CLIENT_ID</code> in
-                your <code className="font-mono bg-amber-900/50 px-1 py-0.5 rounded">.env.local</code> file.
-              </p>
-            </div>
-          )}
+            <Button variant="outline-secondary" className="w-100" onClick={loginAsGuest}>
+              Continue as Guest
+            </Button>
+          </Card.Body>
+        </Card>
 
-          <div className="w-full flex items-center gap-3">
-            <div className="flex-1 h-px bg-gray-800" />
-            <span className="text-gray-600 text-xs">or</span>
-            <div className="flex-1 h-px bg-gray-800" />
-          </div>
-
-          <button
-            onClick={loginAsGuest}
-            className="w-full py-2.5 px-4 rounded-soft border border-gray-700 text-gray-300 text-sm font-medium hover:bg-gray-800/60 hover:border-gray-600 transition-all duration-200 active:scale-[0.98]"
-          >
-            Continue as Guest
-          </button>
-        </div>
-
-        <p className="text-gray-600 text-xs text-center">
+        <p className="text-muted fs-sm text-center">
           Guest mode uses sample data and does not save changes.
         </p>
       </div>

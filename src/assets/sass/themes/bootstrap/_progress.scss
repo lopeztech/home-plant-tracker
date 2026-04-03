@@ -1,0 +1,38 @@
+// Keyframes for striped animation (color-related effect)
+@if $enable-transitions {
+  @keyframes progress-bar-stripes {
+    0% { background-position-x: $progress-height; }
+  }
+}
+
+.progress,
+.progress-stacked {
+  // scss-docs-start progress-css-vars
+  --#{$prefix}progress-bg: #{$progress-bg};
+  --#{$prefix}progress-bar-color: #{$progress-bar-color};
+  --#{$prefix}progress-bar-bg: #{$progress-bar-bg};
+  // scss-docs-end progress-css-vars
+
+  background-color: var(--#{$prefix}progress-bg);
+}
+
+.progress-bar {
+  color: var(--#{$prefix}progress-bar-color);
+  background-color: var(--#{$prefix}progress-bar-bg);
+}
+
+.progress-bar-striped {
+  @include gradient-striped();
+}
+
+@if $enable-transitions {
+  .progress-bar-animated {
+    animation: $progress-bar-animation-timing progress-bar-stripes;
+
+    @if $enable-reduced-motion {
+      @media (prefers-reduced-motion: reduce) {
+        animation: none;
+      }
+    }
+  }
+}

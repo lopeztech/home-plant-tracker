@@ -1,0 +1,12 @@
+//
+// Theme overrides for Bootstrap image-related colors
+//
+
+.img-thumbnail {
+  background-color: $thumbnail-bg;
+  border-color: $thumbnail-border-color;
+}
+
+.figure-caption {
+  color: $figure-caption-color;
+}

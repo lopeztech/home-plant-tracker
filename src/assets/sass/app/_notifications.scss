@@ -1,0 +1,160 @@
+//profile
+[data-toggle="dropdown"] .profile-image {
+    width: 2rem;
+    height: auto;
+}
+
+
+//notifications header
+.notification-header {
+    padding: 1.5rem 1.5rem 0.5rem;
+
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    background: var(--bs-body-bg);
+    font-size: .75rem;
+    white-space: nowrap;
+    margin-bottom: 0;
+
+    h4 {
+        display: flex;
+        flex-direction: column;
+        font-size: 1.25rem;
+
+        small {
+            font-size: 0.825rem;
+            font-weight: 300;
+            margin-top: 0.25rem; //4px
+        }
+    }
+
+    // .nav-link {
+    //     --bs-nav-link-color: #536371;
+
+    //     &.active {
+    //         border-width: 2px !important;
+    //         font-weight: 500;
+    //     }
+    // }
+
+    // & + .nav-tabs-clean {
+    //     border: 0;
+    // }
+
+}
+
+//notifications
+
+.tab-notification {
+    height: 22.6875rem; //363px
+}
+
+.tab-notification .tab-pane {
+    height: 100%
+}
+
+.notification {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+    position: relative
+}
+
+.notification li {
+    position: relative;
+    background: var(--bs-body-bg);
+    padding: 0;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+
+    [data-bs-dismiss="alert"] {
+        position: absolute;
+        right: 0;
+        top: 0;
+        padding: 15px;
+        background: transparent var(--bs-btn-close-bg) center / 0.7em auto no-repeat;
+        visibility: hidden;
+    }
+
+    &:hover {
+        [data-bs-dismiss="alert"] {
+            visibility: visible;
+        }
+    }
+}
+
+
+.notification li.unread {
+    background: rgba(var(--bs-primary-rgb), 0.05);
+}
+
+
+
+.notification li.unread .name {
+    font-weight: 600
+}
+
+.notification li>:first-child {
+    padding: .75rem 1.5rem;
+    border-bottom: 1px solid rgba(0,0,0,.06)
+}
+
+.notification li:hover>:first-child {
+    text-decoration: none;
+    background-image: -webkit-gradient(linear,left top, left bottom,from(rgba(29,33,41,.03)),to(rgba(29,33,41,.04)));
+    background-image: linear-gradient(rgba(29,33,41,.03),rgba(29,33,41,.04))
+}
+
+.notification li>:first-child:focus {
+    text-decoration: none
+}
+
+.notification li>:first-child>span {
+    position: relative
+}
+
+.notification li>:first-child>span>span {
+    display: block
+}
+
+.notification li:last-child>a {
+    border: 0
+}
+
+.notification .name {
+    color: var(--bs-body-color);
+    font-weight: 400;
+    font-size: .825rem
+}
+
+.notification .msg-a,
+.notification .msg-b {
+    color: var(--bs-body-color);
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    max-width: 300px;
+}
+
+.notification:has(*) {
+    & + .notification-empty-msg {
+        display: none;
+    }
+}
+
+
+.notification:not(:has(*)) {
+    & + .notification-empty-msg {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-size: 1.25rem;
+        font-weight: 300;
+    }
+}

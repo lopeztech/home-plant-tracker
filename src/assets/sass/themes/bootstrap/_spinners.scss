@@ -1,0 +1,18 @@
+.spinner-border {
+  border-color: currentcolor;
+  border-right-color: transparent;
+}
+
+.spinner-grow {
+  background-color: currentcolor;
+}
+
+// Reduced motion support for accessibility
+@if $enable-reduced-motion {
+  @media (prefers-reduced-motion: reduce) {
+    .spinner-border,
+    .spinner-grow {
+      --#{$prefix}spinner-animation-speed: #{$spinner-animation-speed * 2};
+    }
+  }
+}

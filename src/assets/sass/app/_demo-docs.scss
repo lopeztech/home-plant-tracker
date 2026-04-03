@@ -1,0 +1,137 @@
+/*THIS CSS IS FOR THE DEMO PAGE ONLY*/
+
+pre {
+    // padding: 1rem 0;
+    border-radius: 0.5rem;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+pre code.hljs {
+    padding: 1.5em;
+    font-size: 0.875rem;
+}
+
+.hljs-comment {
+    color: #6d9d9d;
+}
+
+.code-example {
+    margin: 1.5rem 0;
+}
+.concept-section {
+    margin-bottom: 3rem;
+}
+.concept-title.with-lead {
+    font-size: 2.5rem;
+    font-weight: 300;
+}
+.sidebar {
+    position: sticky;
+    top: 1rem;
+}
+.main-content {
+    line-height: 1.6;
+}
+.concept-title {
+    color: var(--secondary-500);
+    font-size: 1rem;
+    font-weight: 600;
+}
+.example-output {
+    background-color: #e9ecef;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-top: 0.5rem;
+}
+.pro-tip {
+    background-color: rgba(var(--bs-success-rgb), 0.2);
+    border-left: 4px solid var(--bs-success-border-subtle, --success-500);
+    padding: 1rem;
+    margin: 1rem 0;
+}
+.warning {
+    background-color: var(--bs-warning-bg-subtle, --warning-100);
+    border-left: 4px solid var(--bs-warning-border-subtle, --warning-700);
+    padding: 1rem;
+    margin: 1rem 0;
+}
+.demo-sidebar a {
+    display: block;
+    padding: 0.25rem 0;
+    color: var(--bs-gray-900);
+}
+.demo-sidebar a:hover {
+    color: var(--primary-500);
+}
+
+.sidebar {
+    position: sticky;
+    top: 20px; /* Distance from the top of the viewport */
+    align-self: flex-start; /* Keeps sidebar at the top of its flex container */
+    max-height: calc(100vh - 40px); /* Prevents overlapping footer, adjust as needed */
+    overflow-y: auto; /* Adds scrolling if sidebar content is tall */
+    padding: 15px 0; /* Optional padding for spacing */
+}
+
+.sidebar ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.sidebar a {
+    color: #0d6efd; /* Bootstrap link color, matches your screenshot */
+    text-decoration: none;
+    display: block;
+    padding: 8px 0;
+}
+
+.sidebar a:hover {
+    text-decoration: underline;
+    color: #0a58ca; /* Darker blue on hover */
+}
+
+/* Ensure sidebar stays within viewport and doesn’t overlap footer */
+@media (max-width: 991px) {
+    .sidebar {
+        position: static; /* Non-sticky on small screens */
+        top: auto;
+        max-height: none;
+        padding: 15px;
+    }
+}
+
+// /* Highlight.js styles (if used) */
+// pre code {
+//     background-color: #2d2d2d;
+//     color: #fff;
+//     padding: 15px;
+//     border-radius: 5px;
+//     display: block;
+// }
+
+/* Tip box styling */
+.tip-box {
+    background-color: #e6f7ff;
+    border-left: 4px solid #1890ff;
+    padding: 15px;
+    margin: 20px 0;
+    border-radius: 4px;
+}
+
+/* build notes */
+.build-notes {
+    display:flex;
+    flex-direction: column;
+    gap: 0.5rem;
+
+    & > li {
+        padding-left: 3rem;
+        position: relative;
+
+        & > .badge {
+            position: absolute;
+            left: 0;
+        }
+    }
+}

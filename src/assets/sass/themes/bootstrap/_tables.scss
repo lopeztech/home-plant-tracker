@@ -1,0 +1,62 @@
+.table {
+  // Color variables
+  --#{$prefix}table-color: #{$table-color};
+  --#{$prefix}table-bg: #{$table-bg};
+  --#{$prefix}table-border-color: #{$table-border-color};
+  --#{$prefix}table-accent-bg: #{$table-accent-bg};
+  --#{$prefix}table-striped-color: #{$table-striped-color};
+  --#{$prefix}table-striped-bg: #{$table-striped-bg};
+  --#{$prefix}table-active-color: #{$table-active-color};
+  --#{$prefix}table-active-bg: #{$table-active-bg};
+  --#{$prefix}table-hover-color: #{$table-hover-color};
+  --#{$prefix}table-hover-bg: #{$table-hover-bg};
+
+  // Color properties
+  border-color: var(--#{$prefix}table-border-color);
+
+  > :not(caption) > * > * {
+    color: var(--#{$prefix}table-color-state, var(--#{$prefix}table-color-type, var(--#{$prefix}table-color)));
+    background-color: var(--#{$prefix}table-bg);
+    // Used for cell background colors
+    box-shadow: inset 0 0 0 9999px var(--#{$prefix}table-bg-state, var(--#{$prefix}table-bg-type, var(--#{$prefix}table-accent-bg)));
+  }
+}
+
+// Table group divider color
+.table-group-divider {
+  border-top-color: $table-group-separator-color;
+}
+
+// Striped tables
+.table-striped {
+  > tbody > tr:nth-of-type(#{$table-striped-order}) > * {
+    --#{$prefix}table-color-type: var(--#{$prefix}table-striped-color);
+    --#{$prefix}table-bg-type: var(--#{$prefix}table-striped-bg);
+  }
+}
+
+.table-striped-columns {
+  > :not(caption) > tr > :nth-child(#{$table-striped-columns-order}) {
+    --#{$prefix}table-color-type: var(--#{$prefix}table-striped-color);
+    --#{$prefix}table-bg-type: var(--#{$prefix}table-striped-bg);
+  }
+}
+
+// Active state
+.table-active {
+  --#{$prefix}table-color-state: var(--#{$prefix}table-active-color);
+  --#{$prefix}table-bg-state: var(--#{$prefix}table-active-bg);
+}
+
+// Hover state
+.table-hover {
+  > tbody > tr:hover > * {
+    --#{$prefix}table-color-state: var(--#{$prefix}table-hover-color);
+    --#{$prefix}table-bg-state: var(--#{$prefix}table-hover-bg);
+  }
+}
+
+// Table variants (color themes)
+@each $color, $value in $table-variants {
+  @include table-variant($color, $value);
+}
