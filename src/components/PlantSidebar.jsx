@@ -178,7 +178,7 @@ function PlantCard({ plant, onClick, onWater, weather, floors, selectMode, selec
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-1">
-            <span className="text-sm font-medium text-white truncate">{plant.name}</span>
+            <span className="text-sm font-medium text-gray-100 truncate">{plant.name}</span>
             <div className="flex items-center gap-1 flex-shrink-0">
               <UrgencyIcon days={daysUntil} skippedRain={skippedRain} />
               <span className="text-xs font-medium" style={{ color }}>
@@ -276,10 +276,10 @@ const LEGEND_ITEMS = [
 function SkeletonCard() {
   return (
     <div className="w-full flex rounded-lg bg-gray-800 border border-gray-700 px-3 py-2.5">
-      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, transparent 0%, #374151 50%, transparent 100%)', backgroundSize: '200% 100%' }} />
+      <div className="w-10 h-10 rounded-full bg-gray-700 flex-shrink-0 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, transparent 0%, var(--border-color-strong) 50%, transparent 100%)', backgroundSize: '200% 100%' }} />
       <div className="flex-1 ml-2.5 space-y-2">
-        <div className="h-3 bg-gray-700 rounded w-24 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, #374151 0%, #4b5563 50%, #374151 100%)', backgroundSize: '200% 100%' }} />
-        <div className="h-2.5 bg-gray-700/60 rounded w-16 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, #374151 0%, #4b5563 50%, #374151 100%)', backgroundSize: '200% 100%', animationDelay: '0.2s' }} />
+        <div className="h-3 bg-gray-700 rounded w-24 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, var(--border-color) 0%, var(--border-color-strong) 50%, var(--border-color) 100%)', backgroundSize: '200% 100%' }} />
+        <div className="h-2.5 bg-gray-700/60 rounded w-16 animate-shimmer" style={{ backgroundImage: 'linear-gradient(90deg, var(--border-color) 0%, var(--border-color-strong) 50%, var(--border-color) 100%)', backgroundSize: '200% 100%', animationDelay: '0.2s' }} />
       </div>
     </div>
   )
@@ -387,7 +387,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-800 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-white">Plant List</h2>
+          <h2 className="text-sm font-semibold text-gray-100">Plant List</h2>
           <div className="flex items-center gap-2">
             <span className="text-xs text-gray-500">
               {isFiltered ? `${filteredPlants.length} / ${floorPlants.length}` : floorPlants.length} plants

@@ -205,7 +205,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     >
       <div
         className="animate-fade-in-up relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 flex flex-col md:max-h-[calc(100vh-2rem)]"
-        style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}
+        style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}
       >
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
@@ -213,7 +213,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm shadow-emerald-900/30">
               <Leaf size={14} className="text-white" />
             </div>
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-base font-semibold text-gray-100">
               {isEditing ? plant.name : 'Add Plant'}
             </h2>
             {wateringStatus && (
@@ -291,7 +291,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <Camera size={20} className="text-emerald-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Analyse with AI</p>
+                <p className="text-sm font-semibold text-gray-100">Analyse with AI</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
                   Take or upload a photo — Gemini identifies the plant and fills in care details automatically
                 </p>
@@ -307,7 +307,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <ClipboardList size={20} className="text-gray-400" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">Enter manually</p>
+                <p className="text-sm font-semibold text-gray-100">Enter manually</p>
                 <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
                   Fill in the plant name and care details yourself
                 </p>

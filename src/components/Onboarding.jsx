@@ -54,7 +54,7 @@ export default function Onboarding() {
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-4 animate-fade-in"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
     >
-      <div className="animate-fade-in-up w-full max-w-sm bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
+      <div className="animate-fade-in-up w-full max-w-sm bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
         {/* Progress bar */}
         <div className="flex gap-1 px-5 pt-5">
           {STEPS.map((_, i) => (
@@ -79,7 +79,7 @@ export default function Onboarding() {
             </button>
           </div>
 
-          <h3 className="text-base font-semibold text-white mt-4">{current.title}</h3>
+          <h3 className="text-base font-semibold text-gray-100 mt-4">{current.title}</h3>
           <p className="text-sm text-gray-400 mt-1 leading-relaxed">{current.description}</p>
         </div>
 

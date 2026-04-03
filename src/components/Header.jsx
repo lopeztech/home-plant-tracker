@@ -24,7 +24,7 @@ export default function Header({ onOpenSettings, onOpenAnalytics, analyticsActiv
         <div className="w-8 h-8 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-lg flex items-center justify-center shadow-md shadow-emerald-900/30">
           <Leaf size={18} className="text-white" />
         </div>
-        <h1 className="text-base font-bold text-white leading-tight tracking-tight">Plant Tracker</h1>
+        <h1 className="text-base font-bold text-gray-100 leading-tight tracking-tight">Plant Tracker</h1>
       </div>
 
       {user && (

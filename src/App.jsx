@@ -491,10 +491,10 @@ function AppContent() {
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           onClick={() => setShowHelp(false)}
         >
-          <div className="animate-fade-in-up bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 p-6 max-w-sm w-full mx-auto my-auto" onClick={e => e.stopPropagation()} style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
+          <div className="animate-fade-in-up bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 p-6 max-w-sm w-full mx-auto my-auto" onClick={e => e.stopPropagation()} style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
             <div className="flex items-center gap-2 mb-4">
               <Keyboard size={18} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-white">Keyboard Shortcuts</h2>
+              <h2 className="text-sm font-semibold text-gray-100">Keyboard Shortcuts</h2>
             </div>
             <div className="space-y-2">
               {SHORTCUTS.map(s => (

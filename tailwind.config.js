@@ -1,3 +1,5 @@
+import defaultTheme from 'tailwindcss/defaultTheme'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: [
@@ -6,6 +8,9 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['Open Sans', 'Inter', ...defaultTheme.fontFamily.sans],
+      },
       colors: {
         emerald: {
           50: '#ecfdf5',
@@ -20,6 +25,16 @@ export default {
           900: '#064e3b',
           950: '#022c22',
         },
+      },
+      boxShadow: {
+        'soft': '0 0.25rem 0.375rem -0.0625rem rgba(20,20,20,0.12), 0 0.125rem 0.25rem -0.0625rem rgba(20,20,20,0.07)',
+        'soft-lg': '0 8px 26px -4px rgba(20,20,20,0.15), 0 8px 9px -5px rgba(20,20,20,0.06)',
+        'soft-xl': '0 23px 45px -11px rgba(20,20,20,0.25)',
+      },
+      borderRadius: {
+        'soft': '0.75rem',
+        'soft-lg': '1rem',
+        'soft-xl': '1.5rem',
       },
       animation: {
         'pulse-ring': 'pulse-ring 1.5s ease-in-out infinite',

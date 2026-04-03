@@ -40,12 +40,12 @@ export default function LoginPage() {
 
         {/* Title */}
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-white tracking-tight">Plant Tracker</h1>
+          <h1 className="text-3xl font-bold text-gray-100 tracking-tight">Plant Tracker</h1>
           <p className="mt-1.5 text-gray-400 text-sm">Your personal plant care companion</p>
         </div>
 
         {/* Sign-in card */}
-        <div className="w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-xl shadow-black/30" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
+        <div className="w-full bg-gray-900 border border-gray-800 rounded-2xl p-8 flex flex-col items-center gap-5 shadow-xl shadow-black/30" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
           <p className="text-gray-400 text-sm text-center">Sign in to access your plants</p>
 
           {loginError && (

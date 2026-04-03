@@ -295,14 +295,14 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="animate-fade-in-up w-full flex-1 md:flex-none md:max-w-lg bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 flex flex-col md:max-h-[calc(100vh-2rem)]" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
+      <div className="animate-fade-in-up w-full flex-1 md:flex-none md:max-w-lg bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 flex flex-col md:max-h-[calc(100vh-2rem)]" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gray-700 flex items-center justify-center">
               <Settings size={14} className="text-gray-300" />
             </div>
-            <h2 className="text-base font-semibold text-white">Settings</h2>
+            <h2 className="text-base font-semibold text-gray-100">Settings</h2>
           </div>
           <button
             onClick={onClose}

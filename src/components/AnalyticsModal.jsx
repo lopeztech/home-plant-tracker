@@ -98,7 +98,7 @@ function SectionTitle({ children }) {
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-gray-800/40 border border-gray-700/40 rounded-xl p-4 shadow-sm shadow-black/10 ${className}`} style={{ background: 'linear-gradient(135deg, rgba(30, 42, 58, 0.5) 0%, rgba(20, 30, 48, 0.5) 100%)' }}>
+    <div className={`bg-gray-800/40 border border-gray-700/40 rounded-xl p-4 shadow-soft ${className}`}>
       {children}
     </div>
   )
@@ -213,7 +213,7 @@ function OverviewTab({ plants }) {
                   <div key={d.name} className="flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: d.color }} />
                     <span className="text-xs text-gray-300 flex-1">{d.name}</span>
-                    <span className="text-xs font-semibold text-white">{d.value}</span>
+                    <span className="text-xs font-semibold text-gray-100">{d.value}</span>
                   </div>
                 ))}
               </div>
@@ -239,7 +239,7 @@ function OverviewTab({ plants }) {
                   <li key={p.id} className="flex items-start gap-2">
                     <AlertTriangle size={13} className="text-amber-400 flex-shrink-0 mt-0.5" />
                     <div className="min-w-0">
-                      <p className="text-xs font-medium text-white truncate">{p.name}</p>
+                      <p className="text-xs font-medium text-gray-100 truncate">{p.name}</p>
                       <p className="text-[11px] text-gray-400">
                         {isHealthRisk && <span className="text-amber-400">{p.health} health</span>}
                         {isHealthRisk && daysOverdue > 3 && ' · '}
@@ -311,16 +311,16 @@ function OverviewTab({ plants }) {
               layout="vertical"
               margin={{ top: 0, right: 8, bottom: 0, left: 0 }}
             >
-              <CartesianGrid horizontal={false} stroke="#374151" />
+              <CartesianGrid horizontal={false} stroke="var(--border-color-strong)" />
               <XAxis
                 type="number" domain={[0, 100]}
-                tick={{ fill: '#6b7280', fontSize: 10 }}
+                tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                 tickLine={false} axisLine={false}
                 tickFormatter={v => `${v}%`}
               />
               <YAxis
                 type="category" dataKey="name" width={130}
-                tick={{ fill: '#d1d5db', fontSize: 11 }}
+                tick={{ fill: 'var(--text-body)', fontSize: 11 }}
                 tickLine={false} axisLine={false}
               />
               <Tooltip content={<DarkTooltip unit="%" />} />
@@ -395,7 +395,7 @@ function PerPlantTab({ plants }) {
         <select
           value={selectedId}
           onChange={e => setSelectedId(e.target.value)}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
           {plants.map(p => (
             <option key={p.id} value={p.id}>{p.name} — {p.species || p.room}</option>
@@ -414,7 +414,7 @@ function PerPlantTab({ plants }) {
               <>
                 {/* Circular gauge via SVG */}
                 <svg width={88} height={88} viewBox="0 0 88 88">
-                  <circle cx="44" cy="44" r="36" fill="none" stroke="#374151" strokeWidth="8" />
+                  <circle cx="44" cy="44" r="36" fill="none" stroke="var(--border-color-strong)" strokeWidth="8" />
                   <circle
                     cx="44" cy="44" r="36"
                     fill="none"
@@ -425,7 +425,7 @@ function PerPlantTab({ plants }) {
                     transform="rotate(-90 44 44)"
                   />
                   <text x="44" y="44" textAnchor="middle" dominantBaseline="middle" fill="white" fontSize="18" fontWeight="bold">{score}</text>
-                  <text x="44" y="58" textAnchor="middle" fill="#9ca3af" fontSize="9">/ 100</text>
+                  <text x="44" y="58" textAnchor="middle" fill="var(--text-muted)" fontSize="9">/ 100</text>
                 </svg>
                 <p className="text-xs mt-1" style={{ color: scoreColor(score) }}>{scoreLabel(score)}</p>
                 <p className="text-[11px] text-gray-500 mt-0.5">{plant.wateringLog?.length ?? 0} waterings logged</p>
@@ -441,7 +441,7 @@ function PerPlantTab({ plants }) {
           ) : (
             <>
               <div className="flex items-baseline gap-1 mb-3">
-                <span className="text-3xl font-bold text-white">{daysSinceLast}</span>
+                <span className="text-3xl font-bold text-gray-100">{daysSinceLast}</span>
                 <span className="text-sm text-gray-400">days ago</span>
               </div>
               {plant.frequencyDays && (
@@ -482,7 +482,7 @@ function PerPlantTab({ plants }) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm font-semibold text-white">{getPatternMeta(patternResult.pattern).label}</span>
+                <span className="text-sm font-semibold text-gray-100">{getPatternMeta(patternResult.pattern).label}</span>
                 <span className="text-[11px] text-gray-500">{Math.round(patternResult.confidence * 100)}% confidence</span>
               </div>
               <ul className="space-y-0.5">
@@ -503,17 +503,17 @@ function PerPlantTab({ plants }) {
         ) : (
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={weeklyData} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
-              <CartesianGrid vertical={false} stroke="#374151" />
+              <CartesianGrid vertical={false} stroke="var(--border-color-strong)" />
               <XAxis
                 dataKey="week"
-                tick={{ fill: '#6b7280', fontSize: 9 }}
+                tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
                 tickLine={false} axisLine={false}
                 interval={1}
                 angle={-35} textAnchor="end" height={36}
               />
               <YAxis
                 allowDecimals={false}
-                tick={{ fill: '#6b7280', fontSize: 10 }}
+                tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
                 tickLine={false} axisLine={false}
               />
               <Tooltip content={<DarkTooltip unit=" waterings" />} />
@@ -546,10 +546,10 @@ function PerPlantTab({ plants }) {
           <>
             <ResponsiveContainer width="100%" height={160}>
               <LineChart data={healthData} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
-                <CartesianGrid vertical={false} stroke="#374151" />
+                <CartesianGrid vertical={false} stroke="var(--border-color-strong)" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: '#6b7280', fontSize: 9 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
                   tickLine={false} axisLine={false}
                   angle={-35} textAnchor="end" height={36}
                 />
@@ -557,7 +557,7 @@ function PerPlantTab({ plants }) {
                   domain={[0.5, 4.5]}
                   ticks={[1, 2, 3, 4]}
                   tickFormatter={v => ['', 'Poor', 'Fair', 'Good', 'Excellent'][v] || ''}
-                  tick={{ fill: '#6b7280', fontSize: 9 }}
+                  tick={{ fill: 'var(--text-muted)', fontSize: 9 }}
                   tickLine={false} axisLine={false}
                   width={60}
                 />
