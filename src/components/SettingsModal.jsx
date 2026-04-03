@@ -7,7 +7,7 @@ import {
 import { useTheme } from '../hooks/useTheme.js'
 
 function inputCls(extra = '') {
-  return `w-full px-3 py-2 rounded-lg bg-gray-800 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 transition-colors ${extra}`
+  return `w-full px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/30 focus:bg-gray-800 transition-all ${extra}`
 }
 
 function FloorRow({ floor, onToggleHidden, onNameChange, onTypeChange, onDelete, onUpdateRoom, onToggleRoom, onDeleteRoom, onAddRoom }) {
@@ -295,7 +295,7 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="animate-fade-in-up w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]">
+      <div className="animate-fade-in-up w-full max-w-lg bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 flex flex-col max-h-[calc(100vh-2rem)]" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2">

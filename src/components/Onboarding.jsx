@@ -54,7 +54,7 @@ export default function Onboarding() {
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-4 animate-fade-in"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
     >
-      <div className="animate-fade-in-up w-full max-w-sm bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl overflow-hidden">
+      <div className="animate-fade-in-up w-full max-w-sm bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}>
         {/* Progress bar */}
         <div className="flex gap-1 px-5 pt-5">
           {STEPS.map((_, i) => (
@@ -67,7 +67,7 @@ export default function Onboarding() {
 
         <div className="p-5">
           <div className="flex items-start justify-between gap-3">
-            <div className="w-12 h-12 rounded-xl bg-emerald-950/60 border border-emerald-900/50 flex items-center justify-center flex-shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-900/60 to-emerald-950/60 border border-emerald-900/40 flex items-center justify-center flex-shrink-0 shadow-sm shadow-emerald-950/20">
               <Icon size={22} className="text-emerald-400" />
             </div>
             <button

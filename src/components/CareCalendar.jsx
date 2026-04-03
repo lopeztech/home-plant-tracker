@@ -78,7 +78,8 @@ export default function CareCalendar({ plants, weather, floors, onClose }) {
       onClick={onClose}
     >
       <div
-        className="animate-fade-in-up w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col max-h-[calc(100vh-2rem)]"
+        className="animate-fade-in-up w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 flex flex-col max-h-[calc(100vh-2rem)]"
+        style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, #0f1925 100%)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}

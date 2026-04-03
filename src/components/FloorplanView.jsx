@@ -64,7 +64,7 @@ export default function FloorplanView({
   }, [visibleFloors, activeFloorId, onFloorChange])
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 bg-gray-950 border-r border-gray-800">
+    <div className="flex-1 flex flex-col min-w-0 bg-gray-950 border-r border-gray-800" style={{ background: 'linear-gradient(180deg, var(--tw-gray-950) 0%, #080e1a 100%)' }}>
 
       {/* ── Toolbar ──────────────────────────────────────────────────────── */}
       <div className="flex items-center px-4 py-2 bg-gray-900 border-b border-gray-800 flex-shrink-0 gap-2">
@@ -153,8 +153,9 @@ export default function FloorplanView({
             className="floorplan-container w-full h-full rounded-xl overflow-hidden border-2 transition-colors"
             style={{
               position: 'relative',
-              borderColor: borderColor ?? '#1f2937',
-              boxShadow: borderColor ? `0 0 20px ${borderColor}40` : undefined,
+              borderColor: borderColor ?? '#1e2d42',
+              boxShadow: borderColor ? `0 0 24px ${borderColor}30, inset 0 0 40px ${borderColor}05` : '0 4px 16px rgba(0,0,0,0.2)',
+              borderRadius: '14px',
             }}
             onDrop={handleDrop}
             onDragOver={handleDragOver}

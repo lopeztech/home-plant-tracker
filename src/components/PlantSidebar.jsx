@@ -130,10 +130,10 @@ function PlantCard({ plant, onClick, onWater, weather, floors, selectMode, selec
 
   return (
     <div
-      className={`w-full flex rounded-lg bg-gray-800 border transition-all duration-150 group overflow-hidden hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg hover:shadow-black/20 ${
+      className={`w-full flex rounded-xl bg-gray-800 border transition-all duration-200 group overflow-hidden hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg hover:shadow-black/20 ${
         selected ? 'border-emerald-500 bg-emerald-950/20' : 'border-gray-700 hover:border-gray-600'
       }`}
-      style={{ borderTop: `3px solid ${color}` }}
+      style={{ borderTop: `3px solid ${color}`, background: `linear-gradient(135deg, var(--tw-gray-800) 0%, ${color}08 100%)` }}
     >
       <button
         onClick={() => selectMode ? onSelect(plant.id) : onClick(plant)}
@@ -154,11 +154,11 @@ function PlantCard({ plant, onClick, onWater, weather, floors, selectMode, selec
 
         {/* Avatar: photo thumbnail or initial with leaf icon */}
         <div
-          className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold overflow-hidden relative"
+          className="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white text-sm font-bold overflow-hidden relative transition-transform duration-200 group-hover:scale-105"
           style={{
-            backgroundColor: showPhoto ? 'transparent' : color,
+            backgroundColor: showPhoto ? 'transparent' : `${color}25`,
             border: `2px solid ${color}`,
-            boxShadow: `0 0 0 1px ${color}40`,
+            boxShadow: `0 0 8px ${color}20`,
           }}
         >
           {showPhoto ? (
@@ -212,7 +212,7 @@ function PlantCard({ plant, onClick, onWater, weather, floors, selectMode, selec
       {onWater && !selectMode && (
         <button
           onClick={() => onWater(plant.id)}
-          className="flex-shrink-0 px-2.5 hover:bg-blue-900/30 text-gray-600 hover:text-blue-400 transition-colors border-l border-gray-700"
+          className="flex-shrink-0 px-2.5 hover:bg-blue-900/20 text-gray-600 hover:text-blue-400 transition-all duration-200 border-l border-gray-700/50 active:scale-90"
           aria-label={`Mark ${plant.name} as watered`}
           title={`Water ${plant.name} now`}
         >
@@ -376,7 +376,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
   }, [duePlantIds, onBatchWater, toast, exitSelectMode])
 
   return (
-    <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full">
+    <div id="plant-sidebar" className="flex flex-col bg-gray-900 border-l border-gray-800 w-full h-full" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--tw-gray-950) 100%)' }}>
       {/* Weather */}
       <WeatherSection
         weather={weather}
@@ -426,24 +426,24 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
         </div>
         {/* Summary pills */}
         {floorPlants.length > 0 && (
-          <div className="flex gap-1.5 mt-2 flex-wrap">
+          <div className="flex gap-1.5 mt-2.5 flex-wrap">
             {counts.overdue > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-950 text-red-400 border border-red-900">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-red-950/60 text-red-400 border border-red-900/50 shadow-sm shadow-red-950/30">
                 {counts.overdue} overdue
               </span>
             )}
             {counts.today > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-orange-950 text-orange-400 border border-orange-900">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-orange-950/60 text-orange-400 border border-orange-900/50 shadow-sm shadow-orange-950/30">
                 {counts.today} today
               </span>
             )}
             {counts.soon > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-950 text-yellow-400 border border-yellow-900">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-yellow-950/60 text-yellow-400 border border-yellow-900/50 shadow-sm shadow-yellow-950/30">
                 {counts.soon} soon
               </span>
             )}
             {counts.good > 0 && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-900">
+              <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-950/60 text-emerald-400 border border-emerald-900/50 shadow-sm shadow-emerald-950/30">
                 {counts.good} good
               </span>
             )}
@@ -461,7 +461,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
               placeholder="Search plants…"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-xs bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-emerald-600 transition-colors"
+              className="w-full pl-7 pr-3 py-1.5 text-xs bg-gray-800/60 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:bg-gray-800 focus:ring-1 focus:ring-emerald-600/30 transition-all"
             />
           </div>
           {rooms.length > 1 && (

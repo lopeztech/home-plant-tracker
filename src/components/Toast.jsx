@@ -22,13 +22,14 @@ function ToastItem({ toast, onDismiss }) {
     <div
       role="status"
       aria-live="polite"
-      className={`flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg border text-sm max-w-xs transition-all duration-300 ${
+      className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl shadow-black/30 border text-sm max-w-xs transition-all duration-300 ${
         exiting ? 'animate-slide-out' : 'animate-slide-in'
       } ${
         isError
-          ? 'bg-red-950 border-red-800 text-red-200'
-          : 'bg-gray-800 border-gray-700 text-gray-200'
+          ? 'bg-red-950/95 border-red-800/60 text-red-200'
+          : 'bg-gray-800/95 border-gray-700/60 text-gray-200'
       }`}
+      style={{ backdropFilter: 'blur(12px)' }}
     >
       {isError
         ? <AlertCircle size={16} className="text-red-400 flex-shrink-0" />

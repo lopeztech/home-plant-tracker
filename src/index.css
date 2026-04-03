@@ -7,22 +7,25 @@
     box-sizing: border-box;
   }
 
-  /* Lighten the dark palette globally — shift grays up for a softer look */
+  /* Refined dark palette — richer, deeper tones with subtle blue undertone */
   :root {
-    --tw-gray-950: #111827;  /* was #030712 */
-    --tw-gray-900: #1a2332;  /* was #111827 */
-    --tw-gray-800: #273040;  /* was #1f2937 */
-    --tw-gray-700: #374151;  /* was #374151 (unchanged) */
+    --tw-gray-950: #0c1220;  /* deeper blue-black */
+    --tw-gray-900: #141e30;  /* richer dark surface */
+    --tw-gray-800: #1e2a3a;  /* warmer mid-dark */
+    --tw-gray-700: #2d3d52;  /* softer border tone */
+    --accent-glow: rgba(16, 185, 129, 0.08);
   }
 
   body {
     background-color: var(--tw-gray-950);
     @apply text-gray-100;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
     margin: 0;
     padding: 0;
     height: 100vh;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   #root {
@@ -32,19 +35,19 @@
   }
 }
 
-/* Remap Tailwind gray classes to lighter values */
+/* Remap Tailwind gray classes to refined values */
 .bg-gray-950 { background-color: var(--tw-gray-950) !important; }
 .bg-gray-900 { background-color: var(--tw-gray-900) !important; }
 .bg-gray-800 { background-color: var(--tw-gray-800) !important; }
-.border-gray-800 { border-color: #2d3a4d !important; }
-.border-gray-700 { border-color: #3d4b5f !important; }
+.border-gray-800 { border-color: #1e2d42 !important; }
+.border-gray-700 { border-color: #2a3c54 !important; }
 
 /* ── Light theme overrides ──────────────────────────────────── */
 html.light-theme body {
-  background: #f8fafc;
+  background: #f0f4f8;
   color: #1e293b;
 }
-html.light-theme .bg-gray-950 { background-color: #f8fafc !important; }
+html.light-theme .bg-gray-950 { background-color: #f0f4f8 !important; }
 html.light-theme .bg-gray-900 { background-color: #ffffff !important; }
 html.light-theme .bg-gray-800 { background-color: #f1f5f9 !important; }
 html.light-theme .bg-gray-700 { background-color: #e2e8f0 !important; }
@@ -57,8 +60,8 @@ html.light-theme .text-gray-300 { color: #475569 !important; }
 html.light-theme .text-gray-400 { color: #64748b !important; }
 html.light-theme .text-gray-500 { color: #94a3b8 !important; }
 html.light-theme .text-gray-600 { color: #94a3b8 !important; }
-html.light-theme .shadow-md { box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
-html.light-theme .shadow-lg { box-shadow: 0 4px 12px rgba(0,0,0,0.08) !important; }
+html.light-theme .shadow-md { box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important; }
+html.light-theme .shadow-lg { box-shadow: 0 4px 16px rgba(0,0,0,0.06), 0 2px 4px rgba(0,0,0,0.04) !important; }
 html.light-theme .scrollbar-thin { scrollbar-color: #cbd5e1 #f1f5f9; }
 html.light-theme .scrollbar-thin::-webkit-scrollbar-track { background: #f1f5f9; }
 html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #cbd5e1; }
@@ -66,20 +69,24 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: #374151 #111827;
+    scrollbar-color: #2a3c54 #0c1220;
   }
 
   .scrollbar-thin::-webkit-scrollbar {
-    width: 6px;
+    width: 5px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-track {
-    background: #111827;
+    background: transparent;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background-color: #374151;
+    background-color: #2a3c54;
     border-radius: 3px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: #3a4f6a;
   }
 }
 
@@ -151,16 +158,17 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(17, 24, 39, 0.95);
-  border: 1px solid rgba(55, 65, 81, 1);
+  background: rgba(12, 18, 32, 0.92);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(42, 60, 84, 0.8);
   color: white;
-  padding: 6px 10px;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
   font-size: 12px;
   white-space: nowrap;
   pointer-events: none;
   z-index: 50;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(16, 185, 129, 0.05);
 }
 
 .tooltip::after {
@@ -170,7 +178,7 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
   left: 50%;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: rgba(55, 65, 81, 1);
+  border-top-color: rgba(42, 60, 84, 0.8);
 }
 
 /* Tooltip below marker (near top edge) */
@@ -218,7 +226,7 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
   width: 88px;
   flex-shrink: 0;
   background: var(--tw-gray-950);
-  border-right: 1px solid #2d3a4d;
+  border-right: 1px solid #1e2d42;
   padding: 8px 6px;
   gap: 4px;
   overflow-y: auto;
@@ -236,12 +244,12 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
   align-items: center;
   justify-content: center;
   height: 26px;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
-  border: 1px dashed #3d4b5f;
+  border: 1px dashed #2a3c54;
   color: #4b5563;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
   flex-shrink: 0;
   margin-bottom: 4px;
 }
@@ -249,6 +257,7 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
 .floor-nav-add:hover {
   border-color: #10b981;
   color: #10b981;
+  background: rgba(16, 185, 129, 0.05);
 }
 
 .floor-nav-list {
@@ -264,38 +273,39 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
   align-items: center;
   justify-content: center;
   padding: 8px 4px;
-  border-radius: 8px;
-  background: #162030;
-  border: 1px solid #2d3a4d;
+  border-radius: 10px;
+  background: #121d2e;
+  border: 1px solid #1e2d42;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
   min-height: 48px;
 }
 
 .floor-nav-item:hover {
-  background: #111f35;
-  border-color: #1e3a5f;
+  background: #162640;
+  border-color: #2a4060;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .floor-nav-item-active {
-  background: #0f2040 !important;
+  background: linear-gradient(135deg, #0a1f38, #0f2a42) !important;
   border-color: #10b981 !important;
-  box-shadow: 0 0 0 1px #10b98130, inset 3px 0 0 #10b981;
+  box-shadow: 0 0 0 1px #10b98120, inset 3px 0 0 #10b981, 0 4px 12px rgba(16, 185, 129, 0.1);
 }
 
 .floor-nav-item-outdoor {
-  border-color: #14532d44;
+  border-color: #14532d30;
 }
 
 .floor-nav-item-outdoor:hover {
-  background: #051a0a;
-  border-color: #166534;
+  background: #071e10;
+  border-color: #16653480;
 }
 
 .floor-nav-item-outdoor.floor-nav-item-active {
-  background: #052e16 !important;
+  background: linear-gradient(135deg, #041a0c, #0a2e18) !important;
   border-color: #10b981 !important;
-  box-shadow: 0 0 0 1px #10b98130, inset 3px 0 0 #10b981;
+  box-shadow: 0 0 0 1px #10b98120, inset 3px 0 0 #10b981, 0 4px 12px rgba(16, 185, 129, 0.1);
 }
 
 .floor-nav-label {
@@ -339,15 +349,17 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
 
 /* Zoom control — dark style */
 .leaflet-control-zoom {
-  border: 1px solid #1f2937 !important;
-  border-radius: 8px !important;
+  border: 1px solid #1e2d42 !important;
+  border-radius: 10px !important;
   overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
 }
 .leaflet-control-zoom a {
   background: var(--tw-gray-900) !important;
   color: #9ca3af !important;
-  border-bottom: 1px solid #2d3a4d !important;
+  border-bottom: 1px solid #1e2d42 !important;
   line-height: 26px !important;
+  transition: background 0.15s, color 0.15s !important;
 }
 .leaflet-control-zoom a:hover {
   background: var(--tw-gray-800) !important;
@@ -399,11 +411,12 @@ html.light-theme .scrollbar-thin::-webkit-scrollbar-thumb { background-color: #c
 
 /* Plant hover tooltip */
 .lf-plant-tip-wrap.leaflet-tooltip {
-  background: rgba(17, 24, 39, 0.95) !important;
-  border: 1px solid #374151 !important;
-  border-radius: 6px !important;
-  padding: 6px 10px !important;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.4) !important;
+  background: rgba(12, 18, 32, 0.92) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(42, 60, 84, 0.6) !important;
+  border-radius: 10px !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4) !important;
   color: white !important;
 }
 .lf-plant-tip-wrap.leaflet-tooltip::before { display: none !important; }
