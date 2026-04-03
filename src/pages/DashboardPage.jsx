@@ -1,12 +1,12 @@
 import { useState, useCallback } from 'react'
-import { Row, Col } from 'react-bootstrap'
+import { Row, Col, Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
 import PlantListPanel from '../components/PlantListPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 
 export default function DashboardPage() {
-  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest } = usePlantContext()
+  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError } = usePlantContext()
 
   const [showPlantModal, setShowPlantModal] = useState(false)
   const [editingPlant, setEditingPlant] = useState(null)
@@ -62,6 +62,11 @@ export default function DashboardPage() {
   return (
     <div className="content-wrapper">
       <div className="main-content">
+        {plantsError && (
+          <Alert variant="danger" className="mb-3" dismissible>
+            Failed to load plants: {plantsError}
+          </Alert>
+        )}
         <Row>
           <Col xl={8} className="mb-4">
             <FloorplanPanel

@@ -20,7 +20,7 @@ export function usePlantContext() {
 }
 
 export function PlantProvider({ children }) {
-  const { isAuthenticated, isGuest } = useAuth()
+  const { isAuthenticated, isGuest, logout } = useAuth()
   const tempUnit = useTempUnit()
   const { weather, locationDenied } = useWeather(tempUnit.unit)
 
@@ -50,7 +50,13 @@ export function PlantProvider({ children }) {
     setPlantsError(null)
     plantsApi.list()
       .then(setPlants)
-      .catch((err) => setPlantsError(err.message))
+      .catch((err) => {
+        setPlantsError(err.message)
+        // Auto-logout on network/auth errors so user can re-authenticate
+        if (err.message.includes('NetworkError') || err.message.includes('401') || err.message.includes('403')) {
+          logout()
+        }
+      })
       .finally(() => setPlantsLoading(false))
     floorsApi.get()
       .then(({ floors: loaded }) => {
