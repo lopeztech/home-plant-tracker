@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react'
-import { Droplets, AlertTriangle, Leaf } from 'lucide-react'
+import { Droplets, AlertTriangle, Leaf, Activity } from 'lucide-react'
+import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
@@ -364,6 +365,8 @@ function PerPlantTab({ plants }) {
       }))
   }, [plant])
 
+  const patternResult = useMemo(() => plant ? analyseWateringPattern(plant) : null, [plant])
+
   if (!plant) {
     return <p className="text-gray-500 text-sm">No plants yet.</p>
   }
@@ -468,6 +471,29 @@ function PerPlantTab({ plants }) {
           )}
         </Card>
       </div>
+
+      {/* Watering pattern analysis */}
+      {patternResult && patternResult.pattern !== 'insufficient_data' && (
+        <Card>
+          <SectionTitle>Watering Pattern</SectionTitle>
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center" style={{ backgroundColor: getPatternMeta(patternResult.pattern).color + '20', border: `2px solid ${getPatternMeta(patternResult.pattern).color}` }}>
+              <Activity size={16} style={{ color: getPatternMeta(patternResult.pattern).color }} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm font-semibold text-white">{getPatternMeta(patternResult.pattern).label}</span>
+                <span className="text-[11px] text-gray-500">{Math.round(patternResult.confidence * 100)}% confidence</span>
+              </div>
+              <ul className="space-y-0.5">
+                {patternResult.contributingFactors.map((f, i) => (
+                  <li key={i} className="text-xs text-gray-400">{f}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Watering timeline */}
       <Card>

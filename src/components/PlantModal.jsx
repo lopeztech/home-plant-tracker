@@ -3,6 +3,7 @@ import { X, Trash2, Save, Leaf, Loader2, Droplets, Sparkles, Camera, ClipboardLi
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi } from '../api/plants.js'
 import { getWateringStatus } from '../utils/watering.js'
+import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import { useToast } from './Toast.jsx'
 
 const ROOMS = [
@@ -80,6 +81,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     health: null,
     healthReason: null,
     maturity: null,
+    potSize: null,
     recommendations: [],
   })
   const [isSaving, setIsSaving] = useState(false)
@@ -105,6 +107,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         health: plant.health || null,
         healthReason: plant.healthReason || null,
         maturity: plant.maturity || null,
+        potSize: plant.potSize || null,
         recommendations: plant.recommendations || [],
       })
     }
@@ -158,6 +161,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       health: form.health,
       healthReason: form.healthReason,
       maturity: form.maturity,
+      potSize: form.potSize,
       recommendations: form.recommendations,
     })
     setIsSaving(false)
@@ -436,6 +440,38 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   </select>
                 </FormField>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <FormField label="Pot Size">
+                  <select
+                    className={InputClass('cursor-pointer')}
+                    value={form.potSize || ''}
+                    onChange={e => update('potSize', e.target.value || null)}
+                  >
+                    <option value="">— Select —</option>
+                    <option value="small">Small</option>
+                    <option value="medium">Medium</option>
+                    <option value="large">Large</option>
+                    <option value="xl">Extra Large</option>
+                  </select>
+                </FormField>
+                <div />
+              </div>
+
+              {/* Watering pattern badge (only shown for existing plants with data) */}
+              {isEditing && (plant?.wateringLog?.length ?? 0) >= 3 && (() => {
+                const { pattern, confidence, contributingFactors } = analyseWateringPattern(plant)
+                const meta = getPatternMeta(pattern)
+                if (pattern === 'insufficient_data') return null
+                return (
+                  <div className={`flex items-start gap-2 px-3 py-2 rounded-lg border text-xs ${meta.bgClass}`}>
+                    <span className="font-semibold flex-shrink-0">{meta.label}</span>
+                    <span className="text-gray-400">·</span>
+                    <span className="text-gray-400 flex-1">{contributingFactors[0]}</span>
+                    <span className="text-gray-500 flex-shrink-0">{Math.round(confidence * 100)}%</span>
+                  </div>
+                )
+              })()}
 
               <FormField label="Notes">
                 <textarea
