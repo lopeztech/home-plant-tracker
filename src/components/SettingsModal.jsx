@@ -7,7 +7,7 @@ import {
 import { useTheme } from '../hooks/useTheme.js'
 
 function inputCls(extra = '') {
-  return `w-full px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/30 focus:bg-gray-800 transition-all ${extra}`
+  return `w-full px-3 py-2 rounded-soft bg-gray-800/60 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/30 focus:bg-gray-800 transition-all ${extra}`
 }
 
 function FloorRow({ floor, onToggleHidden, onNameChange, onTypeChange, onDelete, onUpdateRoom, onToggleRoom, onDeleteRoom, onAddRoom }) {
@@ -33,7 +33,7 @@ function FloorRow({ floor, onToggleHidden, onNameChange, onTypeChange, onDelete,
   const rooms = floor.rooms || []
 
   return (
-    <div className={`rounded-xl border transition-colors ${floor.hidden ? 'border-gray-800 bg-gray-900/30 opacity-60' : 'border-gray-700 bg-gray-800/50'}`}>
+    <div className={`rounded-soft-lg border transition-colors ${floor.hidden ? 'border-gray-800 bg-gray-900/30 opacity-60' : 'border-gray-700 bg-gray-800/50'}`}>
       {/* Floor header row */}
       <div className="flex items-center gap-2 px-3 py-2.5">
         {/* Visibility toggle */}
@@ -295,14 +295,14 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="animate-fade-in-up w-full flex-1 md:flex-none md:max-w-lg bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 flex flex-col md:max-h-[calc(100vh-2rem)]" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
+      <div className="animate-fade-in-up w-full flex-1 md:flex-none md:max-w-lg bg-gray-900 md:border md:border-gray-800 md:rounded-soft-xl shadow-soft-xl flex flex-col md:max-h-[calc(100vh-2rem)]" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gray-700 flex items-center justify-center">
+            <div className="w-7 h-7 rounded-soft bg-gray-700 flex items-center justify-center">
               <Settings size={14} className="text-gray-300" />
             </div>
-            <h2 className="text-base font-semibold text-gray-100">Settings</h2>
+            <h2 className="text-base font-medium text-gray-100">Settings</h2>
           </div>
           <button
             onClick={onClose}
@@ -321,7 +321,7 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={isAnalysingFloorplan}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-soft text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
             title={isAnalysingFloorplan ? 'Analysing…' : 'Upload floorplan'}
           >
             <Upload size={13} />
@@ -345,17 +345,17 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
         <div className="flex items-center justify-end px-5 py-4 border-t border-gray-800 flex-shrink-0 gap-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
+            className="px-4 py-2 rounded-soft text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
           >
             Cancel
           </button>
           <button
             onClick={handleSaveFloors}
             disabled={floorsSaving}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-soft text-sm font-medium transition-all ${
               floorsSaved
                 ? 'bg-emerald-700 text-emerald-200'
-                : 'bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-60'
+                : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/50 disabled:opacity-60'
             }`}
           >
             {floorsSaved ? <><CheckCircle2 size={14} /> Saved!</> : 'Save Floors'}
@@ -368,7 +368,7 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
             <span className="text-sm text-gray-400">Theme</span>
             <button
               onClick={onToggleTheme}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-soft text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
             >
               {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
               {theme === 'dark' ? 'Light mode' : 'Dark mode'}
@@ -379,7 +379,7 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
               <span className="text-sm text-gray-400">Temperature</span>
               <button
                 onClick={tempUnit.toggle}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-soft text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
               >
                 <Thermometer size={14} />
                 {tempUnit.unit === 'celsius' ? '°C → °F' : '°F → °C'}

@@ -22,7 +22,7 @@ function ToastItem({ toast, onDismiss }) {
     <div
       role="status"
       aria-live="polite"
-      className={`flex items-center gap-2 px-4 py-3 rounded-xl shadow-xl shadow-black/30 border text-sm max-w-xs transition-all duration-300 ${
+      className={`flex items-center gap-2 px-4 py-3 rounded-soft-lg shadow-soft-lg border text-sm max-w-xs transition-all duration-300 ${
         exiting ? 'animate-slide-out' : 'animate-slide-in'
       } ${
         isError

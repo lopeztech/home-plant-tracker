@@ -18,7 +18,7 @@ function ForecastModal({ weather, onClose }) {
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-fade-in-up"
+        className="bg-white rounded-soft-lg shadow-soft-lg w-full max-w-md overflow-hidden animate-fade-in-up"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
@@ -156,7 +156,7 @@ function PlantCard({ plant, onClick, onWater, weather, floors, selectMode, selec
 
   return (
     <div
-      className={`w-full flex rounded-xl bg-gray-800 border transition-all duration-200 group overflow-hidden hover:scale-[1.01] active:scale-[0.99] hover:shadow-lg hover:shadow-black/20 ${
+      className={`w-full flex rounded-soft-lg bg-gray-800 border transition-all duration-200 group overflow-hidden hover:scale-[1.01] active:scale-[0.99] hover:shadow-soft ${
         selected ? 'border-emerald-500 bg-emerald-950/20' : 'border-gray-700 hover:border-gray-600'
       }`}
       style={{ borderTop: `3px solid ${color}`, background: `linear-gradient(135deg, var(--tw-gray-800) 0%, ${color}08 100%)` }}
@@ -435,7 +435,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
             {onBatchWater && floorPlants.length > 0 && (
               <button
                 onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs border transition-colors font-medium ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-soft text-xs border transition-colors font-medium ${
                   selectMode
                     ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
                     : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:border-gray-600'
@@ -447,7 +447,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
             )}
             <button
               onClick={onAddPlant}
-              className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium"
+              className="flex items-center gap-1 px-2 py-1 rounded-soft text-xs bg-emerald-600 hover:bg-emerald-500 text-white transition-colors font-medium shadow-sm shadow-emerald-600/50"
             >
               <Plus size={12} />
               Add Plant
@@ -491,7 +491,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
               placeholder="Search plants…"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-7 pr-3 py-1.5 text-xs bg-gray-800/60 border border-gray-700 rounded-lg text-white placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:bg-gray-800 focus:ring-1 focus:ring-emerald-600/30 transition-all"
+              className="w-full pl-7 pr-3 py-1.5 text-xs bg-gray-800/60 border border-gray-700 rounded-soft text-white placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:bg-gray-800 focus:ring-1 focus:ring-emerald-600/30 transition-all"
             />
           </div>
           {rooms.length > 1 && (
@@ -528,7 +528,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
           <div className="flex flex-col items-center justify-center h-full text-center py-12 px-4 animate-fade-in-up">
             {plants.length === 0 ? (
               <>
-                <div className="w-16 h-16 rounded-2xl bg-emerald-950/50 border border-emerald-900/50 flex items-center justify-center mb-4">
+                <div className="w-16 h-16 rounded-soft-lg bg-emerald-950/50 border border-emerald-900/50 flex items-center justify-center mb-4">
                   <Leaf size={28} className="text-emerald-600" />
                 </div>
                 <p className="text-sm text-gray-200 font-medium">No plants yet</p>
@@ -543,7 +543,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
               </>
             ) : floorPlants.length === 0 ? (
               <>
-                <div className="w-16 h-16 rounded-2xl bg-gray-800/50 border border-gray-700/50 flex items-center justify-center mb-4">
+                <div className="w-16 h-16 rounded-soft-lg bg-gray-800/50 border border-gray-700/50 flex items-center justify-center mb-4">
                   <MapPin size={28} className="text-gray-600" />
                 </div>
                 <p className="text-sm text-gray-400 font-medium">No plants on this floor</p>
@@ -551,7 +551,7 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
               </>
             ) : (
               <>
-                <div className="w-16 h-16 rounded-2xl bg-gray-800/50 border border-gray-700/50 flex items-center justify-center mb-4">
+                <div className="w-16 h-16 rounded-soft-lg bg-gray-800/50 border border-gray-700/50 flex items-center justify-center mb-4">
                   <Search size={28} className="text-gray-600" />
                 </div>
                 <p className="text-sm text-gray-400 font-medium">No plants match</p>

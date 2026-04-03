@@ -98,7 +98,7 @@ function SectionTitle({ children }) {
 
 function Card({ children, className = '' }) {
   return (
-    <div className={`bg-white/80 border border-gray-200 rounded-xl p-4 shadow-sm ${className}`}>
+    <div className={`bg-white/80 border border-gray-200 rounded-soft-lg p-4 shadow-soft ${className}`}>
       {children}
     </div>
   )
@@ -108,7 +108,7 @@ function Card({ children, className = '' }) {
 function DarkTooltip({ active, payload, label, unit = '' }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-gray-900/95 border border-gray-700/60 rounded-lg px-3 py-2 text-xs shadow-xl shadow-black/30" style={{ backdropFilter: 'blur(8px)' }}>
+    <div className="bg-gray-900/95 border border-gray-700/60 rounded-soft px-3 py-2 text-xs shadow-soft-lg" style={{ backdropFilter: 'blur(8px)' }}>
       <p className="text-gray-400 mb-1">{label}</p>
       {payload.map((p, i) => (
         <p key={i} style={{ color: p.color || p.fill }}>{p.name}: <strong>{p.value}{unit}</strong></p>
@@ -395,7 +395,7 @@ function PerPlantTab({ plants }) {
         <select
           value={selectedId}
           onChange={e => setSelectedId(e.target.value)}
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-full bg-gray-800 border border-gray-700 rounded-soft px-3 py-2 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
           {plants.map(p => (
             <option key={p.id} value={p.id}>{p.name} — {p.species || p.room}</option>

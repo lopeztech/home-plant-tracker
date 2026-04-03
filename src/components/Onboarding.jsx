@@ -54,7 +54,7 @@ export default function Onboarding() {
       className="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-4 animate-fade-in"
       style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
     >
-      <div className="animate-fade-in-up w-full max-w-sm bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl shadow-black/40 overflow-hidden" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
+      <div className="animate-fade-in-up w-full max-w-sm bg-gray-900 border border-gray-800 rounded-soft-xl shadow-soft-xl overflow-hidden" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
         {/* Progress bar */}
         <div className="flex gap-1 px-5 pt-5">
           {STEPS.map((_, i) => (
@@ -67,7 +67,7 @@ export default function Onboarding() {
 
         <div className="p-5">
           <div className="flex items-start justify-between gap-3">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-900/60 to-emerald-950/60 border border-emerald-900/40 flex items-center justify-center flex-shrink-0 shadow-sm shadow-emerald-950/20">
+            <div className="w-12 h-12 rounded-soft-lg bg-gradient-to-br from-emerald-900/60 to-emerald-950/60 border border-emerald-900/40 flex items-center justify-center flex-shrink-0 shadow-soft">
               <Icon size={22} className="text-emerald-400" />
             </div>
             <button
@@ -79,7 +79,7 @@ export default function Onboarding() {
             </button>
           </div>
 
-          <h3 className="text-base font-semibold text-gray-100 mt-4">{current.title}</h3>
+          <h3 className="text-base font-medium text-gray-100 mt-4">{current.title}</h3>
           <p className="text-sm text-gray-400 mt-1 leading-relaxed">{current.description}</p>
         </div>
 
@@ -92,7 +92,7 @@ export default function Onboarding() {
           </button>
           <button
             onClick={next}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-soft text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/50 transition-colors"
           >
             {step < STEPS.length - 1 ? (
               <>Next <ChevronRight size={14} /></>

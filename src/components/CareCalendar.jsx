@@ -78,7 +78,7 @@ export default function CareCalendar({ plants, weather, floors, onClose }) {
       onClick={onClose}
     >
       <div
-        className="animate-fade-in-up w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 flex flex-col md:max-h-[calc(100vh-2rem)]"
+        className="animate-fade-in-up w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-soft-xl shadow-soft-xl flex flex-col md:max-h-[calc(100vh-2rem)]"
         style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}
         onClick={e => e.stopPropagation()}
       >
@@ -86,7 +86,7 @@ export default function CareCalendar({ plants, weather, floors, onClose }) {
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
           <div className="flex items-center gap-2">
             <Calendar size={16} className="text-emerald-400" />
-            <h2 className="text-sm font-semibold text-gray-100">Care Schedule</h2>
+            <h2 className="text-sm font-medium text-gray-100">Care Schedule</h2>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={prev} className="p-1.5 rounded-lg hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">

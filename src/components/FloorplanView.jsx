@@ -83,7 +83,7 @@ export default function FloorplanView({
         {activeFloor?.rooms?.length > 0 && (
           <button
             onClick={() => setEditZones(z => !z)}
-            className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs border transition-colors flex-shrink-0 ${
+            className={`hidden md:flex items-center gap-1.5 px-2 py-1 rounded-soft text-xs border transition-colors flex-shrink-0 ${
               editZones
                 ? 'bg-emerald-900/50 border-emerald-600 text-emerald-300'
                 : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white hover:bg-gray-700'
@@ -98,7 +98,7 @@ export default function FloorplanView({
         {/* Mobile: floor selector dropdown */}
         {visibleFloors.length > 1 && (
           <select
-            className="md:hidden text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-lg px-2 py-1 focus:outline-none"
+            className="md:hidden text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-soft px-2 py-1 focus:outline-none"
             value={activeFloorId}
             onChange={e => onFloorChange(e.target.value)}
           >
@@ -128,12 +128,12 @@ export default function FloorplanView({
 
         <div className="flex-1 overflow-hidden p-3">
           <div
-            className="floorplan-container w-full h-full rounded-xl overflow-hidden border-2 transition-colors"
+            className="floorplan-container w-full h-full rounded-soft-lg overflow-hidden border-2 transition-colors"
             style={{
               position: 'relative',
               borderColor: borderColor ?? 'var(--border-color)',
               boxShadow: borderColor ? `0 0 24px ${borderColor}30, inset 0 0 40px ${borderColor}05` : 'var(--shadow-soft)',
-              borderRadius: '14px',
+              borderRadius: '0.75rem',
             }}
             onDrop={handleDrop}
             onDragOver={handleDragOver}
@@ -177,7 +177,7 @@ export default function FloorplanView({
                 className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none animate-fade-in-up"
                 style={{ zIndex: 1000 }}
               >
-                <div className="w-16 h-16 rounded-2xl bg-gray-800/60 border border-gray-700/50 flex items-center justify-center mb-4">
+                <div className="w-16 h-16 rounded-soft-lg bg-gray-800/60 border border-gray-700/50 flex items-center justify-center mb-4">
                   <Upload size={24} className="text-gray-500" />
                 </div>
                 <p className="hidden md:block text-sm text-gray-400 font-medium">No floorplan uploaded yet</p>
@@ -191,7 +191,7 @@ export default function FloorplanView({
               <div
                 className="absolute bottom-3 left-3 pointer-events-none z-[999] hidden md:block"
               >
-                <div className="bg-gray-900/80 border border-gray-700/50 rounded-lg px-3 py-2 backdrop-blur-sm">
+                <div className="bg-gray-900/80 border border-gray-700/50 rounded-soft px-3 py-2 backdrop-blur-sm">
                   <div className="flex items-center gap-3">
                     {[
                       { color: '#ef4444', label: 'Overdue' },
@@ -215,7 +215,7 @@ export default function FloorplanView({
                 className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none animate-fade-in"
                 style={{ zIndex: 1000 }}
               >
-                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900/90 border border-gray-700 text-xs text-gray-400 shadow-lg">
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-gray-900/90 border border-gray-700 text-xs text-gray-400 shadow-soft">
                   <ScanLine size={12} className="text-emerald-500" />
                   <span className="hidden md:inline">Click anywhere on the floorplan to place a plant</span>
                   <span className="md:hidden">Tap to add a plant</span>

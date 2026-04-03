@@ -46,7 +46,7 @@ function FormField({ label, children, hint }) {
 }
 
 function InputClass(extra = '') {
-  return `w-full px-3 py-2 rounded-lg bg-gray-800/60 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/30 focus:bg-gray-800 transition-all ${extra}`
+  return `w-full px-3 py-2 rounded-soft bg-gray-800/60 border border-gray-700 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600/30 focus:bg-gray-800 transition-all ${extra}`
 }
 
 function CareSection({ label, children }) {
@@ -204,16 +204,16 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
       <div
-        className="animate-fade-in-up relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 flex flex-col md:max-h-[calc(100vh-2rem)]"
+        className="animate-fade-in-up relative w-full flex-1 md:flex-none md:max-w-md bg-gray-900 md:border md:border-gray-800 md:rounded-soft-xl shadow-soft-xl flex flex-col md:max-h-[calc(100vh-2rem)]"
         style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}
       >
         {/* Modal header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm shadow-emerald-900/30">
+            <div className="w-7 h-7 rounded-soft bg-gradient-to-br from-emerald-500 to-emerald-700 flex items-center justify-center shadow-sm shadow-emerald-600/50">
               <Leaf size={14} className="text-white" />
             </div>
-            <h2 className="text-base font-semibold text-gray-100">
+            <h2 className="text-base font-medium text-gray-100">
               {isEditing ? plant.name : 'Add Plant'}
             </h2>
             {wateringStatus && (
@@ -285,7 +285,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <button
               type="button"
               onClick={() => setMode('photo')}
-              className="w-full flex items-center gap-4 p-4 rounded-xl bg-emerald-900/15 border border-emerald-800/30 hover:bg-emerald-900/30 hover:border-emerald-700/60 hover:shadow-lg hover:shadow-emerald-950/30 transition-all duration-200 text-left group"
+              className="w-full flex items-center gap-4 p-4 rounded-soft-lg bg-emerald-900/15 border border-emerald-800/30 hover:bg-emerald-900/30 hover:border-emerald-700/60 hover:shadow-soft transition-all duration-200 text-left group"
             >
               <div className="w-11 h-11 rounded-full bg-gradient-to-br from-emerald-800/60 to-emerald-900/60 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                 <Camera size={20} className="text-emerald-400" />
@@ -301,7 +301,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <button
               type="button"
               onClick={() => setMode('manual')}
-              className="w-full flex items-center gap-4 p-4 rounded-xl bg-gray-800/30 border border-gray-700/60 hover:bg-gray-800/60 hover:border-gray-600 hover:shadow-lg hover:shadow-black/20 transition-all duration-200 text-left group"
+              className="w-full flex items-center gap-4 p-4 rounded-soft-lg bg-gray-800/30 border border-gray-700/60 hover:bg-gray-800/60 hover:border-gray-600 hover:shadow-soft transition-all duration-200 text-left group"
             >
               <div className="w-11 h-11 rounded-full bg-gray-700/40 flex items-center justify-center flex-shrink-0 group-hover:scale-105 transition-transform">
                 <ClipboardList size={20} className="text-gray-400" />
@@ -505,7 +505,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <button
                 type="button"
                 onClick={() => onWater(plant.id)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/60 transition-colors"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-soft text-sm font-medium bg-blue-900/40 hover:bg-blue-800/60 text-blue-300 border border-blue-800/60 transition-colors"
               >
                 <Droplets size={15} />
                 Watered
@@ -543,7 +543,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               type="button"
               onClick={handleGetRecommendations}
               disabled={careLoading}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-soft text-sm font-medium bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-300 border border-emerald-800/60 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {careLoading
                 ? <Loader2 size={15} className="animate-spin" />
@@ -605,8 +605,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
         {/* Delete confirmation dialog */}
         {confirmDelete && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 md:rounded-2xl">
-            <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 mx-6 max-w-xs w-full shadow-xl space-y-4">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60 md:rounded-soft-xl">
+            <div className="bg-gray-800 border border-gray-700 rounded-soft-lg p-5 mx-6 max-w-xs w-full shadow-soft-lg space-y-4">
               <p className="text-sm text-white font-medium">
                 Delete {plant?.name || 'this plant'}?
               </p>
@@ -615,14 +615,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <button
                   type="button"
                   onClick={() => setConfirmDelete(false)}
-                  className="px-4 py-2 rounded-lg text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
+                  className="px-4 py-2 rounded-soft text-sm bg-gray-700 hover:bg-gray-600 text-gray-300 hover:text-white transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleDelete}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-600 hover:bg-red-500 text-white transition-colors"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-soft text-sm font-medium bg-red-600 hover:bg-red-500 text-white shadow-sm shadow-red-600/50 transition-colors"
                 >
                   <Trash2 size={14} />
                   Delete
@@ -639,7 +639,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <button
                 type="button"
                 onClick={() => setConfirmDelete(true)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-gray-700"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-soft text-sm font-medium transition-colors bg-gray-800 hover:bg-gray-700 text-red-400 hover:text-red-300 border border-gray-700"
               >
                 <Trash2 size={14} />
                 Delete
@@ -651,7 +651,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
+              className="px-4 py-2 rounded-soft text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
             >
               Cancel
             </button>
@@ -662,9 +662,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 onClick={handleSubmit}
                 disabled={!form.name.trim() || isSaving}
                 title={!form.name.trim() ? 'Enter a name to save' : undefined}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-soft text-sm font-medium transition-all duration-200 ${
                   form.name.trim() && !isSaving
-                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-md shadow-emerald-900/30'
+                    ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/50'
                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                 }`}
               >

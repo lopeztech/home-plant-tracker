@@ -381,7 +381,7 @@ function AppContent() {
           {mobileTab === 'floorplan' && (
             <button
               onClick={handleAddPlant}
-              className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 active:scale-90 text-white shadow-lg shadow-emerald-900/50 flex items-center justify-center transition-all duration-200"
+              className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-90 text-white shadow-sm shadow-emerald-600/50 flex items-center justify-center transition-all duration-200"
               aria-label="Add new plant"
             >
               <Plus size={24} />
@@ -497,7 +497,7 @@ function AppContent() {
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
           onClick={() => setShowHelp(false)}
         >
-          <div className="animate-fade-in-up bg-gray-900 md:border md:border-gray-800 md:rounded-2xl shadow-2xl shadow-black/40 p-6 max-w-sm w-full mx-auto my-auto" onClick={e => e.stopPropagation()} style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
+          <div className="animate-fade-in-up bg-gray-900 md:border md:border-gray-800 md:rounded-soft-xl shadow-soft-xl p-6 max-w-sm w-full mx-auto my-auto" onClick={e => e.stopPropagation()} style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
             <div className="flex items-center gap-2 mb-4">
               <Keyboard size={18} className="text-emerald-400" />
               <h2 className="text-sm font-semibold text-gray-100">Keyboard Shortcuts</h2>

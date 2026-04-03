@@ -25,7 +25,7 @@ const MATURITY_COLORS = {
 function Badge({ label, value, colorMap }) {
   const colors = colorMap[value] || { bg: 'bg-gray-800', text: 'text-gray-300', border: 'border-gray-600' }
   return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium ${colors.bg} ${colors.text} ${colors.border}`}>
+    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-soft border text-xs font-medium ${colors.bg} ${colors.text} ${colors.border}`}>
       <span className="text-gray-500">{label}:</span>
       <span>{value}</span>
     </div>
@@ -136,7 +136,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
 
       {!previewSrc ? (
         <div
-          className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
+          className={`border-2 border-dashed rounded-soft-lg p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
             isDragging
               ? 'border-emerald-500 bg-emerald-950/30'
               : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
@@ -162,7 +162,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
           />
         </div>
       ) : (
-        <div className="relative rounded-xl overflow-hidden bg-gray-800 border border-gray-700">
+        <div className="relative rounded-soft-lg overflow-hidden bg-gray-800 border border-gray-700">
           <img src={previewSrc} alt="Plant" className="w-full h-40 object-contain" />
           <button
             onClick={handleRemoveImage}
@@ -178,7 +178,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
                   <Loader2 size={14} className="animate-spin text-emerald-400" />
                   <span className="text-xs text-gray-300">{ANALYSIS_STAGES[stageIndex]}</span>
                 </div>
-                <span className="text-[10px] text-gray-500">Usually takes 5–15 seconds</span>
+                <span className="text-[10px] text-gray-500">Usually takes 5-15 seconds</span>
               </div>
             </div>
           )}
@@ -186,7 +186,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
       )}
 
       {error && (
-        <div className="flex items-start gap-2 p-3 rounded-lg bg-red-950 border border-red-800">
+        <div className="flex items-start gap-2 p-3 rounded-soft bg-red-950 border border-red-800">
           <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="text-xs text-red-300">{error}</p>
@@ -200,7 +200,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
       )}
 
       {analysisResult && (
-        <div className="space-y-3 p-3 rounded-xl bg-gray-800 border border-gray-700">
+        <div className="space-y-3 p-3 rounded-soft-lg bg-gray-800 border border-gray-700">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sparkles size={13} className="text-emerald-400" />
@@ -218,7 +218,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
           <div className="flex flex-wrap gap-2">
             <Badge label="Health" value={analysisResult.health} colorMap={HEALTH_COLORS} />
             <Badge label="Maturity" value={analysisResult.maturity} colorMap={MATURITY_COLORS} />
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium bg-blue-950 text-blue-300 border-blue-800">
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-soft border text-xs font-medium bg-blue-950 text-blue-300 border-blue-800">
               <Droplets size={12} className="text-blue-400" />
               <span>Every {analysisResult.frequencyDays}d</span>
             </div>
