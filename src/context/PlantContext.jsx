@@ -51,11 +51,17 @@ export function PlantProvider({ children }) {
     plantsApi.list()
       .then(setPlants)
       .catch((err) => {
-        setPlantsError(err.message)
-        // Auto-logout on network/auth errors so user can re-authenticate
-        if (err.message.includes('NetworkError') || err.message.includes('401') || err.message.includes('403')) {
+        const msg = err.message || ''
+        // CORS errors (expired JWT → 400 without CORS headers) and auth errors
+        // indicate a stale credential — force re-login
+        const isAuthError = msg.includes('NetworkError') || msg.includes('Failed to fetch')
+          || msg.includes('Load failed') || msg.includes('401') || msg.includes('403')
+        if (isAuthError) {
+          setPlantsError('Session expired. Please sign in again.')
           logout()
+          return
         }
+        setPlantsError(msg)
       })
       .finally(() => setPlantsLoading(false))
     floorsApi.get()
