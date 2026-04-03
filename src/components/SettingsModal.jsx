@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useRef } from 'react'
 import {
   X, Eye, EyeOff, CheckCircle2,
   Layers, Plus, Trash2, ChevronDown, ChevronRight, Settings,
-  Sun, Moon, LogOut,
+  Sun, Moon, LogOut, Upload,
 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { useTheme } from '../hooks/useTheme.js'
@@ -263,9 +263,10 @@ function FloorsTab({ floors, onChange }) {
   )
 }
 
-export default function SettingsModal({ floors: initialFloors, onSaveFloors, onClose, onToggleTheme }) {
+export default function SettingsModal({ floors: initialFloors, onSaveFloors, onClose, onToggleTheme, onFloorplanUpload, isAnalysingFloorplan }) {
   const { logout } = useAuth()
   const theme = useTheme()
+  const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
     () => (initialFloors || []).map(f => ({ ...f, rooms: (f.rooms || []).map(r => ({ ...r })) }))
   )
@@ -282,6 +283,13 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
       setFloorsSaving(false)
     }
   }, [editableFloors, onSaveFloors])
+
+  const handleFileChange = (e) => {
+    const file = e.target.files && e.target.files[0]
+    if (!file) return
+    onFloorplanUpload(file)
+    e.target.value = ''
+  }
 
   return (
     <div
@@ -307,9 +315,27 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
         </div>
 
         {/* Header label */}
-        <div className="flex items-center gap-2 px-5 py-3 border-b border-gray-800 flex-shrink-0">
-          <Layers size={14} className="text-emerald-400" />
-          <span className="text-sm font-medium text-gray-300">Floors &amp; Zones</span>
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-800 flex-shrink-0">
+          <div className="flex items-center gap-2">
+            <Layers size={14} className="text-emerald-400" />
+            <span className="text-sm font-medium text-gray-300">Floors &amp; Zones</span>
+          </div>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isAnalysingFloorplan}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={isAnalysingFloorplan ? 'Analysing…' : 'Upload floorplan'}
+          >
+            <Upload size={13} />
+            {isAnalysingFloorplan ? 'Analysing…' : 'Upload Floorplan'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleFileChange}
+          />
         </div>
 
         {/* Body */}

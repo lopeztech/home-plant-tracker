@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react'
-import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon, Check, Leaf, ListChecks } from 'lucide-react'
+import { Droplets, AlertCircle, Clock, CheckCircle2, MapPin, CloudRain, Plus, Search, Sun, Moon, Check, Leaf, ListChecks, Calendar } from 'lucide-react'
 import { getWateringStatus, urgencyColor, urgencyLabel, OUTDOOR_ROOMS } from '../utils/watering.js'
 import { useToast } from './Toast.jsx'
 
@@ -285,7 +285,7 @@ function SkeletonCard() {
   )
 }
 
-export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, onBatchWater, loading, weather, locationDenied }) {
+export default function PlantSidebar({ plants, floors, activeFloorId, onPlantClick, onAddPlant, onWater, onBatchWater, loading, weather, locationDenied, onOpenCalendar }) {
   const toast = useToast()
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
@@ -392,6 +392,16 @@ export default function PlantSidebar({ plants, floors, activeFloorId, onPlantCli
             <span className="text-xs text-gray-500">
               {isFiltered ? `${filteredPlants.length} / ${floorPlants.length}` : floorPlants.length} plants
             </span>
+            {onOpenCalendar && (
+              <button
+                onClick={onOpenCalendar}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                title="Care schedule"
+                aria-label="Care schedule"
+              >
+                <Calendar size={14} />
+              </button>
+            )}
             {onBatchWater && floorPlants.length > 0 && (
               <button
                 onClick={() => selectMode ? exitSelectMode() : setSelectMode(true)}

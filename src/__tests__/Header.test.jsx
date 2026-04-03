@@ -27,74 +27,48 @@ describe('Header', () => {
   // ── Initial render state ──────────────────────────────────────────────────
 
   it('renders the app title', () => {
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} />)
+    render(<Header />)
     expect(screen.getByText('Plant Tracker')).toBeInTheDocument()
   })
 
   it('does not show buttons when not authenticated', () => {
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} />)
-    expect(screen.queryByRole('button', { name: /upload floorplan/i })).not.toBeInTheDocument()
+    render(<Header />)
+    expect(screen.queryByRole('button', { name: /settings/i })).not.toBeInTheDocument()
   })
 
-  it('shows upload, calendar, and settings buttons when authenticated', () => {
+  it('shows analytics and settings buttons when authenticated', () => {
     useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} />)
-    expect(screen.getByRole('button', { name: /upload floorplan/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /care schedule/i })).toBeInTheDocument()
+    render(<Header />)
+    expect(screen.getByRole('button', { name: /analytics/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument()
   })
 
   it('renders the user profile picture', () => {
     useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} />)
+    render(<Header />)
     const img = screen.getByAltText('Jane Smith')
     expect(img).toHaveAttribute('src', mockUser.picture)
   })
 
   // ── User interactions ─────────────────────────────────────────────────────
 
-  it('calls onFloorplanUpload with the selected file', () => {
-    useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
-    const onUpload = vi.fn()
-    render(<Header onFloorplanUpload={onUpload} isAnalysingFloorplan={false} />)
-    const input = document.querySelector('input[type="file"]')
-    const file = new File(['data'], 'floor.png', { type: 'image/png' })
-    fireEvent.change(input, { target: { files: [file] } })
-    expect(onUpload).toHaveBeenCalledWith(file)
-  })
-
-  it('does not call onFloorplanUpload when no file is selected', () => {
-    useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
-    const onUpload = vi.fn()
-    render(<Header onFloorplanUpload={onUpload} isAnalysingFloorplan={false} />)
-    const input = document.querySelector('input[type="file"]')
-    fireEvent.change(input, { target: { files: [] } })
-    expect(onUpload).not.toHaveBeenCalled()
-  })
-
   it('calls onOpenSettings when settings button is clicked', () => {
     useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
     const onOpenSettings = vi.fn()
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} onOpenSettings={onOpenSettings} />)
+    render(<Header onOpenSettings={onOpenSettings} />)
     fireEvent.click(screen.getByRole('button', { name: /settings/i }))
     expect(onOpenSettings).toHaveBeenCalledOnce()
   })
 
-  it('calls onOpenCalendar when calendar button is clicked', () => {
+  it('calls onOpenAnalytics when analytics button is clicked', () => {
     useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
-    const onOpenCalendar = vi.fn()
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={false} onOpenCalendar={onOpenCalendar} />)
-    fireEvent.click(screen.getByRole('button', { name: /care schedule/i }))
-    expect(onOpenCalendar).toHaveBeenCalledOnce()
+    const onOpenAnalytics = vi.fn()
+    render(<Header onOpenAnalytics={onOpenAnalytics} />)
+    fireEvent.click(screen.getByRole('button', { name: /analytics/i }))
+    expect(onOpenAnalytics).toHaveBeenCalledOnce()
   })
 
-  // ── Loading / error states ────────────────────────────────────────────────
-
-  it('disables the upload button while analysing', () => {
-    useAuth.mockReturnValue({ user: mockUser, logout: vi.fn() })
-    render(<Header onFloorplanUpload={vi.fn()} isAnalysingFloorplan={true} />)
-    expect(screen.getByRole('button', { name: /upload floorplan/i })).toBeDisabled()
-  })
+  // ── Edge cases ────────────────────────────────────────────────────────────
 
   it('renders without crashing when optional props are omitted', () => {
     expect(() => render(<Header />)).not.toThrow()

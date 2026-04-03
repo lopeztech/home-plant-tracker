@@ -1,17 +1,8 @@
-import React, { useRef } from 'react'
-import { Upload, Leaf, Settings, Calendar, BarChart2 } from 'lucide-react'
+import { Leaf, Settings, BarChart2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
-export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpenSettings, onOpenCalendar, onOpenAnalytics }) {
+export default function Header({ onOpenSettings, onOpenAnalytics }) {
   const { user } = useAuth()
-  const fileInputRef = useRef(null)
-
-  const handleFileChange = (e) => {
-    const file = e.target.files && e.target.files[0]
-    if (!file) return
-    onFloorplanUpload(file)
-    e.target.value = ''
-  }
 
   const iconBtn = "p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
 
@@ -27,38 +18,12 @@ export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpen
       {user && (
         <div className="flex items-center gap-1">
           <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isAnalysingFloorplan}
-            className={`${iconBtn} disabled:opacity-50 disabled:cursor-not-allowed`}
-            title={isAnalysingFloorplan ? 'Analysing…' : 'Upload floorplan'}
-            aria-label="Upload floorplan"
-          >
-            <Upload size={16} />
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-
-          <button
             onClick={onOpenAnalytics}
             className={iconBtn}
             title="Analytics"
             aria-label="Analytics"
           >
             <BarChart2 size={16} />
-          </button>
-
-          <button
-            onClick={onOpenCalendar}
-            className={iconBtn}
-            title="Care schedule"
-            aria-label="Care schedule"
-          >
-            <Calendar size={16} />
           </button>
 
           <button

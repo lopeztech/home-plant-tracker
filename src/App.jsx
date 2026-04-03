@@ -303,10 +303,7 @@ function AppContent() {
         Skip to plant list
       </a>
       <Header
-        onFloorplanUpload={handleFloorplanUpload}
-        isAnalysingFloorplan={isAnalysingFloorplan}
         onOpenSettings={() => setShowSettings(true)}
-        onOpenCalendar={() => setShowCalendar(true)}
         onOpenAnalytics={() => setShowAnalytics(true)}
       />
 
@@ -366,6 +363,7 @@ function AppContent() {
             loading={plantsLoading}
             weather={weather}
             locationDenied={locationDenied}
+            onOpenCalendar={() => setShowCalendar(true)}
           />
         </div>
       </div>
@@ -443,6 +441,8 @@ function AppContent() {
           onSaveFloors={handleSaveFloors}
           onClose={() => setShowSettings(false)}
           onToggleTheme={toggleTheme}
+          onFloorplanUpload={handleFloorplanUpload}
+          isAnalysingFloorplan={isAnalysingFloorplan}
         />
       )}
 
