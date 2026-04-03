@@ -10,6 +10,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import Onboarding from './components/Onboarding.jsx'
 import CareCalendar from './components/CareCalendar.jsx'
+import AnalyticsModal from './components/AnalyticsModal.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
@@ -51,12 +52,14 @@ function AppContent() {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
   const [showCalendar, setShowCalendar] = useState(false)
+  const [showAnalytics, setShowAnalytics] = useState(false)
 
   const { showHelp, setShowHelp } = useKeyboardShortcuts({
     onAddPlant: () => { if (!showPlantModal && !showSettings) handleAddPlant() },
     onToggleSettings: () => setShowSettings(s => !s),
     onEscape: () => {
       if (showHelp) setShowHelp(false)
+      else if (showAnalytics) setShowAnalytics(false)
       else if (showCalendar) setShowCalendar(false)
       else if (showSettings) setShowSettings(false)
       else if (showPlantModal) { setShowPlantModal(false); setEditingPlant(null); setPendingPosition(null) }
@@ -304,6 +307,7 @@ function AppContent() {
         isAnalysingFloorplan={isAnalysingFloorplan}
         onOpenSettings={() => setShowSettings(true)}
         onOpenCalendar={() => setShowCalendar(true)}
+        onOpenAnalytics={() => setShowAnalytics(true)}
       />
 
       {isGuest && (
@@ -448,6 +452,13 @@ function AppContent() {
           weather={weather}
           floors={floors}
           onClose={() => setShowCalendar(false)}
+        />
+      )}
+
+      {showAnalytics && (
+        <AnalyticsModal
+          plants={plants}
+          onClose={() => setShowAnalytics(false)}
         />
       )}
 

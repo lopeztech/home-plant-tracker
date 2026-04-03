@@ -1,8 +1,8 @@
 import React, { useRef } from 'react'
-import { Upload, Leaf, Settings, Calendar } from 'lucide-react'
+import { Upload, Leaf, Settings, Calendar, BarChart2 } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
-export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpenSettings, onOpenCalendar }) {
+export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpenSettings, onOpenCalendar, onOpenAnalytics }) {
   const { user } = useAuth()
   const fileInputRef = useRef(null)
 
@@ -42,6 +42,15 @@ export default function Header({ onFloorplanUpload, isAnalysingFloorplan, onOpen
             className="hidden"
             onChange={handleFileChange}
           />
+
+          <button
+            onClick={onOpenAnalytics}
+            className={iconBtn}
+            title="Analytics"
+            aria-label="Analytics"
+          >
+            <BarChart2 size={16} />
+          </button>
 
           <button
             onClick={onOpenCalendar}
