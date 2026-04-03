@@ -2,9 +2,8 @@ import React, { useState, useCallback, useRef } from 'react'
 import {
   X, Eye, EyeOff, CheckCircle2,
   Layers, Plus, Trash2, ChevronDown, ChevronRight, Settings,
-  Sun, Moon, LogOut, Upload,
+  Sun, Moon, Upload,
 } from 'lucide-react'
-import { useAuth } from '../contexts/AuthContext.jsx'
 import { useTheme } from '../hooks/useTheme.js'
 
 function inputCls(extra = '') {
@@ -264,7 +263,6 @@ function FloorsTab({ floors, onChange }) {
 }
 
 export default function SettingsModal({ floors: initialFloors, onSaveFloors, onClose, onToggleTheme, onFloorplanUpload, isAnalysingFloorplan }) {
-  const { logout } = useAuth()
   const theme = useTheme()
   const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
@@ -376,13 +374,6 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
               {theme === 'dark' ? 'Light mode' : 'Dark mode'}
             </button>
           </div>
-          <button
-            onClick={logout}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm bg-gray-800 hover:bg-red-900/40 text-gray-400 hover:text-red-300 transition-colors border border-gray-700 hover:border-red-800"
-          >
-            <LogOut size={14} />
-            Sign out
-          </button>
         </div>
       </div>
     </div>
