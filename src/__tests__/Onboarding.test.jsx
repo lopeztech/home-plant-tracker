@@ -21,11 +21,16 @@ describe('Onboarding', () => {
     expect(container.innerHTML).toBe('')
   })
 
-  it('localStorage.getItem is checked on mount', () => {
-    const spy = vi.spyOn(localStorage, 'getItem')
-    render(<Onboarding />)
-    expect(spy).toHaveBeenCalledWith(STORAGE_KEY)
-    spy.mockRestore()
+  it('respects localStorage onboarding key on mount', () => {
+    // When key is absent, onboarding shows
+    const { unmount } = render(<Onboarding />)
+    expect(screen.getByText('Upload your floorplan')).toBeInTheDocument()
+    unmount()
+
+    // When key is set, onboarding is hidden
+    localStorage.setItem(STORAGE_KEY, 'true')
+    const { container } = render(<Onboarding />)
+    expect(container.innerHTML).toBe('')
   })
 
   it('clicking Next advances through steps', () => {

@@ -48,13 +48,30 @@ describe('LoginPage', () => {
     expect(mockLoginAsGuest).toHaveBeenCalled()
   })
 
-  // CLIENT_ID is captured at module load from import.meta.env.VITE_GOOGLE_CLIENT_ID.
-  // When .env.local provides a value, GoogleLogin always renders in tests.
-  // We test the path that is actually active based on the env.
-  it('renders Google login when client ID is set', () => {
-    render(<LoginPage />)
+  it('renders Google login when client ID is set', async () => {
+    const originalEnv = import.meta.env.VITE_GOOGLE_CLIENT_ID
+    import.meta.env.VITE_GOOGLE_CLIENT_ID = 'test-client-id'
+
+    vi.resetModules()
+    vi.doMock('../contexts/AuthContext.jsx', () => ({
+      useAuth: vi.fn(() => ({ login: mockLogin, loginAsGuest: mockLoginAsGuest })),
+    }))
+    vi.doMock('@react-oauth/google', () => ({
+      GoogleLogin: ({ onSuccess, onError }) => (
+        <div data-testid="google-login">
+          <button onClick={() => onSuccess({ credential: 'test-token' })}>Sign in</button>
+          <button onClick={() => onError()}>Fail</button>
+        </div>
+      ),
+    }))
+
+    const { default: LoginPageWithId } = await import('../pages/LoginPage.jsx')
+    render(<LoginPageWithId />)
+
     expect(screen.getByTestId('google-login')).toBeInTheDocument()
     expect(screen.queryByText('Configuration required')).not.toBeInTheDocument()
+
+    import.meta.env.VITE_GOOGLE_CLIENT_ID = originalEnv
   })
 
   it('shows error message on failed login when Google login is available', () => {
