@@ -583,7 +583,7 @@ export default function AnalyticsPage({ plants }) {
   const [tab, setTab] = useState('overview')
 
   return (
-    <div className="flex flex-col h-full bg-gray-950">
+    <div className="flex flex-col h-full min-h-0 bg-gray-950">
       {/* Tabs */}
       <div className="flex border-b border-gray-800 flex-shrink-0 px-4">
         {[
