@@ -43,13 +43,31 @@ Browser (React SPA)
   → Gemini API (plant analysis, care recommendations)
 ```
 
-**Frontend** (`src/`) is a Vite + React SPA using Tailwind CSS. The main interactive surface is the Leaflet-based floorplan canvas (`LeafletFloorplan.jsx`) where plants are placed as markers. `App.jsx` owns top-level state (plants, floors, selected floor/plant). All API calls go through `src/api/plants.js`.
+**Frontend** (`src/`) is a Vite + React SPA using **Bootstrap 5 + React-Bootstrap** with Smart Admin template SCSS theming. The layout uses Smart's CSS Grid: `app-wrap` → `app-header` (topbar) + `app-sidebar` (sidebar nav) + `app-body` (content). Uses `react-router` for page navigation.
+
+**Layout structure:**
+- `src/layouts/MainLayout.jsx` — CSS Grid shell (topbar + sidebar + content + footer)
+- `src/layouts/components/Topbar.jsx` — Header bar: logo, weather, theme toggle, profile dropdown
+- `src/layouts/components/Sidebar.jsx` — Navigation sidebar with Smart's menu pattern
+- `src/context/LayoutContext.jsx` — Theme/sidebar state (light/dark, theme style, nav collapsed)
+- `src/context/PlantContext.jsx` — All plant/floor CRUD state (extracted from old App.jsx)
+
+**Pages** (routed via `src/routes/index.jsx`):
+- `/` → `DashboardPage.jsx` — Floorplan panel (Leaflet) + Plant list panel
+- `/analytics` → `AnalyticsPage.jsx` — ApexCharts: health distribution, watering heatmap, consistency
+- `/calendar` → `CalendarPage.jsx` — Monthly care schedule
+- `/settings` → `SettingsPage.jsx` — Floor management, theme picker, preferences
+- `/login` → `LoginPage.jsx` — Google OAuth + guest mode
+
+**Styling:** Bootstrap 5.3 + Smart Admin SCSS (`src/assets/sass/smartapp.scss`). 9 color themes in `public/css/` (olive is default). Custom app styles in `_plant-tracker.scss` and `_leaflet-overrides.scss`. Icons use Smart's SVG sprite (`public/icons/sprite.svg`) via `<svg><use href="..."></use></svg>`.
+
+**Charts:** ApexCharts via `react-apexcharts`.
 
 **Backend** (`api/plants/index.js`) is a single Express file handling all routes. Auth: the API Gateway injects a decoded JWT as `x-apigateway-api-userinfo` header; locally, the backend falls back to parsing a `Authorization: Bearer` token directly. User isolation is enforced by scoping all Firestore reads/writes to `users/{userId}/`.
 
 **Gemini integration** is in `api/plants/index.js` — `/analyse` and `/analyse-floorplan` send base64 images; responses are JSON-parsed with `jsonrepair` fallback (handles Gemini's occasionally malformed output).
 
-**Auth** is Google OAuth via `@react-oauth/google`. `AuthContext.jsx` stores the credential and passes the ID token as `Authorization: Bearer` on every API request. The login gate is in `App.jsx`.
+**Auth** is Google OAuth via `@react-oauth/google`. `AuthContext.jsx` stores the credential and passes the ID token as `Authorization: Bearer` on every API request. The login gate is in `MainLayout.jsx` (redirects to `/login` if not authenticated).
 
 **Infrastructure** is managed by Terraform in the `platform-infra` repository. Key resources: Cloud Run (frontend Docker container with nginx), Cloud Run Function (backend), API Gateway (OpenAPI 2.0 spec), Firestore, Cloud Storage, Secret Manager. The GitHub Actions workflow (`deploy.yml`) in this repo only deploys the **frontend** (Docker image → Cloud Run `plant-tracker`). The **backend** Cloud Run Function (`plant-tracker-plants-api`) is deployed via `platform-infra`.
 
@@ -69,5 +87,8 @@ Backend env vars (`IMAGES_BUCKET`, `GEMINI_API_KEY`) are injected by Terraform/C
 - **Firestore path:** `users/{userId}/plants/{plantId}` and `users/{userId}/config/floors/{floorId}`
 - **Plant positions** (`x`, `y`) are percentage coordinates on the floorplan image (0–100)
 - **Watering logic** lives in `src/utils/watering.js`; the backend also stores `lastWatered` as an ISO date string
+- **Component pattern:** Use Smart Admin's `panel` / `panel-hdr` / `panel-container` / `panel-content` for card-like containers. Use React-Bootstrap components (`Modal`, `Button`, `Form`, `Card`, `Nav`, `Badge`, `Table`, `Row`, `Col`) for UI elements.
+- **Icons:** Use Smart's SVG sprite: `<svg className="sa-icon"><use href="/icons/sprite.svg#icon-name"></use></svg>`. Icon sizes: `sa-icon-2x`, `sa-icon-5x`.
+- **Theming:** 9 themes available (olive, earth, aurora, lunar, nebula, night, solar, storm, flare). Selected via `LayoutContext.changeThemeStyle()`. Dark mode via `LayoutContext.changeTheme('dark')`.
 - **Test mocks:** Backend tests use proxyquire + in-memory Firestore mock in `index.test.js`. Frontend tests mock `src/api/plants.js`
-- **CI/CD:** Tests run on every push/PR; Docker build + Cloud Run deploy only runs on `main` pushes
+- **CI/CD:** Tests run on every push/PR; Docker build + Cloud Run deploy only runs on `main` pushes. Do NOT run tests locally — rely on GitHub Actions CI.

@@ -1,35 +1,20 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react'
-import { Loader2, Sparkles, AlertCircle, X, Camera, Droplets } from 'lucide-react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Button, Card, Spinner, Alert, Badge, Form } from 'react-bootstrap'
 import { analyseApi } from '../api/plants.js'
 
 const ANALYSIS_STAGES = [
-  'Identifying species…',
-  'Assessing health…',
-  'Calculating watering schedule…',
+  'Identifying plant species...',
+  'Assessing plant health...',
+  'Evaluating maturity...',
+  'Calculating care schedule...',
 ]
 
 const HEALTH_COLORS = {
-  Excellent: { bg: 'bg-emerald-900', text: 'text-emerald-300', border: 'border-emerald-700' },
-  Good: { bg: 'bg-green-900', text: 'text-green-300', border: 'border-green-700' },
-  Fair: { bg: 'bg-yellow-900', text: 'text-yellow-300', border: 'border-yellow-700' },
-  Poor: { bg: 'bg-red-900', text: 'text-red-300', border: 'border-red-700' },
+  Excellent: 'success', Good: 'success', Fair: 'warning', Poor: 'danger',
 }
 
 const MATURITY_COLORS = {
-  Seedling: { bg: 'bg-cyan-900', text: 'text-cyan-300', border: 'border-cyan-700' },
-  Young: { bg: 'bg-blue-900', text: 'text-blue-300', border: 'border-blue-700' },
-  Mature: { bg: 'bg-violet-900', text: 'text-violet-300', border: 'border-violet-700' },
-  Established: { bg: 'bg-purple-900', text: 'text-purple-300', border: 'border-purple-700' },
-}
-
-function Badge({ label, value, colorMap }) {
-  const colors = colorMap[value] || { bg: 'bg-gray-800', text: 'text-gray-300', border: 'border-gray-600' }
-  return (
-    <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-soft border text-xs font-medium ${colors.bg} ${colors.text} ${colors.border}`}>
-      <span className="text-gray-500">{label}:</span>
-      <span>{value}</span>
-    </div>
-  )
+  Seedling: 'info', Young: 'info', Mature: 'primary', Established: 'primary',
 }
 
 export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImageChange }) {
@@ -43,142 +28,74 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
   const fileInputRef = useRef(null)
   const objectUrlRef = useRef(null)
 
-  useEffect(() => {
-    return () => {
-      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
-    }
-  }, [])
+  useEffect(() => () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current) }, [])
 
-  // Cycle through analysis stage messages
   useEffect(() => {
     if (!isAnalysing) { setStageIndex(0); return }
-    const interval = setInterval(() => {
-      setStageIndex(i => (i + 1) % ANALYSIS_STAGES.length)
-    }, 3000)
+    const interval = setInterval(() => setStageIndex((i) => (i + 1) % ANALYSIS_STAGES.length), 3000)
     return () => clearInterval(interval)
   }, [isAnalysing])
 
-  const runAnalysis = useCallback(async (file) => {
-    setIsAnalysing(true)
-    setError(null)
-    setAnalysisResult(null)
-    try {
-      const result = await analyseApi.analyse(file)
-      if (!result.health || !result.maturity || !result.frequencyDays) throw new Error('Incomplete response from AI')
-      setAnalysisResult(result)
-      onAnalysisComplete?.(result)
-    } catch (err) {
-      setError(err.message || 'Analysis failed. Please try again.')
-    } finally {
-      setIsAnalysing(false)
-    }
-  }, [onAnalysisComplete])
-
-  const loadImage = useCallback((file) => {
-    if (!file || !file.type.startsWith('image/')) {
-      setError('Please upload a valid image file.')
-      return
-    }
-    setError(null)
-    setAnalysisResult(null)
+  const processFile = useCallback((file) => {
+    if (!file?.type.startsWith('image/')) return
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
     const url = URL.createObjectURL(file)
     objectUrlRef.current = url
     setPreviewSrc(url)
     setImageFile(file)
-    onImageChange?.(file)
-    runAnalysis(file)
-  }, [onImageChange, runAnalysis])
-
-  const handleFileInput = useCallback((e) => {
-    const file = e.target.files?.[0]
-    if (file) loadImage(file)
-    e.target.value = ''
-  }, [loadImage])
-
-  const handleDrop = useCallback((e) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const file = e.dataTransfer.files?.[0]
-    if (file) loadImage(file)
-  }, [loadImage])
-
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }, [])
-
-  const handleDragLeave = useCallback(() => {
-    setIsDragging(false)
-  }, [])
-
-  const handleRemoveImage = useCallback(() => {
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current)
-      objectUrlRef.current = null
-    }
-    setPreviewSrc(null)
-    setImageFile(null)
-    setAnalysisResult(null)
     setError(null)
-    onImageChange?.(null)
+    setAnalysisResult(null)
+    onImageChange(file)
+    runAnalysis(file)
   }, [onImageChange])
 
-  const handleReanalyse = useCallback(() => {
-    if (imageFile) runAnalysis(imageFile)
-  }, [imageFile, runAnalysis])
+  const runAnalysis = useCallback(async (file) => {
+    setIsAnalysing(true); setError(null)
+    try {
+      const result = await analyseApi.analyse(file)
+      setAnalysisResult(result)
+      onAnalysisComplete(result)
+    } catch (err) { setError(err.message) }
+    finally { setIsAnalysing(false) }
+  }, [onAnalysisComplete])
+
+  const handleRemoveImage = () => {
+    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+    objectUrlRef.current = null
+    setPreviewSrc(null); setImageFile(null); setAnalysisResult(null); setError(null)
+    onImageChange(null)
+  }
+
+  const handleReanalyse = () => { if (imageFile) runAnalysis(imageFile) }
 
   return (
-    <div className="space-y-3">
-      <label className="block text-xs font-medium text-gray-400 uppercase tracking-wider">
-        Plant Photo
-      </label>
-
+    <div>
+      <Form.Label className="text-muted text-uppercase fs-xs fw-600 d-block mb-2">Plant Photo</Form.Label>
       {!previewSrc ? (
         <div
-          className={`border-2 border-dashed rounded-soft-lg p-6 flex flex-col items-center justify-center gap-2 cursor-pointer transition-colors ${
-            isDragging
-              ? 'border-emerald-500 bg-emerald-950/30'
-              : 'border-gray-700 hover:border-gray-600 bg-gray-800/50'
-          }`}
+          className={`border border-2 border-dashed rounded p-4 text-center cursor-pointer ${isDragging ? 'border-primary bg-primary bg-opacity-10' : ''}`}
+          style={{ cursor: 'pointer' }}
           onClick={() => fileInputRef.current?.click()}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
+          onDrop={(e) => { e.preventDefault(); setIsDragging(false); processFile(e.dataTransfer.files[0]) }}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+          onDragLeave={() => setIsDragging(false)}
         >
-          <div className="w-10 h-10 rounded-full bg-gray-700 flex items-center justify-center">
-            <Camera size={18} className="text-gray-400" />
-          </div>
-          <div className="text-center">
-            <p className="text-sm text-gray-300">Drop a photo here</p>
-            <p className="text-xs text-gray-500 mt-0.5">or click to browse — AI will analyse automatically</p>
-          </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleFileInput}
-          />
+          <svg className="sa-icon sa-icon-2x text-muted mb-2"><use href="/icons/sprite.svg#camera"></use></svg>
+          <p className="mb-0 fs-sm">Drop a photo here or click to browse</p>
+          <small className="text-muted">AI will analyse automatically</small>
+          <input ref={fileInputRef} type="file" accept="image/*" className="d-none" onChange={(e) => processFile(e.target.files?.[0])} />
         </div>
       ) : (
-        <div className="relative rounded-soft-lg overflow-hidden bg-gray-800 border border-gray-700">
-          <img src={previewSrc} alt="Plant" className="w-full h-40 object-contain" />
-          <button
-            onClick={handleRemoveImage}
-            className="absolute top-2 right-2 w-6 h-6 rounded-full bg-gray-900/80 hover:bg-gray-900 flex items-center justify-center border border-gray-700 transition-colors"
-            title="Remove image"
-          >
-            <X size={12} className="text-gray-300" />
-          </button>
+        <div className="position-relative rounded overflow-hidden border">
+          <img src={previewSrc} alt="Plant" className="w-100" style={{ height: 160, objectFit: 'contain' }} />
+          <Button variant="dark" size="sm" className="position-absolute top-0 end-0 m-1 rounded-circle p-0" style={{ width: 24, height: 24 }} onClick={handleRemoveImage}>
+            <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
+          </Button>
           {isAnalysing && (
-            <div className="absolute inset-0 flex items-center justify-center bg-gray-900/60">
-              <div className="flex flex-col items-center gap-1.5 px-4 py-3 rounded-lg bg-gray-900/90 border border-gray-700">
-                <div className="flex items-center gap-2">
-                  <Loader2 size={14} className="animate-spin text-emerald-400" />
-                  <span className="text-xs text-gray-300">{ANALYSIS_STAGES[stageIndex]}</span>
-                </div>
-                <span className="text-[10px] text-gray-500">Usually takes 5-15 seconds</span>
+            <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
+              <div className="text-center">
+                <Spinner size="sm" variant="primary" className="mb-1" />
+                <p className="text-white fs-xs mb-0">{ANALYSIS_STAGES[stageIndex]}</p>
               </div>
             </div>
           )}
@@ -186,63 +103,33 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
       )}
 
       {error && (
-        <div className="flex items-start gap-2 p-3 rounded-soft bg-red-950 border border-red-800">
-          <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-red-300">{error}</p>
-            {imageFile && (
-              <button onClick={handleReanalyse} className="text-xs text-red-400 hover:text-red-300 underline mt-1">
-                Retry analysis
-              </button>
-            )}
-          </div>
-        </div>
+        <Alert variant="danger" className="mt-2 fs-sm py-2">
+          {error}
+          {imageFile && <Button variant="link" size="sm" className="p-0 ms-2 text-danger" onClick={handleReanalyse}>Retry</Button>}
+        </Alert>
       )}
 
       {analysisResult && (
-        <div className="space-y-3 p-3 rounded-soft-lg bg-gray-800 border border-gray-700">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles size={13} className="text-emerald-400" />
-              <span className="text-xs font-medium text-emerald-400 uppercase tracking-wider">Gemini Analysis</span>
+        <Card className="mt-2">
+          <Card.Body className="py-2">
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <span className="d-flex align-items-center gap-1 fs-xs fw-600 text-primary text-uppercase">
+                <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>
+                Gemini Analysis
+              </span>
+              <Button variant="link" size="sm" className="p-0 fs-xs text-muted" onClick={handleReanalyse}>Re-analyse</Button>
             </div>
-            <button onClick={handleReanalyse} className="text-xs text-gray-500 hover:text-gray-400 transition-colors">
-              Re-analyse
-            </button>
-          </div>
-
-          {analysisResult.species && (
-            <p className="text-xs text-gray-300 font-medium">{analysisResult.species}</p>
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            <Badge label="Health" value={analysisResult.health} colorMap={HEALTH_COLORS} />
-            <Badge label="Maturity" value={analysisResult.maturity} colorMap={MATURITY_COLORS} />
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-soft border text-xs font-medium bg-blue-950 text-blue-300 border-blue-800">
-              <Droplets size={12} className="text-blue-400" />
-              <span>Every {analysisResult.frequencyDays}d</span>
+            {analysisResult.species && <p className="fw-500 fs-sm mb-2">{analysisResult.species}</p>}
+            <div className="d-flex flex-wrap gap-2">
+              {analysisResult.health && <Badge bg={HEALTH_COLORS[analysisResult.health] || 'secondary'}>Health: {analysisResult.health}</Badge>}
+              {analysisResult.maturity && <Badge bg={MATURITY_COLORS[analysisResult.maturity] || 'secondary'}>Maturity: {analysisResult.maturity}</Badge>}
+              {analysisResult.frequencyDays && <Badge bg="info">Every {analysisResult.frequencyDays}d</Badge>}
             </div>
-          </div>
-
-          {analysisResult.healthReason && (
-            <p className="text-xs text-gray-400 leading-relaxed">{analysisResult.healthReason}</p>
-          )}
-
-          {analysisResult.recommendations?.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-gray-400 mb-1.5">Care recommendations:</p>
-              <ul className="space-y-1">
-                {analysisResult.recommendations.map((rec, i) => (
-                  <li key={i} className="flex items-start gap-1.5 text-xs text-gray-300">
-                    <span className="text-emerald-500 mt-0.5 flex-shrink-0">•</span>
-                    {rec}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
+            {analysisResult.healthReason && <p className="text-muted fs-xs mt-2 mb-0">{analysisResult.healthReason}</p>}
+          </Card.Body>
+        </Card>
       )}
     </div>
   )
 }
+

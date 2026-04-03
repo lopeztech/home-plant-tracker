@@ -1,0 +1,110 @@
+/* ── Leaflet overrides for Smart Admin theme ─────────────────────────── */
+
+.leaflet-container {
+  background: var(--app-content-background, #fdfdfd);
+  cursor: crosshair;
+  font-family: inherit;
+}
+
+.leaflet-tile-pane { display: none; }
+
+.leaflet-control-zoom {
+  border: 1px solid var(--bs-border-color) !important;
+  border-radius: var(--bs-border-radius) !important;
+  overflow: hidden;
+  box-shadow: 0 0 13px 0 rgba(var(--bs-primary-rgb), .08) !important;
+}
+
+.leaflet-control-zoom a {
+  background: var(--bs-body-bg) !important;
+  color: var(--bs-secondary-color) !important;
+  border-bottom: 1px solid var(--bs-border-color) !important;
+  line-height: 26px !important;
+  transition: background 0.15s, color 0.15s !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background: var(--bs-tertiary-bg) !important;
+  color: var(--bs-body-color) !important;
+}
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+  border-radius: 0 !important;
+}
+
+.leaflet-control-zoom-out {
+  border-bottom: none !important;
+}
+
+.plant-lf-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.plant-lf-inner {
+  cursor: grab;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+
+.plant-lf-inner:hover {
+  transform: scale(1.2);
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.2));
+}
+
+@media (pointer: coarse) {
+  .plant-lf-inner {
+    min-width: 36px;
+    min-height: 36px;
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1.05);
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.plant-lf-overdue {
+  animation: pulse-ring 1.5s ease-in-out infinite;
+}
+
+.lf-room-label {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: var(--bs-primary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none !important;
+}
+
+.lf-room-label::before { display: none !important; }
+
+/* Tooltip */
+.lf-plant-tip-wrap.leaflet-tooltip {
+  background: var(--bs-body-bg) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid var(--bs-border-color) !important;
+  border-radius: var(--bs-border-radius) !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 0 13px 0 rgba(var(--bs-primary-rgb), .08) !important;
+  color: var(--bs-body-color) !important;
+}
+
+.lf-plant-tip-wrap.leaflet-tooltip::before { display: none !important; }
+.lf-plant-tip-name { font-size: 12px; font-weight: 600; color: var(--bs-body-color); }
+.lf-plant-tip-species { font-size: 11px; color: var(--bs-secondary-color); margin-top: 1px; }

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback, createContext, useContext } from 'react'
-import { CheckCircle2, AlertCircle, X } from 'lucide-react'
+import { useState, useEffect, useCallback, createContext, useContext } from 'react'
+import { Toast as BsToast, ToastContainer } from 'react-bootstrap'
 
 const ToastContext = createContext(null)
 
@@ -8,41 +8,30 @@ export function useToast() {
 }
 
 function ToastItem({ toast, onDismiss }) {
-  const [exiting, setExiting] = useState(false)
-
   useEffect(() => {
-    const timer = setTimeout(() => setExiting(true), toast.duration - 300)
-    const remove = setTimeout(() => onDismiss(toast.id), toast.duration)
-    return () => { clearTimeout(timer); clearTimeout(remove) }
+    const timer = setTimeout(() => onDismiss(toast.id), toast.duration)
+    return () => clearTimeout(timer)
   }, [toast, onDismiss])
 
   const isError = toast.type === 'error'
 
   return (
-    <div
-      role="status"
-      aria-live="polite"
-      className={`flex items-center gap-2 px-4 py-3 rounded-soft-lg shadow-soft-lg border text-sm max-w-xs transition-all duration-300 ${
-        exiting ? 'animate-slide-out' : 'animate-slide-in'
-      } ${
-        isError
-          ? 'bg-red-950/95 border-red-800/60 text-red-200'
-          : 'bg-gray-800/95 border-gray-700/60 text-gray-200'
-      }`}
-      style={{ backdropFilter: 'blur(12px)' }}
+    <BsToast
+      onClose={() => onDismiss(toast.id)}
+      bg={isError ? 'danger' : 'dark'}
+      autohide
+      delay={toast.duration}
     >
-      {isError
-        ? <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
-        : <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
-      }
-      <span className="flex-1 min-w-0">{toast.message}</span>
-      <button
-        onClick={() => onDismiss(toast.id)}
-        className="flex-shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
-      >
-        <X size={14} />
-      </button>
-    </div>
+      <BsToast.Header closeButton>
+        <svg className={`sa-icon me-2 ${isError ? 'text-danger' : 'text-success'}`} style={{ width: 14, height: 14 }}>
+          <use href={`/icons/sprite.svg#${isError ? 'alert-circle' : 'check-circle'}`}></use>
+        </svg>
+        <strong className="me-auto">{isError ? 'Error' : 'Success'}</strong>
+      </BsToast.Header>
+      <BsToast.Body className={isError ? 'text-white' : ''}>
+        {toast.message}
+      </BsToast.Body>
+    </BsToast>
   )
 }
 
@@ -53,11 +42,11 @@ export function ToastProvider({ children }) {
 
   const addToast = useCallback((message, type = 'success', duration = 3500) => {
     const id = ++nextId
-    setToasts(prev => [...prev, { id, message, type, duration }])
+    setToasts((prev) => [...prev, { id, message, type, duration }])
   }, [])
 
   const dismiss = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id))
+    setToasts((prev) => prev.filter((t) => t.id !== id))
   }, [])
 
   const toast = useCallback((message) => addToast(message, 'success'), [addToast])
@@ -67,11 +56,11 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-auto">
-        {toasts.map(t => (
+      <ToastContainer position="top-end" className="p-3" style={{ zIndex: 9999 }}>
+        {toasts.map((t) => (
           <ToastItem key={t.id} toast={t} onDismiss={dismiss} />
         ))}
-      </div>
+      </ToastContainer>
     </ToastContext.Provider>
   )
 }

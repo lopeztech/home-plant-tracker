@@ -1,107 +1,84 @@
-import React, { useState, useEffect } from 'react'
-import { Upload, Plus, Droplets, ChevronRight, X } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Modal, Button, ProgressBar } from 'react-bootstrap'
+
+const LS_KEY = 'plant-tracker-onboarded'
 
 const STEPS = [
   {
-    id: 'upload',
-    icon: Upload,
-    title: 'Upload your floorplan',
-    description: 'Start by uploading a photo of your floorplan. Our AI will identify rooms automatically.',
+    icon: '/icons/sprite.svg#upload',
+    title: 'Upload a Floorplan',
+    description: 'Go to Settings and upload a photo of your floor plan. Gemini AI will identify rooms automatically.',
   },
   {
-    id: 'add',
-    icon: Plus,
-    title: 'Add your plants',
-    description: 'Click anywhere on the floorplan to place a plant, or use the Add Plant button.',
+    icon: '/icons/sprite.svg#plus',
+    title: 'Add Your Plants',
+    description: 'Click anywhere on the floorplan to place a plant. Take a photo to auto-identify the species.',
   },
   {
-    id: 'water',
-    icon: Droplets,
-    title: 'Track watering',
-    description: 'Keep your plants healthy by logging when you water them. We\'ll remind you when they\'re due.',
+    icon: '/icons/sprite.svg#droplet',
+    title: 'Track Watering',
+    description: 'Mark plants as watered to build your care schedule. Get reminders when plants need attention.',
   },
 ]
 
-const STORAGE_KEY = 'plant_tracker_onboarding_done'
-
 export default function Onboarding() {
   const [step, setStep] = useState(0)
-  const [visible, setVisible] = useState(false)
+  const [show, setShow] = useState(false)
 
   useEffect(() => {
-    if (!localStorage.getItem(STORAGE_KEY)) {
-      setVisible(true)
-    }
+    if (!localStorage.getItem(LS_KEY)) setShow(true)
   }, [])
 
   const dismiss = () => {
-    setVisible(false)
-    localStorage.setItem(STORAGE_KEY, 'true')
+    setShow(false)
+    localStorage.setItem(LS_KEY, '1')
   }
 
   const next = () => {
-    if (step < STEPS.length - 1) setStep(s => s + 1)
+    if (step < STEPS.length - 1) setStep((s) => s + 1)
     else dismiss()
   }
 
-  if (!visible) return null
-
+  if (!show) return null
   const current = STEPS[step]
-  const Icon = current.icon
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-4 animate-fade-in"
-      style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
-    >
-      <div className="animate-fade-in-up w-full max-w-sm bg-gray-900 border border-gray-800 rounded-soft-xl shadow-soft-xl overflow-hidden" style={{ background: 'linear-gradient(180deg, var(--tw-gray-900) 0%, var(--surface-gradient-end) 100%)' }}>
-        {/* Progress bar */}
-        <div className="flex gap-1 px-5 pt-5">
-          {STEPS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1 flex-1 rounded-full transition-colors ${i <= step ? 'bg-emerald-500' : 'bg-gray-800'}`}
-            />
-          ))}
-        </div>
+    <Modal show={show} onHide={dismiss} centered size="sm">
+      <Modal.Body className="p-4">
+        <ProgressBar
+          now={((step + 1) / STEPS.length) * 100}
+          variant="primary"
+          className="mb-4"
+          style={{ height: 4 }}
+        />
 
-        <div className="p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div className="w-12 h-12 rounded-soft-lg bg-gradient-to-br from-emerald-900/60 to-emerald-950/60 border border-emerald-900/40 flex items-center justify-center flex-shrink-0 shadow-soft">
-              <Icon size={22} className="text-emerald-400" />
-            </div>
-            <button
-              onClick={dismiss}
-              className="text-gray-600 hover:text-gray-400 transition-colors flex-shrink-0"
-              aria-label="Skip onboarding"
-            >
-              <X size={16} />
-            </button>
+        <div className="d-flex align-items-start justify-content-between mb-3">
+          <div className="rounded-3 bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style={{ width: 48, height: 48 }}>
+            <svg className="sa-icon sa-icon-2x text-primary">
+              <use href={current.icon}></use>
+            </svg>
           </div>
-
-          <h3 className="text-base font-medium text-gray-100 mt-4">{current.title}</h3>
-          <p className="text-sm text-gray-400 mt-1 leading-relaxed">{current.description}</p>
-        </div>
-
-        <div className="flex items-center justify-between px-5 pb-5">
-          <button
-            onClick={dismiss}
-            className="text-xs text-gray-500 hover:text-gray-400 transition-colors"
-          >
-            Skip tour
-          </button>
-          <button
-            onClick={next}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-soft text-sm font-medium bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm shadow-emerald-600/50 transition-colors"
-          >
-            {step < STEPS.length - 1 ? (
-              <>Next <ChevronRight size={14} /></>
-            ) : (
-              'Get started'
-            )}
+          <button className="btn btn-sm text-muted p-0" onClick={dismiss} aria-label="Skip">
+            <svg className="sa-icon"><use href="/icons/sprite.svg#x"></use></svg>
           </button>
         </div>
-      </div>
-    </div>
+
+        <h5 className="fw-500 mb-2">{current.title}</h5>
+        <p className="text-muted fs-sm mb-0">{current.description}</p>
+      </Modal.Body>
+      <Modal.Footer className="border-top-0 d-flex justify-content-between">
+        <button className="btn btn-link btn-sm text-muted p-0" onClick={dismiss}>
+          Skip tour
+        </button>
+        <Button variant="primary" size="sm" onClick={next}>
+          {step < STEPS.length - 1 ? (
+            <>
+              Next
+              <svg className="sa-icon ms-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#chevron-right"></use></svg>
+            </>
+          ) : 'Get started'}
+        </Button>
+      </Modal.Footer>
+    </Modal>
   )
 }
