@@ -61,10 +61,11 @@ function writeCache(lat, lon, weather) {
   }
 }
 
-function parseWeather(data) {
+function parseWeather(data, unit = 'celsius') {
   const cw = data.current_weather
   const d = data.daily
   return {
+    unit,
     current: {
       temp: Math.round(cw.temperature),
       code: cw.weathercode,
@@ -82,7 +83,7 @@ function parseWeather(data) {
   }
 }
 
-export function useWeather() {
+export function useWeather(tempUnit = 'celsius') {
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(true)
   const [locationDenied, setLocationDenied] = useState(false)
@@ -98,12 +99,13 @@ export function useWeather() {
       url.searchParams.set('daily', 'weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum')
       url.searchParams.set('forecast_days', '7')
       url.searchParams.set('timezone', 'auto')
+      if (tempUnit === 'fahrenheit') url.searchParams.set('temperature_unit', 'fahrenheit')
 
       fetch(url)
         .then(r => (r.ok ? r.json() : Promise.reject()))
         .then(data => {
           if (cancelled) return
-          const parsed = parseWeather(data)
+          const parsed = parseWeather(data, tempUnit)
           writeCache(lat, lon, parsed)
           setWeather(parsed)
         })
@@ -139,7 +141,7 @@ export function useWeather() {
     )
 
     return () => { cancelled = true }
-  }, [])
+  }, [tempUnit])
 
   return { weather, loading, locationDenied }
 }

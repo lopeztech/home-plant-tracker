@@ -218,7 +218,7 @@ describe('PlantSidebar', () => {
     renderSidebar({ plants: [], onPlantClick: vi.fn(), onAddPlant: vi.fn(), weather: mockWeather })
     // "Sunny" appears in both the current-conditions header and the forecast row
     expect(screen.getAllByText('Sunny').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByText('22°')).toBeInTheDocument()
+    expect(screen.getByText('22°C')).toBeInTheDocument()
   })
 
   it('shows a rain alert when rain is forecast and there are outdoor plants', () => {

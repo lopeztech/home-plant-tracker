@@ -113,7 +113,7 @@ describe('FloorplanView', () => {
       days: [],
     }
     renderView({ weather })
-    expect(screen.getByText('18°')).toBeInTheDocument()
+    expect(screen.getByText('18°C')).toBeInTheDocument()
   })
 
   // ── Loading / analysing state ─────────────────────────────────────────────

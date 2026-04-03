@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react'
 import {
   X, Eye, EyeOff, CheckCircle2,
   Layers, Plus, Trash2, ChevronDown, ChevronRight, Settings,
-  Sun, Moon, Upload,
+  Sun, Moon, Upload, Thermometer,
 } from 'lucide-react'
 import { useTheme } from '../hooks/useTheme.js'
 
@@ -262,7 +262,7 @@ function FloorsTab({ floors, onChange }) {
   )
 }
 
-export default function SettingsModal({ floors: initialFloors, onSaveFloors, onClose, onToggleTheme, onFloorplanUpload, isAnalysingFloorplan }) {
+export default function SettingsModal({ floors: initialFloors, onSaveFloors, onClose, onToggleTheme, onFloorplanUpload, isAnalysingFloorplan, tempUnit }) {
   const theme = useTheme()
   const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
@@ -374,6 +374,18 @@ export default function SettingsModal({ floors: initialFloors, onSaveFloors, onC
               {theme === 'dark' ? 'Light mode' : 'Dark mode'}
             </button>
           </div>
+          {tempUnit && (
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-400">Temperature</span>
+              <button
+                onClick={tempUnit.toggle}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white transition-colors border border-gray-700"
+              >
+                <Thermometer size={14} />
+                {tempUnit.unit === 'celsius' ? '°C → °F' : '°F → °C'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

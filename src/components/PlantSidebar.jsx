@@ -44,7 +44,7 @@ function WeatherSection({ weather, locationDenied, outdoorPlantCount }) {
             </div>
           </div>
         </div>
-        <span className="text-xl font-light text-white">{current.temp}°</span>
+        <span className="text-xl font-light text-white">{current.temp}°{weather.unit === 'fahrenheit' ? 'F' : 'C'}</span>
       </div>
 
       {/* 3-day forecast */}

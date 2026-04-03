@@ -128,7 +128,7 @@ export default function FloorplanView({
               : <Moon size={13} className="text-indigo-400" />
             }
             <span className="text-base leading-none">{weather.current.condition.emoji}</span>
-            <span>{weather.current.temp}°</span>
+            <span>{weather.current.temp}°{weather.unit === 'fahrenheit' ? 'F' : 'C'}</span>
           </span>
         )}
       </div>

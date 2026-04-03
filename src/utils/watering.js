@@ -21,9 +21,13 @@ export function urgencyLabel(days) {
   return `${days}d`
 }
 
-function heatNote(temp) {
-  if (temp >= 35) return 'Very hot — watering sooner'
-  if (temp >= 30) return 'Hot day — watering sooner'
+function toC(temp, unit) {
+  return unit === 'fahrenheit' ? (temp - 32) * 5 / 9 : temp
+}
+
+function heatNote(tempC) {
+  if (tempC >= 35) return 'Very hot — watering sooner'
+  if (tempC >= 30) return 'Hot day — watering sooner'
   return null
 }
 
@@ -44,6 +48,7 @@ function heatNote(temp) {
 export function getWateringStatus(plant, weather = null, floors = []) {
   const outdoor   = isOutdoor(plant, floors)
   const temp      = weather?.current?.temp ?? null
+  const tempC     = temp !== null ? toC(temp, weather?.unit) : null
   const sky       = weather?.current?.condition?.sky
   const raining   = sky === 'rainy' || sky === 'stormy'
 
@@ -58,19 +63,19 @@ export function getWateringStatus(plant, weather = null, floors = []) {
     }
   }
 
-  // Adjust frequency for heat
+  // Adjust frequency for heat (thresholds in °C)
   const base = plant.frequencyDays ?? 7
   let effective = base
-  if (temp !== null) {
-    if (temp >= 35) effective = Math.max(1, base - 2)
-    else if (temp >= 30) effective = Math.max(1, base - 1)
+  if (tempC !== null) {
+    if (tempC >= 35) effective = Math.max(1, base - 2)
+    else if (tempC >= 30) effective = Math.max(1, base - 1)
   }
 
   if (!plant.lastWatered) {
     return {
       daysUntil:   0,
       skippedRain: false,
-      note:        heatNote(temp),
+      note:        heatNote(tempC),
       color:       urgencyColor(0),
       label:       urgencyLabel(0),
     }
@@ -81,7 +86,7 @@ export function getWateringStatus(plant, weather = null, floors = []) {
   const daysUntil = Math.ceil((next - new Date()) / 86400000)
 
   // Note: heat adjustment or upcoming-rain advisory for outdoor plants
-  let note = heatNote(temp)
+  let note = heatNote(tempC)
   if (!note && outdoor && daysUntil <= 1 && weather?.days) {
     const hasUpcomingRain = weather.days.slice(0, 3).some(d => d.precipitation >= 2)
     if (hasUpcomingRain) note = 'Rain forecast — may skip'

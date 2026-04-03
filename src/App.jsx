@@ -18,6 +18,7 @@ import { getWateringStatus } from './utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from './data/guestData.js'
 import { useKeyboardShortcuts, SHORTCUTS } from './hooks/useKeyboardShortcuts.js'
 import { useThemeProvider } from './hooks/useTheme.js'
+import { useTempUnit } from './hooks/useTempUnit.js'
 
 const DEFAULT_FLOORS = [
   { id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null },
@@ -26,7 +27,8 @@ const DEFAULT_FLOORS = [
 
 function AppContent() {
   const { isAuthenticated, isGuest, isLoading, logout } = useAuth()
-  const { weather, locationDenied } = useWeather()
+  const tempUnit = useTempUnit()
+  const { weather, locationDenied } = useWeather(tempUnit.unit)
   const toast = useToast()
   const { theme, toggleTheme, ThemeContext } = useThemeProvider()
 
@@ -456,6 +458,7 @@ function AppContent() {
           onToggleTheme={toggleTheme}
           onFloorplanUpload={handleFloorplanUpload}
           isAnalysingFloorplan={isAnalysingFloorplan}
+          tempUnit={tempUnit}
         />
       )}
 
