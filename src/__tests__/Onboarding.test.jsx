@@ -22,7 +22,7 @@ describe('Onboarding', () => {
   })
 
   it('localStorage.getItem is checked on mount', () => {
-    const spy = vi.spyOn(Storage.prototype, 'getItem')
+    const spy = vi.spyOn(localStorage, 'getItem')
     render(<Onboarding />)
     expect(spy).toHaveBeenCalledWith(STORAGE_KEY)
     spy.mockRestore()
