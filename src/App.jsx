@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { GoogleOAuthProvider } from '@react-oauth/google'
-import { Map, Leaf, Plus, Keyboard } from 'lucide-react'
+import { Map, Leaf, Plus, Keyboard, BarChart2 } from 'lucide-react'
 import { AuthProvider, useAuth } from './contexts/AuthContext.jsx'
 import Header from './components/Header.jsx'
 import FloorplanView from './components/FloorplanView.jsx'
@@ -10,7 +10,7 @@ import LoginPage from './pages/LoginPage.jsx'
 import SettingsModal from './components/SettingsModal.jsx'
 import Onboarding from './components/Onboarding.jsx'
 import CareCalendar from './components/CareCalendar.jsx'
-import AnalyticsModal from './components/AnalyticsModal.jsx'
+import AnalyticsPage from './components/AnalyticsModal.jsx'
 import { ToastProvider, useToast } from './components/Toast.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from './api/plants.js'
 import { useWeather } from './hooks/useWeather.js'
@@ -54,12 +54,19 @@ function AppContent() {
   const [showCalendar, setShowCalendar] = useState(false)
   const [showAnalytics, setShowAnalytics] = useState(false)
 
+  const toggleAnalytics = useCallback(() => {
+    setShowAnalytics(prev => {
+      if (!prev) setMobileTab('analytics')
+      return !prev
+    })
+  }, [])
+
   const { showHelp, setShowHelp } = useKeyboardShortcuts({
     onAddPlant: () => { if (!showPlantModal && !showSettings) handleAddPlant() },
     onToggleSettings: () => setShowSettings(s => !s),
     onEscape: () => {
       if (showHelp) setShowHelp(false)
-      else if (showAnalytics) setShowAnalytics(false)
+      else if (showAnalytics) { setShowAnalytics(false); setMobileTab('floorplan') }
       else if (showCalendar) setShowCalendar(false)
       else if (showSettings) setShowSettings(false)
       else if (showPlantModal) { setShowPlantModal(false); setEditingPlant(null); setPendingPosition(null) }
@@ -304,7 +311,8 @@ function AppContent() {
       </a>
       <Header
         onOpenSettings={() => setShowSettings(true)}
-        onOpenAnalytics={() => setShowAnalytics(true)}
+        onOpenAnalytics={toggleAnalytics}
+        analyticsActive={showAnalytics}
       />
 
       {plantsError && (
@@ -313,58 +321,65 @@ function AppContent() {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Floorplan panel — hidden on mobile when Plants tab is active */}
-        <div className={mobileTab === 'plants' ? 'hidden md:flex md:flex-1 md:flex-col md:min-w-0' : 'flex flex-1 flex-col min-w-0'}>
-          <FloorplanView
-            plants={plants}
-            onFloorplanUpload={handleFloorplanUpload}
-            onFloorplanClick={handleFloorplanClick}
-            onMarkerClick={handleMarkerClick}
-            onMarkerDrag={handleMarkerDrag}
-            onRoomsChange={handleFloorRoomsChange}
-            loading={plantsLoading}
-            weather={weather}
-            floors={floors}
-            activeFloorId={activeFloorId}
-            onFloorChange={setActiveFloorId}
-            isAnalysingFloorplan={isAnalysingFloorplan}
-            sidebarOpen={sidebarOpen}
-            onToggleSidebar={() => setSidebarOpen(o => !o)}
-          />
-        </div>
+      {/* Main content: analytics page or floorplan+sidebar */}
+      {showAnalytics ? (
+        <AnalyticsPage plants={plants} />
+      ) : (
+        <>
+          <div className="flex flex-1 overflow-hidden">
+            {/* Floorplan panel — hidden on mobile when Plants tab is active */}
+            <div className={mobileTab === 'plants' ? 'hidden md:flex md:flex-1 md:flex-col md:min-w-0' : 'flex flex-1 flex-col min-w-0'}>
+              <FloorplanView
+                plants={plants}
+                onFloorplanUpload={handleFloorplanUpload}
+                onFloorplanClick={handleFloorplanClick}
+                onMarkerClick={handleMarkerClick}
+                onMarkerDrag={handleMarkerDrag}
+                onRoomsChange={handleFloorRoomsChange}
+                loading={plantsLoading}
+                weather={weather}
+                floors={floors}
+                activeFloorId={activeFloorId}
+                onFloorChange={setActiveFloorId}
+                isAnalysingFloorplan={isAnalysingFloorplan}
+                sidebarOpen={sidebarOpen}
+                onToggleSidebar={() => setSidebarOpen(o => !o)}
+              />
+            </div>
 
-        {/* Sidebar panel — controlled by mobileTab on mobile, sidebarOpen on md+ */}
-        <div className={[
-          'flex-col',
-          mobileTab === 'floorplan' ? 'hidden' : 'flex w-full',
-          sidebarOpen ? 'md:flex md:flex-shrink-0 md:w-72' : 'md:hidden',
-        ].join(' ')}>
-          <PlantSidebar
-            plants={plants}
-            floors={floors}
-            activeFloorId={activeFloorId}
-            onPlantClick={handleMarkerClick}
-            onAddPlant={handleAddPlant}
-            onWater={handleWaterPlant}
-            onBatchWater={handleBatchWater}
-            loading={plantsLoading}
-            weather={weather}
-            locationDenied={locationDenied}
-            onOpenCalendar={() => setShowCalendar(true)}
-          />
-        </div>
-      </div>
+            {/* Sidebar panel — controlled by mobileTab on mobile, sidebarOpen on md+ */}
+            <div className={[
+              'flex-col',
+              mobileTab === 'floorplan' ? 'hidden' : 'flex w-full',
+              sidebarOpen ? 'md:flex md:flex-shrink-0 md:w-72' : 'md:hidden',
+            ].join(' ')}>
+              <PlantSidebar
+                plants={plants}
+                floors={floors}
+                activeFloorId={activeFloorId}
+                onPlantClick={handleMarkerClick}
+                onAddPlant={handleAddPlant}
+                onWater={handleWaterPlant}
+                onBatchWater={handleBatchWater}
+                loading={plantsLoading}
+                weather={weather}
+                locationDenied={locationDenied}
+                onOpenCalendar={() => setShowCalendar(true)}
+              />
+            </div>
+          </div>
 
-      {/* Mobile FAB — add plant on floorplan view */}
-      {mobileTab === 'floorplan' && (
-        <button
-          onClick={handleAddPlant}
-          className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-lg shadow-emerald-900/40 flex items-center justify-center transition-all"
-          aria-label="Add new plant"
-        >
-          <Plus size={24} />
-        </button>
+          {/* Mobile FAB — add plant on floorplan view */}
+          {mobileTab === 'floorplan' && (
+            <button
+              onClick={handleAddPlant}
+              className="md:hidden fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white shadow-lg shadow-emerald-900/40 flex items-center justify-center transition-all"
+              aria-label="Add new plant"
+            >
+              <Plus size={24} />
+            </button>
+          )}
+        </>
       )}
 
       {/* Mobile tab bar */}
@@ -376,7 +391,7 @@ function AppContent() {
         <button
           role="tab"
           aria-selected={mobileTab === 'floorplan'}
-          onClick={() => setMobileTab('floorplan')}
+          onClick={() => { setMobileTab('floorplan'); setShowAnalytics(false) }}
           className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${mobileTab === 'floorplan' ? 'text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
         >
           <Map size={20} />
@@ -385,7 +400,7 @@ function AppContent() {
         <button
           role="tab"
           aria-selected={mobileTab === 'plants'}
-          onClick={() => setMobileTab('plants')}
+          onClick={() => { setMobileTab('plants'); setShowAnalytics(false) }}
           className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${
             overdueCount > 0
               ? (mobileTab === 'plants' ? 'text-red-400' : 'text-red-500')
@@ -406,6 +421,15 @@ function AppContent() {
               : `Plants${plants.length > 0 ? ` (${plants.length})` : ''}`
             }
           </span>
+        </button>
+        <button
+          role="tab"
+          aria-selected={mobileTab === 'analytics'}
+          onClick={() => { setMobileTab('analytics'); setShowAnalytics(true) }}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-3 text-xs font-medium transition-colors ${mobileTab === 'analytics' ? 'text-emerald-400' : 'text-gray-500 hover:text-gray-300'}`}
+        >
+          <BarChart2 size={20} />
+          <span>Analytics</span>
         </button>
       </nav>
 
@@ -440,13 +464,6 @@ function AppContent() {
           weather={weather}
           floors={floors}
           onClose={() => setShowCalendar(false)}
-        />
-      )}
-
-      {showAnalytics && (
-        <AnalyticsModal
-          plants={plants}
-          onClose={() => setShowAnalytics(false)}
         />
       )}
 

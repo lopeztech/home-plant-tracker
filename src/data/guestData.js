@@ -36,6 +36,12 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Mature',
+    healthLog: [
+      { date: '2026-01-03T09:00:00Z', health: 'Fair', reason: 'New leaf unfurling but some yellowing on lower leaves' },
+      { date: '2026-01-24T09:00:00Z', health: 'Good', reason: 'Yellowing resolved after adjusting watering schedule' },
+      { date: '2026-02-14T09:00:00Z', health: 'Good', reason: 'Steady growth, new leaf emerging' },
+      { date: '2026-03-07T09:00:00Z', health: 'Good', reason: 'Healthy foliage, consistent growth' },
+    ],
     wateringLog: [
       { date: '2026-01-03T09:00:00Z', note: '' },
       { date: '2026-01-10T09:00:00Z', note: '' },
@@ -65,6 +71,12 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Mature',
+    healthLog: [
+      { date: '2026-01-02T08:00:00Z', health: 'Good', reason: 'Healthy, blooming well' },
+      { date: '2026-02-01T08:00:00Z', health: 'Fair', reason: 'Leaves drooping between waterings' },
+      { date: '2026-02-17T08:00:00Z', health: 'Good', reason: 'Recovered after increasing watering frequency' },
+      { date: '2026-03-14T08:00:00Z', health: 'Good', reason: 'New blooms appearing' },
+    ],
     wateringLog: [
       { date: '2026-01-02T08:00:00Z', note: '' },
       { date: '2026-01-05T08:00:00Z', note: '' },
@@ -104,6 +116,10 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Excellent',
     maturity: 'Mature',
+    healthLog: [
+      { date: '2026-01-04T10:00:00Z', health: 'Good', reason: 'Healthy, minimal care needed' },
+      { date: '2026-02-01T10:00:00Z', health: 'Excellent', reason: 'Thriving with minimal attention' },
+    ],
     wateringLog: [
       { date: '2026-01-04T10:00:00Z', note: '' },
       { date: '2026-01-18T10:00:00Z', note: '' },
@@ -127,6 +143,11 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Young',
+    healthLog: [
+      { date: '2026-01-06T11:00:00Z', health: 'Fair', reason: 'Small plant, still establishing' },
+      { date: '2026-02-06T11:00:00Z', health: 'Good', reason: 'Growing well, new leaves appearing' },
+      { date: '2026-03-04T11:00:00Z', health: 'Good', reason: 'Vines extending nicely' },
+    ],
     wateringLog: [
       { date: '2026-01-06T11:00:00Z', note: '' },
       { date: '2026-01-13T11:00:00Z', note: '' },
@@ -154,6 +175,13 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Fair',
     maturity: 'Mature',
+    healthLog: [
+      { date: '2026-01-05T09:30:00Z', health: 'Good', reason: 'Stable after recent move' },
+      { date: '2026-01-28T09:30:00Z', health: 'Fair', reason: 'Dropping leaves, possibly overwatered' },
+      { date: '2026-02-09T09:30:00Z', health: 'Poor', reason: 'Significant leaf drop, brown spots' },
+      { date: '2026-02-24T09:30:00Z', health: 'Poor', reason: 'Still struggling, reduced watering' },
+      { date: '2026-03-10T09:30:00Z', health: 'Fair', reason: 'New growth appearing, slow recovery' },
+    ],
     wateringLog: [
       { date: '2026-01-05T09:30:00Z', note: '' },
       { date: '2026-01-16T09:30:00Z', note: '' },
@@ -178,6 +206,10 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Young',
+    healthLog: [
+      { date: '2026-01-06T14:00:00Z', health: 'Good', reason: 'Low maintenance, doing well' },
+      { date: '2026-03-10T14:00:00Z', health: 'Good', reason: 'Steady growth' },
+    ],
     wateringLog: [
       { date: '2026-01-06T14:00:00Z', note: '' },
       { date: '2026-01-27T14:00:00Z', note: '' },
@@ -199,6 +231,11 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Mature',
+    healthLog: [
+      { date: '2026-01-02T07:00:00Z', health: 'Good', reason: 'Established plant, blooming' },
+      { date: '2026-02-03T07:00:00Z', health: 'Excellent', reason: 'Thriving in winter sun' },
+      { date: '2026-03-02T07:00:00Z', health: 'Good', reason: 'Spring pruning needed' },
+    ],
     wateringLog: [
       { date: '2026-01-02T07:00:00Z', note: '' },
       { date: '2026-01-07T07:00:00Z', note: '' },
@@ -232,6 +269,11 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Excellent',
     maturity: 'Mature',
+    healthLog: [
+      { date: '2026-01-02T08:00:00Z', health: 'Good', reason: 'Healthy herb, growing well' },
+      { date: '2026-01-30T08:00:00Z', health: 'Excellent', reason: 'Bushy growth, very fragrant' },
+      { date: '2026-03-06T08:00:00Z', health: 'Excellent', reason: 'Flowering, excellent condition' },
+    ],
     wateringLog: [
       { date: '2026-01-02T08:00:00Z', note: '' },
       { date: '2026-01-09T08:00:00Z', note: '' },

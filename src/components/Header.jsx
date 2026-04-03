@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { Leaf, BarChart2, Settings, LogOut } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
-export default function Header({ onOpenSettings, onOpenAnalytics }) {
+export default function Header({ onOpenSettings, onOpenAnalytics, analyticsActive }) {
   const { user, logout } = useAuth()
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef(null)
@@ -29,7 +29,7 @@ export default function Header({ onOpenSettings, onOpenAnalytics }) {
         <div className="flex items-center gap-1">
           <button
             onClick={onOpenAnalytics}
-            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className={`p-2 rounded-lg transition-colors ${analyticsActive ? 'text-emerald-400 bg-gray-800' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
             title="Analytics"
             aria-label="Analytics"
           >

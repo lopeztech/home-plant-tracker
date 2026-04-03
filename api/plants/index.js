@@ -558,7 +558,26 @@ app.put('/plants/:id', requireUser, async (req, res) => {
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
     const { imageBase64, ...body } = req.body;
-    const updates = { ...body, updatedAt: new Date().toISOString() };
+    const now = new Date().toISOString();
+    const existing = doc.data();
+    const updates = { ...body, updatedAt: now };
+
+    // Track health changes in healthLog
+    if (body.health && body.health !== existing.health) {
+      const healthLog = [...(existing.healthLog || []), {
+        date: now,
+        health: body.health,
+        reason: body.healthReason || '',
+      }];
+      updates.healthLog = healthLog;
+    }
+
+    // Delete old GCS image when replaced with a new one
+    if (body.imageUrl && existing.imageUrl && body.imageUrl !== existing.imageUrl) {
+      const oldPath = gcsPath(existing.imageUrl);
+      if (oldPath) await storage.bucket(IMAGES_BUCKET).file(oldPath).delete().catch(() => {});
+    }
+
     await ref.set(updates, { merge: true });
 
     const updated = await ref.get();
@@ -594,7 +613,12 @@ app.delete('/plants/:id', requireUser, async (req, res) => {
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const { imageUrl } = doc.data();
     await ref.delete();
+    if (imageUrl) {
+      const path = gcsPath(imageUrl);
+      if (path) await storage.bucket(IMAGES_BUCKET).file(path).delete().catch(() => {});
+    }
     res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });

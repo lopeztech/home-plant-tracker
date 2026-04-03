@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react'
-import { X, BarChart2, Droplets, AlertTriangle, Leaf } from 'lucide-react'
+import { Droplets, AlertTriangle, Leaf } from 'lucide-react'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid, ReferenceLine,
+  LineChart, Line,
 } from 'recharts'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -14,6 +15,7 @@ const HEALTH_COLORS = {
   Poor:      '#ef4444',
 }
 const HEALTH_ORDER = ['Excellent', 'Good', 'Fair', 'Poor']
+const HEALTH_VALUE = { Excellent: 4, Good: 3, Fair: 2, Poor: 1 }
 
 // ─── Analytics helpers ────────────────────────────────────────────────────────
 
@@ -349,6 +351,19 @@ function PerPlantTab({ plants }) {
     return Math.round((Date.now() - new Date(plant.lastWatered).getTime()) / 86400000)
   }, [plant])
 
+  const healthData = useMemo(() => {
+    const log = plant?.healthLog || []
+    if (log.length < 2) return []
+    return [...log]
+      .sort((a, b) => new Date(a.date) - new Date(b.date))
+      .map(entry => ({
+        date: new Date(entry.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }),
+        value: HEALTH_VALUE[entry.health] ?? 0,
+        health: entry.health,
+        reason: entry.reason,
+      }))
+  }, [plant])
+
   if (!plant) {
     return <p className="text-gray-500 text-sm">No plants yet.</p>
   }
@@ -495,76 +510,116 @@ function PerPlantTab({ plants }) {
           </p>
         )}
       </Card>
+
+      {/* Health progression */}
+      <Card>
+        <SectionTitle>Health Progression</SectionTitle>
+        {healthData.length === 0 ? (
+          <p className="text-xs text-gray-500">Need at least 2 health assessments to show progression.</p>
+        ) : (
+          <>
+            <ResponsiveContainer width="100%" height={160}>
+              <LineChart data={healthData} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
+                <CartesianGrid vertical={false} stroke="#374151" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: '#6b7280', fontSize: 9 }}
+                  tickLine={false} axisLine={false}
+                  angle={-35} textAnchor="end" height={36}
+                />
+                <YAxis
+                  domain={[0.5, 4.5]}
+                  ticks={[1, 2, 3, 4]}
+                  tickFormatter={v => ['', 'Poor', 'Fair', 'Good', 'Excellent'][v] || ''}
+                  tick={{ fill: '#6b7280', fontSize: 9 }}
+                  tickLine={false} axisLine={false}
+                  width={60}
+                />
+                <Tooltip content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null
+                  const d = payload[0].payload
+                  return (
+                    <div className="bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs shadow-lg max-w-[200px]">
+                      <p className="text-gray-400 mb-1">{d.date}</p>
+                      <p style={{ color: HEALTH_COLORS[d.health] }} className="font-semibold">{d.health}</p>
+                      {d.reason && <p className="text-gray-400 mt-1">{d.reason}</p>}
+                    </div>
+                  )
+                }} />
+                <Line
+                  type="stepAfter"
+                  dataKey="value"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={({ cx, cy, payload }) => (
+                    <circle
+                      key={payload.date}
+                      cx={cx} cy={cy} r={4}
+                      fill={HEALTH_COLORS[payload.health] || '#6b7280'}
+                      stroke="#1f2937" strokeWidth={2}
+                    />
+                  )}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+            <div className="flex items-center gap-3 mt-2">
+              {HEALTH_ORDER.map(h => (
+                <div key={h} className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full" style={{ background: HEALTH_COLORS[h] }} />
+                  <span className="text-[10px] text-gray-500">{h}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   )
 }
 
-// ─── Main modal ───────────────────────────────────────────────────────────────
+// ─── Full-page analytics view ────────────────────────────────────────────────
 
-export default function AnalyticsModal({ plants, onClose }) {
+export default function AnalyticsPage({ plants }) {
   const [tab, setTab] = useState('overview')
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
-      onClick={onClose}
-    >
-      <div
-        className="bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <BarChart2 size={18} className="text-emerald-400" />
-            <h2 className="text-base font-semibold text-white">Analytics</h2>
-            <span className="text-xs text-gray-500">{plants.length} plant{plants.length !== 1 ? 's' : ''}</span>
-          </div>
+    <div className="flex flex-col h-full bg-gray-950">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-800 flex-shrink-0 px-4">
+        {[
+          { id: 'overview', label: 'Overview' },
+          { id: 'plant',    label: 'Per Plant' },
+        ].map(t => (
           <button
-            onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-            aria-label="Close analytics"
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2.5 text-sm font-medium transition-colors border-b-2 ${
+              tab === t.id
+                ? 'text-emerald-400 border-emerald-500'
+                : 'text-gray-400 border-transparent hover:text-gray-200'
+            }`}
           >
-            <X size={16} />
+            {t.label}
           </button>
-        </div>
+        ))}
+        <div className="flex-1" />
+        <span className="self-center text-xs text-gray-500">{plants.length} plant{plants.length !== 1 ? 's' : ''}</span>
+      </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-800 flex-shrink-0">
-          {[
-            { id: 'overview', label: 'Overview' },
-            { id: 'plant',    label: 'Per Plant' },
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex-1 py-2.5 text-sm font-medium transition-colors border-b-2 ${
-                tab === t.id
-                  ? 'text-emerald-400 border-emerald-500'
-                  : 'text-gray-400 border-transparent hover:text-gray-200'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+      {/* Body */}
+      <div className="overflow-y-auto flex-1 p-5 max-w-3xl mx-auto w-full">
+        {tab === 'overview'
+          ? <OverviewTab plants={plants} />
+          : <PerPlantTab plants={plants} />
+        }
+      </div>
 
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 p-5">
-          {tab === 'overview'
-            ? <OverviewTab plants={plants} />
-            : <PerPlantTab plants={plants} />
-          }
-        </div>
-
-        {/* Footer */}
-        <div className="px-5 py-3 border-t border-gray-800 flex-shrink-0">
-          <p className="text-[11px] text-gray-600 flex items-center gap-1">
-            <Droplets size={10} />
-            Analytics computed from watering log data. Health history tracking coming soon.
-          </p>
-        </div>
+      {/* Footer */}
+      <div className="px-5 py-3 border-t border-gray-800 flex-shrink-0">
+        <p className="text-[11px] text-gray-600 flex items-center justify-center gap-1">
+          <Droplets size={10} />
+          Analytics computed from watering and health log data.
+        </p>
       </div>
     </div>
   )
