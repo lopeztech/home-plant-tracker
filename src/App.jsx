@@ -88,6 +88,9 @@ function AppContent() {
       return
     }
 
+    // Clear any stale guest data before fetching
+    setPlants([])
+    setFloors(DEFAULT_FLOORS)
     setPlantsLoading(true)
     setPlantsError(null)
     plantsApi.list()
