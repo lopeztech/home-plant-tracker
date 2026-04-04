@@ -59,6 +59,8 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
+    const shouldRedirectIAP = window.location.hostname !== 'localhost' && !user?.isGuest
+
     localStorage.removeItem(STORAGE_KEY)
     setApiCredential(null)
 
@@ -67,12 +69,13 @@ export function AuthProvider({ children }) {
       window.google.accounts.id.disableAutoSelect()
     }
 
-    setUser(null)
-
-    // Redirect to IAP logout endpoint in production (not for guests)
-    if (window.location.hostname !== 'localhost' && !user?.isGuest) {
-      window.location.href = '/_gcp_iap/clear_login_cookie'
+    // Redirect to IAP logout endpoint before clearing state (full page nav bypasses router)
+    if (shouldRedirectIAP) {
+      window.location.replace('/_gcp_iap/clear_login_cookie')
+      return
     }
+
+    setUser(null)
   }
 
   return (
