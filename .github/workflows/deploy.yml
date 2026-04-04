@@ -86,6 +86,14 @@ jobs:
       - name: Upload to GCS
         run: gsutil cp "${{ env.ZIP_NAME }}" gs://${{ secrets.FUNCTION_SOURCE_BUCKET }}/${{ env.ZIP_NAME }}
 
+      - name: Persist latest source object name
+        env:
+          GH_TOKEN: ${{ secrets.PLATFORM_INFRA_TOKEN }}
+        run: |
+          gh secret set HOME_PLANT_TRACKER_FUNCTION_SOURCE_OBJECT \
+            --repo lopeztech/platform-infra \
+            --body "${{ env.ZIP_NAME }}"
+
       - name: Trigger platform-infra Terraform apply
         env:
           GH_TOKEN: ${{ secrets.PLATFORM_INFRA_TOKEN }}
