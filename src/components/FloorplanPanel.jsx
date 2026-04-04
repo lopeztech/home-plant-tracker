@@ -60,12 +60,14 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
                     onClick={() => setActiveFloorId(f.id)}
                     className="floor-tab py-1 px-2"
                   >
-                    {f.type === 'outdoor' && (
-                      <svg className="sa-icon sa-thin me-1" style={{ width: 12, height: 12 }}>
-                        <use href="/icons/sprite.svg#sun"></use>
-                      </svg>
-                    )}
-                    {f.name}
+                    <span className="d-inline-flex align-items-center gap-1">
+                      {f.type === 'outdoor' && (
+                        <svg className="sa-icon sa-thin" style={{ width: 12, height: 12 }}>
+                          <use href="/icons/sprite.svg#sun"></use>
+                        </svg>
+                      )}
+                      {f.name}
+                    </span>
                   </Nav.Link>
                 </Nav.Item>
               ))}
