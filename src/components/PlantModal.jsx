@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi } from '../api/plants.js'
-import { getWateringStatus } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 
 const ROOMS = ['Living Room', 'Kitchen', 'Bedroom', 'Bathroom', 'Garden', 'Balcony', 'Office', 'Hallway', 'Dining Room', 'Other']
@@ -315,19 +315,37 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Watering tab */}
       {isEditing && activeTab === 'watering' && (
         <Modal.Body>
-          {(plant.waterMethod || plant.waterAmount) && (
-            <div className="d-flex align-items-center gap-3 mb-3 p-2 rounded bg-body-tertiary fs-sm">
-              {plant.waterMethod && (
-                <span className="d-flex align-items-center gap-1">
-                  <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                  <strong>{WATER_METHODS.find((m) => m.value === plant.waterMethod)?.label || plant.waterMethod}</strong>
-                </span>
-              )}
-              {plant.waterAmount && <span>{plant.waterAmount}</span>}
-              {plant.irrigationDuration && <span>{plant.irrigationDuration} min</span>}
-              {plant.irrigationSchedule && <span className="text-muted">{plant.irrigationSchedule}</span>}
-            </div>
-          )}
+          {(plant.waterMethod || plant.waterAmount) && (() => {
+            const adjusted = getAdjustedWaterAmount(plant, weather, floors)
+            return (
+              <div className="mb-3 p-2 rounded bg-body-tertiary fs-sm">
+                <div className="d-flex align-items-center gap-3">
+                  {plant.waterMethod && (
+                    <span className="d-flex align-items-center gap-1">
+                      <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                      <strong>{WATER_METHODS.find((m) => m.value === plant.waterMethod)?.label || plant.waterMethod}</strong>
+                    </span>
+                  )}
+                  {adjusted.amount && (
+                    <span className={adjusted.adjusted ? 'fw-bold text-primary' : ''}>
+                      {adjusted.amount}
+                      {adjusted.adjusted && plant.waterAmount && adjusted.amount !== 'Skip' && (
+                        <small className="text-muted ms-1" style={{ textDecoration: 'line-through' }}>{plant.waterAmount}</small>
+                      )}
+                    </span>
+                  )}
+                  {plant.irrigationDuration && <span>{plant.irrigationDuration} min</span>}
+                  {plant.irrigationSchedule && <span className="text-muted">{plant.irrigationSchedule}</span>}
+                </div>
+                {adjusted.reason && (
+                  <small className="text-primary d-block mt-1">
+                    <svg className="sa-icon me-1" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#info"></use></svg>
+                    {adjusted.reason}
+                  </small>
+                )}
+              </div>
+            )
+          })()}
           {onWater && (
             <Button variant="info" className="w-100 mb-3" onClick={() => onWater(plant.id)}>
               <svg className="sa-icon me-2"><use href="/icons/sprite.svg#droplet"></use></svg>

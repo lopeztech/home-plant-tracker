@@ -100,3 +100,61 @@ export function getWateringStatus(plant, weather = null, floors = []) {
     label: urgencyLabel(daysUntil),
   }
 }
+
+/**
+ * Returns a weather-adjusted water amount recommendation.
+ *
+ * Takes the plant's base waterAmount (e.g. "250ml") and adjusts based on:
+ *  - Hot days (≥30°C): +25-50% more water
+ *  - Cold days (≤10°C): -25% less water
+ *  - Rainy days (outdoor): skip or -50%
+ *  - Humid conditions: -25%
+ *
+ * @param {object}      plant   - plant with waterAmount, floor, room
+ * @param {object|null} weather - from useWeather()
+ * @param {Array}       floors  - floor objects
+ * @returns {{ amount: string, adjusted: boolean, reason: string|null, multiplier: number }}
+ */
+export function getAdjustedWaterAmount(plant, weather = null, floors = []) {
+  const base = plant.waterAmount
+  if (!base) return { amount: null, adjusted: false, reason: null, multiplier: 1 }
+
+  const outdoor = isOutdoor(plant, floors)
+  const temp = weather?.current?.temp ?? null
+  const tempC = temp !== null ? toC(temp, weather?.unit) : null
+  const sky = weather?.current?.condition?.sky
+  const raining = sky === 'rainy' || sky === 'stormy'
+  const humidity = weather?.current?.humidity ?? null
+
+  let multiplier = 1
+  let reason = null
+
+  if (outdoor && raining) {
+    return { amount: 'Skip', adjusted: true, reason: 'Raining — no watering needed', multiplier: 0 }
+  }
+
+  if (tempC !== null) {
+    if (tempC >= 35) { multiplier = 1.5; reason = 'Very hot — 50% more water' }
+    else if (tempC >= 30) { multiplier = 1.25; reason = 'Hot day — 25% more water' }
+    else if (tempC <= 10) { multiplier = 0.75; reason = 'Cold — 25% less water' }
+  }
+
+  if (!reason && humidity !== null && humidity >= 80) {
+    multiplier = 0.75
+    reason = 'High humidity — 25% less water'
+  }
+
+  if (multiplier === 1) {
+    return { amount: base, adjusted: false, reason: null, multiplier: 1 }
+  }
+
+  // Parse numeric amount and adjust
+  const match = base.match(/^([\d.]+)\s*(.*)$/)
+  if (!match) return { amount: base, adjusted: false, reason, multiplier }
+
+  const num = parseFloat(match[1])
+  const unit = match[2] || 'ml'
+  const adjusted = Math.round(num * multiplier)
+
+  return { amount: `${adjusted}${unit}`, adjusted: true, reason, multiplier }
+}
