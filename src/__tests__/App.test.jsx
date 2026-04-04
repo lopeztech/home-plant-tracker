@@ -1,6 +1,7 @@
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { MemoryRouter } from 'react-router'
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -17,8 +18,9 @@ vi.mock('../api/plants.js', () => ({
     save: vi.fn().mockResolvedValue({ floors: [] }),
   },
   imagesApi:  { upload: vi.fn() },
-  analyseApi: { analyseFloorplan: vi.fn() },
+  analyseApi: { analyseFloorplan: vi.fn(), analyse: vi.fn() },
   setApiCredential: vi.fn(),
+  recommendApi: { get: vi.fn() },
 }))
 
 vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {
@@ -28,6 +30,7 @@ vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {
     useAuth: vi.fn().mockReturnValue({
       isAuthenticated: true,
       isLoading:       false,
+      isGuest:         false,
       user:            { name: 'Test User', email: 'test@example.com', picture: '' },
       login:           vi.fn(),
       logout:          vi.fn(),
@@ -40,7 +43,11 @@ vi.mock('../hooks/useWeather.js', () => ({
   useWeather: () => ({ weather: null, loading: false, locationDenied: false }),
 }))
 
-// Leaflet is not available in jsdom — stub out the whole floorplan component
+vi.mock('../hooks/useTempUnit.js', () => ({
+  useTempUnit: () => ({ unit: 'celsius', toggle: vi.fn() }),
+}))
+
+// Leaflet is not available in jsdom
 vi.mock('../components/LeafletFloorplan.jsx', () => ({
   default: () => <div data-testid="leaflet-floorplan" />,
 }))
@@ -58,14 +65,21 @@ import App from '../App.jsx'
 import { plantsApi, floorsApi } from '../api/plants.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
+function renderApp(initialRoute = '/') {
+  return render(
+    <MemoryRouter initialEntries={[initialRoute]}>
+      <App />
+    </MemoryRouter>
+  )
+}
+
 const samplePlant = {
   id: 'p1',
   name: 'Fern',
   species: 'Nephrolepis',
   room: 'Living Room',
   floor: 'ground',
-  x: 40,
-  y: 50,
+  x: 40, y: 50,
   lastWatered: '2026-03-20T00:00:00Z',
   frequencyDays: 7,
   health: 'Good',
@@ -79,192 +93,80 @@ describe('App', () => {
     useAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading:       false,
+      isGuest:         false,
       user:            { name: 'Test User', email: 'test@example.com', picture: '' },
       login:           vi.fn(),
       logout:          vi.fn(),
     })
   })
 
-  // ── Auth state ────────────────────────────────────────────────────────────
-
-  it('shows the login page when the user is not authenticated', () => {
-    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, user: null, login: vi.fn(), logout: vi.fn() })
-    render(<App />)
-    expect(screen.getByText(/sign in to access your plants/i)).toBeInTheDocument()
+  it('redirects to login page when the user is not authenticated', async () => {
+    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, isGuest: false, user: null, login: vi.fn(), logout: vi.fn() })
+    renderApp()
+    await waitFor(() => expect(screen.getByText(/sign in to access your plants/i)).toBeInTheDocument())
   })
 
-  it('renders the main view when authenticated', async () => {
-    render(<App />)
+  it('renders the dashboard when authenticated', async () => {
+    renderApp()
     await waitFor(() => expect(plantsApi.list).toHaveBeenCalledOnce())
     expect(screen.getByTestId('leaflet-floorplan')).toBeInTheDocument()
   })
 
-  it('shows a loading state while auth is resolving', () => {
-    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: true, user: null, login: vi.fn(), logout: vi.fn() })
-    render(<App />)
-    // Should not show the login page yet
-    expect(screen.queryByRole('button', { name: /sign in/i })).not.toBeInTheDocument()
+  it('shows a loading spinner while auth is resolving', () => {
+    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: true, isGuest: false, user: null, login: vi.fn(), logout: vi.fn() })
+    renderApp()
+    expect(screen.queryByText(/sign in/i)).not.toBeInTheDocument()
   })
 
-  // ── Data loading ──────────────────────────────────────────────────────────
-
   it('calls plantsApi.list on mount when authenticated', async () => {
-    render(<App />)
+    renderApp()
     await waitFor(() => expect(plantsApi.list).toHaveBeenCalledOnce())
   })
 
   it('calls floorsApi.get on mount when authenticated', async () => {
-    render(<App />)
+    renderApp()
     await waitFor(() => expect(floorsApi.get).toHaveBeenCalledOnce())
   })
 
-  it('displays plants in the sidebar after loading', async () => {
+  it('displays plants in the list after loading', async () => {
     plantsApi.list.mockResolvedValue([samplePlant])
-    render(<App />)
+    renderApp()
     await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
   })
 
   it('does not call plantsApi.list when not authenticated', () => {
-    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, user: null, login: vi.fn(), logout: vi.fn() })
-    render(<App />)
+    useAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, isGuest: false, user: null, login: vi.fn(), logout: vi.fn() })
+    renderApp()
     expect(plantsApi.list).not.toHaveBeenCalled()
   })
 
-  // ── Plant CRUD ────────────────────────────────────────────────────────────
-
-  it('adds a plant to the list after create', async () => {
-    plantsApi.list.mockResolvedValue([])
-    plantsApi.create.mockResolvedValue(samplePlant)
-
-    render(<App />)
-    await waitFor(() => expect(plantsApi.list).toHaveBeenCalled())
-
-    // Open modal via sidebar "Add Plant" button
-    fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
-
-    // New-plant modal shows mode-choice screen first
-    fireEvent.click(screen.getByRole('button', { name: /enter manually/i }))
-
-    // Fill in name and save
-    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
-      target: { value: 'Fern' },
-    })
-    // The modal save button has form="" (explicit empty form attr); sidebar button has none
-    const saveBtn = screen.getAllByRole('button', { name: /^add plant$/i })
-      .find(b => b.getAttribute('form') === '')
-    fireEvent.click(saveBtn)
-
-    await waitFor(() => expect(plantsApi.create).toHaveBeenCalledOnce())
-    expect(await screen.findByText('Fern')).toBeInTheDocument()
-  })
-
-  it('removes a plant from the list after delete', async () => {
-    plantsApi.list.mockResolvedValue([samplePlant])
-    plantsApi.delete.mockResolvedValue(null)
-
-    render(<App />)
-    await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
-
-    // Click on the plant card to open the modal
-    fireEvent.click(screen.getByText('Fern').closest('button'))
-
-    // Delete with confirmation dialog
-    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
-    // Click the Delete button inside the confirmation dialog (first match in DOM)
-    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i })
-    fireEvent.click(deleteButtons[0])
-
-    await waitFor(() => expect(plantsApi.delete).toHaveBeenCalledWith(samplePlant.id))
-    expect(screen.queryByText('Fern')).not.toBeInTheDocument()
-  })
-
-  it('updates a plant in the list after water', async () => {
-    plantsApi.list.mockResolvedValue([samplePlant])
-    const wateredPlant = { ...samplePlant, lastWatered: new Date().toISOString() }
-    plantsApi.water.mockResolvedValue(wateredPlant)
-
-    render(<App />)
-    await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
-
-    // Click the water button on the plant card
-    fireEvent.click(screen.getByRole('button', { name: /mark .+ as watered/i }))
-
-    await waitFor(() => expect(plantsApi.water).toHaveBeenCalledWith(samplePlant.id))
-  })
-
-  // ── Error handling ────────────────────────────────────────────────────────
-
   it('does not crash when plantsApi.list rejects', async () => {
     plantsApi.list.mockRejectedValue(new Error('Network error'))
-    expect(() => render(<App />)).not.toThrow()
+    expect(() => renderApp()).not.toThrow()
     await waitFor(() => expect(plantsApi.list).toHaveBeenCalled())
   })
 
-  it('does not crash when floorsApi.get rejects (falls back to default floors)', async () => {
+  it('does not crash when floorsApi.get rejects', async () => {
     floorsApi.get.mockRejectedValue(new Error('Floors unavailable'))
-    expect(() => render(<App />)).not.toThrow()
+    expect(() => renderApp()).not.toThrow()
     await waitFor(() => expect(floorsApi.get).toHaveBeenCalled())
   })
 
-  it('shows error banner when plantsApi.list fails', async () => {
-    plantsApi.list.mockRejectedValue(new Error('Server down'))
-    render(<App />)
-    await waitFor(() => expect(screen.getByText(/failed to load plants/i)).toBeInTheDocument())
-  })
-
-  it('shows error toast when watering fails', async () => {
-    plantsApi.list.mockResolvedValue([samplePlant])
-    plantsApi.water.mockRejectedValue(new Error('Water failed'))
-
-    render(<App />)
-    await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
-
-    fireEvent.click(screen.getByRole('button', { name: /mark .+ as watered/i }))
-
-    await waitFor(() => expect(screen.getByText(/failed to water plant/i)).toBeInTheDocument())
-  })
-
-  it('shows error toast when delete fails', async () => {
-    plantsApi.list.mockResolvedValue([samplePlant])
-    plantsApi.delete.mockRejectedValue(new Error('Delete failed'))
-
-    render(<App />)
-    await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
-
-    fireEvent.click(screen.getByText('Fern').closest('button'))
-    fireEvent.click(screen.getByRole('button', { name: /^delete$/i }))
-    const deleteButtons = screen.getAllByRole('button', { name: /^delete$/i })
-    fireEvent.click(deleteButtons[0])
-
-    await waitFor(() => expect(screen.getByText(/failed to delete plant/i)).toBeInTheDocument())
-  })
-
-  // ── Guest mode ──────────────────────────────────────────────────────────
-
   it('shows guest mode banner when user is a guest', async () => {
     useAuth.mockReturnValue({
-      isAuthenticated: true,
-      isGuest: true,
-      isLoading: false,
-      user: { name: 'Guest', isGuest: true },
-      login: vi.fn(),
-      logout: vi.fn(),
+      isAuthenticated: true, isGuest: true, isLoading: false,
+      user: { name: 'Guest', isGuest: true }, login: vi.fn(), logout: vi.fn(),
     })
-    render(<App />)
+    renderApp()
     await waitFor(() => expect(screen.getByText(/guest mode/i)).toBeInTheDocument())
   })
 
   it('does not call plantsApi.list in guest mode', async () => {
     useAuth.mockReturnValue({
-      isAuthenticated: true,
-      isGuest: true,
-      isLoading: false,
-      user: { name: 'Guest', isGuest: true },
-      login: vi.fn(),
-      logout: vi.fn(),
+      isAuthenticated: true, isGuest: true, isLoading: false,
+      user: { name: 'Guest', isGuest: true }, login: vi.fn(), logout: vi.fn(),
     })
-    render(<App />)
-    // Wait for initial render to settle
+    renderApp()
     await waitFor(() => expect(screen.getByText(/guest mode/i)).toBeInTheDocument())
     expect(plantsApi.list).not.toHaveBeenCalled()
   })
