@@ -91,7 +91,7 @@ describe('App', () => {
     // Skip onboarding modal so dashboard content is visible
     localStorage.setItem('plant-tracker-onboarded', '1')
     plantsApi.list.mockResolvedValue([])
-    floorsApi.get.mockResolvedValue({ floors: [] })
+    floorsApi.get.mockResolvedValue({ floors: [{ id: 'ground', name: 'Ground Floor', order: 0, type: 'interior' }] })
     useAuth.mockReturnValue({
       isAuthenticated: true,
       isLoading:       false,
