@@ -88,6 +88,8 @@ const samplePlant = {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Skip onboarding modal so dashboard content is visible
+    localStorage.setItem('plant-tracker-onboarded', '1')
     plantsApi.list.mockResolvedValue([])
     floorsApi.get.mockResolvedValue({ floors: [] })
     useAuth.mockReturnValue({
