@@ -160,7 +160,7 @@ export default function HouseWeatherFrame({ weather, location, children }) {
         ))}
 
         {/* Weather info overlay */}
-        {temp !== null && (
+        {weather?.current && (
           <div
             className="position-absolute d-flex align-items-center gap-2 px-3 py-1 rounded-pill"
             style={{

@@ -40,7 +40,7 @@ vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {
 })
 
 vi.mock('../hooks/useWeather.js', () => ({
-  useWeather: () => ({ weather: null, loading: false, locationDenied: false }),
+  useWeather: () => ({ weather: null, loading: false, locationDenied: false, location: null, setLocation: vi.fn() }),
 }))
 
 vi.mock('../hooks/useTempUnit.js', () => ({
