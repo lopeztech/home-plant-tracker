@@ -83,10 +83,23 @@ function parseWeather(data, unit = 'celsius') {
   }
 }
 
+const LOCATION_KEY = 'plantTracker_location'
+
+function loadSavedLocation() {
+  try { return JSON.parse(localStorage.getItem(LOCATION_KEY)) } catch { return null }
+}
+
 export function useWeather(tempUnit = 'celsius') {
   const [weather, setWeather] = useState(null)
   const [loading, setLoading] = useState(true)
   const [locationDenied, setLocationDenied] = useState(false)
+  const [location, setLocationState] = useState(() => loadSavedLocation())
+
+  function setLocation(loc) {
+    setLocationState(loc)
+    if (loc) localStorage.setItem(LOCATION_KEY, JSON.stringify(loc))
+    else localStorage.removeItem(LOCATION_KEY)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -129,6 +142,20 @@ export function useWeather(tempUnit = 'celsius') {
           return
         }
 
+        // Reverse geocode to get location name
+        if (!loadSavedLocation()) {
+          fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&count=1`)
+            .then((r) => r.ok ? r.json() : null)
+            .then((data) => {
+              if (data?.results?.[0]) {
+                const r = data.results[0]
+                const loc = { name: r.name, country: r.country, lat, lon }
+                setLocation(loc)
+              }
+            })
+            .catch(() => {})
+        }
+
         fetchWeather(lat, lon)
       },
       () => {
@@ -143,5 +170,5 @@ export function useWeather(tempUnit = 'celsius') {
     return () => { cancelled = true }
   }, [tempUnit])
 
-  return { weather, loading, locationDenied }
+  return { weather, loading, locationDenied, location, setLocation }
 }

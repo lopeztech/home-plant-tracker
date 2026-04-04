@@ -19,7 +19,7 @@ export function usePlantContext() {
 export function PlantProvider({ children }) {
   const { isAuthenticated, isGuest, logout } = useAuth()
   const tempUnit = useTempUnit()
-  const { weather, locationDenied } = useWeather(tempUnit.unit)
+  const { weather, locationDenied, location, setLocation } = useWeather(tempUnit.unit)
 
   const [plants, setPlants] = useState([])
   const [plantsLoading, setPlantsLoading] = useState(false)
@@ -193,7 +193,7 @@ export function PlantProvider({ children }) {
   const value = useMemo(() => ({
     plants, plantsLoading, plantsError,
     floors, activeFloorId, setActiveFloorId,
-    weather, locationDenied, tempUnit,
+    weather, locationDenied, location, setLocation, tempUnit,
     overdueCount, isAnalysingFloorplan,
     isGuest,
     handleSavePlant, handleWaterPlant, handleBatchWater,
@@ -201,7 +201,7 @@ export function PlantProvider({ children }) {
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
   }), [
     plants, plantsLoading, plantsError, floors, activeFloorId,
-    weather, locationDenied, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
+    weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
     handleSavePlant, handleWaterPlant, handleBatchWater,
     handleDeletePlant, handleMarkerDrag,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,

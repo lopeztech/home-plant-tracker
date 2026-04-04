@@ -167,7 +167,7 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
 }
 
 export default function SettingsPage() {
-  const { floors, handleSaveFloors, handleFloorplanUpload, isAnalysingFloorplan, tempUnit, isGuest } = usePlantContext()
+  const { floors, handleSaveFloors, handleFloorplanUpload, isAnalysingFloorplan, tempUnit, isGuest, location, setLocation } = usePlantContext()
   const { theme, changeTheme, selectedTheme, changeThemeStyle } = useLayoutContext()
   const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
@@ -296,7 +296,7 @@ export default function SettingsPage() {
                   </Button>
                 </div>
                 {tempUnit && (
-                  <div className="d-flex align-items-center justify-content-between">
+                  <div className="d-flex align-items-center justify-content-between mb-3">
                     <span>Temperature</span>
                     <Button variant="outline-default" size="sm" onClick={tempUnit.toggle}>
                       <svg className="sa-icon me-1"><use href="/icons/sprite.svg#thermometer"></use></svg>
@@ -304,6 +304,23 @@ export default function SettingsPage() {
                     </Button>
                   </div>
                 )}
+                <div>
+                  <span className="d-block mb-1">Location</span>
+                  <div className="d-flex gap-2 align-items-center">
+                    <Form.Control
+                      size="sm"
+                      value={location?.name || ''}
+                      onChange={(e) => setLocation(e.target.value ? { ...location, name: e.target.value } : null)}
+                      placeholder="Auto-detected from GPS"
+                    />
+                    {location?.name && (
+                      <Button variant="outline-danger" size="sm" className="flex-shrink-0" onClick={() => setLocation(null)} title="Reset to GPS">
+                        <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
+                      </Button>
+                    )}
+                  </div>
+                  {location?.country && <small className="text-muted">{location.country}</small>}
+                </div>
               </div></div>
             </div>
 
