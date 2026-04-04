@@ -247,6 +247,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <div key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm text-muted">
                   <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
                   {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  <span className="text-muted">{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
                   {entry.note && <span>— {entry.note}</span>}
                 </div>
               ))}
