@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react'
 import { Button, Form, Table, Badge, Card, Row, Col } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
+import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 
 const THEMES = [
   { id: 'olive', label: 'Olive', color: '#556B2F' },
@@ -92,12 +93,32 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
         <tr>
           <td colSpan={4} className="p-0">
             <div className="bg-body-tertiary p-3">
+              {/* Interactive zone map */}
+              <div className="border rounded mb-3" style={{ height: 350, position: 'relative', overflow: 'hidden', background: floor.type === 'outdoor' ? '#f0fdf4' : '#f8f9fa' }}>
+                <LeafletFloorplan
+                  key={`edit-${floor.id}`}
+                  floor={floor}
+                  floors={[floor]}
+                  plants={[]}
+                  weather={null}
+                  onFloorplanClick={() => {}}
+                  onMarkerClick={() => {}}
+                  onMarkerDrag={() => {}}
+                  editMode={true}
+                  onRoomsChange={(newRooms) => onChange({ ...floor, rooms: newRooms })}
+                />
+              </div>
+              <p className="text-muted fs-xs mb-3">
+                <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#info"></use></svg>
+                Drag rooms to move, drag corners to resize, or draw new zones by clicking and dragging on empty space.
+              </p>
+
               <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">
                 Rooms / Zones ({rooms.length})
               </h6>
 
               {rooms.length === 0 ? (
-                <p className="text-muted fs-sm mb-2">No rooms defined. Add one below.</p>
+                <p className="text-muted fs-sm mb-2">No rooms defined. Draw on the map above or add one below.</p>
               ) : (
                 <div className="mb-3">
                   {rooms.map((room, i) => (
