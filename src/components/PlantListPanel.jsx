@@ -117,14 +117,16 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
       <div className="panel-hdr">
         <span>
           Plants
-          <Badge bg="primary" className="ms-2">{floorPlants.length}</Badge>
+          {floorPlants.length > 0 && <Badge bg="primary" className="ms-2">{floorPlants.length}</Badge>}
         </span>
-        <div className="panel-toolbar">
-          <Button variant="primary" size="sm" className="waves-effect waves-themed" onClick={onAddPlant}>
-            <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
-            Add Plant
-          </Button>
-        </div>
+        {floorPlants.length > 0 && (
+          <div className="panel-toolbar">
+            <Button variant="primary" size="sm" className="waves-effect waves-themed" onClick={onAddPlant}>
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
+              Add Plant
+            </Button>
+          </div>
+        )}
       </div>
       <div className="panel-container">
         <div className="panel-content p-0">
