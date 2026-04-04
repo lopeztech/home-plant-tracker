@@ -59,20 +59,12 @@ export function AuthProvider({ children }) {
   }
 
   function logout() {
-    const shouldRedirectIAP = window.location.hostname !== 'localhost' && !user?.isGuest
-
     localStorage.removeItem(STORAGE_KEY)
     setApiCredential(null)
 
     // Clear Google's cached account selection so the account picker appears on next login
     if (window.google?.accounts?.id) {
       window.google.accounts.id.disableAutoSelect()
-    }
-
-    // Redirect to IAP logout endpoint before clearing state (full page nav bypasses router)
-    if (shouldRedirectIAP) {
-      window.location.replace('/_gcp_iap/clear_login_cookie')
-      return
     }
 
     setUser(null)
