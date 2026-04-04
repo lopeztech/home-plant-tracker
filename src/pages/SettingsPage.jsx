@@ -208,6 +208,11 @@ export default function SettingsPage() {
             </div>
           </Col>
         </Row>
+
+        {/* Version */}
+        <div className="text-muted fs-xs mt-2">
+          Version: {__APP_VERSION__} &middot; Built: {new Date(__BUILD_TIME__).toLocaleString()}
+        </div>
       </div>
     </div>
   )
