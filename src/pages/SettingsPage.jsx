@@ -113,18 +113,6 @@ export default function SettingsPage() {
                   Floors & Zones
                 </span>
                 <div className="panel-toolbar">
-                  <Button
-                    variant="outline-default"
-                    size="sm"
-                    className="me-2"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isAnalysingFloorplan || isGuest}
-                  >
-                    <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#upload"></use></svg>
-                    {isAnalysingFloorplan ? 'Analysing...' : 'Upload Floorplan'}
-                  </Button>
-                  <input ref={fileInputRef} type="file" accept="image/*" className="d-none"
-                    onChange={(e) => { if (e.target.files?.[0]) handleFloorplanUpload(e.target.files[0]); e.target.value = '' }} />
                   <Button variant={saved ? 'success' : 'primary'} size="sm" onClick={handleSave} disabled={saving}>
                     {saved ? 'Saved!' : 'Save Floors'}
                   </Button>
@@ -158,6 +146,22 @@ export default function SettingsPage() {
                   <Button variant="primary" size="sm" onClick={handleAddFloor} disabled={!newName.trim()}>
                     <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
                   </Button>
+                </div>
+
+                {/* Upload floorplan */}
+                <div className="p-3 border-top">
+                  <Button
+                    variant="outline-primary"
+                    className="w-100"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isAnalysingFloorplan || isGuest}
+                  >
+                    <svg className="sa-icon me-2" style={{ width: 16, height: 16 }}><use href="/icons/sprite.svg#upload"></use></svg>
+                    {isAnalysingFloorplan ? 'Analysing floorplan...' : 'Upload Floorplan'}
+                  </Button>
+                  <input ref={fileInputRef} type="file" accept="image/*" className="d-none"
+                    onChange={(e) => { if (e.target.files?.[0]) handleFloorplanUpload(e.target.files[0]); e.target.value = '' }} />
+                  <small className="text-muted d-block mt-1">Upload a photo of your floor plan — Gemini AI will identify rooms automatically</small>
                 </div>
               </div></div>
             </div>
