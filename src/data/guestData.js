@@ -36,6 +36,8 @@ export const GUEST_PLANTS = [
     imageUrl: null,
     health: 'Good',
     maturity: 'Mature',
+    waterAmount: '500ml',
+    waterMethod: 'jug',
     healthLog: [
       { date: '2026-01-03T09:00:00Z', health: 'Fair', reason: 'New leaf unfurling but some yellowing on lower leaves' },
       { date: '2026-01-24T09:00:00Z', health: 'Good', reason: 'Yellowing resolved after adjusting watering schedule' },

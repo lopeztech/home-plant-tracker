@@ -268,6 +268,8 @@ const ANALYSE_SCHEMA = {
     healthReason:    { type: SchemaType.STRING },
     maturity:        { type: SchemaType.STRING },
     recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+    waterAmount:     { type: SchemaType.STRING },
+    waterMethod:     { type: SchemaType.STRING },
   },
   required: ['species', 'frequencyDays', 'health', 'healthReason', 'maturity', 'recommendations'],
 };
@@ -279,13 +281,18 @@ const ANALYSE_PROMPT = `Analyse this plant photo and respond ONLY with valid JSO
   "health": "Good",
   "healthReason": "One sentence reason",
   "maturity": "Mature",
-  "recommendations": ["tip 1", "tip 2", "tip 3"]
+  "recommendations": ["tip 1", "tip 2", "tip 3"],
+  "waterAmount": "250ml",
+  "waterMethod": "jug"
 }
 Rules:
 - health must be exactly one of: Excellent, Good, Fair, Poor
 - maturity must be exactly one of: Seedling, Young, Mature, Established
 - frequencyDays is an integer representing days between waterings
 - recommendations must have exactly 3 items
+- waterAmount is the recommended amount of water per watering (e.g. "100ml", "250ml", "500ml", "1L")
+- waterMethod must be one of: jug, spray, bottom-water, hose, irrigation, drip
+- Choose waterMethod based on plant type: small indoor plants = jug or spray, large indoor = jug or bottom-water, outdoor/garden = hose or irrigation
 - Respond with JSON only, no markdown or extra text`;
 
 const RECOMMEND_SCHEMA = {
@@ -687,7 +694,8 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
 
     const now = new Date().toISOString();
     const existing = doc.data();
-    const wateringLog = [...(existing.wateringLog || []), { date: now, note: '' }];
+    const { amount, method } = req.body || {};
+    const wateringLog = [...(existing.wateringLog || []), { date: now, note: '', amount: amount || null, method: method || null }];
 
     await ref.set({ lastWatered: now, wateringLog, updatedAt: now }, { merge: true });
 

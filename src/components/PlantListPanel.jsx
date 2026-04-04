@@ -74,7 +74,7 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
 }
 
 export default function PlantListPanel({ onPlantClick, onAddPlant }) {
-  const { plants, floors, activeFloorId, weather, handleWaterPlant, plantsLoading } = usePlantContext()
+  const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading } = usePlantContext()
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
 
@@ -191,18 +191,47 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
                 )}
               </div>
             ) : (
-              <ListGroup variant="flush">
-                {filteredPlants.map((plant) => (
-                  <PlantCard
-                    key={plant.id}
-                    plant={plant}
-                    onClick={onPlantClick}
-                    onWater={handleWaterPlant}
-                    weather={weather}
-                    floors={floors}
-                  />
-                ))}
-              </ListGroup>
+              <div>
+                {(() => {
+                  const grouped = {}
+                  filteredPlants.forEach((p) => {
+                    const room = p.room || 'Unassigned'
+                    if (!grouped[room]) grouped[room] = []
+                    grouped[room].push(p)
+                  })
+                  const roomNames = Object.keys(grouped).sort()
+                  return roomNames.map((room) => (
+                    <div key={room}>
+                      {roomNames.length > 1 && (
+                        <div className="d-flex align-items-center justify-content-between px-3 py-1 bg-body-tertiary border-top border-bottom">
+                          <small className="text-muted fw-600 text-uppercase fs-xs">{room}</small>
+                          <Button
+                            variant="outline-primary"
+                            size="sm"
+                            className="py-0 px-2 fs-xs"
+                            onClick={() => handleBatchWater(grouped[room].map((p) => p.id))}
+                          >
+                            <svg className="sa-icon me-1" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                            Water all
+                          </Button>
+                        </div>
+                      )}
+                      <ListGroup variant="flush">
+                        {grouped[room].map((plant) => (
+                          <PlantCard
+                            key={plant.id}
+                            plant={plant}
+                            onClick={onPlantClick}
+                            onWater={handleWaterPlant}
+                            weather={weather}
+                            floors={floors}
+                          />
+                        ))}
+                      </ListGroup>
+                    </div>
+                  ))
+                })()}
+              </div>
             )}
           </div>
         </div>

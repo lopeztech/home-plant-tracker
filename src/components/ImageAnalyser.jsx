@@ -124,6 +124,8 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
               {analysisResult.health && <Badge bg={HEALTH_COLORS[analysisResult.health] || 'secondary'}>Health: {analysisResult.health}</Badge>}
               {analysisResult.maturity && <Badge bg={MATURITY_COLORS[analysisResult.maturity] || 'secondary'}>Maturity: {analysisResult.maturity}</Badge>}
               {analysisResult.frequencyDays && <Badge bg="info">Every {analysisResult.frequencyDays}d</Badge>}
+              {analysisResult.waterAmount && <Badge bg="primary">💧 {analysisResult.waterAmount}</Badge>}
+              {analysisResult.waterMethod && <Badge bg="secondary">{analysisResult.waterMethod}</Badge>}
             </div>
             {analysisResult.healthReason && <p className="text-muted fs-xs mt-2 mb-0">{analysisResult.healthReason}</p>}
           </Card.Body>

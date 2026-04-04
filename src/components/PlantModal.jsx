@@ -8,6 +8,15 @@ import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern
 const ROOMS = ['Living Room', 'Kitchen', 'Bedroom', 'Bathroom', 'Garden', 'Balcony', 'Office', 'Hallway', 'Dining Room', 'Other']
 const HEALTH_OPTIONS = ['Excellent', 'Good', 'Fair', 'Poor']
 const MATURITY_OPTIONS = ['Seedling', 'Young', 'Mature', 'Established']
+const WATER_METHODS = [
+  { value: 'jug', label: 'Jug / Watering Can' },
+  { value: 'spray', label: 'Spray / Mist' },
+  { value: 'bottom-water', label: 'Bottom Watering' },
+  { value: 'hose', label: 'Hose' },
+  { value: 'irrigation', label: 'Irrigation System' },
+  { value: 'drip', label: 'Drip System' },
+]
+const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function today() { return new Date().toISOString().split('T')[0] }
 
@@ -21,6 +30,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     lastWatered: today(), frequencyDays: 7, notes: '',
     imageFile: null, imageUrl: null, health: null, healthReason: null,
     maturity: null, potSize: null, recommendations: [],
+    waterAmount: null, waterMethod: null,
+    irrigationDuration: null, irrigationSchedule: null,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -40,6 +51,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         health: plant.health || null, healthReason: plant.healthReason || null,
         maturity: plant.maturity || null, potSize: plant.potSize || null,
         recommendations: plant.recommendations || [],
+        waterAmount: plant.waterAmount || null, waterMethod: plant.waterMethod || null,
+        irrigationDuration: plant.irrigationDuration || null,
+        irrigationSchedule: plant.irrigationSchedule || null,
       })
     }
   }, [plant, activeFloorId])
@@ -53,6 +67,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       ...(result.frequencyDays ? { frequencyDays: Math.min(30, Math.max(1, Number(result.frequencyDays))) } : {}),
       health: result.health, healthReason: result.healthReason,
       maturity: result.maturity, recommendations: result.recommendations || [],
+      ...(result.waterAmount ? { waterAmount: result.waterAmount } : {}),
+      ...(result.waterMethod ? { waterMethod: result.waterMethod } : {}),
     }))
   }, [])
 
@@ -72,6 +88,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       lastWatered: new Date(form.lastWatered).toISOString(), frequencyDays: Number(form.frequencyDays),
       notes: form.notes.trim(), imageUrl, health: form.health, healthReason: form.healthReason,
       maturity: form.maturity, potSize: form.potSize, recommendations: form.recommendations,
+      waterAmount: form.waterAmount, waterMethod: form.waterMethod,
+      irrigationDuration: form.irrigationDuration ? Number(form.irrigationDuration) : null,
+      irrigationSchedule: form.irrigationSchedule,
     })
     setIsSaving(false)
   }, [form, onSave])
@@ -218,6 +237,68 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Form.Group>
             </Col>
           </Row>
+          <Row className="mb-3">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Watering Method</Form.Label>
+                <Form.Select value={form.waterMethod || ''} onChange={(e) => update('waterMethod', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {WATER_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Water Amount</Form.Label>
+                <Form.Control type="text" placeholder="e.g. 250ml, 1L, 2 cups" value={form.waterAmount || ''} onChange={(e) => update('waterAmount', e.target.value || null)} />
+              </Form.Group>
+            </Col>
+          </Row>
+          {(form.waterMethod === 'hose' || form.waterMethod === 'irrigation') && (
+            <Row className="mb-3">
+              <Col md={4}>
+                <Form.Group>
+                  <Form.Label>Duration (min)</Form.Label>
+                  <Form.Control type="number" min={1} max={120} placeholder="15" value={form.irrigationDuration || ''} onChange={(e) => update('irrigationDuration', e.target.value || null)} />
+                </Form.Group>
+              </Col>
+              <Col md={8}>
+                <Form.Group>
+                  <Form.Label>Schedule</Form.Label>
+                  <div className="d-flex gap-1 flex-wrap mb-1">
+                    {DAYS_OF_WEEK.map((day) => {
+                      const schedule = form.irrigationSchedule || ''
+                      const days = schedule.split(' ')[0]?.split(',') || []
+                      const isSelected = days.includes(day)
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline-secondary'}`}
+                          onClick={() => {
+                            const time = schedule.split(' ')[1] || '06:00'
+                            const newDays = isSelected ? days.filter((d) => d !== day) : [...days, day]
+                            update('irrigationSchedule', newDays.length ? `${newDays.join(',')} ${time}` : null)
+                          }}
+                        >
+                          {day}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <Form.Control
+                    type="time"
+                    size="sm"
+                    value={(form.irrigationSchedule || '').split(' ')[1] || '06:00'}
+                    onChange={(e) => {
+                      const days = (form.irrigationSchedule || '').split(' ')[0] || ''
+                      update('irrigationSchedule', days ? `${days} ${e.target.value}` : null)
+                    }}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+          )}
           <Form.Group className="mb-3">
             <Form.Label>Notes</Form.Label>
             <Form.Control as="textarea" rows={3} placeholder="Any special care instructions..." value={form.notes} onChange={(e) => update('notes', e.target.value)} />
@@ -234,6 +315,19 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Watering tab */}
       {isEditing && activeTab === 'watering' && (
         <Modal.Body>
+          {(plant.waterMethod || plant.waterAmount) && (
+            <div className="d-flex align-items-center gap-3 mb-3 p-2 rounded bg-body-tertiary fs-sm">
+              {plant.waterMethod && (
+                <span className="d-flex align-items-center gap-1">
+                  <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                  <strong>{WATER_METHODS.find((m) => m.value === plant.waterMethod)?.label || plant.waterMethod}</strong>
+                </span>
+              )}
+              {plant.waterAmount && <span>{plant.waterAmount}</span>}
+              {plant.irrigationDuration && <span>{plant.irrigationDuration} min</span>}
+              {plant.irrigationSchedule && <span className="text-muted">{plant.irrigationSchedule}</span>}
+            </div>
+          )}
           {onWater && (
             <Button variant="info" className="w-100 mb-3" onClick={() => onWater(plant.id)}>
               <svg className="sa-icon me-2"><use href="/icons/sprite.svg#droplet"></use></svg>
