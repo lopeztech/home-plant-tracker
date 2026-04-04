@@ -2,7 +2,6 @@ import { Suspense } from 'react'
 import { Outlet, Navigate } from 'react-router'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
-import Topbar from './components/Topbar.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Onboarding from '../components/Onboarding.jsx'
 
@@ -24,8 +23,8 @@ export default function MainLayout() {
 
   return (
     <PlantProvider>
-      <div className="app-wrap">
-        <Topbar />
+      <div className="app-wrap set-header-fixed" style={{ gridTemplateRows: '0 auto' }}>
+        <header className="app-header" style={{ display: 'none' }} />
         <Sidebar />
         <main className="app-body">
           <div className="app-content">

@@ -42,12 +42,8 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
 
   return (
     <>
-      <tr
-        className={`${floor.hidden ? 'opacity-50' : ''} ${expanded ? 'table-active' : ''}`}
-        style={{ cursor: 'pointer' }}
-        onClick={onToggle}
-      >
-        <td onClick={(e) => e.stopPropagation()}>
+      <tr className={`${floor.hidden ? 'opacity-50' : ''} ${expanded ? 'table-active' : ''}`}>
+        <td>
           <Form.Check
             type="switch"
             checked={!floor.hidden}
@@ -57,19 +53,20 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
         </td>
         <td>
           <div className="d-flex align-items-center gap-2">
-            <svg className="sa-icon" style={{ width: 12, height: 12, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
-              <use href="/icons/sprite.svg#chevron-right"></use>
-            </svg>
+            <button type="button" className="btn btn-sm p-0 border-0" onClick={onToggle} title="Show rooms">
+              <svg className="sa-icon" style={{ width: 14, height: 14, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
+                <use href="/icons/sprite.svg#chevron-right"></use>
+              </svg>
+            </button>
             <Form.Control
               size="sm"
               value={floor.name}
               onChange={(e) => onChange({ ...floor, name: e.target.value })}
-              onClick={(e) => e.stopPropagation()}
               className="border-0 bg-transparent"
             />
           </div>
         </td>
-        <td onClick={(e) => e.stopPropagation()}>
+        <td>
           <Badge
             bg={floor.type === 'outdoor' ? 'success' : 'info'}
             style={{ cursor: 'pointer' }}
@@ -78,7 +75,7 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
             {floor.type === 'outdoor' ? 'outdoor' : 'interior'}
           </Badge>
         </td>
-        <td className="text-end" onClick={(e) => e.stopPropagation()}>
+        <td className="text-end">
           {confirmDelete ? (
             <div className="d-flex gap-1 justify-content-end">
               <Button variant="danger" size="sm" onClick={() => { onDelete(floor.id); setConfirmDelete(false) }}>Yes</Button>
