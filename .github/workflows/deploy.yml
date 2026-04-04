@@ -87,6 +87,7 @@ jobs:
         run: gsutil cp "${{ env.ZIP_NAME }}" gs://${{ secrets.FUNCTION_SOURCE_BUCKET }}/${{ env.ZIP_NAME }}
 
       - name: Persist latest source object name
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.PLATFORM_INFRA_TOKEN }}
         run: |
