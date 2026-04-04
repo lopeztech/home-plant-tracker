@@ -15,50 +15,136 @@ const THEMES = [
   { id: 'flare', label: 'Flare', color: '#c0392b' },
 ]
 
-function FloorRow({ floor, onChange, onDelete }) {
+function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [newRoomName, setNewRoomName] = useState('')
+
+  const rooms = floor.rooms || []
+
+  const addRoom = () => {
+    if (!newRoomName.trim()) return
+    const last = rooms[rooms.length - 1]
+    const newY = last ? Math.min(last.y + last.height + 2, 90) : 5
+    onChange({
+      ...floor,
+      rooms: [...rooms, { name: newRoomName.trim(), x: 5, y: newY, width: 90, height: Math.min(20, 95 - newY) }],
+    })
+    setNewRoomName('')
+  }
+
+  const updateRoom = (idx, updates) => {
+    onChange({ ...floor, rooms: rooms.map((r, i) => (i === idx ? { ...r, ...updates } : r)) })
+  }
+
+  const deleteRoom = (idx) => {
+    onChange({ ...floor, rooms: rooms.filter((_, i) => i !== idx) })
+  }
 
   return (
-    <tr className={floor.hidden ? 'opacity-50' : ''}>
-      <td>
-        <Form.Check
-          type="switch"
-          checked={!floor.hidden}
-          onChange={() => onChange({ ...floor, hidden: !floor.hidden })}
-          label=""
-        />
-      </td>
-      <td>
-        <Form.Control
-          size="sm"
-          value={floor.name}
-          onChange={(e) => onChange({ ...floor, name: e.target.value })}
-          className="border-0 bg-transparent"
-        />
-      </td>
-      <td>
-        <Badge
-          bg={floor.type === 'outdoor' ? 'success' : 'info'}
-          className="cursor-pointer"
-          style={{ cursor: 'pointer' }}
-          onClick={() => onChange({ ...floor, type: floor.type === 'outdoor' ? 'interior' : 'outdoor' })}
-        >
-          {floor.type === 'outdoor' ? 'outdoor' : 'interior'}
-        </Badge>
-      </td>
-      <td className="text-end">
-        {confirmDelete ? (
-          <div className="d-flex gap-1 justify-content-end">
-            <Button variant="danger" size="sm" onClick={() => { onDelete(floor.id); setConfirmDelete(false) }}>Yes</Button>
-            <Button variant="light" size="sm" onClick={() => setConfirmDelete(false)}>No</Button>
+    <>
+      <tr
+        className={`${floor.hidden ? 'opacity-50' : ''} ${expanded ? 'table-active' : ''}`}
+        style={{ cursor: 'pointer' }}
+        onClick={onToggle}
+      >
+        <td onClick={(e) => e.stopPropagation()}>
+          <Form.Check
+            type="switch"
+            checked={!floor.hidden}
+            onChange={() => onChange({ ...floor, hidden: !floor.hidden })}
+            label=""
+          />
+        </td>
+        <td>
+          <div className="d-flex align-items-center gap-2">
+            <svg className="sa-icon" style={{ width: 12, height: 12, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
+              <use href="/icons/sprite.svg#chevron-right"></use>
+            </svg>
+            <Form.Control
+              size="sm"
+              value={floor.name}
+              onChange={(e) => onChange({ ...floor, name: e.target.value })}
+              onClick={(e) => e.stopPropagation()}
+              className="border-0 bg-transparent"
+            />
           </div>
-        ) : (
-          <Button variant="link" size="sm" className="text-danger p-0" onClick={() => setConfirmDelete(true)}>
-            <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#trash-2"></use></svg>
-          </Button>
-        )}
-      </td>
-    </tr>
+        </td>
+        <td onClick={(e) => e.stopPropagation()}>
+          <Badge
+            bg={floor.type === 'outdoor' ? 'success' : 'info'}
+            style={{ cursor: 'pointer' }}
+            onClick={() => onChange({ ...floor, type: floor.type === 'outdoor' ? 'interior' : 'outdoor' })}
+          >
+            {floor.type === 'outdoor' ? 'outdoor' : 'interior'}
+          </Badge>
+        </td>
+        <td className="text-end" onClick={(e) => e.stopPropagation()}>
+          {confirmDelete ? (
+            <div className="d-flex gap-1 justify-content-end">
+              <Button variant="danger" size="sm" onClick={() => { onDelete(floor.id); setConfirmDelete(false) }}>Yes</Button>
+              <Button variant="light" size="sm" onClick={() => setConfirmDelete(false)}>No</Button>
+            </div>
+          ) : (
+            <Button variant="link" size="sm" className="text-danger p-0" onClick={() => setConfirmDelete(true)}>
+              <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#trash-2"></use></svg>
+            </Button>
+          )}
+        </td>
+      </tr>
+      {expanded && (
+        <tr>
+          <td colSpan={4} className="p-0">
+            <div className="bg-body-tertiary p-3">
+              <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">
+                Rooms / Zones ({rooms.length})
+              </h6>
+
+              {rooms.length === 0 ? (
+                <p className="text-muted fs-sm mb-2">No rooms defined. Add one below.</p>
+              ) : (
+                <div className="mb-3">
+                  {rooms.map((room, i) => (
+                    <div key={i} className={`d-flex align-items-center gap-2 mb-1 ${room.hidden ? 'opacity-50' : ''}`}>
+                      <Form.Check
+                        type="switch"
+                        checked={!room.hidden}
+                        onChange={() => updateRoom(i, { hidden: !room.hidden })}
+                        className="flex-shrink-0"
+                      />
+                      <Form.Control
+                        size="sm"
+                        value={room.name}
+                        onChange={(e) => updateRoom(i, { name: e.target.value })}
+                      />
+                      <span className="text-muted fs-xs flex-shrink-0" title="Position & size">
+                        {room.width}×{room.height}
+                      </span>
+                      <Button variant="link" size="sm" className="text-danger p-0 flex-shrink-0" onClick={() => deleteRoom(i)}>
+                        <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add room */}
+              <div className="d-flex gap-2">
+                <Form.Control
+                  size="sm"
+                  placeholder="New room name..."
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addRoom()}
+                />
+                <Button variant="primary" size="sm" onClick={addRoom} disabled={!newRoomName.trim()}>
+                  <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#plus"></use></svg>
+                </Button>
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   )
 }
 
@@ -73,6 +159,7 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState('interior')
+  const [expandedFloorId, setExpandedFloorId] = useState(null)
 
   const handleFloorChange = useCallback((updated) => {
     setEditableFloors((prev) => prev.map((f) => (f.id === updated.id ? updated : f)))
@@ -127,7 +214,14 @@ export default function SettingsPage() {
                   </thead>
                   <tbody>
                     {[...editableFloors].sort((a, b) => b.order - a.order).map((floor) => (
-                      <FloorRow key={floor.id} floor={floor} onChange={handleFloorChange} onDelete={handleDeleteFloor} />
+                      <FloorRow
+                        key={floor.id}
+                        floor={floor}
+                        onChange={handleFloorChange}
+                        onDelete={handleDeleteFloor}
+                        expanded={expandedFloorId === floor.id}
+                        onToggle={() => setExpandedFloorId((prev) => (prev === floor.id ? null : floor.id))}
+                      />
                     ))}
                   </tbody>
                 </Table>
