@@ -184,6 +184,7 @@ jobs:
             VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }}
             VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }}
             VITE_API_KEY=${{ secrets.VITE_API_KEY }}
+            COMMIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

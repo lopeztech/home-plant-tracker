@@ -3,8 +3,9 @@ import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 import { execSync } from 'child_process'
 
-let commitHash = 'unknown'
+let commitHash = process.env.COMMIT_SHA || 'unknown'
 try { commitHash = execSync('git rev-parse --short HEAD').toString().trim() } catch {}
+if (commitHash.length > 7) commitHash = commitHash.substring(0, 7)
 const buildTime = new Date().toISOString()
 
 export default defineConfig({

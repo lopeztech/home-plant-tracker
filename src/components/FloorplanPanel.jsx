@@ -1,7 +1,37 @@
-import { useState, useMemo, useCallback } from 'react'
-import { Nav, Button, Spinner } from 'react-bootstrap'
+import { useMemo } from 'react'
+import { Nav, Spinner } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
+
+const WEATHER_STYLES = {
+  sunny:  { bg: 'linear-gradient(135deg, #fef3c7, #fde68a, #fbbf24)', emoji: '☀️', label: 'Sunny' },
+  partly: { bg: 'linear-gradient(135deg, #e0f2fe, #bae6fd, #7dd3fc)', emoji: '⛅', label: 'Partly Cloudy' },
+  cloudy: { bg: 'linear-gradient(135deg, #e2e8f0, #cbd5e1, #94a3b8)', emoji: '☁️', label: 'Cloudy' },
+  foggy:  { bg: 'linear-gradient(135deg, #e2e8f0, #d1d5db, #9ca3af)', emoji: '🌫️', label: 'Foggy' },
+  rainy:  { bg: 'linear-gradient(135deg, #bfdbfe, #93c5fd, #60a5fa)', emoji: '🌧️', label: 'Rainy' },
+  stormy: { bg: 'linear-gradient(135deg, #c7d2fe, #a5b4fc, #818cf8)', emoji: '⛈️', label: 'Stormy' },
+  snowy:  { bg: 'linear-gradient(135deg, #f1f5f9, #e2e8f0, #cbd5e1)', emoji: '🌨️', label: 'Snowy' },
+  night:  { bg: 'linear-gradient(135deg, #1e293b, #334155, #475569)', emoji: '🌙', label: 'Night' },
+}
+
+function WeatherStrip({ weather }) {
+  if (!weather?.current) return null
+  const condition = weather.current.condition?.sky || 'sunny'
+  const style = WEATHER_STYLES[condition] || WEATHER_STYLES.sunny
+  const isNight = !weather.current.isDay
+  const display = isNight ? WEATHER_STYLES.night : style
+
+  return (
+    <div
+      className="d-flex align-items-center justify-content-center gap-2 py-2 px-3"
+      style={{ background: display.bg, color: isNight ? '#e2e8f0' : '#1e293b' }}
+    >
+      <span style={{ fontSize: '1.5rem' }}>{weather.current.condition?.emoji || display.emoji}</span>
+      <span className="fw-500">{weather.current.temp}°{weather.unit === 'fahrenheit' ? 'F' : 'C'}</span>
+      <span className="opacity-75 fs-sm">{weather.current.condition?.label || display.label}</span>
+    </div>
+  )
+}
 
 export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   const {
@@ -9,8 +39,6 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
     weather, handleMarkerDrag, handleFloorRoomsChange,
     isAnalysingFloorplan,
   } = usePlantContext()
-
-  const [editZones, setEditZones] = useState(false)
 
   const visibleFloors = useMemo(
     () => [...floors].filter((f) => !f.hidden).sort((a, b) => b.order - a.order),
@@ -30,26 +58,14 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   return (
     <div className="panel panel-icon">
       <div className="panel-hdr">
-        <span>
-          Floorplan
-          {activeFloor && <small className="text-muted ms-2">— {activeFloor.name}</small>}
-        </span>
-        <div className="panel-toolbar">
-          {activeFloor?.rooms?.length > 0 && (
-            <Button
-              variant={editZones ? 'primary' : 'outline-default'}
-              size="sm"
-              className="waves-effect waves-themed me-2"
-              onClick={() => setEditZones((z) => !z)}
-            >
-              <svg className="sa-icon me-1"><use href="/icons/sprite.svg#edit-3"></use></svg>
-              {editZones ? 'Done' : 'Edit Zones'}
-            </Button>
-          )}
-        </div>
+        <span>Floorplan</span>
+        <div className="panel-toolbar"></div>
       </div>
       <div className="panel-container">
         <div className="panel-content p-0">
+          {/* Weather strip */}
+          <WeatherStrip weather={weather} />
+
           {/* Floor tabs */}
           {visibleFloors.length > 1 && (
             <Nav variant="pills" className="px-3 pt-2 gap-1 flex-nowrap overflow-auto">
@@ -96,7 +112,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
                 onFloorplanClick={onFloorplanClick}
                 onMarkerClick={onPlantClick}
                 onMarkerDrag={handleMarkerDrag}
-                editMode={editZones}
+                editMode={false}
                 onRoomsChange={handleFloorRoomsChange}
               />
             )}
