@@ -91,7 +91,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
           )}
 
           {/* Leaflet map */}
-          <div className="floorplan-wrapper" style={{ minHeight: 450 }}>
+          <div className="floorplan-wrapper" style={{ height: 500 }}>
             {isAnalysingFloorplan && (
               <div
                 className="position-absolute d-flex flex-column align-items-center justify-content-center gap-2 w-100 h-100"

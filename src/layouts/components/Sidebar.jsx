@@ -1,8 +1,13 @@
 import { useState, useMemo } from 'react'
+import { Dropdown } from 'react-bootstrap'
+import { useAuth } from '../../contexts/AuthContext.jsx'
+import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
 import { menuItems } from './menuData.js'
 
 export default function Sidebar() {
+  const { user, logout } = useAuth()
+  const { changeTheme, theme } = useLayoutContext()
   const [search, setSearch] = useState('')
 
   const filtered = useMemo(() => {
@@ -11,14 +16,42 @@ export default function Sidebar() {
     return menuItems.filter((item) => item.isTitle || item.label.toLowerCase().includes(q))
   }, [search])
 
+  const toggleSidenav = () => {
+    document.documentElement.classList.toggle('set-nav-minified')
+  }
+
   return (
     <aside className="app-sidebar d-flex flex-column">
-      {/* Logo area */}
-      <div className="d-flex align-items-center px-4 py-3" style={{ height: 'var(--app-header-height)' }}>
-        <svg className="sa-icon sa-icon-2x text-primary me-2">
-          <use href="/icons/sprite.svg#feather"></use>
-        </svg>
-        <span className="fw-500 fs-5">Plant Tracker</span>
+      {/* Profile area */}
+      <div className="px-4 py-3" style={{ height: 'var(--app-header-height)' }}>
+        {user && (
+          <Dropdown>
+            <Dropdown.Toggle as="div" className="d-flex align-items-center gap-2 cursor-pointer" style={{ cursor: 'pointer' }}>
+              {user.picture ? (
+                <img src={user.picture} alt={user.name} className="rounded-circle" width={36} height={36} referrerPolicy="no-referrer" />
+              ) : (
+                <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style={{ width: 36, height: 36, fontSize: '0.85rem' }}>
+                  {user.name?.charAt(0)?.toUpperCase() || '?'}
+                </div>
+              )}
+              <div className="min-w-0">
+                <div className="fw-500 text-truncate text-white">{user.name}</div>
+                <div className="fs-xs text-white-50 text-truncate">{user.email}</div>
+              </div>
+            </Dropdown.Toggle>
+            <Dropdown.Menu>
+              <Dropdown.Item onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')}>
+                <svg className="sa-icon me-2"><use href={`/icons/sprite.svg#${theme === 'dark' ? 'sun' : 'moon'}`}></use></svg>
+                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              </Dropdown.Item>
+              <Dropdown.Divider />
+              <Dropdown.Item onClick={logout}>
+                <svg className="sa-icon me-2"><use href="/icons/sprite.svg#log-out"></use></svg>
+                Sign out
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown>
+        )}
       </div>
 
       {/* Filter input */}
@@ -32,11 +65,7 @@ export default function Sidebar() {
           autoComplete="off"
         />
         {search && (
-          <div
-            className="badge bg-secondary btn"
-            title="Clear filter"
-            onClick={() => setSearch('')}
-          >
+          <div className="badge bg-secondary btn" title="Clear filter" onClick={() => setSearch('')}>
             {filtered.filter((i) => !i.isTitle).length}
           </div>
         )}
@@ -49,11 +78,11 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="nav-footer">
-        <svg className="sa-icon sa-thin">
-          <use href="/icons/sprite.svg#wifi"></use>
-        </svg>
+      {/* Footer: collapse toggle */}
+      <div className="nav-footer d-flex align-items-center justify-content-between px-3 py-2">
+        <button type="button" className="btn btn-sm text-white-50" onClick={toggleSidenav} title="Collapse sidebar">
+          <svg className="sa-icon"><use href="/icons/sprite.svg#chevrons-left"></use></svg>
+        </button>
       </div>
     </aside>
   )
