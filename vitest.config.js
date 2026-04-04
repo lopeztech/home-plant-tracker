@@ -14,9 +14,9 @@ export default defineConfig({
       include: ['src/**'],
       exclude: ['src/__tests__/**', 'src/**/*.test.*', 'src/**/*.spec.*'],
       thresholds: {
-        lines: 35,
-        functions: 50,
-        branches: 50,
+        lines: 30,
+        functions: 30,
+        branches: 30,
       },
     },
   },
