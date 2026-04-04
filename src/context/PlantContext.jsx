@@ -6,10 +6,7 @@ import { useTempUnit } from '../hooks/useTempUnit.js'
 import { getWateringStatus } from '../utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from '../data/guestData.js'
 
-const DEFAULT_FLOORS = [
-  { id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null },
-  { id: 'garden', name: 'Garden', order: -1, type: 'outdoor', imageUrl: null },
-]
+const DEFAULT_FLOORS = []
 
 const PlantContext = createContext(undefined)
 
@@ -28,7 +25,7 @@ export function PlantProvider({ children }) {
   const [plantsLoading, setPlantsLoading] = useState(false)
   const [plantsError, setPlantsError] = useState(null)
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
-  const [activeFloorId, setActiveFloorId] = useState('ground')
+  const [activeFloorId, setActiveFloorId] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
 
   const overdueCount = useMemo(

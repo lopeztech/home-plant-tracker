@@ -6,7 +6,9 @@ import PlantListPanel from '../components/PlantListPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 
 export default function DashboardPage() {
-  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError } = usePlantContext()
+  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError, plants } = usePlantContext()
+
+  const hasFloors = floors.length > 0
 
   const [showPlantModal, setShowPlantModal] = useState(false)
   const [editingPlant, setEditingPlant] = useState(null)
@@ -67,20 +69,28 @@ export default function DashboardPage() {
             Failed to load plants: {plantsError}
           </Alert>
         )}
-        <Row>
-          <Col xl={8} className="mb-4">
+        {hasFloors ? (
+          <>
             <FloorplanPanel
               onPlantClick={handlePlantClick}
               onFloorplanClick={handleFloorplanClick}
             />
-          </Col>
-          <Col xl={4} className="mb-4">
-            <PlantListPanel
-              onPlantClick={handlePlantClick}
-              onAddPlant={handleAddPlant}
-            />
-          </Col>
-        </Row>
+            <div className="mt-4">
+              <PlantListPanel
+                onPlantClick={handlePlantClick}
+                onAddPlant={handleAddPlant}
+              />
+            </div>
+          </>
+        ) : (
+          <div className="panel panel-icon">
+            <div className="panel-container"><div className="panel-content text-center py-5">
+              <svg className="sa-icon sa-icon-5x text-muted mb-3"><use href="/icons/sprite.svg#upload"></use></svg>
+              <h5 className="fw-500 mb-2">No floorplan uploaded yet</h5>
+              <p className="text-muted mb-0">Go to <a href="/settings">Settings</a> to upload a floorplan or add floors manually.</p>
+            </div></div>
+          </div>
+        )}
       </div>
 
       {showPlantModal && (
