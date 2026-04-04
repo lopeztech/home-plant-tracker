@@ -108,7 +108,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {!isEditing && mode === null && (
         <Modal.Body className="d-flex flex-column gap-3 py-5 px-4">
           <p className="text-muted text-center mb-2">How would you like to add it?</p>
-          <div className="card border cursor-pointer" style={{ cursor: 'pointer' }} onClick={() => setMode('photo')}>
+          <button type="button" className="card border w-100 text-start" onClick={() => setMode('photo')}>
             <div className="card-body d-flex align-items-center gap-3">
               <div className="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style={{ width: 44, height: 44 }}>
                 <svg className="sa-icon text-primary sa-icon-2x"><use href="/icons/sprite.svg#camera"></use></svg>
@@ -118,8 +118,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <small className="text-muted">Take or upload a photo — Gemini identifies the plant automatically</small>
               </div>
             </div>
-          </div>
-          <div className="card border" style={{ cursor: 'pointer' }} onClick={() => setMode('manual')}>
+          </button>
+          <button type="button" className="card border w-100 text-start" onClick={() => setMode('manual')}>
             <div className="card-body d-flex align-items-center gap-3">
               <div className="rounded-circle bg-secondary bg-opacity-10 d-flex align-items-center justify-content-center" style={{ width: 44, height: 44 }}>
                 <svg className="sa-icon text-secondary sa-icon-2x"><use href="/icons/sprite.svg#clipboard"></use></svg>
@@ -129,7 +129,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <small className="text-muted">Fill in the plant name and care details yourself</small>
               </div>
             </div>
-          </div>
+          </button>
         </Modal.Body>
       )}
 
