@@ -111,7 +111,8 @@ describe('App', () => {
   it('renders the dashboard when authenticated', async () => {
     renderApp()
     await waitFor(() => expect(plantsApi.list).toHaveBeenCalledOnce())
-    expect(screen.getByTestId('leaflet-floorplan')).toBeInTheDocument()
+    // Lazy-loaded DashboardPage renders the floorplan after Suspense resolves
+    await waitFor(() => expect(screen.getByTestId('leaflet-floorplan')).toBeInTheDocument())
   })
 
   it('shows a loading spinner while auth is resolving', () => {
