@@ -113,9 +113,6 @@ export default function SettingsPage() {
                   Floors & Zones
                 </span>
                 <div className="panel-toolbar">
-                  <Button variant={saved ? 'success' : 'primary'} size="sm" onClick={handleSave} disabled={saving}>
-                    {saved ? 'Saved!' : 'Save Floors'}
-                  </Button>
                 </div>
               </div>
               <div className="panel-container"><div className="panel-content p-0">
@@ -145,6 +142,13 @@ export default function SettingsPage() {
                   </Form.Select>
                   <Button variant="primary" size="sm" onClick={handleAddFloor} disabled={!newName.trim()}>
                     <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
+                  </Button>
+                </div>
+
+                {/* Save floors */}
+                <div className="p-3 border-top">
+                  <Button variant={saved ? 'success' : 'primary'} className="w-100" onClick={handleSave} disabled={saving}>
+                    {saved ? 'Saved!' : 'Save Floors'}
                   </Button>
                 </div>
 
