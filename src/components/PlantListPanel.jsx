@@ -57,15 +57,17 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
       </div>
 
       {onWater && (
-        <Button
-          variant="link"
-          size="sm"
+        <span
+          role="button"
+          tabIndex={0}
           className="flex-shrink-0 p-1 text-muted"
           onClick={(e) => { e.stopPropagation(); onWater(plant.id) }}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onWater(plant.id) } }}
           title={`Water ${plant.name}`}
+          style={{ cursor: 'pointer' }}
         >
           <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-        </Button>
+        </span>
       )}
     </ListGroup.Item>
   )
