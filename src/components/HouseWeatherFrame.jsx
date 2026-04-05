@@ -164,8 +164,8 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
           <div className="position-absolute" style={{ top: 10, left: 10, right: 10, zIndex: 5 }}>
             {/* Current weather + location */}
             <div
-              className="d-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-2"
-              style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', color: '#fff', fontSize: '0.85rem', width: 'fit-content' }}
+              className="d-flex align-items-center flex-wrap gap-1 gap-md-2 px-2 px-md-3 py-1 rounded-pill mb-1 mb-md-2"
+              style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(8px)', color: '#fff', fontSize: '0.75rem', width: 'fit-content' }}
             >
               <span style={{ fontSize: '1.2rem' }}>{weather.current.condition.emoji}</span>
               <strong>{temp}°{unit}</strong>
@@ -187,11 +187,11 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
             {/* 3-day forecast strip */}
             {weather.days?.length >= 3 && (
               <div
-                className="d-flex gap-2"
-                style={{ fontSize: '0.75rem' }}
+                className="d-flex gap-1 flex-wrap"
+                style={{ fontSize: '0.7rem' }}
               >
-                {weather.days.slice(0, 3).map((day, i) => {
-                  const dayLabel = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' })
+                {weather.days.slice(1, 4).map((day, i) => {
+                  const dayLabel = i === 0 ? 'Tmrw' : new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' })
                   const hasRain = day.precipitation >= 2
                   return (
                     <div
@@ -223,17 +223,17 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
       </div>
 
       {/* House shape with floorplan inside */}
-      <div className="position-relative" style={{ zIndex: 1, padding: '60px 30px 30px' }}>
+      <div className="position-relative" style={{ zIndex: 1, padding: '50px 8px 15px' }}>
         {/* Roof */}
         <div
-          className="mx-auto"
+          className="mx-auto d-none d-md-block"
           style={{
-            width: '90%',
+            width: '95%',
             maxWidth: 900,
             height: 0,
-            borderLeft: '40px solid transparent',
-            borderRight: '40px solid transparent',
-            borderBottom: '50px solid var(--bs-body-bg, #fff)',
+            borderLeft: '30px solid transparent',
+            borderRight: '30px solid transparent',
+            borderBottom: '40px solid var(--bs-body-bg, #fff)',
             position: 'relative',
             zIndex: 2,
             filter: 'drop-shadow(0 -2px 4px rgba(0,0,0,0.1))',
@@ -243,7 +243,7 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
         <div
           className="mx-auto"
           style={{
-            width: '90%',
+            width: '100%',
             maxWidth: 900,
             background: 'var(--bs-body-bg, #fff)',
             borderRadius: '0 0 8px 8px',
