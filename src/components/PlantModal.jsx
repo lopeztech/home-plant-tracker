@@ -25,6 +25,11 @@ const WATER_METHODS = [
   { value: 'irrigation', label: 'Irrigation System' },
   { value: 'drip', label: 'Drip System' },
 ]
+const SUN_EXPOSURE_OPTIONS = [
+  { value: 'full-sun', label: 'Full Sun' },
+  { value: 'part-sun', label: 'Part Sun' },
+  { value: 'shade', label: 'Shade' },
+]
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function today() { return new Date().toISOString().split('T')[0] }
@@ -41,6 +46,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     maturity: null, potSize: null, recommendations: [],
     waterAmount: null, waterMethod: null,
     irrigationDuration: null, irrigationSchedule: null,
+    sunExposure: null, sunHoursPerDay: null,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -63,6 +69,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         waterAmount: plant.waterAmount || null, waterMethod: plant.waterMethod || null,
         irrigationDuration: plant.irrigationDuration || null,
         irrigationSchedule: plant.irrigationSchedule || null,
+        sunExposure: plant.sunExposure || null,
+        sunHoursPerDay: plant.sunHoursPerDay ?? null,
       })
     }
   }, [plant, activeFloorId])
@@ -109,6 +117,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       waterAmount: form.waterAmount, waterMethod: form.waterMethod,
       irrigationDuration: form.irrigationDuration ? Number(form.irrigationDuration) : null,
       irrigationSchedule: form.irrigationSchedule,
+      sunExposure: form.sunExposure,
+      sunHoursPerDay: form.sunHoursPerDay ? Number(form.sunHoursPerDay) : null,
     })
     setIsSaving(false)
   }, [form, onSave])
@@ -259,6 +269,24 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   <option value="">— Select —</option>
                   {MATURITY_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row className="mb-3">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Sun Exposure</Form.Label>
+                <Form.Select value={form.sunExposure || ''} onChange={(e) => update('sunExposure', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {SUN_EXPOSURE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Sun Hours / Day{form.sunHoursPerDay ? `: ${form.sunHoursPerDay}h` : ''}</Form.Label>
+                <Form.Range min={0} max={16} value={form.sunHoursPerDay || 0} onChange={(e) => update('sunHoursPerDay', Number(e.target.value) || null)} className="mt-2" />
+                <div className="d-flex justify-content-between fs-xs text-muted"><span>0h</span><span>16h</span></div>
               </Form.Group>
             </Col>
           </Row>

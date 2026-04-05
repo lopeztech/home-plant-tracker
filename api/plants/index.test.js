@@ -423,6 +423,17 @@ describe('POST /plants', () => {
     expect(res.body.imageBase64).toBeUndefined();
     expect(store[plantPath(res.body.id)].imageBase64).toBeUndefined();
   });
+
+  it('stores sunExposure and sunHoursPerDay fields', async () => {
+    const res = await request(app)
+      .post('/plants').set('Authorization', authHeader())
+      .send({ name: 'Cactus', floor: 'ground', x: 50, y: 50, sunExposure: 'full-sun', sunHoursPerDay: 8 });
+    expect(res.status).toBe(201);
+    expect(res.body.sunExposure).toBe('full-sun');
+    expect(res.body.sunHoursPerDay).toBe(8);
+    expect(store[plantPath(res.body.id)].sunExposure).toBe('full-sun');
+    expect(store[plantPath(res.body.id)].sunHoursPerDay).toBe(8);
+  });
 });
 
 // ── GET /plants/:id ───────────────────────────────────────────────────────────
@@ -478,6 +489,16 @@ describe('PUT /plants/:id', () => {
       .put('/plants/p1').set('Authorization', authHeader())
       .send({ name: 'Fern', imageBase64: 'huge-data' });
     expect(store[plantPath('p1')].imageBase64).toBeUndefined();
+  });
+
+  it('updates sunExposure and sunHoursPerDay via PUT', async () => {
+    store[plantPath('p1')] = { name: 'Cactus', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ sunExposure: 'shade', sunHoursPerDay: 2 });
+    expect(res.status).toBe(200);
+    expect(res.body.sunExposure).toBe('shade');
+    expect(res.body.sunHoursPerDay).toBe(2);
   });
 
   it('uses merge semantics — preserves untouched fields', async () => {
