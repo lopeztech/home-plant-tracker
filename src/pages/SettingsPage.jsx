@@ -71,9 +71,9 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
           <Badge
             bg={floor.type === 'outdoor' ? 'success' : 'info'}
             style={{ cursor: 'pointer' }}
-            onClick={() => onChange({ ...floor, type: floor.type === 'outdoor' ? 'interior' : 'outdoor' })}
+            onClick={() => onChange({ ...floor, type: floor.type === 'outdoor' ? 'indoor' : 'outdoor' })}
           >
-            {floor.type === 'outdoor' ? 'outdoor' : 'interior'}
+            {floor.type === 'outdoor' ? 'outdoor' : 'indoor'}
           </Badge>
         </td>
         <td className="text-end">
@@ -181,7 +181,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newType, setNewType] = useState('interior')
+  const [newType, setNewType] = useState('indoor')
   const [expandedFloorId, setExpandedFloorId] = useState(null)
 
   const handleFloorChange = useCallback((updated) => {
@@ -254,7 +254,7 @@ export default function SettingsPage() {
                   <Form.Control size="sm" placeholder="Zone name (e.g. Loft)" value={newName}
                     onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddFloor()} />
                   <Form.Select size="sm" value={newType} onChange={(e) => setNewType(e.target.value)} style={{ width: 120 }}>
-                    <option value="interior">Interior</option>
+                    <option value="indoor">Indoor</option>
                     <option value="outdoor">Outdoor</option>
                   </Form.Select>
                   <Button variant="primary" size="sm" onClick={handleAddFloor} disabled={!newName.trim()}>

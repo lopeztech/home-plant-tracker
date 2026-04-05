@@ -65,7 +65,7 @@ export function PlantProvider({ children }) {
       .then(({ floors: loaded }) => {
         if (loaded?.length) {
           setFloors(loaded)
-          const first = loaded.find((f) => f.type === 'interior') ?? loaded[0]
+          const first = loaded.find((f) => f.type !== 'outdoor') ?? loaded[0]
           setActiveFloorId(first.id)
         }
       })
@@ -158,7 +158,7 @@ export function PlantProvider({ children }) {
     }
     const current = (isGuest ? updatedFloors : floors).find((f) => f.id === activeFloorId && !f.hidden)
     if (!current) {
-      const first = (isGuest ? updatedFloors : floors).find((f) => !f.hidden && f.type === 'interior') ?? (isGuest ? updatedFloors : floors).find((f) => !f.hidden)
+      const first = (isGuest ? updatedFloors : floors).find((f) => !f.hidden && f.type !== 'outdoor') ?? (isGuest ? updatedFloors : floors).find((f) => !f.hidden)
       if (first) setActiveFloorId(first.id)
     }
   }, [activeFloorId, isGuest, floors])
@@ -183,7 +183,7 @@ export function PlantProvider({ children }) {
       const { floors: analysedFloors } = await analyseApi.analyseFloorplan(file)
       const { floors: saved } = await floorsApi.save(analysedFloors)
       setFloors(saved)
-      const first = saved.find((f) => f.type === 'interior') ?? saved[0]
+      const first = saved.find((f) => f.type !== 'outdoor') ?? saved[0]
       if (first) setActiveFloorId(first.id)
     } finally {
       setIsAnalysingFloorplan(false)

@@ -3,7 +3,7 @@
 
 export const GUEST_FLOORS = [
   {
-    id: 'ground', name: 'Ground Floor', order: 0, type: 'interior', imageUrl: null,
+    id: 'ground', name: 'Ground Floor', order: 0, type: 'indoor', imageUrl: null,
     rooms: [
       { id: 'r1', name: 'Living Room', x: 5,  y: 5,  width: 40, height: 35, type: 'indoor' },
       { id: 'r2', name: 'Bedroom',     x: 52, y: 5,  width: 43, height: 35, type: 'indoor' },

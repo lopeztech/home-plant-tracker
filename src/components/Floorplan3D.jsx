@@ -8,8 +8,9 @@ const WALL_HEIGHT = 0.8
 const WALL_THICKNESS = 0.05
 
 const ROOM_COLORS = {
-  interior: { wall: '#dee2e6', floor: '#f8f9fa', edge: '#adb5bd' },
-  outdoor: { wall: '#b7dfc5', floor: '#d1e7dd', edge: '#6aad80' },
+  indoor:   { wall: '#e0e0e0', floor: '#ffffff', edge: '#9e9e9e' },
+  interior: { wall: '#e0e0e0', floor: '#ffffff', edge: '#9e9e9e' },
+  outdoor:  { wall: '#b7dfc5', floor: '#e8f5e9', edge: '#6aad80' },
 }
 
 function pctToWorld(x, y) {

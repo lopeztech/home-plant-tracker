@@ -40,8 +40,9 @@ function makePlantIcon(plant, weather, floors) {
 
 // ── Room rectangle styles by floor type ──────────────────────────────────────
 const ROOM_STYLE = {
-  interior: { color: '#6c757d', weight: 2, fillColor: '#e9ecef', fillOpacity: 0.6 },
-  outdoor:  { color: '#198754', weight: 2, fillColor: '#d1e7dd', fillOpacity: 0.6 },
+  indoor:   { color: '#495057', weight: 3, fillColor: '#ffffff', fillOpacity: 0.9, dashArray: null },
+  interior: { color: '#495057', weight: 3, fillColor: '#ffffff', fillOpacity: 0.9, dashArray: null },
+  outdoor:  { color: '#2e7d32', weight: 2, fillColor: '#e8f5e9', fillOpacity: 0.5, dashArray: '6 4' },
 }
 
 // ── Edit mode icons ───────────────────────────────────────────────────────────
@@ -219,8 +220,8 @@ export default function LeafletFloorplan({
     roomLayerRef.current.clearLayers()
     imageLayerRef.current.clearLayers()
 
-    map.getContainer().style.background =
-      floor?.type === 'outdoor' ? '#f0fdf4' : '#f8f9fa'
+    // Background represents the outdoor/yard area; indoor rooms are white boxes on top
+    map.getContainer().style.background = '#e8f5e9'
 
     if (floor?.imageUrl) {
       L.imageOverlay(floor.imageUrl, BOUNDS, { opacity: 0.9 })
