@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from '../api/plants.js'
 import { useWeather } from '../hooks/useWeather.js'
 import { useTempUnit } from '../hooks/useTempUnit.js'
-import { getWateringStatus } from '../utils/watering.js'
+import { getWateringStatus, isOutdoor } from '../utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from '../data/guestData.js'
 
 const DEFAULT_FLOORS = []
@@ -32,6 +32,43 @@ export function PlantProvider({ children }) {
     () => plants.filter((p) => getWateringStatus(p, weather, floors).daysUntil < 0).length,
     [plants, weather, floors],
   )
+
+  // Auto-mark outdoor plants as watered when it's raining
+  useEffect(() => {
+    if (!weather?.current?.condition?.sky) return
+    const sky = weather.current.condition.sky
+    const isRaining = sky === 'rainy' || sky === 'stormy'
+    if (!isRaining) return
+
+    const today = new Date().toISOString().slice(0, 10)
+    const outdoorPlantsDueForRainWater = plants.filter((p) => {
+      if (!isOutdoor(p, floors)) return false
+      // Check if already watered today
+      const lastEntry = p.wateringLog?.[p.wateringLog.length - 1]
+      if (lastEntry?.date?.slice(0, 10) === today && lastEntry?.method === 'rain') return false
+      // Only auto-water if due within 1 day
+      const status = getWateringStatus(p, weather, floors)
+      return status.daysUntil <= 1 && !status.skippedRain
+    })
+
+    if (outdoorPlantsDueForRainWater.length === 0) return
+
+    const now = new Date().toISOString()
+    const entry = { date: now, note: 'Auto-watered by rain', amount: null, method: 'rain' }
+    setPlants((prev) =>
+      prev.map((p) =>
+        outdoorPlantsDueForRainWater.some((op) => op.id === p.id)
+          ? { ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] }
+          : p
+      ),
+    )
+    // Persist to backend (non-blocking)
+    if (!isGuest) {
+      outdoorPlantsDueForRainWater.forEach((p) => {
+        plantsApi.water(p.id).catch(() => {})
+      })
+    }
+  }, [weather?.current?.condition?.sky, plants.length, floors])
 
   useEffect(() => {
     if (!isAuthenticated) return

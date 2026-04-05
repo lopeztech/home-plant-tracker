@@ -11,7 +11,7 @@ const WEATHER_CONFIGS = {
   night:  { sky: '#1A237E', ground: '#2E4A32', sunVisible: false, clouds: 1, rainDrops: 0, snowFlakes: 0, night: true },
 }
 
-export default function HouseWeatherFrame({ weather, location, children }) {
+export default function HouseWeatherFrame({ weather, location, onLocationClick, children }) {
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
   const config = isNight ? { ...WEATHER_CONFIGS.night } : (WEATHER_CONFIGS[condition] || WEATHER_CONFIGS.sunny)
@@ -161,26 +161,52 @@ export default function HouseWeatherFrame({ weather, location, children }) {
 
         {/* Weather info overlay */}
         {weather?.current && (
-          <div
-            className="position-absolute d-flex align-items-center gap-2 px-3 py-1 rounded-pill"
-            style={{
-              top: 12, left: 12, zIndex: 5,
-              background: 'rgba(0,0,0,0.3)',
-              backdropFilter: 'blur(8px)',
-              color: '#fff',
-              fontSize: '0.85rem',
-            }}
-          >
-            <span style={{ fontSize: '1.2rem' }}>{weather.current.condition.emoji}</span>
-            <strong>{temp}°{unit}</strong>
-            <span style={{ opacity: 0.8 }}>{label}</span>
-            {location?.name && (
-              <span style={{ opacity: 0.7, borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 8, marginLeft: 4 }}>
-                <svg style={{ width: 10, height: 10, marginRight: 3, verticalAlign: 'middle' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
-                </svg>
-                {location.name}
-              </span>
+          <div className="position-absolute" style={{ top: 10, left: 10, right: 10, zIndex: 5 }}>
+            {/* Current weather + location */}
+            <div
+              className="d-flex align-items-center gap-2 px-3 py-1 rounded-pill mb-2"
+              style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', color: '#fff', fontSize: '0.85rem', width: 'fit-content' }}
+            >
+              <span style={{ fontSize: '1.2rem' }}>{weather.current.condition.emoji}</span>
+              <strong>{temp}°{unit}</strong>
+              <span style={{ opacity: 0.8 }}>{label}</span>
+              {location?.name && (
+                <span
+                  onClick={onLocationClick}
+                  style={{ opacity: 0.7, borderLeft: '1px solid rgba(255,255,255,0.3)', paddingLeft: 8, marginLeft: 4, cursor: onLocationClick ? 'pointer' : 'default' }}
+                  title="Change location"
+                >
+                  <svg style={{ width: 10, height: 10, marginRight: 3, verticalAlign: 'middle' }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" /><circle cx="12" cy="10" r="3" />
+                  </svg>
+                  {location.name}
+                </span>
+              )}
+            </div>
+
+            {/* 3-day forecast strip */}
+            {weather.days?.length >= 3 && (
+              <div
+                className="d-flex gap-2"
+                style={{ fontSize: '0.75rem' }}
+              >
+                {weather.days.slice(0, 3).map((day, i) => {
+                  const dayLabel = i === 0 ? 'Today' : i === 1 ? 'Tmrw' : new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' })
+                  const hasRain = day.precipitation >= 2
+                  return (
+                    <div
+                      key={day.date}
+                      className="d-flex align-items-center gap-1 px-2 py-1 rounded-pill"
+                      style={{ background: hasRain ? 'rgba(96,165,250,0.4)' : 'rgba(0,0,0,0.25)', backdropFilter: 'blur(6px)', color: '#fff' }}
+                    >
+                      <span style={{ fontSize: '1rem' }}>{day.condition.emoji}</span>
+                      <span className="fw-500">{dayLabel}</span>
+                      <span>{day.maxTemp}°/{day.minTemp}°</span>
+                      {hasRain && <span style={{ color: '#93c5fd' }}>{day.precipitation.toFixed(0)}mm</span>}
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </div>
         )}

@@ -1,5 +1,6 @@
 import { useMemo, useState, lazy, Suspense } from 'react'
 import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
+import { useNavigate } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
@@ -13,6 +14,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
     isAnalysingFloorplan,
   } = usePlantContext()
 
+  const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('2d')
 
   const visibleFloors = useMemo(
@@ -31,7 +33,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   )
 
   return (
-    <HouseWeatherFrame weather={weather} location={location}>
+    <HouseWeatherFrame weather={weather} location={location} onLocationClick={() => navigate('/settings')}>
       {/* Floor tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
         <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
