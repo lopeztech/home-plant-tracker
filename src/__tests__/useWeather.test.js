@@ -198,7 +198,8 @@ describe('useWeather', () => {
     const { result } = renderHook(() => useWeather())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(global.fetch).toHaveBeenCalledOnce()
+    // Weather fetch + reverse geocoding fetch
+    expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 
   it('fetches fresh data when location moved > 1 km from cached position', async () => {
@@ -218,7 +219,8 @@ describe('useWeather', () => {
     const { result } = renderHook(() => useWeather())
     await waitFor(() => expect(result.current.loading).toBe(false))
 
-    expect(global.fetch).toHaveBeenCalledOnce()
+    // Weather fetch + reverse geocoding fetch
+    expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 
   // ── Network error ─────────────────────────────────────────────────────────
