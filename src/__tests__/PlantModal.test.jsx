@@ -426,6 +426,51 @@ describe('PlantModal', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalled())
   })
 
+  // ── Sun exposure fields ────────────────────────────────────────────────────
+
+  it('shows Sun Exposure dropdown in the edit form', () => {
+    renderModal()
+    selectMode('manual')
+    expect(screen.getByText('Sun Exposure')).toBeInTheDocument()
+  })
+
+  it('renders sun exposure options: Full Sun, Part Sun, Shade', () => {
+    renderModal()
+    selectMode('manual')
+    expect(screen.getByRole('option', { name: 'Full Sun' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Part Sun' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Shade' })).toBeInTheDocument()
+  })
+
+  it('shows Sun Hours / Day slider in the edit form', () => {
+    renderModal()
+    selectMode('manual')
+    expect(screen.getByText(/sun hours \/ day/i)).toBeInTheDocument()
+  })
+
+  it('pre-fills sun exposure when editing a plant with sunExposure set', () => {
+    const plant = { ...existingPlant, sunExposure: 'part-sun' }
+    renderModal({ plant })
+    const sunSelect = screen.getByRole('option', { name: 'Part Sun' }).closest('select')
+    expect(sunSelect).toHaveValue('part-sun')
+  })
+
+  it('includes sunExposure and sunHoursPerDay in saved data', async () => {
+    const onSave = vi.fn()
+    renderModal({ onSave })
+    selectMode('manual')
+    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
+      target: { value: 'Cactus' },
+    })
+    const sunSelect = screen.getByRole('option', { name: 'Full Sun' }).closest('select')
+    fireEvent.change(sunSelect, { target: { value: 'full-sun' } })
+    fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ sunExposure: 'full-sun' })
+    )
+  })
+
   it('shows a watering status badge in the header when viewing an existing plant', () => {
     renderModal({ plant: existingPlant })
     // Check that a Badge element exists in the modal title area
