@@ -5,7 +5,16 @@ import { imagesApi, recommendApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 
-const ROOMS = ['Living Room', 'Kitchen', 'Bedroom', 'Bathroom', 'Garden', 'Balcony', 'Office', 'Hallway', 'Dining Room', 'Other']
+// Derive rooms from configured floors
+function getRoomsFromFloors(floors) {
+  const rooms = []
+  for (const floor of (floors || [])) {
+    for (const room of (floor.rooms || [])) {
+      if (room.name && !rooms.includes(room.name)) rooms.push(room.name)
+    }
+  }
+  return rooms.length > 0 ? rooms : ['Living Room', 'Kitchen', 'Bedroom', 'Other']
+}
 const HEALTH_OPTIONS = ['Excellent', 'Good', 'Fair', 'Poor']
 const MATURITY_OPTIONS = ['Seedling', 'Young', 'Mature', 'Established']
 const WATER_METHODS = [
@@ -26,7 +35,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [activeTab, setActiveTab] = useState('edit')
 
   const [form, setForm] = useState({
-    name: '', species: '', room: 'Living Room', floor: activeFloorId ?? 'ground',
+    name: '', species: '', room: getRoomsFromFloors(floors)[0] || '', floor: activeFloorId ?? 'ground',
     lastWatered: today(), frequencyDays: 7, notes: '',
     imageFile: null, imageUrl: null, health: null, healthReason: null,
     maturity: null, potSize: null, recommendations: [],
@@ -213,7 +222,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <Form.Group>
                 <Form.Label>Room / Zone</Form.Label>
                 <Form.Select value={form.room} onChange={(e) => update('room', e.target.value)}>
-                  {ROOMS.map((r) => <option key={r} value={r}>{r}</option>)}
+                  {getRoomsFromFloors(floors).map((r) => <option key={r} value={r}>{r}</option>)}
                 </Form.Select>
               </Form.Group>
             </Col>
