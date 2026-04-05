@@ -1,5 +1,38 @@
 /* ── Plant Tracker app-specific styles ────────────────────────────────── */
 
+/* ── Green sidebar override ──────────────────────────────────────────── */
+.set-nav-dark .app-sidebar {
+  background: linear-gradient(180deg, #1b5e20 0%, #2e7d32 40%, #388e3c 100%) !important;
+}
+
+.set-nav-dark .app-sidebar .nav-title {
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+
+.set-nav-dark .app-sidebar .nav-menu li a {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.set-nav-dark .app-sidebar .nav-menu li a:hover,
+.set-nav-dark .app-sidebar .nav-menu li.active a {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.set-nav-dark .app-sidebar .nav-footer {
+  border-top-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.set-nav-dark .app-sidebar .form-control {
+  background: rgba(255, 255, 255, 0.12) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+.set-nav-dark .app-sidebar .form-control::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
 /* Floorplan container */
 .floorplan-wrapper {
   position: relative;
