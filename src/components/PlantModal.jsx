@@ -378,13 +378,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       )}
 
       {/* Care tab */}
-      {isEditing && activeTab === 'care' && (() => {
-        // Auto-fetch if no cached recommendations and plant has a name
-        if (!careData && !careLoading && !careError && form.name) {
-          setTimeout(handleGetRecommendations, 0)
-        }
-        return null
-      })()}
       {isEditing && activeTab === 'care' && (
         <Modal.Body>
           <div className="d-flex justify-content-end mb-3">
