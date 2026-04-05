@@ -33,35 +33,35 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   return (
     <HouseWeatherFrame weather={weather} location={location}>
       {/* Floor tabs + view toggle */}
-      <div className="d-flex align-items-center justify-content-between px-3 pt-2 bg-body-secondary flex-wrap gap-2">
-        {visibleFloors.length > 1 && (
-          <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
-            {visibleFloors.map((f) => (
-              <Nav.Item key={f.id}>
-                <Nav.Link
-                  active={f.id === activeFloorId}
-                  onClick={() => setActiveFloorId(f.id)}
-                  className="floor-tab py-1 px-2"
-                >
-                  <span className="d-inline-flex align-items-center gap-1">
-                    {f.type === 'outdoor' && (
-                      <svg className="sa-icon sa-thin" style={{ width: 12, height: 12 }}>
-                        <use href="/icons/sprite.svg#sun"></use>
-                      </svg>
-                    )}
-                    {f.name}
-                  </span>
-                </Nav.Link>
-              </Nav.Item>
-            ))}
-          </Nav>
-        )}
+      <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
+        <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
+          {visibleFloors.map((f) => (
+            <Nav.Item key={f.id}>
+              <Nav.Link
+                active={f.id === activeFloorId}
+                onClick={() => setActiveFloorId(f.id)}
+                className="floor-tab py-1 px-2"
+              >
+                <span className="d-inline-flex align-items-center gap-1">
+                  {f.type === 'outdoor' && (
+                    <svg className="sa-icon sa-thin" style={{ width: 12, height: 12 }}>
+                      <use href="/icons/sprite.svg#sun"></use>
+                    </svg>
+                  )}
+                  {f.name}
+                </span>
+              </Nav.Link>
+            </Nav.Item>
+          ))}
+        </Nav>
         <ButtonGroup size="sm" className="flex-shrink-0">
           <Button variant={viewMode === '2d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('2d')} title="2D View">
-            <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
+            <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
+            2D
           </Button>
           <Button variant={viewMode === '3d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('3d')} title="3D View">
-            <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#box"></use></svg>
+            <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#box"></use></svg>
+            3D
           </Button>
         </ButtonGroup>
       </div>
