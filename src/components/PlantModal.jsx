@@ -36,7 +36,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [nameTouched, setNameTouched] = useState(false)
-  const [careData, setCareData] = useState(null)
+  const [careData, setCareData] = useState(() => plant?.careRecommendations || null)
   const [careLoading, setCareLoading] = useState(false)
   const [careError, setCareError] = useState(null)
 
@@ -102,10 +102,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
   const handleGetRecommendations = useCallback(async () => {
     setCareLoading(true); setCareError(null)
-    try { setCareData(await recommendApi.get(form.name, form.species)) }
+    try {
+      const data = await recommendApi.get(form.name, form.species)
+      setCareData(data)
+      // Save recommendations to the plant so they persist
+      if (plant && onSave) {
+        onSave({ ...form, lastWatered: new Date(form.lastWatered).toISOString(), frequencyDays: Number(form.frequencyDays), careRecommendations: data })
+      }
+    }
     catch (err) { setCareError(err.message) }
     finally { setCareLoading(false) }
-  }, [form.name, form.species])
+  }, [form, plant, onSave])
 
   const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
 
@@ -371,12 +378,21 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       )}
 
       {/* Care tab */}
+      {isEditing && activeTab === 'care' && (() => {
+        // Auto-fetch if no cached recommendations and plant has a name
+        if (!careData && !careLoading && !careError && form.name) {
+          setTimeout(handleGetRecommendations, 0)
+        }
+        return null
+      })()}
       {isEditing && activeTab === 'care' && (
         <Modal.Body>
-          <Button variant="success" className="w-100 mb-3" onClick={handleGetRecommendations} disabled={careLoading}>
-            {careLoading ? <Spinner size="sm" className="me-2" /> : <svg className="sa-icon me-2"><use href="/icons/sprite.svg#zap"></use></svg>}
-            {careLoading ? 'Getting recommendations...' : 'Get Recommendations'}
-          </Button>
+          <div className="d-flex justify-content-end mb-3">
+            <Button variant="outline-success" size="sm" onClick={handleGetRecommendations} disabled={careLoading}>
+              {careLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
+              {careLoading ? 'Loading...' : careData ? 'Refresh' : 'Get Recommendations'}
+            </Button>
+          </div>
           {careError && <p className="text-danger text-center fs-sm">{careError}</p>}
           {careData && (
             <div>

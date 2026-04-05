@@ -1,7 +1,29 @@
-import { useMemo, useRef } from 'react'
-import { Canvas, useThree } from '@react-three/fiber'
+import { useMemo, useRef, useState } from 'react'
+import { Canvas, useThree, useLoader } from '@react-three/fiber'
 import { OrbitControls, Text, Billboard, RoundedBox } from '@react-three/drei'
+import { TextureLoader } from 'three'
 import { getWateringStatus } from '../utils/watering.js'
+
+function PlantPhoto({ url, size = 0.16 }) {
+  const [error, setError] = useState(false)
+  if (!url || error) return null
+  return (
+    <mesh position={[0, 0, 0.001]}>
+      <circleGeometry args={[size, 32]} />
+      <PhotoMaterial url={url} onError={() => setError(true)} />
+    </mesh>
+  )
+}
+
+function PhotoMaterial({ url, onError }) {
+  try {
+    const texture = useLoader(TextureLoader, url)
+    return <meshBasicMaterial map={texture} />
+  } catch {
+    onError?.()
+    return <meshBasicMaterial color="#ffffff" />
+  }
+}
 
 const SCALE = 0.1 // 100% → 10 world units
 const WALL_HEIGHT = 0.8
@@ -91,23 +113,27 @@ function PlantMarker({ plant, weather, floors, onClick }) {
           <meshBasicMaterial color={color} />
         </mesh>
 
-        {/* Inner circle (white bg for letter) */}
-        <mesh position={[0, 0, 0.001]}>
-          <circleGeometry args={[0.14, 32]} />
-          <meshBasicMaterial color="#ffffff" />
-        </mesh>
-
-        {/* Plant letter */}
-        <Text
-          position={[0, 0, 0.002]}
-          fontSize={0.13}
-          color={color}
-          anchorX="center"
-          anchorY="middle"
-          fontWeight="bold"
-        >
-          {initial}
-        </Text>
+        {/* Plant photo or letter */}
+        {plant.imageUrl ? (
+          <PlantPhoto url={plant.imageUrl} size={0.15} />
+        ) : (
+          <>
+            <mesh position={[0, 0, 0.001]}>
+              <circleGeometry args={[0.14, 32]} />
+              <meshBasicMaterial color="#ffffff" />
+            </mesh>
+            <Text
+              position={[0, 0, 0.002]}
+              fontSize={0.13}
+              color={color}
+              anchorX="center"
+              anchorY="middle"
+              fontWeight="bold"
+            >
+              {initial}
+            </Text>
+          </>
+        )}
 
         {/* Plant name label below */}
         <Text
