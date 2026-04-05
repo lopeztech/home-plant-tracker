@@ -144,13 +144,15 @@ export function useWeather(tempUnit = 'celsius') {
 
         // Reverse geocode to get location name
         if (!loadSavedLocation()) {
-          fetch(`https://geocoding-api.open-meteo.com/v1/reverse?latitude=${lat.toFixed(4)}&longitude=${lon.toFixed(4)}&count=1`)
+          fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}&format=json&zoom=10`, {
+              headers: { 'Accept-Language': 'en' },
+            })
             .then((r) => r.ok ? r.json() : null)
             .then((data) => {
-              if (data?.results?.[0]) {
-                const r = data.results[0]
-                const loc = { name: r.name, country: r.country, lat, lon }
-                setLocation(loc)
+              if (data?.address) {
+                const name = data.address.city || data.address.town || data.address.suburb || data.address.village || ''
+                const country = data.address.country || ''
+                if (name) setLocation({ name, country, lat, lon })
               }
             })
             .catch(() => {})

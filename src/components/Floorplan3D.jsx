@@ -2,7 +2,6 @@ import { useMemo, useRef } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Text, Billboard, RoundedBox } from '@react-three/drei'
 import { getWateringStatus } from '../utils/watering.js'
-import * as THREE from 'three'
 
 const SCALE = 0.1 // 100% → 10 world units
 const WALL_HEIGHT = 0.8
@@ -54,12 +53,6 @@ function Room({ room, floorType }) {
         <meshStandardMaterial color={palette.wall} transparent opacity={0.6} />
       </mesh>
 
-      {/* Wall top edges for definition */}
-      <lineSegments position={[0, WALL_HEIGHT, 0]}>
-        <edgesGeometry args={[new THREE.BoxGeometry(w, 0.01, d)]} />
-        <lineBasicMaterial color={palette.edge} />
-      </lineSegments>
-
       {/* Room label */}
       <Billboard position={[0, 0.15, 0]}>
         <Text
@@ -67,7 +60,6 @@ function Room({ room, floorType }) {
           color="#495057"
           anchorX="center"
           anchorY="middle"
-          font="/fonts/PublicSans-Medium.woff"
           maxWidth={w - 0.2}
         >
           {room.name?.toUpperCase()}
