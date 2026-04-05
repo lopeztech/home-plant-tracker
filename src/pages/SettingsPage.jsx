@@ -134,9 +134,14 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                         value={room.name}
                         onChange={(e) => updateRoom(i, { name: e.target.value })}
                       />
-                      <span className="text-muted fs-xs flex-shrink-0" title="Position & size">
-                        {room.width}×{room.height}
-                      </span>
+                      <Badge
+                        bg={room.type === 'outdoor' ? 'success' : 'info'}
+                        style={{ cursor: 'pointer', fontSize: '0.65rem' }}
+                        onClick={() => updateRoom(i, { type: room.type === 'outdoor' ? 'indoor' : 'outdoor' })}
+                        title="Toggle indoor/outdoor"
+                      >
+                        {room.type === 'outdoor' ? '☀ outdoor' : '🏠 indoor'}
+                      </Badge>
                       <Button variant="link" size="sm" className="text-danger p-0 flex-shrink-0" onClick={() => deleteRoom(i)}>
                         <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
                       </Button>

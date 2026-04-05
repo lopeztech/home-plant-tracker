@@ -228,9 +228,10 @@ export default function LeafletFloorplan({
     }
 
     if (floor?.rooms?.length > 0) {
-      const style = ROOM_STYLE[floor.type] ?? ROOM_STYLE.interior
       for (const room of floor.rooms) {
         if (room.hidden) continue
+        const roomType = room.type || floor.type || 'interior'
+        const style = ROOM_STYLE[roomType] ?? ROOM_STYLE.interior
         const sw = toLL(room.x,              room.y + room.height)
         const ne = toLL(room.x + room.width, room.y)
         L.rectangle([sw, ne], { ...style, interactive: false })

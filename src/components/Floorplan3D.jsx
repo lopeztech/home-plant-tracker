@@ -17,7 +17,8 @@ function pctToWorld(x, y) {
 }
 
 function Room({ room, floorType }) {
-  const palette = ROOM_COLORS[floorType] || ROOM_COLORS.interior
+  const roomType = room.type || floorType || 'interior'
+  const palette = ROOM_COLORS[roomType] || ROOM_COLORS.interior
   const cx = (room.x + room.width / 2 - 50) * SCALE
   const cz = (room.y + room.height / 2 - 50) * SCALE
   const w = room.width * SCALE
