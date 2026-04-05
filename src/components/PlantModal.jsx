@@ -61,15 +61,24 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const update = useCallback((key, value) => setForm((prev) => ({ ...prev, [key]: value })), [])
 
   const handleAnalysisComplete = useCallback((result) => {
-    setForm((prev) => ({
-      ...prev,
-      ...(result.species ? { species: result.species } : {}),
-      ...(result.frequencyDays ? { frequencyDays: Math.min(30, Math.max(1, Number(result.frequencyDays))) } : {}),
-      health: result.health, healthReason: result.healthReason,
-      maturity: result.maturity, recommendations: result.recommendations || [],
-      ...(result.waterAmount ? { waterAmount: result.waterAmount } : {}),
-      ...(result.waterMethod ? { waterMethod: result.waterMethod } : {}),
-    }))
+    setForm((prev) => {
+      const species = result.species || prev.species
+      // Auto-generate name: short species name + room
+      const shortSpecies = species ? species.split('(')[0].split(',')[0].trim() : ''
+      const autoName = (!prev.name || prev.name === '') && shortSpecies
+        ? `${shortSpecies} - ${prev.room}`
+        : prev.name
+      return {
+        ...prev,
+        ...(result.species ? { species: result.species } : {}),
+        ...(result.frequencyDays ? { frequencyDays: Math.min(30, Math.max(1, Number(result.frequencyDays))) } : {}),
+        name: autoName,
+        health: result.health, healthReason: result.healthReason,
+        maturity: result.maturity, recommendations: result.recommendations || [],
+        ...(result.waterAmount ? { waterAmount: result.waterAmount } : {}),
+        ...(result.waterMethod ? { waterMethod: result.waterMethod } : {}),
+      }
+    })
   }, [])
 
   const handleImageChange = useCallback((file) => setForm((prev) => ({ ...prev, imageFile: file, imageUrl: null })), [])
