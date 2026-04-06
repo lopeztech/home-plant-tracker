@@ -6,6 +6,7 @@ const { Storage } = require('@google-cloud/storage');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const { jsonrepair } = require('jsonrepair');
 const vertexai = require('./vertexai');
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
