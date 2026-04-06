@@ -727,6 +727,12 @@ app.put('/plants/:id', requireUser, async (req, res) => {
         reason: body.healthReason || '',
       }];
       updates.healthLog = healthLog;
+
+      // Invalidate health-related ML caches
+      const mlCache = { ...(existing.mlCache || {}) };
+      delete mlCache.healthPrediction;
+      delete mlCache.wateringPattern;
+      updates.mlCache = mlCache;
     }
 
     // Delete old GCS image when replaced with a new one
@@ -759,6 +765,7 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
     const mlCache = { ...(existing.mlCache || {}) };
     delete mlCache.wateringPattern;
     delete mlCache.wateringRecommendation;
+    delete mlCache.healthPrediction;
     await ref.set({ lastWatered: now, wateringLog, updatedAt: now, mlCache }, { merge: true });
 
     const updated = await ref.get();
@@ -982,6 +989,126 @@ app.get('/plants/:id/watering-recommendation', requireUser, async (req, res) => 
     // Cache the result
     await ref.set({
       mlCache: { ...mlCache, wateringRecommendation: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Plant health prediction ──────────────────────────────────────────────────
+
+const HEALTH_RANK = { Excellent: 4, Good: 3, Fair: 2, Poor: 1 };
+const HEALTH_FROM_RANK = { 4: 'Excellent', 3: 'Good', 2: 'Fair', 1: 'Poor' };
+
+function predictHealthHeuristic(plant) {
+  const healthLog = (plant.healthLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const currentHealth = healthLog.length > 0 ? healthLog[healthLog.length - 1].health : plant.health || 'Good';
+  const currentRank = HEALTH_RANK[currentHealth] || 3;
+
+  const keyRisks = [];
+  let trendSlope = 0;
+
+  if (healthLog.length >= 2) {
+    const recent = healthLog.slice(-5);
+    const ranks = recent.map(h => HEALTH_RANK[h.health] || 3);
+    trendSlope = (ranks[ranks.length - 1] - ranks[0]) / recent.length;
+  }
+
+  // Check watering adherence
+  const pattern = analyseWateringPattern(plant);
+  if (pattern.pattern === 'over_watered') {
+    keyRisks.push('Over-watering may lead to root rot');
+    trendSlope -= 0.2;
+  } else if (pattern.pattern === 'under_watered') {
+    keyRisks.push('Under-watering is stressing the plant');
+    trendSlope -= 0.2;
+  } else if (pattern.pattern === 'inconsistent') {
+    keyRisks.push('Inconsistent watering schedule causes stress');
+    trendSlope -= 0.1;
+  }
+
+  // Check days since last watered
+  const lastWatered = plant.lastWatered || (plant.wateringLog || []).slice(-1)[0]?.date;
+  if (lastWatered) {
+    const daysSince = (Date.now() - new Date(lastWatered).getTime()) / 86400000;
+    const freq = plant.frequencyDays || 7;
+    if (daysSince > freq * 2) {
+      keyRisks.push(`Not watered in ${Math.round(daysSince)} days (recommended: every ${freq} days)`);
+      trendSlope -= 0.3;
+    }
+  }
+
+  if (keyRisks.length === 0) keyRisks.push('No significant risk factors detected');
+
+  // Project health 14 days out
+  const projectedRank = Math.max(1, Math.min(4, Math.round(currentRank + trendSlope * 2)));
+  const predictedHealth = HEALTH_FROM_RANK[projectedRank];
+  const trend = trendSlope > 0.1 ? 'improving' : trendSlope < -0.1 ? 'declining' : 'stable';
+
+  return {
+    predictedHealth,
+    probability: trendSlope === 0 ? 0.7 : Math.min(0.85, 0.5 + Math.abs(trendSlope) * 0.5),
+    horizon: '14d',
+    trend,
+    keyRisks,
+    source: 'heuristic',
+  };
+}
+
+app.get('/plants/:id/health-prediction', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh
+    if (isCacheValid(mlCache, 'healthPrediction')) {
+      return res.status(200).json(mlCache.healthPrediction.result);
+    }
+
+    const endpointId = process.env.HEALTH_PREDICTION_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 3) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const latest = featureRows[featureRows.length - 1];
+          const predictions = await vertexai.predict(endpointId, [{
+            ...latest,
+            current_health: plant.health || '',
+            health_trend_30d: (plant.healthLog || []).length >= 2 ? 'available' : 'insufficient',
+          }]);
+
+          if (predictions.length > 0 && predictions[0].predictedHealth) {
+            const pred = predictions[0];
+            result = {
+              predictedHealth: pred.predictedHealth,
+              probability: pred.probability || 0.75,
+              horizon: '14d',
+              trend: pred.trend || 'stable',
+              keyRisks: pred.keyRisks || [],
+              source: 'vertex_ai',
+            };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI health prediction failed, falling back to heuristic', { error: err.message });
+      }
+    }
+
+    if (!result) {
+      result = predictHealthHeuristic(plant);
+    }
+
+    // Cache for 24 hours
+    await ref.set({
+      mlCache: { ...mlCache, healthPrediction: { result, cachedAt: new Date().toISOString() } }
     }, { merge: true });
 
     res.status(200).json(result);

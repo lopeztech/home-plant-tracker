@@ -1312,6 +1312,103 @@ describe('GET /plants/:id/watering-recommendation', () => {
   });
 });
 
+// ── GET /plants/:id/health-prediction ────────────────────────────────────────
+
+describe('GET /plants/:id/health-prediction', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns heuristic prediction for healthy plant', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera', frequencyDays: 7, health: 'Good',
+      lastWatered: new Date().toISOString(),
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-01-15T00:00:00.000Z', health: 'Good' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.predictedHealth).toBeTruthy();
+    expect(res.body.horizon).toBe('14d');
+    expect(res.body.trend).toBeTruthy();
+    expect(res.body.keyRisks).toBeInstanceOf(Array);
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('detects risk when plant is overdue for watering', async () => {
+    const oldDate = new Date(Date.now() - 30 * 86400000).toISOString(); // 30 days ago
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7, health: 'Good',
+      lastWatered: oldDate,
+      wateringLog: [{ date: oldDate }],
+      healthLog: [{ date: oldDate, health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.keyRisks.some(r => r.includes('Not watered'))).toBe(true);
+    expect(res.body.trend).toBe('declining');
+  });
+
+  it('uses Vertex AI when endpoint configured', async () => {
+    process.env.HEALTH_PREDICTION_ENDPOINT = 'health-ep-1';
+    vertexaiPredictFn = async () => [{
+      predictedHealth: 'Fair', probability: 0.82, trend: 'declining',
+      keyRisks: ['Low watering adherence', 'Season change approaching'],
+    }];
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7, health: 'Good',
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.predictedHealth).toBe('Fair');
+    expect(res.body.source).toBe('vertex_ai');
+    expect(res.body.keyRisks).toHaveLength(2);
+    delete process.env.HEALTH_PREDICTION_ENDPOINT;
+  });
+
+  it('returns cached prediction within TTL', async () => {
+    const cached = {
+      predictedHealth: 'Good', probability: 0.8, horizon: '14d',
+      trend: 'stable', keyRisks: ['Cached'], source: 'vertex_ai',
+    };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      mlCache: { healthPrediction: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.predictedHealth).toBe('Good');
+    expect(res.body.keyRisks).toEqual(['Cached']);
+  });
+
+  it('invalidates health prediction cache on health change', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', health: 'Good',
+      mlCache: {
+        healthPrediction: { result: { predictedHealth: 'Good' }, cachedAt: new Date().toISOString() },
+      },
+    };
+    await request(app).put('/plants/p1').set('Authorization', authHeader())
+      .send({ health: 'Fair', healthReason: 'Wilting' });
+    const data = store[plantPath('p1')];
+    expect(data.mlCache.healthPrediction).toBeUndefined();
+  });
+});
+
 // ── gcsPath edge cases ───────────────────────────────────────────────────────
 
 describe('gcsPath — via DELETE /plants/:id', () => {
