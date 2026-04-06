@@ -136,6 +136,21 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
             </div>
           )}
 
+          {/* Water all on floor */}
+          {floorPlants.length > 0 && (counts.overdue > 0 || counts.today > 0) && (
+            <div className="px-3 pb-2">
+              <Button
+                variant="outline-info"
+                size="sm"
+                className="w-100"
+                onClick={() => handleBatchWater(floorPlants.map((p) => p.id))}
+              >
+                <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                Water All on Floor ({floorPlants.length} plants)
+              </Button>
+            </div>
+          )}
+
           {/* Search + room filter */}
           {floorPlants.length > 0 && (
             <div className="px-3 pb-2">

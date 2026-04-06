@@ -11,24 +11,27 @@ export default function DashboardPage() {
   const hasFloors = floors.length > 0
 
   const [showPlantModal, setShowPlantModal] = useState(false)
-  const [editingPlant, setEditingPlant] = useState(null)
+  const [editingPlantId, setEditingPlantId] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
+
+  // Always get latest plant data from the array (not a stale snapshot)
+  const editingPlant = editingPlantId ? plants.find((p) => p.id === editingPlantId) || null : null
 
   const handleFloorplanClick = useCallback((x, y) => {
     setPendingPosition({ x, y })
-    setEditingPlant(null)
+    setEditingPlantId(null)
     setShowPlantModal(true)
   }, [])
 
   const handlePlantClick = useCallback((plant) => {
-    setEditingPlant(plant)
+    setEditingPlantId(plant.id)
     setPendingPosition(null)
     setShowPlantModal(true)
   }, [])
 
   const handleAddPlant = useCallback(() => {
     setPendingPosition({ x: 50, y: 50 })
-    setEditingPlant(null)
+    setEditingPlantId(null)
     setShowPlantModal(true)
   }, [])
 
@@ -40,7 +43,7 @@ export default function DashboardPage() {
       return
     }
     setShowPlantModal(false)
-    setEditingPlant(null)
+    setEditingPlantId(null)
     setPendingPosition(null)
   }, [editingPlant, pendingPosition, handleSavePlant])
 
@@ -52,12 +55,12 @@ export default function DashboardPage() {
       return
     }
     setShowPlantModal(false)
-    setEditingPlant(null)
+    setEditingPlantId(null)
   }, [handleDeletePlant])
 
   const handleCloseModal = useCallback(() => {
     setShowPlantModal(false)
-    setEditingPlant(null)
+    setEditingPlantId(null)
     setPendingPosition(null)
   }, [])
 
