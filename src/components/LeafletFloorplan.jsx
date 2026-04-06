@@ -90,6 +90,7 @@ export default function LeafletFloorplan({
   onMarkerDrag,
   editMode = false,
   onRoomsChange,
+  hasPendingMoves = false,
 }) {
   const containerRef   = useRef(null)
   const mapRef         = useRef(null)
@@ -365,6 +366,16 @@ export default function LeafletFloorplan({
   // ── Re-render plant markers when plants list changes ──────────────────────
   // Track markers by plant ID to update positions without destroying/recreating
   const plantMarkersRef = useRef({})
+  // IDs of plants dragged locally — never override their position from props
+  const draggedIdsRef = useRef(new Set())
+  // Clear drag tracking when saves are committed (pendingMoves cleared)
+  const prevPendingRef = useRef(hasPendingMoves)
+  useEffect(() => {
+    if (prevPendingRef.current && !hasPendingMoves) {
+      draggedIdsRef.current.clear()
+    }
+    prevPendingRef.current = hasPendingMoves
+  }, [hasPendingMoves])
 
   useEffect(() => {
     const map = mapRef.current
@@ -385,13 +396,9 @@ export default function LeafletFloorplan({
       const existing = plantMarkersRef.current[plant.id]
 
       if (existing) {
-        // Update existing marker position (don't recreate)
-        const currentPos = fromLL(existing.getLatLng())
-        if (Math.abs(currentPos.x - plant.x) > 0.1 || Math.abs(currentPos.y - plant.y) > 0.1) {
-          // Only move if the marker isn't currently being dragged
-          if (!existing.dragging?._enabled || !existing.dragging?._moved) {
-            existing.setLatLng(toLL(plant.x, plant.y))
-          }
+        // Never override position for locally-dragged plants
+        if (!draggedIdsRef.current.has(plant.id)) {
+          existing.setLatLng(toLL(plant.x, plant.y))
         }
         // Update icon (status color may change)
         existing.setIcon(makePlantIcon(plant, weather, floors))
@@ -419,6 +426,7 @@ export default function LeafletFloorplan({
         })
 
         marker.on('dragend', (e) => {
+          draggedIdsRef.current.add(plant.id)
           const pos = fromLL(e.target.getLatLng())
           markerDragRef.current?.(
             plant,

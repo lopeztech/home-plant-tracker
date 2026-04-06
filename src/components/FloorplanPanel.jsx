@@ -136,6 +136,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
             onMarkerDrag={handleLocalDrag}
             editMode={false}
             onRoomsChange={handleFloorRoomsChange}
+            hasPendingMoves={hasPendingMoves}
           />
         )}
         {activeFloor && viewMode === '3d' && (
