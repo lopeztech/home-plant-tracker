@@ -309,15 +309,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           <Row className="mb-3">
             <Col md={6}>
               <Form.Group>
-                <Form.Label>Health</Form.Label>
-                <Form.Select value={form.health || ''} onChange={(e) => update('health', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {HEALTH_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
                 <Form.Label>Maturity</Form.Label>
                 <Form.Select value={form.maturity || ''} onChange={(e) => update('maturity', e.target.value || null)}>
                   <option value="">— Select —</option>
@@ -353,68 +344,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Form.Group>
             </Col>
           </Row>
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Watering Method</Form.Label>
-                <Form.Select value={form.waterMethod || ''} onChange={(e) => update('waterMethod', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {WATER_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Water Amount</Form.Label>
-                <Form.Control type="text" placeholder="e.g. 250ml, 1L, 2 cups" value={form.waterAmount || ''} onChange={(e) => update('waterAmount', e.target.value || null)} />
-              </Form.Group>
-            </Col>
-          </Row>
-          {(form.waterMethod === 'hose' || form.waterMethod === 'irrigation') && (
-            <Row className="mb-3">
-              <Col md={4}>
-                <Form.Group>
-                  <Form.Label>Duration (min)</Form.Label>
-                  <Form.Control type="number" min={1} max={120} placeholder="15" value={form.irrigationDuration || ''} onChange={(e) => update('irrigationDuration', e.target.value || null)} />
-                </Form.Group>
-              </Col>
-              <Col md={8}>
-                <Form.Group>
-                  <Form.Label>Schedule</Form.Label>
-                  <div className="d-flex gap-1 flex-wrap mb-1">
-                    {DAYS_OF_WEEK.map((day) => {
-                      const schedule = form.irrigationSchedule || ''
-                      const days = schedule.split(' ')[0]?.split(',') || []
-                      const isSelected = days.includes(day)
-                      return (
-                        <button
-                          key={day}
-                          type="button"
-                          className={`btn btn-sm ${isSelected ? 'btn-primary' : 'btn-outline-secondary'}`}
-                          onClick={() => {
-                            const time = schedule.split(' ')[1] || '06:00'
-                            const newDays = isSelected ? days.filter((d) => d !== day) : [...days, day]
-                            update('irrigationSchedule', newDays.length ? `${newDays.join(',')} ${time}` : null)
-                          }}
-                        >
-                          {day}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <Form.Control
-                    type="time"
-                    size="sm"
-                    value={(form.irrigationSchedule || '').split(' ')[1] || '06:00'}
-                    onChange={(e) => {
-                      const days = (form.irrigationSchedule || '').split(' ')[0] || ''
-                      update('irrigationSchedule', days ? `${days} ${e.target.value}` : null)
-                    }}
-                  />
-                </Form.Group>
-              </Col>
-            </Row>
-          )}
           <Form.Group className="mb-3">
             <Form.Label>Notes</Form.Label>
             <Form.Control as="textarea" rows={3} placeholder="Any special care instructions..." value={form.notes} onChange={(e) => update('notes', e.target.value)} />
@@ -468,6 +397,23 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <Form.Label>Frequency: {form.frequencyDays}d</Form.Label>
                 <Form.Range min={1} max={30} value={form.frequencyDays} onChange={(e) => update('frequencyDays', e.target.value)} className="mt-2" />
                 <div className="d-flex justify-content-between fs-xs text-muted"><span>1d</span><span>30d</span></div>
+              </Form.Group>
+            </Col>
+          </Row>
+          <Row className="mb-3">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Watering Method</Form.Label>
+                <Form.Select value={form.waterMethod || ''} onChange={(e) => update('waterMethod', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {WATER_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Water Amount</Form.Label>
+                <Form.Control type="text" placeholder="e.g. 250ml, 1L, 2 cups" value={form.waterAmount || ''} onChange={(e) => update('waterAmount', e.target.value || null)} />
               </Form.Group>
             </Col>
           </Row>
@@ -553,6 +499,21 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Care tab */}
       {isEditing && activeTab === 'care' && (
         <Modal.Body>
+          <Row className="mb-3">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Health</Form.Label>
+                <Form.Select value={form.health || ''} onChange={(e) => update('health', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {HEALTH_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={6} className="d-flex align-items-end">
+              <small className="text-muted fs-xs">Health is auto-updated when you analyse a plant photo via AI.</small>
+            </Col>
+          </Row>
+          <hr />
           <div className="d-flex justify-content-end mb-3">
             <Button variant="outline-success" size="sm" onClick={handleGetRecommendations} disabled={careLoading}>
               {careLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}

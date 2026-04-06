@@ -1,28 +1,17 @@
-import { useMemo, useRef, useState } from 'react'
-import { Canvas, useThree, useLoader } from '@react-three/fiber'
-import { OrbitControls, Text, Billboard, RoundedBox } from '@react-three/drei'
-import { TextureLoader } from 'three'
+import { useMemo, useRef } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
+import { OrbitControls, Text, Billboard } from '@react-three/drei'
 import { getWateringStatus } from '../utils/watering.js'
 
-function PlantPhoto({ url, size = 0.16 }) {
-  const [error, setError] = useState(false)
-  if (!url || error) return null
-  return (
-    <mesh position={[0, 0, 0.001]}>
-      <circleGeometry args={[size, 32]} />
-      <PhotoMaterial url={url} onError={() => setError(true)} />
-    </mesh>
-  )
-}
-
-function PhotoMaterial({ url, onError }) {
-  try {
-    const texture = useLoader(TextureLoader, url)
-    return <meshBasicMaterial map={texture} />
-  } catch {
-    onError?.()
-    return <meshBasicMaterial color="#ffffff" />
-  }
+function getPlantEmoji(plant) {
+  const species = (plant.species || '').toLowerCase()
+  if (/cactus|succulent|aloe/i.test(species)) return '🌵'
+  if (/tree|palm|fig|olive|eucalyptus/i.test(species)) return '🌳'
+  if (/herb|basil|mint|rosemary/i.test(species)) return '🌿'
+  if (/vine|ivy|pothos|philodendron|monstera/i.test(species)) return '🍃'
+  if (/flower|rose|orchid|lily|daisy|tulip|lavender|bird of paradise/i.test(species)) return '🌸'
+  if (/grass|hedge|shrub/i.test(species)) return '🌲'
+  return '🪴'
 }
 
 const SCALE = 0.1 // 100% → 10 world units
@@ -113,27 +102,19 @@ function PlantMarker({ plant, weather, floors, onClick }) {
           <meshBasicMaterial color={color} />
         </mesh>
 
-        {/* Plant photo or letter */}
-        {plant.imageUrl ? (
-          <PlantPhoto url={plant.imageUrl} size={0.15} />
-        ) : (
-          <>
-            <mesh position={[0, 0, 0.001]}>
-              <circleGeometry args={[0.14, 32]} />
-              <meshBasicMaterial color="#ffffff" />
-            </mesh>
-            <Text
-              position={[0, 0, 0.002]}
-              fontSize={0.13}
-              color={color}
-              anchorX="center"
-              anchorY="middle"
-              fontWeight="bold"
-            >
-              {initial}
-            </Text>
-          </>
-        )}
+        {/* Plant emoji icon */}
+        <mesh position={[0, 0, 0.001]}>
+          <circleGeometry args={[0.14, 32]} />
+          <meshBasicMaterial color="#ffffff" />
+        </mesh>
+        <Text
+          position={[0, 0, 0.002]}
+          fontSize={0.16}
+          anchorX="center"
+          anchorY="middle"
+        >
+          {getPlantEmoji(plant)}
+        </Text>
 
         {/* Plant name label below */}
         <Text
