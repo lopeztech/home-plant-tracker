@@ -15,6 +15,23 @@ function getRoomsFromFloors(floors) {
   }
   return rooms.length > 0 ? rooms : ['Living Room', 'Kitchen', 'Bedroom', 'Other']
 }
+
+// Determine which room contains a given (x, y) position on the floor
+function getRoomAtPosition(floors, floorId, position) {
+  if (!position || !floorId) return null
+  const floor = (floors || []).find((f) => f.id === floorId)
+  if (!floor?.rooms?.length) return null
+  for (const room of floor.rooms) {
+    if (room.hidden || !room.name) continue
+    if (
+      position.x >= room.x && position.x <= room.x + room.width &&
+      position.y >= room.y && position.y <= room.y + room.height
+    ) {
+      return room.name
+    }
+  }
+  return null
+}
 const HEALTH_OPTIONS = ['Excellent', 'Good', 'Fair', 'Poor']
 const MATURITY_OPTIONS = ['Seedling', 'Young', 'Mature', 'Established']
 const WATER_METHODS = [
@@ -46,7 +63,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [activeTab, setActiveTab] = useState('edit')
 
   const [form, setForm] = useState({
-    name: '', species: '', room: getRoomsFromFloors(floors)[0] || '', floor: activeFloorId ?? 'ground',
+    name: '', species: '', room: getRoomAtPosition(floors, activeFloorId, position) || getRoomsFromFloors(floors)[0] || '', floor: activeFloorId ?? 'ground',
     lastWatered: today(), frequencyDays: 7, notes: '',
     imageFile: null, imageUrl: null, health: null, healthReason: null,
     maturity: null, potSize: null, recommendations: [],
@@ -115,7 +132,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       try { imageUrl = await imagesApi.upload(form.imageFile, 'plants') }
       catch { setIsSaving(false); return }
     }
-    onSave({
+    await onSave({
       name: form.name.trim(), species: form.species.trim(), room: form.room, floor: form.floor,
       lastWatered: new Date(form.lastWatered).toISOString(), frequencyDays: Number(form.frequencyDays),
       notes: form.notes.trim(), imageUrl, health: form.health, healthReason: form.healthReason,
