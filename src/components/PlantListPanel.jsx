@@ -85,10 +85,13 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
     }),
   [floorPlants, weather, floors])
 
-  const rooms = useMemo(
-    () => [...new Set(floorPlants.map((p) => p.room).filter(Boolean))].sort(),
-    [floorPlants],
-  )
+  const rooms = useMemo(() => {
+    // Get all zones from floor config + any rooms plants are assigned to
+    const activeFloor = floors.find((f) => f.id === activeFloorId)
+    const floorRooms = (activeFloor?.rooms || []).filter((r) => !r.hidden).map((r) => r.name)
+    const plantRooms = floorPlants.map((p) => p.room).filter(Boolean)
+    return [...new Set([...floorRooms, ...plantRooms])].sort()
+  }, [floorPlants, floors, activeFloorId])
 
   const filteredPlants = useMemo(() => {
     let result = sortedPlants
