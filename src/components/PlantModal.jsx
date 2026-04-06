@@ -259,7 +259,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Tab nav for editing */}
       {isEditing && (
         <Nav variant="tabs" className="px-3 pt-2">
-          {[{ id: 'edit', label: 'Edit Plant' }, { id: 'watering', label: 'Watering' }, { id: 'gallery', label: 'Gallery' }, { id: 'care', label: 'Care' }].map((tab) => (
+          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'gallery', label: 'Gallery' }, { id: 'care', label: 'Care' }].map((tab) => (
             <Nav.Item key={tab.id}>
               <Nav.Link active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}</Nav.Link>
             </Nav.Item>
@@ -303,21 +303,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <Form.Select value={form.room} onChange={(e) => update('room', e.target.value)}>
                   {getRoomsFromFloors(floors).map((r) => <option key={r} value={r}>{r}</option>)}
                 </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Last Watered</Form.Label>
-                <Form.Control type="date" value={form.lastWatered} max={today()} onChange={(e) => update('lastWatered', e.target.value)} />
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Frequency: {form.frequencyDays}d</Form.Label>
-                <Form.Range min={1} max={30} value={form.frequencyDays} onChange={(e) => update('frequencyDays', e.target.value)} className="mt-2" />
-                <div className="d-flex justify-content-between fs-xs text-muted"><span>1d</span><span>30d</span></div>
               </Form.Group>
             </Col>
           </Row>
@@ -434,12 +419,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <Form.Label>Notes</Form.Label>
             <Form.Control as="textarea" rows={3} placeholder="Any special care instructions..." value={form.notes} onChange={(e) => update('notes', e.target.value)} />
           </Form.Group>
-          {isEditing && (
-            <>
-              <hr />
-              <ImageAnalyser initialImage={form.imageUrl} onAnalysisComplete={handleAnalysisComplete} onImageChange={handleImageChange} />
-            </>
-          )}
         </Modal.Body>
       )}
 
@@ -477,11 +456,28 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </div>
             )
           })()}
+          <Row className="mb-3">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Last Watered</Form.Label>
+                <Form.Control type="date" value={form.lastWatered} max={today()} onChange={(e) => update('lastWatered', e.target.value)} />
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Frequency: {form.frequencyDays}d</Form.Label>
+                <Form.Range min={1} max={30} value={form.frequencyDays} onChange={(e) => update('frequencyDays', e.target.value)} className="mt-2" />
+                <div className="d-flex justify-content-between fs-xs text-muted"><span>1d</span><span>30d</span></div>
+              </Form.Group>
+            </Col>
+          </Row>
           {onWater && (
-            <Button variant="info" className="w-100 mb-3" onClick={() => onWater(plant.id)}>
-              <svg className="sa-icon me-2"><use href="/icons/sprite.svg#droplet"></use></svg>
-              Mark as Watered
-            </Button>
+            <div className="d-flex justify-content-center mb-3">
+              <Button variant="outline-info" size="sm" onClick={() => onWater(plant.id)}>
+                <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                Mark as Watered
+              </Button>
+            </div>
           )}
           {plant.wateringLog?.length > 0 ? (
             <div>
@@ -511,7 +507,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             ].sort((a, b) => new Date(b.date) - new Date(a.date))
 
             if (photos.length === 0) {
-              return <p className="text-muted text-center py-4">No photos yet. Upload a photo in the Edit tab.</p>
+              return <p className="text-muted text-center py-4">No photos yet. Use the button below to add your first growth photo.</p>
             }
 
             return (
@@ -520,8 +516,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <Row className="g-2">
                   {photos.map((photo, i) => (
                     <Col xs={6} md={4} key={i}>
-                      <div className="border rounded overflow-hidden position-relative">
-                        <img src={photo.url} alt={`Photo ${i + 1}`} className="w-100" style={{ height: 120, objectFit: 'cover' }} />
+                      <div className="border rounded overflow-hidden position-relative" style={{ minHeight: 150 }}>
+                        <img
+                          src={photo.url}
+                          alt={`Photo ${i + 1}`}
+                          className="w-100"
+                          style={{ height: 150, objectFit: 'cover', display: 'block' }}
+                          onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.classList.add('bg-body-tertiary', 'd-flex', 'align-items-center', 'justify-content-center') }}
+                        />
                         <div className="position-absolute bottom-0 start-0 end-0 px-2 py-1" style={{ background: 'rgba(0,0,0,0.6)' }}>
                           <div className="d-flex align-items-center justify-content-between">
                             <small className="text-white" style={{ fontSize: '0.65rem' }}>
