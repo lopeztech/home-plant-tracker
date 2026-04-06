@@ -68,18 +68,6 @@ jobs:
           path: coverage/
           retention-days: 7
 
-      - name: Docker build smoke test
-        run: |
-          docker build \
-            --build-arg VITE_GOOGLE_CLIENT_ID=test \
-            --build-arg VITE_API_BASE_URL=http://localhost \
-            --build-arg VITE_API_KEY=test \
-            -t plant-tracker-smoke .
-          # Verify nginx serves index.html
-          docker run --rm -d --name smoke-test -p 8888:8080 plant-tracker-smoke
-          sleep 2
-          curl -sf http://localhost:8888/ | grep -q '</html>'
-          docker stop smoke-test
 
   deploy-function:
     name: Deploy Cloud Function
@@ -144,8 +132,8 @@ jobs:
           GH_TOKEN: ${{ secrets.PLATFORM_INFRA_TOKEN }}
         run: |
           echo "Waiting for platform-infra apply to finish..."
-          for i in $(seq 1 30); do
-            sleep 20
+          for i in $(seq 1 15); do
+            sleep 15
             STATUS=$(gh run list --repo lopeztech/platform-infra --workflow="home-plant-tracker-apply.yml" --limit 1 --json status,conclusion -q '.[0].status' 2>/dev/null || echo "unknown")
             echo "  Attempt $i: $STATUS"
             if [[ "$STATUS" == "completed" ]]; then

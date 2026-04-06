@@ -13,24 +13,32 @@ function fromLL({ lat, lng }) { return { x: lng, y: 100 - lat } }
 const BOUNDS = L.latLngBounds([[0, 0], [100, 100]])
 
 // ── Plant marker DivIcon ──────────────────────────────────────────────────────
+// Map plant type to a simple emoji for the marker
+function getPlantEmoji(plant) {
+  const species = (plant.species || '').toLowerCase()
+  if (/cactus|succulent|aloe/i.test(species)) return '🌵'
+  if (/tree|palm|fig|olive|eucalyptus/i.test(species)) return '🌳'
+  if (/herb|basil|mint|rosemary/i.test(species)) return '🌿'
+  if (/vine|ivy|pothos|philodendron|monstera/i.test(species)) return '🍃'
+  if (/flower|rose|orchid|lily|daisy|tulip|lavender|bird of paradise/i.test(species)) return '🌸'
+  if (/grass|hedge|shrub/i.test(species)) return '🌲'
+  return '🪴'
+}
+
 function makePlantIcon(plant, weather, floors) {
   const { color, daysUntil } = getWateringStatus(plant, weather, floors)
   const overdue = daysUntil < 0
-  const letter = (plant.name || '?')[0].toUpperCase()
-  const inner = plant.imageUrl
-    ? `<img src="${plant.imageUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" />`
-    : `<span style="color:#fff;font-size:13px;font-weight:700;line-height:1;">${letter}</span>`
+  const emoji = getPlantEmoji(plant)
 
   return L.divIcon({
     className: 'plant-lf-icon',
     html: `<div class="plant-lf-inner${overdue ? ' plant-lf-overdue' : ''}"
                 style="width:32px;height:32px;border-radius:50%;
                        border:2px solid ${color};
-                       background:${plant.imageUrl ? 'transparent' : color};
+                       background:#fff;
                        display:flex;align-items:center;justify-content:center;
-                       box-shadow:0 2px 8px ${color}80,0 0 0 3px ${color}30;
-                       overflow:hidden;">
-              ${inner}
+                       box-shadow:0 2px 8px ${color}80,0 0 0 3px ${color}30;">
+              <span style="font-size:16px;line-height:1;">${emoji}</span>
             </div>`,
     iconSize: [32, 32],
     iconAnchor: [16, 16],

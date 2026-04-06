@@ -177,14 +177,26 @@ export function PlantProvider({ children }) {
   }, [isGuest])
 
   const handleMarkerDrag = useCallback(async (plant, x, y) => {
-    setPlants((prev) => prev.map((p) => (p.id === plant.id ? { ...p, x, y } : p)))
+    // Detect which room the plant was dropped into
+    const floor = floors.find((f) => f.id === (plant.floor || activeFloorId))
+    let room = plant.room
+    if (floor?.rooms?.length) {
+      for (const r of floor.rooms) {
+        if (r.hidden) continue
+        if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) {
+          room = r.name
+          break
+        }
+      }
+    }
+    setPlants((prev) => prev.map((p) => (p.id === plant.id ? { ...p, x, y, room } : p)))
     if (isGuest) return
     try {
-      await plantsApi.update(plant.id, { x, y })
+      await plantsApi.update(plant.id, { x, y, room })
     } catch {
       setPlants((prev) => prev.map((p) => (p.id === plant.id ? plant : p)))
     }
-  }, [isGuest])
+  }, [isGuest, floors, activeFloorId])
 
   const handleSaveFloors = useCallback(async (updatedFloors) => {
     if (isGuest) {
