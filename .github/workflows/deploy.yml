@@ -41,7 +41,15 @@ jobs:
         run: npm audit --audit-level=high
         working-directory: api/plants
 
-      - name: Run tests with coverage
+      - name: Lint backend
+        run: npm run lint
+        working-directory: api/plants
+
+      - name: Run backend tests with coverage
+        run: npm run test:coverage
+        working-directory: api/plants
+
+      - name: Run frontend tests with coverage
         run: npm run test:coverage
 
       - name: Upload coverage to Codecov
@@ -59,6 +67,19 @@ jobs:
           name: coverage-report
           path: coverage/
           retention-days: 7
+
+      - name: Docker build smoke test
+        run: |
+          docker build \
+            --build-arg VITE_GOOGLE_CLIENT_ID=test \
+            --build-arg VITE_API_BASE_URL=http://localhost \
+            --build-arg VITE_API_KEY=test \
+            -t plant-tracker-smoke .
+          # Verify nginx serves index.html
+          docker run --rm -d --name smoke-test -p 8888:8080 plant-tracker-smoke
+          sleep 2
+          curl -sf http://localhost:8888/ | grep -q '</html>'
+          docker stop smoke-test
 
   deploy-function:
     name: Deploy Cloud Function

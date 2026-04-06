@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  firestore-emulator:
+    image: google/cloud-sdk:slim
+    command: >
+      gcloud emulators firestore start
+        --host-port=0.0.0.0:8686
+        --project=plant-tracker-test
+    ports:
+      - "8686:8686"
+    environment:
+      - CLOUDSDK_CORE_PROJECT=plant-tracker-test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8686/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
