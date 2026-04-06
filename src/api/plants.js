@@ -45,6 +45,7 @@ export const plantsApi = {
   healthPrediction: (id) => request(`/plants/${id}/health-prediction`),
   anomaly: (id) => request(`/plants/${id}/anomaly`),
   seasonalAdjustment: (id) => request(`/plants/${id}/seasonal-adjustment`),
+  speciesCluster: (name) => request(`/species/${encodeURIComponent(name)}/cluster`),
   getFloorplan: () => request('/config/floorplan'),
   saveFloorplan: (imageUrl) => request('/config/floorplan', { method: 'PUT', body: JSON.stringify({ imageUrl }) }),
 }

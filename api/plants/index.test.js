@@ -1472,6 +1472,60 @@ describe('GET /plants/:id/seasonal-adjustment', () => {
   });
 });
 
+// ── GET /species/:name/cluster ───────────────────────────────────────────────
+
+describe('GET /species/:name/cluster', () => {
+  it('returns cluster for known tropical species', async () => {
+    const res = await request(app).get('/species/Calathea/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('thirsty_tropicals');
+    expect(res.body.clusterLabel).toBe('Thirsty Tropicals');
+    expect(res.body.similarSpecies).toBeInstanceOf(Array);
+    expect(res.body.clusterCareProfile.droughtTolerance).toBe('low');
+  });
+
+  it('returns cluster for known drought-tolerant species', async () => {
+    const res = await request(app).get('/species/Snake%20Plant/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('drought_tolerant');
+  });
+
+  it('returns cluster for known forgiving foliage', async () => {
+    const res = await request(app).get('/species/Monstera%20Deliciosa/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('forgiving_foliage');
+  });
+
+  it('returns unknown for unrecognised species', async () => {
+    const res = await request(app).get('/species/Xyloplantia/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBeNull();
+    expect(res.body.clusterLabel).toBe('Unknown');
+    expect(res.body.source).toBe('none');
+  });
+
+  it('uses Firestore cluster assignments when available', async () => {
+    store['config/clusters'] = {
+      assignments: {
+        'rare plant': { clusterId: 'forgiving_foliage', clusterLabel: 'Forgiving Foliage', similarSpecies: ['pothos'] },
+      },
+    };
+    const res = await request(app).get('/species/Rare%20Plant/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('forgiving_foliage');
+    expect(res.body.source).toBe('trained');
+  });
+
+  it('uses Vertex AI when endpoint configured', async () => {
+    process.env.SPECIES_CLUSTER_ENDPOINT = 'cluster-ep-1';
+    vertexaiPredictFn = async () => [{ clusterId: 'seasonal_bloomers', clusterLabel: 'Seasonal Bloomers', similarSpecies: ['orchid'] }];
+    const res = await request(app).get('/species/Christmas%20Cactus/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('vertex_ai');
+    delete process.env.SPECIES_CLUSTER_ENDPOINT;
+  });
+});
+
 // ── POST /ml/anomaly-scan ────────────────────────────────────────────────────
 
 describe('POST /ml/anomaly-scan', () => {

@@ -1225,6 +1225,98 @@ app.get('/plants/:id/seasonal-adjustment', requireUser, async (req, res) => {
   }
 });
 
+// ── Species clustering ───────────────────────────────────────────────────────
+
+// Default cluster assignments based on common plant care patterns
+const DEFAULT_CLUSTERS = {
+  'thirsty_tropicals': {
+    id: 'thirsty_tropicals', label: 'Thirsty Tropicals',
+    species: ['fern', 'calathea', 'peace lily', 'spathiphyllum', 'nephrolepis', 'maidenhair', 'boston fern', 'bird of paradise', 'alocasia'],
+    careProfile: { avgFrequency: 5, droughtTolerance: 'low', humidityNeed: 'high' },
+  },
+  'forgiving_foliage': {
+    id: 'forgiving_foliage', label: 'Forgiving Foliage',
+    species: ['pothos', 'philodendron', 'monstera', 'zz plant', 'zamioculcas', 'rubber plant', 'ficus', 'spider plant', 'dracaena', 'dieffenbachia'],
+    careProfile: { avgFrequency: 8, droughtTolerance: 'medium', humidityNeed: 'medium' },
+  },
+  'drought_tolerant': {
+    id: 'drought_tolerant', label: 'Drought Tolerant',
+    species: ['cactus', 'succulent', 'snake plant', 'sansevieria', 'aloe', 'jade', 'crassula', 'echeveria', 'haworthia', 'agave'],
+    careProfile: { avgFrequency: 14, droughtTolerance: 'high', humidityNeed: 'low' },
+  },
+  'seasonal_bloomers': {
+    id: 'seasonal_bloomers', label: 'Seasonal Bloomers',
+    species: ['orchid', 'phalaenopsis', 'christmas cactus', 'cyclamen', 'african violet', 'begonia', 'anthurium', 'bromeliad'],
+    careProfile: { avgFrequency: 7, droughtTolerance: 'medium', humidityNeed: 'high' },
+  },
+};
+
+function findClusterForSpecies(speciesName) {
+  if (!speciesName) return null;
+  const lower = speciesName.toLowerCase();
+  for (const cluster of Object.values(DEFAULT_CLUSTERS)) {
+    if (cluster.species.some(s => lower.includes(s) || s.includes(lower))) {
+      const similarSpecies = cluster.species.filter(s => s !== lower).slice(0, 5);
+      return {
+        clusterId: cluster.id,
+        clusterLabel: cluster.label,
+        similarSpecies,
+        clusterCareProfile: cluster.careProfile,
+        source: 'default',
+      };
+    }
+  }
+  return null;
+}
+
+app.get('/species/:name/cluster', requireUser, async (req, res) => {
+  try {
+    const speciesName = decodeURIComponent(req.params.name);
+
+    // Check GCS cluster assignments if available
+    const endpointId = process.env.SPECIES_CLUSTER_ENDPOINT;
+    if (endpointId) {
+      try {
+        const predictions = await vertexai.predict(endpointId, [{ species: speciesName }]);
+        if (predictions.length > 0 && predictions[0].clusterId) {
+          return res.status(200).json({ ...predictions[0], source: 'vertex_ai' });
+        }
+      } catch (err) {
+        log.warn('Vertex AI species cluster lookup failed, using defaults', { error: err.message });
+      }
+    }
+
+    // Check Firestore config/clusters for cached assignments
+    try {
+      const clusterDoc = await db.collection('config').doc('clusters').get();
+      if (clusterDoc.exists) {
+        const assignments = clusterDoc.data().assignments || {};
+        const lower = speciesName.toLowerCase();
+        if (assignments[lower]) {
+          return res.status(200).json({ ...assignments[lower], source: 'trained' });
+        }
+      }
+    } catch { /* fall through to defaults */ }
+
+    // Default cluster lookup
+    const result = findClusterForSpecies(speciesName);
+    if (result) {
+      return res.status(200).json(result);
+    }
+
+    // Unknown species — return no cluster
+    res.status(200).json({
+      clusterId: null,
+      clusterLabel: 'Unknown',
+      similarSpecies: [],
+      clusterCareProfile: null,
+      source: 'none',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Anomaly detection ────────────────────────────────────────────────────────
 
 function computeAnomalyFeatures(plant) {
