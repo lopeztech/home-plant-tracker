@@ -639,13 +639,18 @@ describe('DELETE /plants/:id', () => {
 // ── PUT /plants/:id — GCS image cleanup on replacement ──────────────────────
 
 describe('PUT /plants/:id — image replacement', () => {
-  it('deletes old GCS image when imageUrl changes', async () => {
-    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/old.jpg', createdAt: '2026-01-01T00:00:00.000Z' };
+  it('preserves old image in photoLog when imageUrl changes', async () => {
+    const oldUrl = 'https://storage.googleapis.com/undefined/plants/old.jpg';
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: oldUrl, createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
     const res = await request(app)
       .put('/plants/p1').set('Authorization', authHeader())
       .send({ name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/new.jpg' });
     expect(res.status).toBe(200);
-    expect(storageDeletedPaths).toContain('plants/old.jpg');
+    const saved = store[plantPath('p1')];
+    expect(saved.photoLog).toBeDefined();
+    expect(saved.photoLog).toHaveLength(1);
+    expect(saved.photoLog[0].url).toBe(oldUrl);
+    expect(saved.photoLog[0].type).toBe('growth');
   });
 
   it('does not delete GCS image when imageUrl stays the same', async () => {
