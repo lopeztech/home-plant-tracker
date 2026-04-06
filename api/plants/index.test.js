@@ -1472,6 +1472,123 @@ describe('GET /plants/:id/seasonal-adjustment', () => {
   });
 });
 
+// ── GET /plants/:id/care-score ───────────────────────────────────────────────
+
+describe('GET /plants/:id/care-score', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/care-score').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns heuristic care score', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-01-15T00:00:00.000Z', health: 'Good' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/care-score').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.score).toBeGreaterThanOrEqual(0);
+    expect(res.body.score).toBeLessThanOrEqual(100);
+    expect(['A', 'B', 'C', 'D', 'F']).toContain(res.body.grade);
+    expect(res.body.dimensions).toHaveProperty('consistency');
+    expect(res.body.dimensions).toHaveProperty('timing');
+    expect(res.body.dimensions).toHaveProperty('healthOutcome');
+    expect(res.body.dimensions).toHaveProperty('responsiveness');
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('scores well-cared-for plant higher than neglected one', async () => {
+    // Well-cared plant
+    store[plantPath('p1')] = {
+      name: 'Good Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+        { date: '2026-01-22T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Excellent' }],
+    };
+    // Neglected plant
+    store[plantPath('p2')] = {
+      name: 'Sad Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-20T00:00:00.000Z' },
+        { date: '2026-02-15T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-02-15T00:00:00.000Z', health: 'Poor' },
+      ],
+    };
+    const res1 = await request(app).get('/plants/p1/care-score').set('Authorization', authHeader());
+    const res2 = await request(app).get('/plants/p2/care-score').set('Authorization', authHeader());
+    expect(res1.body.score).toBeGreaterThan(res2.body.score);
+  });
+
+  it('returns cached care score', async () => {
+    const cached = { score: 85, grade: 'B', dimensions: {}, trend: 0, scoredAt: '2026-01-01', source: 'vertex_ai' };
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      mlCache: { careScore: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/care-score').set('Authorization', authHeader());
+    expect(res.body.score).toBe(85);
+    expect(res.body.source).toBe('vertex_ai');
+  });
+});
+
+// ── GET /ml/care-scores ─────────────────────────────────────────────────────
+
+describe('GET /ml/care-scores', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/ml/care-scores');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns scores for all plants sorted worst-first', async () => {
+    store[plantPath('p1')] = {
+      name: 'Good Plant', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Excellent' }],
+    };
+    store[plantPath('p2')] = {
+      name: 'OK Plant', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-20T00:00:00.000Z' },
+        { date: '2026-02-10T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Fair' }],
+    };
+    const res = await request(app).get('/ml/care-scores').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0].score).toBeLessThanOrEqual(res.body[1].score);
+    expect(res.body[0]).toHaveProperty('plantId');
+    expect(res.body[0]).toHaveProperty('name');
+  });
+
+  it('returns empty array when no plants', async () => {
+    const res = await request(app).get('/ml/care-scores').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+});
+
 // ── GET /species/:name/cluster ───────────────────────────────────────────────
 
 describe('GET /species/:name/cluster', () => {

@@ -1225,6 +1225,155 @@ app.get('/plants/:id/seasonal-adjustment', requireUser, async (req, res) => {
   }
 });
 
+// ── Care optimisation score ──────────────────────────────────────────────────
+
+function computeCareScore(plant) {
+  const wlog = (plant.wateringLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const healthLog = (plant.healthLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const freq = plant.frequencyDays || 7;
+
+  // Consistency (30%): low variance in watering intervals
+  let consistency = 50;
+  if (wlog.length >= 3) {
+    const gaps = [];
+    for (let i = 1; i < wlog.length; i++) {
+      gaps.push((new Date(wlog[i].date) - new Date(wlog[i - 1].date)) / 86400000);
+    }
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const std = Math.sqrt(gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length);
+    const cv = mean > 0 ? std / mean : 0;
+    consistency = Math.max(0, Math.min(100, Math.round(100 * (1 - cv))));
+  }
+
+  // Timing (30%): adherence to recommended frequency
+  let timing = 50;
+  if (wlog.length >= 2) {
+    const gaps = [];
+    for (let i = 1; i < wlog.length; i++) {
+      gaps.push((new Date(wlog[i].date) - new Date(wlog[i - 1].date)) / 86400000);
+    }
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const deviation = Math.abs(mean - freq) / freq;
+    timing = Math.max(0, Math.min(100, Math.round(100 * (1 - deviation))));
+  }
+
+  // Health outcome (25%): recent health trend
+  let healthOutcome = 50;
+  if (healthLog.length >= 1) {
+    const recent = healthLog.slice(-3);
+    const avg = recent.reduce((sum, h) => sum + (HEALTH_RANK[h.health] || 3), 0) / recent.length;
+    healthOutcome = Math.round((avg / 4) * 100);
+  }
+
+  // Responsiveness (15%): how quickly issues are addressed
+  let responsiveness = 70; // default: assume OK
+  if (healthLog.length >= 2) {
+    const declines = [];
+    for (let i = 1; i < healthLog.length; i++) {
+      const prev = HEALTH_RANK[healthLog[i - 1].health] || 3;
+      const curr = HEALTH_RANK[healthLog[i].health] || 3;
+      if (curr > prev) {
+        // Recovery detected
+        const recoveryTime = (new Date(healthLog[i].date) - new Date(healthLog[i - 1].date)) / 86400000;
+        declines.push(recoveryTime);
+      }
+    }
+    if (declines.length > 0) {
+      const avgRecovery = declines.reduce((a, b) => a + b, 0) / declines.length;
+      responsiveness = Math.max(0, Math.min(100, Math.round(100 * Math.max(0, 1 - avgRecovery / 30))));
+    }
+  }
+
+  const score = Math.round(consistency * 0.3 + timing * 0.3 + healthOutcome * 0.25 + responsiveness * 0.15);
+
+  let grade;
+  if (score >= 90) grade = 'A';
+  else if (score >= 75) grade = 'B';
+  else if (score >= 60) grade = 'C';
+  else if (score >= 45) grade = 'D';
+  else grade = 'F';
+
+  return {
+    score,
+    grade,
+    dimensions: { consistency, timing, healthOutcome, responsiveness },
+    trend: 0,
+    scoredAt: new Date().toISOString(),
+    source: 'heuristic',
+  };
+}
+
+app.get('/plants/:id/care-score', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh
+    if (isCacheValid(mlCache, 'careScore')) {
+      return res.status(200).json(mlCache.careScore.result);
+    }
+
+    const endpointId = process.env.CARE_SCORE_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 3) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const predictions = await vertexai.predict(endpointId, [featureRows[featureRows.length - 1]]);
+          if (predictions.length > 0 && typeof predictions[0].score === 'number') {
+            result = { ...predictions[0], source: 'vertex_ai', scoredAt: new Date().toISOString() };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI care score failed, using heuristic', { error: err.message });
+      }
+    }
+
+    if (!result) {
+      result = computeCareScore(plant);
+    }
+
+    // Cache
+    await ref.set({
+      mlCache: { ...mlCache, careScore: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Aggregate care scores for all plants (worst-first)
+app.get('/ml/care-scores', requireUser, async (req, res) => {
+  try {
+    const snapshot = await userPlants(req.userId).get();
+    const scores = [];
+
+    for (const doc of snapshot.docs) {
+      const plant = doc.data();
+      const cached = plant.mlCache?.careScore?.result;
+      const score = cached || computeCareScore(plant);
+      scores.push({
+        plantId: doc.id,
+        name: plant.name,
+        species: plant.species,
+        ...score,
+      });
+    }
+
+    scores.sort((a, b) => a.score - b.score); // worst first
+    res.status(200).json(scores);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Species clustering ───────────────────────────────────────────────────────
 
 // Default cluster assignments based on common plant care patterns
