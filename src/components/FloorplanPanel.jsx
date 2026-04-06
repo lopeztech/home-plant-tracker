@@ -1,4 +1,4 @@
-import { useMemo, useState, lazy, Suspense } from 'react'
+import { useMemo, useState, useCallback, lazy, Suspense } from 'react'
 import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
 import { useNavigate } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
