@@ -5,6 +5,7 @@ const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const { jsonrepair } = require('jsonrepair');
+const vertexai = require('./vertexai');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -321,6 +322,18 @@ Rules:
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
+});
+
+// ── ML status ────────────────────────────────────────────────────────────────
+
+app.get('/ml/status', async (req, res) => {
+  try {
+    const status = await vertexai.checkStatus();
+    const httpCode = status.status === 'ok' ? 200 : status.status === 'unconfigured' ? 503 : 502;
+    res.status(httpCode).json(status);
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
 });
 
 // ── ML feature engineering ────────────────────────────────────────────────────

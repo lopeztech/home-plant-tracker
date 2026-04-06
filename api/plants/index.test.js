@@ -68,6 +68,7 @@ let geminiGenerateFn;
 let storageSignedUrlFn;
 let storageDeleteFn;
 let storageDeletedPaths;
+let vertexaiCheckStatusFn;
 
 // ── Load the express app via proxyquire ───────────────────────────────────────
 
@@ -105,6 +106,11 @@ beforeAll(() => {
         collection(name) { return makeCollRef(name); }
       },
     },
+    './vertexai': {
+      checkStatus: function() { return vertexaiCheckStatusFn(); },
+      predict: async () => [],
+      batchPredict: async () => ({}),
+    },
   });
 });
 
@@ -114,6 +120,7 @@ beforeEach(() => {
   storageSignedUrlFn = async () => ['https://signed.example.com/img.jpg'];
   storageDeleteFn = async () => {};
   storageDeletedPaths = [];
+  vertexaiCheckStatusFn = async () => ({ status: 'ok', project: 'test', location: 'us-central1', endpointCount: 0 });
 });
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -146,6 +153,39 @@ describe('GET /health', () => {
     expect(res.headers['x-xss-protection']).toBe('0');
     expect(res.headers['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
     expect(res.headers['permissions-policy']).toBe('camera=(), microphone=(), geolocation=()');
+  });
+});
+
+// ── GET /ml/status ───────────────────────────────────────────────────────────
+
+describe('GET /ml/status', () => {
+  it('returns 200 when Vertex AI is reachable', async () => {
+    vertexaiCheckStatusFn = async () => ({ status: 'ok', project: 'my-project', location: 'us-central1', endpointCount: 2 });
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(res.body.project).toBe('my-project');
+  });
+
+  it('returns 503 when Vertex AI is unconfigured', async () => {
+    vertexaiCheckStatusFn = async () => ({ status: 'unconfigured', project: null, location: 'us-central1', error: 'VERTEX_AI_PROJECT is not set' });
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(503);
+    expect(res.body.status).toBe('unconfigured');
+  });
+
+  it('returns 502 when Vertex AI returns error status', async () => {
+    vertexaiCheckStatusFn = async () => ({ status: 'error', project: 'p', location: 'us-central1', error: 'Network error' });
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(502);
+    expect(res.body.status).toBe('error');
+  });
+
+  it('returns 500 when checkStatus throws', async () => {
+    vertexaiCheckStatusFn = async () => { throw new Error('unexpected'); };
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(500);
+    expect(res.body.status).toBe('error');
   });
 });
 
