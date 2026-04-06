@@ -41,6 +41,7 @@ export const plantsApi = {
   delete: (id) => request(`/plants/${id}`, { method: 'DELETE' }),
   water: (id) => request(`/plants/${id}/water`, { method: 'POST' }),
   wateringPattern: (id) => request(`/plants/${id}/watering-pattern`),
+  wateringRecommendation: (id) => request(`/plants/${id}/watering-recommendation`),
   getFloorplan: () => request('/config/floorplan'),
   saveFloorplan: (imageUrl) => request('/config/floorplan', { method: 'PUT', body: JSON.stringify({ imageUrl }) }),
 }

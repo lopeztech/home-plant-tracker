@@ -755,9 +755,10 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
     const { amount, method } = req.body || {};
     const wateringLog = [...(existing.wateringLog || []), { date: now, note: '', amount: amount || null, method: method || null }];
 
-    // Invalidate ML cache on new watering event
+    // Invalidate ML caches on new watering event
     const mlCache = { ...(existing.mlCache || {}) };
     delete mlCache.wateringPattern;
+    delete mlCache.wateringRecommendation;
     await ref.set({ lastWatered: now, wateringLog, updatedAt: now, mlCache }, { merge: true });
 
     const updated = await ref.get();
@@ -880,6 +881,107 @@ app.get('/plants/:id/watering-pattern', requireUser, async (req, res) => {
     // Cache the result
     await ref.set({
       mlCache: { ...mlCache, wateringPattern: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Smart watering recommendations ──────────────────────────────────────────
+
+const RECOMMENDATION_CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+app.get('/plants/:id/watering-recommendation', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh (48h TTL)
+    if (mlCache.wateringRecommendation) {
+      const age = Date.now() - new Date(mlCache.wateringRecommendation.cachedAt).getTime();
+      if (age < RECOMMENDATION_CACHE_TTL_MS) {
+        return res.status(200).json(mlCache.wateringRecommendation.result);
+      }
+    }
+
+    const endpointId = process.env.WATERING_RECOMMENDATION_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 5) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const latest = featureRows[featureRows.length - 1];
+          const predictions = await vertexai.predict(endpointId, [{
+            ...latest,
+            current_health: plant.health || '',
+            pot_size: plant.potSize || '',
+          }]);
+
+          if (predictions.length > 0 && predictions[0].recommendedFrequencyDays) {
+            const pred = predictions[0];
+            const lastWatered = plant.lastWatered || plant.wateringLog?.slice(-1)[0]?.date;
+            const nextDate = lastWatered
+              ? new Date(new Date(lastWatered).getTime() + pred.recommendedFrequencyDays * 86400000).toISOString().slice(0, 10)
+              : null;
+
+            result = {
+              recommendedFrequencyDays: pred.recommendedFrequencyDays,
+              confidenceInterval: pred.confidenceInterval || [pred.recommendedFrequencyDays - 1, pred.recommendedFrequencyDays + 1],
+              basis: pred.basis || `Based on care history for ${plant.species || plant.name}`,
+              nextWateringDate: nextDate,
+              source: 'vertex_ai',
+            };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI watering recommendation failed, using heuristic', { error: err.message });
+      }
+    }
+
+    // Heuristic fallback: use current frequencyDays with minor adjustments based on health
+    if (!result) {
+      const freq = plant.frequencyDays || 7;
+      const healthLog = plant.healthLog || [];
+      const lastHealth = healthLog.length > 0 ? healthLog[healthLog.length - 1].health : plant.health;
+
+      let recommended = freq;
+      let note = `Based on your current ${freq}-day schedule`;
+      if (lastHealth === 'Poor' || lastHealth === 'Fair') {
+        // Check if over- or under-watering via pattern analysis
+        const pattern = analyseWateringPattern(plant);
+        if (pattern.pattern === 'over_watered') {
+          recommended = Math.min(30, Math.round(freq * 1.3));
+          note = `${plant.species || plant.name} may be over-watered — try extending to every ${recommended} days`;
+        } else if (pattern.pattern === 'under_watered') {
+          recommended = Math.max(1, Math.round(freq * 0.7));
+          note = `${plant.species || plant.name} may need more water — try every ${recommended} days`;
+        }
+      }
+
+      const lastWatered = plant.lastWatered || plant.wateringLog?.slice(-1)[0]?.date;
+      const nextDate = lastWatered
+        ? new Date(new Date(lastWatered).getTime() + recommended * 86400000).toISOString().slice(0, 10)
+        : null;
+
+      result = {
+        recommendedFrequencyDays: recommended,
+        confidenceInterval: [Math.max(1, recommended - 1), recommended + 1],
+        basis: note,
+        nextWateringDate: nextDate,
+        source: 'heuristic',
+      };
+    }
+
+    // Cache the result
+    await ref.set({
+      mlCache: { ...mlCache, wateringRecommendation: { result, cachedAt: new Date().toISOString() } }
     }, { merge: true });
 
     res.status(200).json(result);

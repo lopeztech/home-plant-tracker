@@ -1197,6 +1197,121 @@ describe('GET /ml/export', () => {
   });
 });
 
+// ── GET /plants/:id/watering-recommendation ─────────────────────────────────
+
+describe('GET /plants/:id/watering-recommendation', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/plants/p1/watering-recommendation');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns heuristic recommendation for plant with sufficient data', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera Deliciosa', frequencyDays: 10,
+      lastWatered: '2026-03-01T00:00:00.000Z',
+      wateringLog: [
+        { date: '2026-02-01T00:00:00.000Z' },
+        { date: '2026-02-11T00:00:00.000Z' },
+        { date: '2026-02-21T00:00:00.000Z' },
+        { date: '2026-03-01T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-02-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBe(10);
+    expect(res.body.confidenceInterval).toHaveLength(2);
+    expect(res.body.basis).toContain('10-day');
+    expect(res.body.nextWateringDate).toBeTruthy();
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('adjusts recommendation when plant is over-watered and declining', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      lastWatered: '2026-03-10T00:00:00.000Z',
+      wateringLog: [
+        { date: '2026-03-01T00:00:00.000Z' },
+        { date: '2026-03-03T00:00:00.000Z' },
+        { date: '2026-03-05T00:00:00.000Z' },
+        { date: '2026-03-07T00:00:00.000Z' },
+        { date: '2026-03-10T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-03-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-03-10T00:00:00.000Z', health: 'Poor' },
+      ],
+      health: 'Poor',
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBeGreaterThan(7);
+    expect(res.body.basis).toContain('over-watered');
+  });
+
+  it('uses Vertex AI when endpoint is configured', async () => {
+    process.env.WATERING_RECOMMENDATION_ENDPOINT = 'rec-ep-1';
+    vertexaiPredictFn = async () => [{
+      recommendedFrequencyDays: 8,
+      confidenceInterval: [7, 10],
+      basis: 'Based on 20 waterings — Monstera in spring does best every 8-10 days',
+    }];
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera Deliciosa', frequencyDays: 10,
+      lastWatered: '2026-03-15T00:00:00.000Z',
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-11T00:00:00.000Z' },
+        { date: '2026-01-21T00:00:00.000Z' },
+        { date: '2026-02-01T00:00:00.000Z' },
+        { date: '2026-02-11T00:00:00.000Z' },
+        { date: '2026-03-15T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBe(8);
+    expect(res.body.source).toBe('vertex_ai');
+    delete process.env.WATERING_RECOMMENDATION_ENDPOINT;
+  });
+
+  it('returns cached recommendation within TTL', async () => {
+    const cached = {
+      recommendedFrequencyDays: 9, confidenceInterval: [8, 10],
+      basis: 'Cached', nextWateringDate: '2026-04-01', source: 'vertex_ai',
+    };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      mlCache: { wateringRecommendation: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBe(9);
+    expect(res.body.source).toBe('vertex_ai');
+  });
+
+  it('invalidates recommendation cache on watering', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [{ date: '2026-01-01T00:00:00.000Z' }],
+      mlCache: {
+        wateringRecommendation: { result: { recommendedFrequencyDays: 9 }, cachedAt: new Date().toISOString() },
+        wateringPattern: { result: { pattern: 'optimal' }, cachedAt: new Date().toISOString() },
+      },
+    };
+    await request(app).post('/plants/p1/water').set('Authorization', authHeader()).send({});
+    const data = store[plantPath('p1')];
+    expect(data.mlCache.wateringRecommendation).toBeUndefined();
+    expect(data.mlCache.wateringPattern).toBeUndefined();
+  });
+});
+
 // ── gcsPath edge cases ───────────────────────────────────────────────────────
 
 describe('gcsPath — via DELETE /plants/:id', () => {
