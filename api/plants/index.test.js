@@ -68,6 +68,7 @@ let geminiGenerateFn;
 let storageSignedUrlFn;
 let storageDeleteFn;
 let storageDeletedPaths;
+let storageSavedFiles;
 let vertexaiCheckStatusFn;
 
 // ── Load the express app via proxyquire ───────────────────────────────────────
@@ -95,6 +96,7 @@ beforeAll(() => {
               return {
                 getSignedUrl: function() { return storageSignedUrlFn.apply(this, arguments); },
                 delete: function() { storageDeletedPaths.push(f); return storageDeleteFn(f); },
+                save: function(content, opts) { storageSavedFiles.push({ path: f, content, opts }); return Promise.resolve(); },
               };
             },
           };
@@ -120,6 +122,7 @@ beforeEach(() => {
   storageSignedUrlFn = async () => ['https://signed.example.com/img.jpg'];
   storageDeleteFn = async () => {};
   storageDeletedPaths = [];
+  storageSavedFiles = [];
   vertexaiCheckStatusFn = async () => ({ status: 'ok', project: 'test', location: 'us-central1', endpointCount: 0 });
 });
 
@@ -980,6 +983,113 @@ describe('GET /ml/export', () => {
     const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
     expect(res.status).toBe(200);
     expect(res.text).toBe('');
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('returns CSV format when format=csv', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/user-csv-1'] = { email: 'a@b.com' };
+    store['users/user-csv-1/plants/p1'] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/ml/export?format=csv').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    const lines = res.text.trim().split('\n');
+    expect(lines[0]).toBe('species,days_between_waterings,recommended_frequency,adherence_ratio,health_at_watering,health_7d_after,season,consecutive_overdue_days,pot_size,room');
+    expect(lines[1]).toContain('Nephrolepis');
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('rejects invalid format parameter', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    const res = await request(app).get('/ml/export?format=xml').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('format');
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('writes to GCS when dest=gcs', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    process.env.ML_DATA_BUCKET = 'my-ml-bucket';
+    store['users/user-gcs-1'] = { email: 'a@b.com' };
+    store['users/user-gcs-1/plants/p1'] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-03-01T00:00:00.000Z' },
+        { date: '2026-03-08T00:00:00.000Z' },
+      ],
+      healthLog: [],
+    };
+    const res = await request(app).get('/ml/export?dest=gcs&format=csv').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.body.rows).toBe(1);
+    expect(res.body.format).toBe('csv');
+    expect(res.body.written).toContain('gs://my-ml-bucket/exports/');
+    expect(res.body.written).toContain('.csv');
+    expect(storageSavedFiles.length).toBe(1);
+    expect(storageSavedFiles[0].content).toContain('Nephrolepis');
+    delete process.env.ML_ADMIN_TOKEN;
+    delete process.env.ML_DATA_BUCKET;
+  });
+
+  it('computes correct feature derivation values', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/user-feat-1'] = {};
+    store['users/user-feat-1/plants/p1'] = {
+      name: 'Aloe', species: 'Aloe Vera', frequencyDays: 14, potSize: 'medium', room: 'Living Room',
+      wateringLog: [
+        { date: '2026-06-01T00:00:00.000Z' },
+        { date: '2026-06-08T00:00:00.000Z' },  // 7 days gap (overdue: < 14)
+        { date: '2026-06-22T00:00:00.000Z' },  // 14 days gap (on time)
+      ],
+      healthLog: [
+        { date: '2026-06-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-06-10T00:00:00.000Z', health: 'Fair' },
+      ],
+    };
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
+    const rows = res.text.trim().split('\n').map(l => JSON.parse(l));
+    expect(rows).toHaveLength(2);
+
+    // First row: gap of 7 days, freq 14 → adherence 0.5
+    expect(rows[0].species).toBe('Aloe Vera');
+    expect(rows[0].days_between_waterings).toBe(7);
+    expect(rows[0].adherence_ratio).toBe(0.5);
+    expect(rows[0].season).toBe('summer');
+    expect(rows[0].pot_size).toBe('medium');
+    expect(rows[0].room).toBe('Living Room');
+
+    // Second row: gap of 14 days, freq 14 → adherence 1.0
+    expect(rows[1].days_between_waterings).toBe(14);
+    expect(rows[1].adherence_ratio).toBe(1);
+    expect(rows[1].consecutive_overdue_days).toBe(0);
+
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('derives correct season from watering dates', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/user-season-1'] = {};
+    store['users/user-season-1/plants/p1'] = {
+      name: 'Plant', species: 'Test', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },  // winter
+        { date: '2026-03-15T00:00:00.000Z' },  // spring
+        { date: '2026-07-01T00:00:00.000Z' },  // summer
+        { date: '2026-10-15T00:00:00.000Z' },  // autumn
+        { date: '2026-12-25T00:00:00.000Z' },  // winter
+      ],
+      healthLog: [],
+    };
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
+    const rows = res.text.trim().split('\n').map(l => JSON.parse(l));
+    expect(rows.map(r => r.season)).toEqual(['spring', 'summer', 'autumn', 'winter']);
     delete process.env.ML_ADMIN_TOKEN;
   });
 });

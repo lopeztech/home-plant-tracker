@@ -398,7 +398,22 @@ function buildFeatureRows(plant) {
   return rows;
 }
 
-// Admin-gated ML export — produces NDJSON feature table
+const CSV_COLUMNS = [
+  'species', 'days_between_waterings', 'recommended_frequency',
+  'adherence_ratio', 'health_at_watering', 'health_7d_after',
+  'season', 'consecutive_overdue_days', 'pot_size', 'room',
+];
+
+function rowToCsv(row) {
+  return CSV_COLUMNS.map(c => {
+    const v = row[c] ?? '';
+    const s = String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',');
+}
+
+// Admin-gated ML export — produces NDJSON or CSV, optionally writes to GCS
 app.get('/ml/export', async (req, res) => {
   const adminToken = req.headers['x-admin-token'];
   const expectedToken = process.env.ML_ADMIN_TOKEN;
@@ -406,21 +421,51 @@ app.get('/ml/export', async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  try {
-    // Stream all users' plant data
-    const usersSnap = await db.collection('users').get();
-    res.setHeader('Content-Type', 'application/x-ndjson');
-    res.setHeader('Content-Disposition', `attachment; filename="features-${new Date().toISOString().slice(0, 10)}.ndjson"`);
+  const format = (req.query.format || 'ndjson').toLowerCase();
+  if (format !== 'ndjson' && format !== 'csv') {
+    return res.status(400).json({ error: 'format must be "ndjson" or "csv"' });
+  }
+  const dest = (req.query.dest || 'stream').toLowerCase();
 
+  try {
+    // Collect all feature rows
+    const allRows = [];
+    const usersSnap = await db.collection('users').get();
     for (const userDoc of usersSnap.docs) {
       const plantsSnap = await db.collection('users').doc(userDoc.id).collection('plants').get();
       for (const plantDoc of plantsSnap.docs) {
-        const rows = buildFeatureRows(plantDoc.data());
-        for (const row of rows) {
-          res.write(JSON.stringify(row) + '\n');
-        }
+        allRows.push(...buildFeatureRows(plantDoc.data()));
       }
     }
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    let body;
+    let contentType;
+    let ext;
+
+    if (format === 'csv') {
+      const header = CSV_COLUMNS.join(',');
+      body = header + '\n' + allRows.map(rowToCsv).join('\n') + (allRows.length ? '\n' : '');
+      contentType = 'text/csv';
+      ext = 'csv';
+    } else {
+      body = allRows.map(r => JSON.stringify(r)).join('\n') + (allRows.length ? '\n' : '');
+      contentType = 'application/x-ndjson';
+      ext = 'ndjson';
+    }
+
+    // Write to GCS if requested
+    if (dest === 'gcs') {
+      const bucket = process.env.ML_DATA_BUCKET || 'plant-tracker-ml-data';
+      const filePath = `exports/${dateStr}.${ext}`;
+      await storage.bucket(bucket).file(filePath).save(body, { contentType });
+      return res.status(200).json({ written: `gs://${bucket}/${filePath}`, rows: allRows.length, format });
+    }
+
+    // Stream to response
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="features-${dateStr}.${ext}"`);
+    res.write(body);
     res.end();
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
