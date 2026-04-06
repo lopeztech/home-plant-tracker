@@ -140,6 +140,17 @@ async function signReadUrl(urlOrPath) {
   return url;
 }
 
+async function signPlantData(data) {
+  if (data.imageUrl) data.imageUrl = await signReadUrl(data.imageUrl);
+  if (data.photoLog?.length) {
+    data.photoLog = await Promise.all(data.photoLog.map(async (entry) => ({
+      ...entry,
+      url: entry.url ? await signReadUrl(entry.url) : entry.url,
+    })));
+  }
+  return data;
+}
+
 const app = express();
 app.use(express.json({ limit: '10mb' }));
 app.use(cors({
@@ -644,7 +655,7 @@ app.get('/config/floorplan', requireUser, async (req, res) => {
   try {
     const doc = await userConfig(req.userId).doc('floorplan').get();
     const data = doc.exists ? doc.data() : { imageUrl: null };
-    data.imageUrl = await signReadUrl(data.imageUrl);
+    await signPlantData(data);
     res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -675,7 +686,7 @@ app.get('/plants', requireUser, async (req, res) => {
     const plants = await Promise.all(
       snapshot.docs.map(async (doc) => {
         const data = { id: doc.id, ...doc.data() };
-        data.imageUrl = await signReadUrl(data.imageUrl);
+        await signPlantData(data);
         return data;
       })
     );
@@ -702,7 +713,7 @@ app.get('/plants/:id', requireUser, async (req, res) => {
     const doc = await userPlants(req.userId).doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
     const data = { id: doc.id, ...doc.data() };
-    data.imageUrl = await signReadUrl(data.imageUrl);
+    await signPlantData(data);
     res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -772,7 +783,7 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
 
     const updated = await ref.get();
     const data = { id: updated.id, ...updated.data() };
-    data.imageUrl = await signReadUrl(data.imageUrl);
+    await signPlantData(data);
     res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });

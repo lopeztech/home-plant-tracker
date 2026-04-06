@@ -36,7 +36,14 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
       .map((p) => pendingMoves[p.id] ? { ...p, ...pendingMoves[p.id] } : p)
   }, [plants, activeFloorId, pendingMoves])
 
-  const hasPendingMoves = Object.keys(pendingMoves).length > 0
+  // Check which pending moves haven't been saved to context yet
+  const hasPendingMoves = useMemo(() => {
+    return Object.entries(pendingMoves).some(([id, move]) => {
+      const p = plants.find((pl) => pl.id === id)
+      if (!p) return false
+      return Math.abs(p.x - move.x) > 0.1 || Math.abs(p.y - move.y) > 0.1 || p.room !== move.room
+    })
+  }, [pendingMoves, plants])
 
   // Local drag handler — doesn't call API, just stores pending position
   const handleLocalDrag = useCallback((plant, x, y) => {
@@ -57,7 +64,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   // Save all pending moves to API
   const handleSaveMoves = useCallback(async () => {
     setSaving(true)
-    // Apply to context state
+    // Apply to context state — positions update in plants array
     updatePlantsLocally(pendingMoves)
     // Persist to API
     if (!isGuest) {
@@ -72,12 +79,10 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
         console.error('Failed to save plant positions:', err)
       }
     }
-    // Wait for React to process the context update before clearing
-    // pendingMoves, so plantsOnFloor picks up the new positions
-    requestAnimationFrame(() => {
-      setPendingMoves({})
-      setSaving(false)
-    })
+    // Don't clear pendingMoves — hasPendingMoves will auto-resolve
+    // to false once the context plants array matches the pending positions.
+    // This prevents the snap-back race condition.
+    setSaving(false)
   }, [pendingMoves, isGuest, updatePlantsLocally])
 
   return (
