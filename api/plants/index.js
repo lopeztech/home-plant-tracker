@@ -1474,11 +1474,10 @@ function computeAnomalyFeatures(plant) {
 
   // Rolling 30-day window
   const thirtyDaysAgo = Date.now() - 30 * 86400000;
-  const recent = wlog.filter(w => new Date(w.date).getTime() > thirtyDaysAgo);
+  const _recent = wlog.filter(w => new Date(w.date).getTime() > thirtyDaysAgo);
   const gaps = [];
-  const sorted = [...wlog].sort((a, b) => new Date(a.date) - new Date(b.date));
-  for (let i = 1; i < sorted.length; i++) {
-    gaps.push((new Date(sorted[i].date) - new Date(sorted[i - 1].date)) / 86400000);
+  for (let i = 1; i < wlog.length; i++) {
+    gaps.push((new Date(wlog[i].date) - new Date(wlog[i - 1].date)) / 86400000);
   }
 
   if (gaps.length === 0) return null;
