@@ -189,12 +189,15 @@ export function PlantProvider({ children }) {
         }
       }
     }
-    setPlants((prev) => prev.map((p) => (p.id === plant.id ? { ...p, x, y, room } : p)))
+    const updatedFields = { x, y, room }
+    setPlants((prev) => prev.map((p) => (p.id === plant.id ? { ...p, ...updatedFields } : p)))
     if (isGuest) return
     try {
-      await plantsApi.update(plant.id, { x, y, room })
-    } catch {
-      setPlants((prev) => prev.map((p) => (p.id === plant.id ? plant : p)))
+      const saved = await plantsApi.update(plant.id, updatedFields)
+      setPlants((prev) => prev.map((p) => (p.id === plant.id ? saved : p)))
+    } catch (err) {
+      console.error('Failed to save plant position:', err)
+      // Don't revert — keep the optimistic position
     }
   }, [isGuest, floors, activeFloorId])
 
