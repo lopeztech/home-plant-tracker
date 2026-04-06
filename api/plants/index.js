@@ -239,7 +239,7 @@ function parseGeminiJson(text) {
   let s = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
 
   // Fast path: direct parse
-  try { return JSON.parse(s); } catch (_) {}
+  try { return JSON.parse(s); } catch (_e) {} // eslint-disable-line no-unused-vars
 
   // Extract the outermost {...} in case Gemini added surrounding prose
   const start = s.indexOf('{');
@@ -252,7 +252,7 @@ function parseGeminiJson(text) {
   const NAMED = { '\b': '\\b', '\t': '\\t', '\n': '\\n', '\f': '\\f', '\r': '\\r' };
   s = s.replace(/[\x00-\x1f]/g, c => NAMED[c] ?? `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
 
-  try { return JSON.parse(s); } catch (_) {}
+  try { return JSON.parse(s); } catch (_e) {} // eslint-disable-line no-unused-vars
 
   // Last resort: jsonrepair handles unescaped quotes, trailing commas, etc.
   log.warn('parseGeminiJson: falling back to jsonrepair', { raw: text.slice(0, 500) });
@@ -629,7 +629,7 @@ app.get('/plants', requireUser, async (req, res) => {
 app.post('/plants', requireUser, async (req, res) => {
   try {
     const now = new Date().toISOString();
-    const { imageBase64, ...body } = req.body;
+    const { imageBase64: _img, ...body } = req.body;
     const data = { ...body, createdAt: now, updatedAt: now };
     const docRef = await userPlants(req.userId).add(data);
     res.status(201).json({ id: docRef.id, ...data });
@@ -656,7 +656,7 @@ app.put('/plants/:id', requireUser, async (req, res) => {
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
-    const { imageBase64, ...body } = req.body;
+    const { imageBase64: _img, ...body } = req.body;
     const now = new Date().toISOString();
     const existing = doc.data();
     const updates = { ...body, updatedAt: now };
@@ -733,7 +733,7 @@ function analyseWateringPattern(plant) {
 
   const factors = [];
   let pattern = 'optimal';
-  let confidence = 0.7;
+  let confidence;
 
   if (cv > 0.5) {
     pattern = 'inconsistent';

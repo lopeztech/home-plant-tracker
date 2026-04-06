@@ -36,6 +36,13 @@ function makeCollRef(prefix) {
       store[`${prefix}/${id}`] = Object.assign({}, data);
       return { id };
     },
+    get: async () => {
+      const pfx = `${prefix}/`;
+      const entries = Object.entries(store)
+        .filter(([k]) => k.startsWith(pfx) && !k.slice(pfx.length).includes('/'))
+        .map(([k, v]) => ({ id: k.slice(pfx.length), data: () => v }));
+      return { docs: entries };
+    },
     orderBy: (field, dir) => ({
       get: async () => {
         dir = dir || 'asc';
@@ -785,5 +792,179 @@ describe('requireUser — API Gateway auth path', () => {
       .set('x-apigateway-api-userinfo', gatewayPayload)
       .set('Authorization', authHeader());
     expect(res.status).toBe(200);
+  });
+});
+
+// ── Under-watered + health decline branch ────────────────────────────────────
+
+describe('GET /plants/:id/watering-pattern — under_watered with health decline', () => {
+  it('detects under_watered with health decline and boosts confidence', async () => {
+    const base = new Date('2026-01-01');
+    // Water every 14 days but recommended is 5 (adherence = 14/5 = 2.8 > 1.5)
+    const wateringLog = Array.from({ length: 5 }, (_, i) => ({
+      date: new Date(base.getTime() + i * 14 * 86400000).toISOString(),
+    }));
+    const healthLog = [
+      { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+      { date: '2026-02-15T00:00:00.000Z', health: 'Poor' },
+    ];
+    store[plantPath('p1')] = { name: 'Fern', frequencyDays: 5, wateringLog, healthLog };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.body.pattern).toBe('under_watered');
+    expect(res.body.confidence).toBeGreaterThan(0.5);
+    expect(res.body.contributingFactors.some(f => f.includes('Health'))).toBe(true);
+    expect(res.body.contributingFactors.some(f => f.includes('vs recommended'))).toBe(true);
+  });
+});
+
+// ── Gemini retry logic ───────────────────────────────────────────────────────
+
+describe('POST /analyse — Gemini retry logic', () => {
+  it('retries on failure and succeeds on second attempt', async () => {
+    let callCount = 0;
+    const payload = { species: 'Ficus', frequencyDays: 7, health: 'Good', healthReason: 'OK', maturity: 'Mature', recommendations: [] };
+    geminiGenerateFn = async () => {
+      callCount++;
+      if (callCount === 1) throw new Error('Transient failure');
+      return { response: { text: () => JSON.stringify(payload) } };
+    };
+    const res = await request(app).post('/analyse').send({ imageBase64: 'abc', mimeType: 'image/jpeg' });
+    expect(res.status).toBe(200);
+    expect(res.body.species).toBe('Ficus');
+    expect(callCount).toBe(2);
+  });
+
+  it('exhausts all retries and returns 500', async () => {
+    geminiGenerateFn = async () => { throw new Error('Persistent failure'); };
+    const res = await request(app).post('/analyse').send({ imageBase64: 'abc', mimeType: 'image/jpeg' });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Persistent failure');
+  });
+});
+
+// ── Legacy floorplan endpoints ───────────────────────────────────────────────
+
+const floorplanPath = () => `users/${USER_SUB}/config/floorplan`;
+
+describe('GET /config/floorplan', () => {
+  it('returns { imageUrl: null } when no config exists', async () => {
+    const res = await request(app).get('/config/floorplan').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.imageUrl).toBeNull();
+  });
+
+  it('returns saved floorplan config with signed imageUrl', async () => {
+    store[floorplanPath()] = { imageUrl: 'floorplans/plan.jpg' };
+    storageSignedUrlFn = async () => ['https://signed.url/plan.jpg'];
+    const res = await request(app).get('/config/floorplan').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.imageUrl).toBe('https://signed.url/plan.jpg');
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/config/floorplan');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PUT /config/floorplan', () => {
+  it('saves floorplan config and returns signed imageUrl', async () => {
+    storageSignedUrlFn = async () => ['https://signed.url/new-plan.jpg'];
+    const res = await request(app).put('/config/floorplan').set('Authorization', authHeader())
+      .send({ imageUrl: 'floorplans/new-plan.jpg' });
+    expect(res.status).toBe(200);
+    expect(res.body.imageUrl).toBe('https://signed.url/new-plan.jpg');
+  });
+
+  it('persists the config to Firestore with merge semantics', async () => {
+    store[floorplanPath()] = { imageUrl: 'floorplans/old.jpg', customField: 'keep' };
+    await request(app).put('/config/floorplan').set('Authorization', authHeader())
+      .send({ imageUrl: 'floorplans/new.jpg' });
+    expect(store[floorplanPath()].imageUrl).toBe('floorplans/new.jpg');
+    expect(store[floorplanPath()].updatedAt).toBeTruthy();
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).put('/config/floorplan').send({ imageUrl: 'test.jpg' });
+    expect(res.status).toBe(401);
+  });
+});
+
+// ── ML export endpoint ───────────────────────────────────────────────────────
+
+describe('GET /ml/export', () => {
+  it('returns 403 without admin token', async () => {
+    const res = await request(app).get('/ml/export');
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('Forbidden');
+  });
+
+  it('returns 403 with wrong admin token', async () => {
+    process.env.ML_ADMIN_TOKEN = 'correct-token';
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'wrong-token');
+    expect(res.status).toBe(403);
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('returns NDJSON feature rows for plants with sufficient watering data', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    // Seed a user with a plant that has watering log
+    store['users/user-ml-1'] = { email: 'test@example.com' };
+    store['users/user-ml-1/plants/p1'] = {
+      name: 'Fern',
+      species: 'Nephrolepis',
+      frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+      ],
+    };
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/x-ndjson');
+    expect(res.headers['content-disposition']).toContain('features-');
+    const lines = res.text.trim().split('\n').map(l => JSON.parse(l));
+    expect(lines.length).toBe(2); // 3 watering events → 2 feature rows
+    expect(lines[0].species).toBe('Nephrolepis');
+    expect(lines[0].days_between_waterings).toBe(7);
+    expect(lines[0].recommended_frequency).toBe(7);
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('returns empty body when no users or plants exist', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.text).toBe('');
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+});
+
+// ── gcsPath edge cases ───────────────────────────────────────────────────────
+
+describe('gcsPath — via DELETE /plants/:id', () => {
+  it('handles imageUrl that is already a plain path (no URL prefix)', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'plants/fern.jpg' };
+    const res = await request(app).delete('/plants/p1').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(storageDeletedPaths).toContain('plants/fern.jpg');
+  });
+
+  it('handles imageUrl that is a full GCS URL', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'https://storage.googleapis.com/undefined/plants/fern.jpg' };
+    const res = await request(app).delete('/plants/p1').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(storageDeletedPaths).toContain('plants/fern.jpg');
+  });
+
+  it('does not attempt delete when imageUrl is null', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: null };
+    const res = await request(app).delete('/plants/p1').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(storageDeletedPaths).toHaveLength(0);
   });
 });
