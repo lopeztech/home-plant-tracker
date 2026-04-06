@@ -259,7 +259,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Tab nav for editing */}
       {isEditing && (
         <Nav variant="tabs" className="px-3 pt-2">
-          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'gallery', label: 'Gallery' }, { id: 'care', label: 'Care' }].map((tab) => (
+          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'gallery', label: 'Growth' }, { id: 'care', label: 'Care' }].map((tab) => (
             <Nav.Item key={tab.id}>
               <Nav.Link active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}</Nav.Link>
             </Nav.Item>
@@ -447,9 +447,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {isEditing && activeTab === 'gallery' && (
         <Modal.Body>
           {(() => {
+            const photoLog = plant.photoLog || []
+            // Only add current imageUrl if it's not already in photoLog
+            const hasCurrentImage = plant.imageUrl && !photoLog.some((p) => p.url === plant.imageUrl)
             const photos = [
-              ...(plant.photoLog || []),
-              ...(plant.imageUrl ? [{ url: plant.imageUrl, date: plant.updatedAt || plant.createdAt, type: 'growth', analysis: null }] : []),
+              ...photoLog,
+              ...(hasCurrentImage ? [{ url: plant.imageUrl, date: plant.updatedAt || plant.createdAt, type: 'growth', analysis: null }] : []),
             ].sort((a, b) => new Date(b.date) - new Date(a.date))
 
             if (photos.length === 0) {
