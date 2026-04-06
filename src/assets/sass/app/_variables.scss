@@ -6,11 +6,11 @@
 //theme colors
 //need some ideas? check out https://coolors.co/palettes/popular/5%20colors
 
-$color-primary: #886ab5;
-$color-success: #1dc9b7;
-$color-info: #2196F3;
-$color-warning: #ffc241;
-$color-danger: #fd3995;
+$color-primary: #43a047;
+$color-success: #66bb6a;
+$color-info: #26a69a;
+$color-warning: #ffa726;
+$color-danger: #ef5350;
 $color-fusion: darken(desaturate(adjust-hue($color-primary, 5), 80%), 25%) !default;
 $color-white: #fff;
 $color-black: #000;

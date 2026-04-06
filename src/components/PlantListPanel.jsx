@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback } from 'react'
 import { Button, FormControl, InputGroup, Badge, ListGroup } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS } from '../utils/watering.js'
+import PlantIcon from './PlantIcon.jsx'
 
 function UrgencyIcon({ days, skippedRain }) {
   if (skippedRain) return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#cloud-rain"></use></svg>
@@ -12,11 +13,8 @@ function UrgencyIcon({ days, skippedRain }) {
 }
 
 function PlantCard({ plant, onClick, onWater, weather, floors }) {
-  const [imgError, setImgError] = useState(false)
   const status = getWateringStatus(plant, weather, floors)
   const { daysUntil, color, label, skippedRain } = status
-  const initial = plant.name ? plant.name.charAt(0).toUpperCase() : '?'
-  const showPhoto = plant.imageUrl && !imgError
 
   return (
     <ListGroup.Item
@@ -27,13 +25,9 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
     >
       <div
         className="plant-avatar"
-        style={{ background: showPhoto ? 'transparent' : color, border: `2px solid ${color}` }}
+        style={{ background: 'transparent', border: `2px solid ${color}` }}
       >
-        {showPhoto ? (
-          <img src={plant.imageUrl} alt={plant.name} onError={() => setImgError(true)} />
-        ) : (
-          <span>{initial}</span>
-        )}
+        <PlantIcon plant={plant} size={36} color={color} />
       </div>
 
       <div className="flex-grow-1 min-w-0">
