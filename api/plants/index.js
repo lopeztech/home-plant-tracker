@@ -755,7 +755,10 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
     const { amount, method } = req.body || {};
     const wateringLog = [...(existing.wateringLog || []), { date: now, note: '', amount: amount || null, method: method || null }];
 
-    await ref.set({ lastWatered: now, wateringLog, updatedAt: now }, { merge: true });
+    // Invalidate ML cache on new watering event
+    const mlCache = { ...(existing.mlCache || {}) };
+    delete mlCache.wateringPattern;
+    await ref.set({ lastWatered: now, wateringLog, updatedAt: now, mlCache }, { merge: true });
 
     const updated = await ref.get();
     const data = { id: updated.id, ...updated.data() };
@@ -825,11 +828,61 @@ function analyseWateringPattern(plant) {
   return { pattern, confidence: +confidence.toFixed(2), contributingFactors: factors };
 }
 
+const ML_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function isCacheValid(cache, key) {
+  if (!cache || !cache[key]) return false;
+  const age = Date.now() - new Date(cache[key].cachedAt).getTime();
+  return age < ML_CACHE_TTL_MS;
+}
+
 app.get('/plants/:id/watering-pattern', requireUser, async (req, res) => {
   try {
-    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
-    res.status(200).json(analyseWateringPattern(doc.data()));
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh
+    if (isCacheValid(mlCache, 'wateringPattern')) {
+      return res.status(200).json(mlCache.wateringPattern.result);
+    }
+
+    // Try Vertex AI prediction if endpoint is configured
+    const endpointId = process.env.WATERING_PATTERN_ENDPOINT;
+    let result;
+    if (endpointId && (plant.wateringLog || []).length >= 3) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const predictions = await vertexai.predict(endpointId, [featureRows[featureRows.length - 1]]);
+          if (predictions.length > 0 && predictions[0].pattern) {
+            result = {
+              pattern: predictions[0].pattern,
+              confidence: predictions[0].confidence || 0.8,
+              contributingFactors: predictions[0].contributingFactors || [],
+              source: 'vertex_ai',
+            };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI watering pattern prediction failed, falling back to heuristic', { error: err.message });
+      }
+    }
+
+    // Fall back to heuristic
+    if (!result) {
+      result = { ...analyseWateringPattern(plant), source: 'heuristic' };
+    }
+
+    // Cache the result
+    await ref.set({
+      mlCache: { ...mlCache, wateringPattern: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

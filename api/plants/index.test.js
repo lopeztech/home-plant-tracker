@@ -70,6 +70,7 @@ let storageDeleteFn;
 let storageDeletedPaths;
 let storageSavedFiles;
 let vertexaiCheckStatusFn;
+let vertexaiPredictFn;
 
 // ── Load the express app via proxyquire ───────────────────────────────────────
 
@@ -110,7 +111,7 @@ beforeAll(() => {
     },
     './vertexai': {
       checkStatus: function() { return vertexaiCheckStatusFn(); },
-      predict: async () => [],
+      predict: function() { return vertexaiPredictFn.apply(this, arguments); },
       batchPredict: async () => ({}),
     },
   });
@@ -124,6 +125,7 @@ beforeEach(() => {
   storageDeletedPaths = [];
   storageSavedFiles = [];
   vertexaiCheckStatusFn = async () => ({ status: 'ok', project: 'test', location: 'us-central1', endpointCount: 0 });
+  vertexaiPredictFn = async () => [];
 });
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -857,6 +859,107 @@ describe('GET /plants/:id/watering-pattern — under_watered with health decline
     expect(res.body.confidence).toBeGreaterThan(0.5);
     expect(res.body.contributingFactors.some(f => f.includes('Health'))).toBe(true);
     expect(res.body.contributingFactors.some(f => f.includes('vs recommended'))).toBe(true);
+  });
+});
+
+// ── Watering pattern — ML integration & caching ────────────────────────────
+
+describe('GET /plants/:id/watering-pattern — ML & cache', () => {
+  it('includes source: heuristic when no ML endpoint configured', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('uses Vertex AI when endpoint is configured', async () => {
+    process.env.WATERING_PATTERN_ENDPOINT = 'ep-123';
+    vertexaiPredictFn = async () => [{ pattern: 'over_watered', confidence: 0.92, contributingFactors: ['ML detected overwatering'] }];
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-04T00:00:00.000Z' },
+        { date: '2026-01-07T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).toBe('over_watered');
+    expect(res.body.source).toBe('vertex_ai');
+    expect(res.body.confidence).toBe(0.92);
+    delete process.env.WATERING_PATTERN_ENDPOINT;
+  });
+
+  it('falls back to heuristic when Vertex AI prediction fails', async () => {
+    process.env.WATERING_PATTERN_ENDPOINT = 'ep-123';
+    vertexaiPredictFn = async () => { throw new Error('Vertex AI down'); };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('heuristic');
+    delete process.env.WATERING_PATTERN_ENDPOINT;
+  });
+
+  it('returns cached result within TTL', async () => {
+    const cachedResult = { pattern: 'optimal', confidence: 0.85, contributingFactors: ['Cached'], source: 'vertex_ai' };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [{ date: '2026-01-01T00:00:00.000Z' }],
+      mlCache: { wateringPattern: { result: cachedResult, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).toBe('optimal');
+    expect(res.body.source).toBe('vertex_ai');
+    expect(res.body.contributingFactors).toEqual(['Cached']);
+  });
+
+  it('ignores expired cache and recomputes', async () => {
+    const expired = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(); // 25h ago
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      mlCache: { wateringPattern: { result: { pattern: 'stale' }, cachedAt: expired } },
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).not.toBe('stale');
+    expect(res.body.source).toBe('heuristic');
+  });
+});
+
+describe('POST /plants/:id/water — ML cache invalidation', () => {
+  it('clears wateringPattern cache on new watering event', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [{ date: '2026-01-01T00:00:00.000Z' }],
+      mlCache: { wateringPattern: { result: { pattern: 'optimal' }, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).post('/plants/p1/water').set('Authorization', authHeader()).send({});
+    expect(res.status).toBe(200);
+    // Verify cache was cleared
+    const data = store[plantPath('p1')];
+    expect(data.mlCache.wateringPattern).toBeUndefined();
   });
 });
 
