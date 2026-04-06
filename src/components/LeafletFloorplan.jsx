@@ -90,7 +90,6 @@ export default function LeafletFloorplan({
   onMarkerDrag,
   editMode = false,
   onRoomsChange,
-  hasPendingMoves = false,
 }) {
   const containerRef   = useRef(null)
   const mapRef         = useRef(null)
@@ -367,15 +366,9 @@ export default function LeafletFloorplan({
   // Track markers by plant ID to update positions without destroying/recreating
   const plantMarkersRef = useRef({})
   // IDs of plants dragged locally — never override their position from props
+  // Positions are updated in context directly, so this just prevents
+  // the useEffect from fighting with the Leaflet marker's drag position
   const draggedIdsRef = useRef(new Set())
-  // Clear drag tracking when saves are committed (pendingMoves cleared)
-  const prevPendingRef = useRef(hasPendingMoves)
-  useEffect(() => {
-    if (prevPendingRef.current && !hasPendingMoves) {
-      draggedIdsRef.current.clear()
-    }
-    prevPendingRef.current = hasPendingMoves
-  }, [hasPendingMoves])
 
   useEffect(() => {
     const map = mapRef.current

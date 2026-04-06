@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, lazy, Suspense } from 'react'
+import { useMemo, useState, useCallback, lazy, Suspense, useRef } from 'react'
 import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
 import { useNavigate } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
@@ -16,8 +16,10 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
 
   const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('2d')
-  const [pendingMoves, setPendingMoves] = useState({}) // { plantId: { x, y, room } }
   const [saving, setSaving] = useState(false)
+
+  // Track which plant IDs have been dragged since last save
+  const dirtyIdsRef = useRef(new Set())
 
   const visibleFloors = useMemo(
     () => [...floors].filter((f) => !f.hidden).sort((a, b) => b.order - a.order),
@@ -29,23 +31,14 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
     [floors, activeFloorId],
   )
 
-  // Merge pending moves into plants for display
-  const plantsOnFloor = useMemo(() => {
-    return plants
-      .filter((p) => (p.floor || 'ground') === activeFloorId)
-      .map((p) => pendingMoves[p.id] ? { ...p, ...pendingMoves[p.id] } : p)
-  }, [plants, activeFloorId, pendingMoves])
+  const plantsOnFloor = useMemo(
+    () => plants.filter((p) => (p.floor || 'ground') === activeFloorId),
+    [plants, activeFloorId],
+  )
 
-  // Check which pending moves haven't been saved to context yet
-  const hasPendingMoves = useMemo(() => {
-    return Object.entries(pendingMoves).some(([id, move]) => {
-      const p = plants.find((pl) => pl.id === id)
-      if (!p) return false
-      return Math.abs(p.x - move.x) > 0.1 || Math.abs(p.y - move.y) > 0.1 || p.room !== move.room
-    })
-  }, [pendingMoves, plants])
+  const [hasDirty, setHasDirty] = useState(false)
 
-  // Local drag handler — doesn't call API, just stores pending position
+  // Drag handler — update context immediately (no API call)
   const handleLocalDrag = useCallback((plant, x, y) => {
     const floor = floors.find((f) => f.id === (plant.floor || activeFloorId))
     let room = plant.room
@@ -58,32 +51,41 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
         }
       }
     }
-    setPendingMoves((prev) => ({ ...prev, [plant.id]: { x, y, room } }))
-  }, [floors, activeFloorId])
+    // Update context directly — markers won't snap because draggedIdsRef in LeafletFloorplan protects them
+    updatePlantsLocally({ [plant.id]: { x, y, room } })
+    dirtyIdsRef.current.add(plant.id)
+    setHasDirty(true)
+  }, [floors, activeFloorId, updatePlantsLocally])
 
-  // Save all pending moves to API
+  // Save dirty plants to API
   const handleSaveMoves = useCallback(async () => {
     setSaving(true)
-    // Apply to context state — positions update in plants array
-    updatePlantsLocally(pendingMoves)
-    // Persist to API
-    if (!isGuest) {
+    const ids = [...dirtyIdsRef.current]
+    if (!isGuest && ids.length > 0) {
       try {
         const { plantsApi } = await import('../api/plants.js')
         await Promise.all(
-          Object.entries(pendingMoves).map(([id, fields]) =>
-            plantsApi.update(id, fields)
-          )
+          ids.map((id) => {
+            const p = plants.find((pl) => pl.id === id)
+            if (!p) return Promise.resolve()
+            return plantsApi.update(id, { x: p.x, y: p.y, room: p.room })
+          })
         )
       } catch (err) {
         console.error('Failed to save plant positions:', err)
       }
     }
-    // Don't clear pendingMoves — hasPendingMoves will auto-resolve
-    // to false once the context plants array matches the pending positions.
-    // This prevents the snap-back race condition.
+    dirtyIdsRef.current.clear()
+    setHasDirty(false)
     setSaving(false)
-  }, [pendingMoves, isGuest, updatePlantsLocally])
+  }, [isGuest, plants])
+
+  // Discard — reload from server
+  const handleDiscard = useCallback(() => {
+    dirtyIdsRef.current.clear()
+    setHasDirty(false)
+    window.location.reload()
+  }, [])
 
   return (
     <HouseWeatherFrame weather={weather} location={location} onLocationClick={() => navigate('/settings')}>
@@ -145,7 +147,6 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
             onMarkerDrag={handleLocalDrag}
             editMode={false}
             onRoomsChange={handleFloorRoomsChange}
-            hasPendingMoves={hasPendingMoves}
           />
         )}
         {activeFloor && viewMode === '3d' && (
@@ -163,11 +164,11 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
       </div>
 
       {/* Save positions button */}
-      {hasPendingMoves && (
+      {hasDirty && (
         <div className="d-flex align-items-center justify-content-between px-3 py-2 border-top bg-warning bg-opacity-10">
-          <small className="text-muted">{Object.keys(pendingMoves).length} plant{Object.keys(pendingMoves).length !== 1 ? 's' : ''} moved</small>
+          <small className="text-muted">{dirtyIdsRef.current.size} plant{dirtyIdsRef.current.size !== 1 ? 's' : ''} moved</small>
           <div className="d-flex gap-2">
-            <Button variant="outline-secondary" size="sm" onClick={() => setPendingMoves({})}>
+            <Button variant="outline-secondary" size="sm" onClick={handleDiscard}>
               Discard
             </Button>
             <Button variant="primary" size="sm" onClick={handleSaveMoves} disabled={saving}>
