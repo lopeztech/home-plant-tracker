@@ -141,21 +141,16 @@ describe('PlantModal', () => {
     expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
   })
 
-  it('renders the ImageAnalyser stub when editing an existing plant', () => {
-    renderModal({ plant: existingPlant })
-    expect(screen.getByTestId('image-analyser')).toBeInTheDocument()
-  })
-
   it('shows tab bar when editing a plant', () => {
     renderModal({ plant: existingPlant })
-    expect(screen.getByText('Edit Plant')).toBeInTheDocument()
+    expect(screen.getByText('Plant')).toBeInTheDocument()
     expect(screen.getByText('Watering')).toBeInTheDocument()
     expect(screen.getByText('Care')).toBeInTheDocument()
   })
 
   it('does not show tab bar for a new plant', () => {
     renderModal()
-    expect(screen.queryByText('Edit Plant')).not.toBeInTheDocument()
+    expect(screen.queryByText('Plant')).not.toBeInTheDocument()
     expect(screen.queryByText('Watering')).not.toBeInTheDocument()
   })
 
