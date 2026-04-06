@@ -1117,6 +1117,162 @@ app.get('/plants/:id/health-prediction', requireUser, async (req, res) => {
   }
 });
 
+// ── Anomaly detection ────────────────────────────────────────────────────────
+
+function computeAnomalyFeatures(plant) {
+  const wlog = (plant.wateringLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (wlog.length < 3) return null;
+
+  // Rolling 30-day window
+  const thirtyDaysAgo = Date.now() - 30 * 86400000;
+  const recent = wlog.filter(w => new Date(w.date).getTime() > thirtyDaysAgo);
+  const gaps = [];
+  const sorted = [...wlog].sort((a, b) => new Date(a.date) - new Date(b.date));
+  for (let i = 1; i < sorted.length; i++) {
+    gaps.push((new Date(sorted[i].date) - new Date(sorted[i - 1].date)) / 86400000);
+  }
+
+  if (gaps.length === 0) return null;
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const std = Math.sqrt(gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length);
+  const maxGap = Math.max(...gaps);
+  const freq = plant.frequencyDays || 7;
+  const adherence = mean / freq;
+
+  return {
+    mean_days_between_waterings: +mean.toFixed(1),
+    std_days_between_waterings: +std.toFixed(1),
+    max_gap_days: +maxGap.toFixed(1),
+    waterings_in_last_14d: wlog.filter(w => new Date(w.date).getTime() > Date.now() - 14 * 86400000).length,
+    adherence_ratio_30d: +adherence.toFixed(3),
+  };
+}
+
+function detectAnomalyHeuristic(plant) {
+  const features = computeAnomalyFeatures(plant);
+  if (!features) return { isAnomaly: false, score: 0, flags: [], detectedAt: null };
+
+  const freq = plant.frequencyDays || 7;
+  const flags = [];
+  let score = 0;
+
+  // Check for extreme gap
+  if (features.max_gap_days > freq * 2.5) {
+    score += 0.3;
+    flags.push(`Longest gap was ${features.max_gap_days} days (recommended: every ${freq} days)`);
+  }
+
+  // Check for low recent activity
+  if (features.waterings_in_last_14d === 0 && freq <= 14) {
+    score += 0.3;
+    flags.push('No watering events in the last 14 days');
+  }
+
+  // Check for high variance
+  if (features.std_days_between_waterings > freq * 0.8) {
+    score += 0.2;
+    flags.push(`High watering variability (${features.std_days_between_waterings} day std dev)`);
+  }
+
+  // Check adherence
+  if (features.adherence_ratio_30d > 2) {
+    score += 0.2;
+    flags.push(`Watering ${features.adherence_ratio_30d.toFixed(1)}x less often than recommended`);
+  }
+
+  score = Math.min(1, score);
+  const threshold = parseFloat(process.env.ANOMALY_THRESHOLD) || 0.8;
+  const isAnomaly = score >= threshold;
+
+  return {
+    isAnomaly,
+    score: +score.toFixed(2),
+    flags: flags.slice(0, 3),
+    detectedAt: isAnomaly ? new Date().toISOString() : null,
+  };
+}
+
+// Background job: scan all plants for anomalies (Cloud Scheduler target)
+app.post('/ml/anomaly-scan', async (req, res) => {
+  const adminToken = req.headers['x-admin-token'];
+  const expectedToken = process.env.ML_ADMIN_TOKEN;
+  if (!expectedToken || adminToken !== expectedToken) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const endpointId = process.env.ANOMALY_DETECTION_ENDPOINT;
+    const usersSnap = await db.collection('users').get();
+    let scanned = 0;
+    let anomalies = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const plantsSnap = await db.collection('users').doc(userDoc.id).collection('plants').get();
+      for (const plantDoc of plantsSnap.docs) {
+        const plant = plantDoc.data();
+        let result;
+
+        if (endpointId) {
+          try {
+            const features = computeAnomalyFeatures(plant);
+            if (features) {
+              const predictions = await vertexai.predict(endpointId, [features]);
+              if (predictions.length > 0) {
+                const threshold = parseFloat(process.env.ANOMALY_THRESHOLD) || 0.8;
+                result = {
+                  isAnomaly: (predictions[0].score || 0) >= threshold,
+                  score: predictions[0].score || 0,
+                  flags: predictions[0].flags || [],
+                  detectedAt: new Date().toISOString(),
+                };
+              }
+            }
+          } catch (err) {
+            log.warn('Vertex AI anomaly detection failed for plant, using heuristic', { plantId: plantDoc.id, error: err.message });
+          }
+        }
+
+        if (!result) {
+          result = detectAnomalyHeuristic(plant);
+        }
+
+        // Update mlCache
+        const ref = db.collection('users').doc(userDoc.id).collection('plants').doc(plantDoc.id);
+        await ref.set({
+          mlCache: { ...(plant.mlCache || {}), anomaly: { result, cachedAt: new Date().toISOString() } }
+        }, { merge: true });
+
+        scanned++;
+        if (result.isAnomaly) anomalies++;
+      }
+    }
+
+    res.status(200).json({ scanned, anomalies });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User-facing anomaly status
+app.get('/plants/:id/anomaly', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const cached = plant.mlCache?.anomaly?.result;
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
+    // Compute on-demand if no cached result
+    const result = detectAnomalyHeuristic(plant);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/plants/:id', requireUser, async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);

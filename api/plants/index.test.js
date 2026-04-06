@@ -1409,6 +1409,105 @@ describe('GET /plants/:id/health-prediction', () => {
   });
 });
 
+// ── POST /ml/anomaly-scan ────────────────────────────────────────────────────
+
+describe('POST /ml/anomaly-scan', () => {
+  it('returns 403 without admin token', async () => {
+    const res = await request(app).post('/ml/anomaly-scan');
+    expect(res.status).toBe(403);
+  });
+
+  it('scans plants and detects anomalies', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/u1'] = {};
+    store['users/u1/plants/p1'] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).post('/ml/anomaly-scan').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.body.scanned).toBe(1);
+    expect(typeof res.body.anomalies).toBe('number');
+    // Verify cache was written
+    const data = store['users/u1/plants/p1'];
+    expect(data.mlCache.anomaly).toBeTruthy();
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+});
+
+// ── GET /plants/:id/anomaly ─────────────────────────────────────────────────
+
+describe('GET /plants/:id/anomaly', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns cached anomaly result', async () => {
+    const cached = { isAnomaly: true, score: 0.9, flags: ['Big gap'], detectedAt: '2026-03-01T00:00:00.000Z' };
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      mlCache: { anomaly: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.isAnomaly).toBe(true);
+    expect(res.body.score).toBe(0.9);
+    expect(res.body.flags).toEqual(['Big gap']);
+  });
+
+  it('computes on-demand when no cache exists', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(typeof res.body.isAnomaly).toBe('boolean');
+    expect(typeof res.body.score).toBe('number');
+    expect(res.body.flags).toBeInstanceOf(Array);
+  });
+
+  it('detects anomaly for severely under-watered plant', async () => {
+    const longAgo = new Date(Date.now() - 60 * 86400000).toISOString();
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: new Date(Date.now() - 90 * 86400000).toISOString() },
+        { date: new Date(Date.now() - 60 * 86400000).toISOString() },
+        { date: longAgo },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.score).toBeGreaterThan(0);
+    expect(res.body.flags.length).toBeGreaterThan(0);
+  });
+
+  it('returns no anomaly for well-maintained plant', async () => {
+    const now = Date.now();
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: new Date(now - 14 * 86400000).toISOString() },
+        { date: new Date(now - 7 * 86400000).toISOString() },
+        { date: new Date(now - 1 * 86400000).toISOString() },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.isAnomaly).toBe(false);
+  });
+});
+
 // ── gcsPath edge cases ───────────────────────────────────────────────────────
 
 describe('gcsPath — via DELETE /plants/:id', () => {
