@@ -1117,6 +1117,114 @@ app.get('/plants/:id/health-prediction', requireUser, async (req, res) => {
   }
 });
 
+// ── Seasonal pattern recognition ─────────────────────────────────────────────
+
+function getSeasonForHemisphere(date, hemisphere) {
+  const month = new Date(date).getMonth(); // 0-indexed
+  const isNorth = hemisphere !== 'south';
+
+  if (isNorth) {
+    if (month >= 2 && month <= 4) return 'spring';
+    if (month >= 5 && month <= 7) return 'summer';
+    if (month >= 8 && month <= 10) return 'autumn';
+    return 'winter';
+  }
+  // Southern hemisphere: seasons are reversed
+  if (month >= 2 && month <= 4) return 'autumn';
+  if (month >= 5 && month <= 7) return 'winter';
+  if (month >= 8 && month <= 10) return 'spring';
+  return 'summer';
+}
+
+// Default seasonal multipliers per season (species-independent baseline)
+const SEASONAL_MULTIPLIERS = {
+  spring: 1.0,
+  summer: 1.3,
+  autumn: 0.85,
+  winter: 0.7,
+};
+
+function computeSeasonalAdjustment(plant, hemisphere) {
+  const now = new Date();
+  const season = getSeasonForHemisphere(now, hemisphere);
+  const multiplier = SEASONAL_MULTIPLIERS[season];
+  const freq = plant.frequencyDays || 7;
+  const adjustedFreq = Math.max(1, Math.round(freq * (1 / multiplier)));
+  // multiplier > 1 means plant needs MORE water → shorter interval
+  // multiplier < 1 means plant needs LESS water → longer interval
+
+  const species = plant.species || plant.name;
+  const notes = {
+    spring: `${species} is entering active growth — maintain regular watering`,
+    summer: `${species} typically needs ~30% more water in summer due to heat and growth`,
+    autumn: `${species} is slowing down — reduce watering by ~15%`,
+    winter: `${species} typically needs ~30% less water in winter dormancy`,
+  };
+
+  return {
+    season,
+    multiplier,
+    adjustedFrequencyDays: adjustedFreq,
+    note: notes[season],
+    source: 'heuristic',
+  };
+}
+
+app.get('/plants/:id/seasonal-adjustment', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+
+    // Get hemisphere from user config or default to north
+    let hemisphere = 'north';
+    try {
+      const configDoc = await userConfig(req.userId).doc('preferences').get();
+      if (configDoc.exists && configDoc.data().hemisphere) {
+        hemisphere = configDoc.data().hemisphere;
+      }
+    } catch { /* default to north */ }
+
+    const endpointId = process.env.SEASONAL_ADJUSTMENT_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 5) {
+      try {
+        const season = getSeasonForHemisphere(new Date(), hemisphere);
+        const predictions = await vertexai.predict(endpointId, [{
+          species: plant.species || plant.name || '',
+          season,
+          hemisphere,
+        }]);
+
+        if (predictions.length > 0 && predictions[0].multiplier) {
+          const pred = predictions[0];
+          const freq = plant.frequencyDays || 7;
+          result = {
+            season,
+            multiplier: pred.multiplier,
+            adjustedFrequencyDays: Math.max(1, Math.round(freq * (1 / pred.multiplier))),
+            note: pred.note || `Seasonal adjustment for ${plant.species || plant.name}`,
+            source: 'vertex_ai',
+          };
+        }
+      } catch (err) {
+        log.warn('Vertex AI seasonal adjustment failed, using heuristic', { error: err.message });
+      }
+    }
+
+    if (!result) {
+      result = computeSeasonalAdjustment(plant, hemisphere);
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Anomaly detection ────────────────────────────────────────────────────────
 
 function computeAnomalyFeatures(plant) {

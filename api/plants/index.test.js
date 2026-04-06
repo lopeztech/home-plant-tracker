@@ -1409,6 +1409,69 @@ describe('GET /plants/:id/health-prediction', () => {
   });
 });
 
+// ── GET /plants/:id/seasonal-adjustment ──────────────────────────────────────
+
+describe('GET /plants/:id/seasonal-adjustment', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns seasonal adjustment with heuristic', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera Deliciosa', frequencyDays: 10,
+    };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.season).toBeTruthy();
+    expect(res.body.multiplier).toBeGreaterThan(0);
+    expect(res.body.adjustedFrequencyDays).toBeGreaterThan(0);
+    expect(res.body.note).toContain('Monstera Deliciosa');
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('uses hemisphere from user config', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+    };
+    store[`users/${USER_SUB}/config/preferences`] = { hemisphere: 'south' };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    // Season should be valid
+    expect(['spring', 'summer', 'autumn', 'winter']).toContain(res.body.season);
+  });
+
+  it('defaults to north hemisphere when no config', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+    };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('uses Vertex AI when endpoint configured', async () => {
+    process.env.SEASONAL_ADJUSTMENT_ENDPOINT = 'season-ep-1';
+    vertexaiPredictFn = async () => [{ multiplier: 0.65, note: 'Winter dormancy for Monstera' }];
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera', frequencyDays: 10,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+        { date: '2026-01-22T00:00:00.000Z' },
+        { date: '2026-01-29T00:00:00.000Z' },
+        { date: '2026-02-05T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.multiplier).toBe(0.65);
+    expect(res.body.source).toBe('vertex_ai');
+    delete process.env.SEASONAL_ADJUSTMENT_ENDPOINT;
+  });
+});
+
 // ── POST /ml/anomaly-scan ────────────────────────────────────────────────────
 
 describe('POST /ml/anomaly-scan', () => {
