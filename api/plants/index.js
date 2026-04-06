@@ -5,6 +5,7 @@ const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
 const { GoogleGenerativeAI, SchemaType } = require('@google/generative-ai');
 const { jsonrepair } = require('jsonrepair');
+const vertexai = require('./vertexai');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -323,6 +324,18 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+// ── ML status ────────────────────────────────────────────────────────────────
+
+app.get('/ml/status', async (req, res) => {
+  try {
+    const status = await vertexai.checkStatus();
+    const httpCode = status.status === 'ok' ? 200 : status.status === 'unconfigured' ? 503 : 502;
+    res.status(httpCode).json(status);
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
 // ── ML feature engineering ────────────────────────────────────────────────────
 
 function getSeason(dateStr) {
@@ -385,7 +398,22 @@ function buildFeatureRows(plant) {
   return rows;
 }
 
-// Admin-gated ML export — produces NDJSON feature table
+const CSV_COLUMNS = [
+  'species', 'days_between_waterings', 'recommended_frequency',
+  'adherence_ratio', 'health_at_watering', 'health_7d_after',
+  'season', 'consecutive_overdue_days', 'pot_size', 'room',
+];
+
+function rowToCsv(row) {
+  return CSV_COLUMNS.map(c => {
+    const v = row[c] ?? '';
+    const s = String(v);
+    return s.includes(',') || s.includes('"') || s.includes('\n')
+      ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(',');
+}
+
+// Admin-gated ML export — produces NDJSON or CSV, optionally writes to GCS
 app.get('/ml/export', async (req, res) => {
   const adminToken = req.headers['x-admin-token'];
   const expectedToken = process.env.ML_ADMIN_TOKEN;
@@ -393,21 +421,51 @@ app.get('/ml/export', async (req, res) => {
     return res.status(403).json({ error: 'Forbidden' });
   }
 
-  try {
-    // Stream all users' plant data
-    const usersSnap = await db.collection('users').get();
-    res.setHeader('Content-Type', 'application/x-ndjson');
-    res.setHeader('Content-Disposition', `attachment; filename="features-${new Date().toISOString().slice(0, 10)}.ndjson"`);
+  const format = (req.query.format || 'ndjson').toLowerCase();
+  if (format !== 'ndjson' && format !== 'csv') {
+    return res.status(400).json({ error: 'format must be "ndjson" or "csv"' });
+  }
+  const dest = (req.query.dest || 'stream').toLowerCase();
 
+  try {
+    // Collect all feature rows
+    const allRows = [];
+    const usersSnap = await db.collection('users').get();
     for (const userDoc of usersSnap.docs) {
       const plantsSnap = await db.collection('users').doc(userDoc.id).collection('plants').get();
       for (const plantDoc of plantsSnap.docs) {
-        const rows = buildFeatureRows(plantDoc.data());
-        for (const row of rows) {
-          res.write(JSON.stringify(row) + '\n');
-        }
+        allRows.push(...buildFeatureRows(plantDoc.data()));
       }
     }
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    let body;
+    let contentType;
+    let ext;
+
+    if (format === 'csv') {
+      const header = CSV_COLUMNS.join(',');
+      body = header + '\n' + allRows.map(rowToCsv).join('\n') + (allRows.length ? '\n' : '');
+      contentType = 'text/csv';
+      ext = 'csv';
+    } else {
+      body = allRows.map(r => JSON.stringify(r)).join('\n') + (allRows.length ? '\n' : '');
+      contentType = 'application/x-ndjson';
+      ext = 'ndjson';
+    }
+
+    // Write to GCS if requested
+    if (dest === 'gcs') {
+      const bucket = process.env.ML_DATA_BUCKET || 'plant-tracker-ml-data';
+      const filePath = `exports/${dateStr}.${ext}`;
+      await storage.bucket(bucket).file(filePath).save(body, { contentType });
+      return res.status(200).json({ written: `gs://${bucket}/${filePath}`, rows: allRows.length, format });
+    }
+
+    // Stream to response
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="features-${dateStr}.${ext}"`);
+    res.write(body);
     res.end();
   } catch (err) {
     if (!res.headersSent) res.status(500).json({ error: err.message });
@@ -669,6 +727,12 @@ app.put('/plants/:id', requireUser, async (req, res) => {
         reason: body.healthReason || '',
       }];
       updates.healthLog = healthLog;
+
+      // Invalidate health-related ML caches
+      const mlCache = { ...(existing.mlCache || {}) };
+      delete mlCache.healthPrediction;
+      delete mlCache.wateringPattern;
+      updates.mlCache = mlCache;
     }
 
     // Delete old GCS image when replaced with a new one
@@ -697,7 +761,12 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
     const { amount, method } = req.body || {};
     const wateringLog = [...(existing.wateringLog || []), { date: now, note: '', amount: amount || null, method: method || null }];
 
-    await ref.set({ lastWatered: now, wateringLog, updatedAt: now }, { merge: true });
+    // Invalidate ML caches on new watering event
+    const mlCache = { ...(existing.mlCache || {}) };
+    delete mlCache.wateringPattern;
+    delete mlCache.wateringRecommendation;
+    delete mlCache.healthPrediction;
+    await ref.set({ lastWatered: now, wateringLog, updatedAt: now, mlCache }, { merge: true });
 
     const updated = await ref.get();
     const data = { id: updated.id, ...updated.data() };
@@ -767,11 +836,787 @@ function analyseWateringPattern(plant) {
   return { pattern, confidence: +confidence.toFixed(2), contributingFactors: factors };
 }
 
+const ML_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function isCacheValid(cache, key) {
+  if (!cache || !cache[key]) return false;
+  const age = Date.now() - new Date(cache[key].cachedAt).getTime();
+  return age < ML_CACHE_TTL_MS;
+}
+
 app.get('/plants/:id/watering-pattern', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh
+    if (isCacheValid(mlCache, 'wateringPattern')) {
+      return res.status(200).json(mlCache.wateringPattern.result);
+    }
+
+    // Try Vertex AI prediction if endpoint is configured
+    const endpointId = process.env.WATERING_PATTERN_ENDPOINT;
+    let result;
+    if (endpointId && (plant.wateringLog || []).length >= 3) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const predictions = await vertexai.predict(endpointId, [featureRows[featureRows.length - 1]]);
+          if (predictions.length > 0 && predictions[0].pattern) {
+            result = {
+              pattern: predictions[0].pattern,
+              confidence: predictions[0].confidence || 0.8,
+              contributingFactors: predictions[0].contributingFactors || [],
+              source: 'vertex_ai',
+            };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI watering pattern prediction failed, falling back to heuristic', { error: err.message });
+      }
+    }
+
+    // Fall back to heuristic
+    if (!result) {
+      result = { ...analyseWateringPattern(plant), source: 'heuristic' };
+    }
+
+    // Cache the result
+    await ref.set({
+      mlCache: { ...mlCache, wateringPattern: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Smart watering recommendations ──────────────────────────────────────────
+
+const RECOMMENDATION_CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
+
+app.get('/plants/:id/watering-recommendation', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh (48h TTL)
+    if (mlCache.wateringRecommendation) {
+      const age = Date.now() - new Date(mlCache.wateringRecommendation.cachedAt).getTime();
+      if (age < RECOMMENDATION_CACHE_TTL_MS) {
+        return res.status(200).json(mlCache.wateringRecommendation.result);
+      }
+    }
+
+    const endpointId = process.env.WATERING_RECOMMENDATION_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 5) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const latest = featureRows[featureRows.length - 1];
+          const predictions = await vertexai.predict(endpointId, [{
+            ...latest,
+            current_health: plant.health || '',
+            pot_size: plant.potSize || '',
+          }]);
+
+          if (predictions.length > 0 && predictions[0].recommendedFrequencyDays) {
+            const pred = predictions[0];
+            const lastWatered = plant.lastWatered || plant.wateringLog?.slice(-1)[0]?.date;
+            const nextDate = lastWatered
+              ? new Date(new Date(lastWatered).getTime() + pred.recommendedFrequencyDays * 86400000).toISOString().slice(0, 10)
+              : null;
+
+            result = {
+              recommendedFrequencyDays: pred.recommendedFrequencyDays,
+              confidenceInterval: pred.confidenceInterval || [pred.recommendedFrequencyDays - 1, pred.recommendedFrequencyDays + 1],
+              basis: pred.basis || `Based on care history for ${plant.species || plant.name}`,
+              nextWateringDate: nextDate,
+              source: 'vertex_ai',
+            };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI watering recommendation failed, using heuristic', { error: err.message });
+      }
+    }
+
+    // Heuristic fallback: use current frequencyDays with minor adjustments based on health
+    if (!result) {
+      const freq = plant.frequencyDays || 7;
+      const healthLog = plant.healthLog || [];
+      const lastHealth = healthLog.length > 0 ? healthLog[healthLog.length - 1].health : plant.health;
+
+      let recommended = freq;
+      let note = `Based on your current ${freq}-day schedule`;
+      if (lastHealth === 'Poor' || lastHealth === 'Fair') {
+        // Check if over- or under-watering via pattern analysis
+        const pattern = analyseWateringPattern(plant);
+        if (pattern.pattern === 'over_watered') {
+          recommended = Math.min(30, Math.round(freq * 1.3));
+          note = `${plant.species || plant.name} may be over-watered — try extending to every ${recommended} days`;
+        } else if (pattern.pattern === 'under_watered') {
+          recommended = Math.max(1, Math.round(freq * 0.7));
+          note = `${plant.species || plant.name} may need more water — try every ${recommended} days`;
+        }
+      }
+
+      const lastWatered = plant.lastWatered || plant.wateringLog?.slice(-1)[0]?.date;
+      const nextDate = lastWatered
+        ? new Date(new Date(lastWatered).getTime() + recommended * 86400000).toISOString().slice(0, 10)
+        : null;
+
+      result = {
+        recommendedFrequencyDays: recommended,
+        confidenceInterval: [Math.max(1, recommended - 1), recommended + 1],
+        basis: note,
+        nextWateringDate: nextDate,
+        source: 'heuristic',
+      };
+    }
+
+    // Cache the result
+    await ref.set({
+      mlCache: { ...mlCache, wateringRecommendation: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Plant health prediction ──────────────────────────────────────────────────
+
+const HEALTH_RANK = { Excellent: 4, Good: 3, Fair: 2, Poor: 1 };
+const HEALTH_FROM_RANK = { 4: 'Excellent', 3: 'Good', 2: 'Fair', 1: 'Poor' };
+
+function predictHealthHeuristic(plant) {
+  const healthLog = (plant.healthLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const currentHealth = healthLog.length > 0 ? healthLog[healthLog.length - 1].health : plant.health || 'Good';
+  const currentRank = HEALTH_RANK[currentHealth] || 3;
+
+  const keyRisks = [];
+  let trendSlope = 0;
+
+  if (healthLog.length >= 2) {
+    const recent = healthLog.slice(-5);
+    const ranks = recent.map(h => HEALTH_RANK[h.health] || 3);
+    trendSlope = (ranks[ranks.length - 1] - ranks[0]) / recent.length;
+  }
+
+  // Check watering adherence
+  const pattern = analyseWateringPattern(plant);
+  if (pattern.pattern === 'over_watered') {
+    keyRisks.push('Over-watering may lead to root rot');
+    trendSlope -= 0.2;
+  } else if (pattern.pattern === 'under_watered') {
+    keyRisks.push('Under-watering is stressing the plant');
+    trendSlope -= 0.2;
+  } else if (pattern.pattern === 'inconsistent') {
+    keyRisks.push('Inconsistent watering schedule causes stress');
+    trendSlope -= 0.1;
+  }
+
+  // Check days since last watered
+  const lastWatered = plant.lastWatered || (plant.wateringLog || []).slice(-1)[0]?.date;
+  if (lastWatered) {
+    const daysSince = (Date.now() - new Date(lastWatered).getTime()) / 86400000;
+    const freq = plant.frequencyDays || 7;
+    if (daysSince > freq * 2) {
+      keyRisks.push(`Not watered in ${Math.round(daysSince)} days (recommended: every ${freq} days)`);
+      trendSlope -= 0.3;
+    }
+  }
+
+  if (keyRisks.length === 0) keyRisks.push('No significant risk factors detected');
+
+  // Project health 14 days out
+  const projectedRank = Math.max(1, Math.min(4, Math.round(currentRank + trendSlope * 2)));
+  const predictedHealth = HEALTH_FROM_RANK[projectedRank];
+  const trend = trendSlope > 0.1 ? 'improving' : trendSlope < -0.1 ? 'declining' : 'stable';
+
+  return {
+    predictedHealth,
+    probability: trendSlope === 0 ? 0.7 : Math.min(0.85, 0.5 + Math.abs(trendSlope) * 0.5),
+    horizon: '14d',
+    trend,
+    keyRisks,
+    source: 'heuristic',
+  };
+}
+
+app.get('/plants/:id/health-prediction', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh
+    if (isCacheValid(mlCache, 'healthPrediction')) {
+      return res.status(200).json(mlCache.healthPrediction.result);
+    }
+
+    const endpointId = process.env.HEALTH_PREDICTION_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 3) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const latest = featureRows[featureRows.length - 1];
+          const predictions = await vertexai.predict(endpointId, [{
+            ...latest,
+            current_health: plant.health || '',
+            health_trend_30d: (plant.healthLog || []).length >= 2 ? 'available' : 'insufficient',
+          }]);
+
+          if (predictions.length > 0 && predictions[0].predictedHealth) {
+            const pred = predictions[0];
+            result = {
+              predictedHealth: pred.predictedHealth,
+              probability: pred.probability || 0.75,
+              horizon: '14d',
+              trend: pred.trend || 'stable',
+              keyRisks: pred.keyRisks || [],
+              source: 'vertex_ai',
+            };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI health prediction failed, falling back to heuristic', { error: err.message });
+      }
+    }
+
+    if (!result) {
+      result = predictHealthHeuristic(plant);
+    }
+
+    // Cache for 24 hours
+    await ref.set({
+      mlCache: { ...mlCache, healthPrediction: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Seasonal pattern recognition ─────────────────────────────────────────────
+
+function getSeasonForHemisphere(date, hemisphere) {
+  const month = new Date(date).getMonth(); // 0-indexed
+  const isNorth = hemisphere !== 'south';
+
+  if (isNorth) {
+    if (month >= 2 && month <= 4) return 'spring';
+    if (month >= 5 && month <= 7) return 'summer';
+    if (month >= 8 && month <= 10) return 'autumn';
+    return 'winter';
+  }
+  // Southern hemisphere: seasons are reversed
+  if (month >= 2 && month <= 4) return 'autumn';
+  if (month >= 5 && month <= 7) return 'winter';
+  if (month >= 8 && month <= 10) return 'spring';
+  return 'summer';
+}
+
+// Default seasonal multipliers per season (species-independent baseline)
+const SEASONAL_MULTIPLIERS = {
+  spring: 1.0,
+  summer: 1.3,
+  autumn: 0.85,
+  winter: 0.7,
+};
+
+function computeSeasonalAdjustment(plant, hemisphere) {
+  const now = new Date();
+  const season = getSeasonForHemisphere(now, hemisphere);
+  const multiplier = SEASONAL_MULTIPLIERS[season];
+  const freq = plant.frequencyDays || 7;
+  const adjustedFreq = Math.max(1, Math.round(freq * (1 / multiplier)));
+  // multiplier > 1 means plant needs MORE water → shorter interval
+  // multiplier < 1 means plant needs LESS water → longer interval
+
+  const species = plant.species || plant.name;
+  const notes = {
+    spring: `${species} is entering active growth — maintain regular watering`,
+    summer: `${species} typically needs ~30% more water in summer due to heat and growth`,
+    autumn: `${species} is slowing down — reduce watering by ~15%`,
+    winter: `${species} typically needs ~30% less water in winter dormancy`,
+  };
+
+  return {
+    season,
+    multiplier,
+    adjustedFrequencyDays: adjustedFreq,
+    note: notes[season],
+    source: 'heuristic',
+  };
+}
+
+app.get('/plants/:id/seasonal-adjustment', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+
+    // Get hemisphere from user config or default to north
+    let hemisphere = 'north';
+    try {
+      const configDoc = await userConfig(req.userId).doc('preferences').get();
+      if (configDoc.exists && configDoc.data().hemisphere) {
+        hemisphere = configDoc.data().hemisphere;
+      }
+    } catch { /* default to north */ }
+
+    const endpointId = process.env.SEASONAL_ADJUSTMENT_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 5) {
+      try {
+        const season = getSeasonForHemisphere(new Date(), hemisphere);
+        const predictions = await vertexai.predict(endpointId, [{
+          species: plant.species || plant.name || '',
+          season,
+          hemisphere,
+        }]);
+
+        if (predictions.length > 0 && predictions[0].multiplier) {
+          const pred = predictions[0];
+          const freq = plant.frequencyDays || 7;
+          result = {
+            season,
+            multiplier: pred.multiplier,
+            adjustedFrequencyDays: Math.max(1, Math.round(freq * (1 / pred.multiplier))),
+            note: pred.note || `Seasonal adjustment for ${plant.species || plant.name}`,
+            source: 'vertex_ai',
+          };
+        }
+      } catch (err) {
+        log.warn('Vertex AI seasonal adjustment failed, using heuristic', { error: err.message });
+      }
+    }
+
+    if (!result) {
+      result = computeSeasonalAdjustment(plant, hemisphere);
+    }
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Care optimisation score ──────────────────────────────────────────────────
+
+function computeCareScore(plant) {
+  const wlog = (plant.wateringLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const healthLog = (plant.healthLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const freq = plant.frequencyDays || 7;
+
+  // Consistency (30%): low variance in watering intervals
+  let consistency = 50;
+  if (wlog.length >= 3) {
+    const gaps = [];
+    for (let i = 1; i < wlog.length; i++) {
+      gaps.push((new Date(wlog[i].date) - new Date(wlog[i - 1].date)) / 86400000);
+    }
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const std = Math.sqrt(gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length);
+    const cv = mean > 0 ? std / mean : 0;
+    consistency = Math.max(0, Math.min(100, Math.round(100 * (1 - cv))));
+  }
+
+  // Timing (30%): adherence to recommended frequency
+  let timing = 50;
+  if (wlog.length >= 2) {
+    const gaps = [];
+    for (let i = 1; i < wlog.length; i++) {
+      gaps.push((new Date(wlog[i].date) - new Date(wlog[i - 1].date)) / 86400000);
+    }
+    const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+    const deviation = Math.abs(mean - freq) / freq;
+    timing = Math.max(0, Math.min(100, Math.round(100 * (1 - deviation))));
+  }
+
+  // Health outcome (25%): recent health trend
+  let healthOutcome = 50;
+  if (healthLog.length >= 1) {
+    const recent = healthLog.slice(-3);
+    const avg = recent.reduce((sum, h) => sum + (HEALTH_RANK[h.health] || 3), 0) / recent.length;
+    healthOutcome = Math.round((avg / 4) * 100);
+  }
+
+  // Responsiveness (15%): how quickly issues are addressed
+  let responsiveness = 70; // default: assume OK
+  if (healthLog.length >= 2) {
+    const declines = [];
+    for (let i = 1; i < healthLog.length; i++) {
+      const prev = HEALTH_RANK[healthLog[i - 1].health] || 3;
+      const curr = HEALTH_RANK[healthLog[i].health] || 3;
+      if (curr > prev) {
+        // Recovery detected
+        const recoveryTime = (new Date(healthLog[i].date) - new Date(healthLog[i - 1].date)) / 86400000;
+        declines.push(recoveryTime);
+      }
+    }
+    if (declines.length > 0) {
+      const avgRecovery = declines.reduce((a, b) => a + b, 0) / declines.length;
+      responsiveness = Math.max(0, Math.min(100, Math.round(100 * Math.max(0, 1 - avgRecovery / 30))));
+    }
+  }
+
+  const score = Math.round(consistency * 0.3 + timing * 0.3 + healthOutcome * 0.25 + responsiveness * 0.15);
+
+  let grade;
+  if (score >= 90) grade = 'A';
+  else if (score >= 75) grade = 'B';
+  else if (score >= 60) grade = 'C';
+  else if (score >= 45) grade = 'D';
+  else grade = 'F';
+
+  return {
+    score,
+    grade,
+    dimensions: { consistency, timing, healthOutcome, responsiveness },
+    trend: 0,
+    scoredAt: new Date().toISOString(),
+    source: 'heuristic',
+  };
+}
+
+app.get('/plants/:id/care-score', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const mlCache = plant.mlCache || {};
+
+    // Return cached result if fresh
+    if (isCacheValid(mlCache, 'careScore')) {
+      return res.status(200).json(mlCache.careScore.result);
+    }
+
+    const endpointId = process.env.CARE_SCORE_ENDPOINT;
+    let result;
+
+    if (endpointId && (plant.wateringLog || []).length >= 3) {
+      try {
+        const featureRows = buildFeatureRows(plant);
+        if (featureRows.length > 0) {
+          const predictions = await vertexai.predict(endpointId, [featureRows[featureRows.length - 1]]);
+          if (predictions.length > 0 && typeof predictions[0].score === 'number') {
+            result = { ...predictions[0], source: 'vertex_ai', scoredAt: new Date().toISOString() };
+          }
+        }
+      } catch (err) {
+        log.warn('Vertex AI care score failed, using heuristic', { error: err.message });
+      }
+    }
+
+    if (!result) {
+      result = computeCareScore(plant);
+    }
+
+    // Cache
+    await ref.set({
+      mlCache: { ...mlCache, careScore: { result, cachedAt: new Date().toISOString() } }
+    }, { merge: true });
+
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Aggregate care scores for all plants (worst-first)
+app.get('/ml/care-scores', requireUser, async (req, res) => {
+  try {
+    const snapshot = await userPlants(req.userId).get();
+    const scores = [];
+
+    for (const doc of snapshot.docs) {
+      const plant = doc.data();
+      const cached = plant.mlCache?.careScore?.result;
+      const score = cached || computeCareScore(plant);
+      scores.push({
+        plantId: doc.id,
+        name: plant.name,
+        species: plant.species,
+        ...score,
+      });
+    }
+
+    scores.sort((a, b) => a.score - b.score); // worst first
+    res.status(200).json(scores);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Species clustering ───────────────────────────────────────────────────────
+
+// Default cluster assignments based on common plant care patterns
+const DEFAULT_CLUSTERS = {
+  'thirsty_tropicals': {
+    id: 'thirsty_tropicals', label: 'Thirsty Tropicals',
+    species: ['fern', 'calathea', 'peace lily', 'spathiphyllum', 'nephrolepis', 'maidenhair', 'boston fern', 'bird of paradise', 'alocasia'],
+    careProfile: { avgFrequency: 5, droughtTolerance: 'low', humidityNeed: 'high' },
+  },
+  'forgiving_foliage': {
+    id: 'forgiving_foliage', label: 'Forgiving Foliage',
+    species: ['pothos', 'philodendron', 'monstera', 'zz plant', 'zamioculcas', 'rubber plant', 'ficus', 'spider plant', 'dracaena', 'dieffenbachia'],
+    careProfile: { avgFrequency: 8, droughtTolerance: 'medium', humidityNeed: 'medium' },
+  },
+  'drought_tolerant': {
+    id: 'drought_tolerant', label: 'Drought Tolerant',
+    species: ['cactus', 'succulent', 'snake plant', 'sansevieria', 'aloe', 'jade', 'crassula', 'echeveria', 'haworthia', 'agave'],
+    careProfile: { avgFrequency: 14, droughtTolerance: 'high', humidityNeed: 'low' },
+  },
+  'seasonal_bloomers': {
+    id: 'seasonal_bloomers', label: 'Seasonal Bloomers',
+    species: ['orchid', 'phalaenopsis', 'christmas cactus', 'cyclamen', 'african violet', 'begonia', 'anthurium', 'bromeliad'],
+    careProfile: { avgFrequency: 7, droughtTolerance: 'medium', humidityNeed: 'high' },
+  },
+};
+
+function findClusterForSpecies(speciesName) {
+  if (!speciesName) return null;
+  const lower = speciesName.toLowerCase();
+  for (const cluster of Object.values(DEFAULT_CLUSTERS)) {
+    if (cluster.species.some(s => lower.includes(s) || s.includes(lower))) {
+      const similarSpecies = cluster.species.filter(s => s !== lower).slice(0, 5);
+      return {
+        clusterId: cluster.id,
+        clusterLabel: cluster.label,
+        similarSpecies,
+        clusterCareProfile: cluster.careProfile,
+        source: 'default',
+      };
+    }
+  }
+  return null;
+}
+
+app.get('/species/:name/cluster', requireUser, async (req, res) => {
+  try {
+    const speciesName = decodeURIComponent(req.params.name);
+
+    // Check GCS cluster assignments if available
+    const endpointId = process.env.SPECIES_CLUSTER_ENDPOINT;
+    if (endpointId) {
+      try {
+        const predictions = await vertexai.predict(endpointId, [{ species: speciesName }]);
+        if (predictions.length > 0 && predictions[0].clusterId) {
+          return res.status(200).json({ ...predictions[0], source: 'vertex_ai' });
+        }
+      } catch (err) {
+        log.warn('Vertex AI species cluster lookup failed, using defaults', { error: err.message });
+      }
+    }
+
+    // Check Firestore config/clusters for cached assignments
+    try {
+      const clusterDoc = await db.collection('config').doc('clusters').get();
+      if (clusterDoc.exists) {
+        const assignments = clusterDoc.data().assignments || {};
+        const lower = speciesName.toLowerCase();
+        if (assignments[lower]) {
+          return res.status(200).json({ ...assignments[lower], source: 'trained' });
+        }
+      }
+    } catch { /* fall through to defaults */ }
+
+    // Default cluster lookup
+    const result = findClusterForSpecies(speciesName);
+    if (result) {
+      return res.status(200).json(result);
+    }
+
+    // Unknown species — return no cluster
+    res.status(200).json({
+      clusterId: null,
+      clusterLabel: 'Unknown',
+      similarSpecies: [],
+      clusterCareProfile: null,
+      source: 'none',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Anomaly detection ────────────────────────────────────────────────────────
+
+function computeAnomalyFeatures(plant) {
+  const wlog = (plant.wateringLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
+  if (wlog.length < 3) return null;
+
+  // Rolling 30-day window
+  const thirtyDaysAgo = Date.now() - 30 * 86400000;
+  const recent = wlog.filter(w => new Date(w.date).getTime() > thirtyDaysAgo);
+  const gaps = [];
+  const sorted = [...wlog].sort((a, b) => new Date(a.date) - new Date(b.date));
+  for (let i = 1; i < sorted.length; i++) {
+    gaps.push((new Date(sorted[i].date) - new Date(sorted[i - 1].date)) / 86400000);
+  }
+
+  if (gaps.length === 0) return null;
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  const std = Math.sqrt(gaps.reduce((a, b) => a + (b - mean) ** 2, 0) / gaps.length);
+  const maxGap = Math.max(...gaps);
+  const freq = plant.frequencyDays || 7;
+  const adherence = mean / freq;
+
+  return {
+    mean_days_between_waterings: +mean.toFixed(1),
+    std_days_between_waterings: +std.toFixed(1),
+    max_gap_days: +maxGap.toFixed(1),
+    waterings_in_last_14d: wlog.filter(w => new Date(w.date).getTime() > Date.now() - 14 * 86400000).length,
+    adherence_ratio_30d: +adherence.toFixed(3),
+  };
+}
+
+function detectAnomalyHeuristic(plant) {
+  const features = computeAnomalyFeatures(plant);
+  if (!features) return { isAnomaly: false, score: 0, flags: [], detectedAt: null };
+
+  const freq = plant.frequencyDays || 7;
+  const flags = [];
+  let score = 0;
+
+  // Check for extreme gap
+  if (features.max_gap_days > freq * 2.5) {
+    score += 0.3;
+    flags.push(`Longest gap was ${features.max_gap_days} days (recommended: every ${freq} days)`);
+  }
+
+  // Check for low recent activity
+  if (features.waterings_in_last_14d === 0 && freq <= 14) {
+    score += 0.3;
+    flags.push('No watering events in the last 14 days');
+  }
+
+  // Check for high variance
+  if (features.std_days_between_waterings > freq * 0.8) {
+    score += 0.2;
+    flags.push(`High watering variability (${features.std_days_between_waterings} day std dev)`);
+  }
+
+  // Check adherence
+  if (features.adherence_ratio_30d > 2) {
+    score += 0.2;
+    flags.push(`Watering ${features.adherence_ratio_30d.toFixed(1)}x less often than recommended`);
+  }
+
+  score = Math.min(1, score);
+  const threshold = parseFloat(process.env.ANOMALY_THRESHOLD) || 0.8;
+  const isAnomaly = score >= threshold;
+
+  return {
+    isAnomaly,
+    score: +score.toFixed(2),
+    flags: flags.slice(0, 3),
+    detectedAt: isAnomaly ? new Date().toISOString() : null,
+  };
+}
+
+// Background job: scan all plants for anomalies (Cloud Scheduler target)
+app.post('/ml/anomaly-scan', async (req, res) => {
+  const adminToken = req.headers['x-admin-token'];
+  const expectedToken = process.env.ML_ADMIN_TOKEN;
+  if (!expectedToken || adminToken !== expectedToken) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+
+  try {
+    const endpointId = process.env.ANOMALY_DETECTION_ENDPOINT;
+    const usersSnap = await db.collection('users').get();
+    let scanned = 0;
+    let anomalies = 0;
+
+    for (const userDoc of usersSnap.docs) {
+      const plantsSnap = await db.collection('users').doc(userDoc.id).collection('plants').get();
+      for (const plantDoc of plantsSnap.docs) {
+        const plant = plantDoc.data();
+        let result;
+
+        if (endpointId) {
+          try {
+            const features = computeAnomalyFeatures(plant);
+            if (features) {
+              const predictions = await vertexai.predict(endpointId, [features]);
+              if (predictions.length > 0) {
+                const threshold = parseFloat(process.env.ANOMALY_THRESHOLD) || 0.8;
+                result = {
+                  isAnomaly: (predictions[0].score || 0) >= threshold,
+                  score: predictions[0].score || 0,
+                  flags: predictions[0].flags || [],
+                  detectedAt: new Date().toISOString(),
+                };
+              }
+            }
+          } catch (err) {
+            log.warn('Vertex AI anomaly detection failed for plant, using heuristic', { plantId: plantDoc.id, error: err.message });
+          }
+        }
+
+        if (!result) {
+          result = detectAnomalyHeuristic(plant);
+        }
+
+        // Update mlCache
+        const ref = db.collection('users').doc(userDoc.id).collection('plants').doc(plantDoc.id);
+        await ref.set({
+          mlCache: { ...(plant.mlCache || {}), anomaly: { result, cachedAt: new Date().toISOString() } }
+        }, { merge: true });
+
+        scanned++;
+        if (result.isAnomaly) anomalies++;
+      }
+    }
+
+    res.status(200).json({ scanned, anomalies });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// User-facing anomaly status
+app.get('/plants/:id/anomaly', requireUser, async (req, res) => {
   try {
     const doc = await userPlants(req.userId).doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
-    res.status(200).json(analyseWateringPattern(doc.data()));
+
+    const plant = doc.data();
+    const cached = plant.mlCache?.anomaly?.result;
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+
+    // Compute on-demand if no cached result
+    const result = detectAnomalyHeuristic(plant);
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

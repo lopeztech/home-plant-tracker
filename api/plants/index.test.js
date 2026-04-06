@@ -68,6 +68,9 @@ let geminiGenerateFn;
 let storageSignedUrlFn;
 let storageDeleteFn;
 let storageDeletedPaths;
+let storageSavedFiles;
+let vertexaiCheckStatusFn;
+let vertexaiPredictFn;
 
 // ── Load the express app via proxyquire ───────────────────────────────────────
 
@@ -94,6 +97,7 @@ beforeAll(() => {
               return {
                 getSignedUrl: function() { return storageSignedUrlFn.apply(this, arguments); },
                 delete: function() { storageDeletedPaths.push(f); return storageDeleteFn(f); },
+                save: function(content, opts) { storageSavedFiles.push({ path: f, content, opts }); return Promise.resolve(); },
               };
             },
           };
@@ -105,6 +109,11 @@ beforeAll(() => {
         collection(name) { return makeCollRef(name); }
       },
     },
+    './vertexai': {
+      checkStatus: function() { return vertexaiCheckStatusFn(); },
+      predict: function() { return vertexaiPredictFn.apply(this, arguments); },
+      batchPredict: async () => ({}),
+    },
   });
 });
 
@@ -114,6 +123,9 @@ beforeEach(() => {
   storageSignedUrlFn = async () => ['https://signed.example.com/img.jpg'];
   storageDeleteFn = async () => {};
   storageDeletedPaths = [];
+  storageSavedFiles = [];
+  vertexaiCheckStatusFn = async () => ({ status: 'ok', project: 'test', location: 'us-central1', endpointCount: 0 });
+  vertexaiPredictFn = async () => [];
 });
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -146,6 +158,39 @@ describe('GET /health', () => {
     expect(res.headers['x-xss-protection']).toBe('0');
     expect(res.headers['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
     expect(res.headers['permissions-policy']).toBe('camera=(), microphone=(), geolocation=()');
+  });
+});
+
+// ── GET /ml/status ───────────────────────────────────────────────────────────
+
+describe('GET /ml/status', () => {
+  it('returns 200 when Vertex AI is reachable', async () => {
+    vertexaiCheckStatusFn = async () => ({ status: 'ok', project: 'my-project', location: 'us-central1', endpointCount: 2 });
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(res.body.project).toBe('my-project');
+  });
+
+  it('returns 503 when Vertex AI is unconfigured', async () => {
+    vertexaiCheckStatusFn = async () => ({ status: 'unconfigured', project: null, location: 'us-central1', error: 'VERTEX_AI_PROJECT is not set' });
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(503);
+    expect(res.body.status).toBe('unconfigured');
+  });
+
+  it('returns 502 when Vertex AI returns error status', async () => {
+    vertexaiCheckStatusFn = async () => ({ status: 'error', project: 'p', location: 'us-central1', error: 'Network error' });
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(502);
+    expect(res.body.status).toBe('error');
+  });
+
+  it('returns 500 when checkStatus throws', async () => {
+    vertexaiCheckStatusFn = async () => { throw new Error('unexpected'); };
+    const res = await request(app).get('/ml/status');
+    expect(res.status).toBe(500);
+    expect(res.body.status).toBe('error');
   });
 });
 
@@ -817,6 +862,107 @@ describe('GET /plants/:id/watering-pattern — under_watered with health decline
   });
 });
 
+// ── Watering pattern — ML integration & caching ────────────────────────────
+
+describe('GET /plants/:id/watering-pattern — ML & cache', () => {
+  it('includes source: heuristic when no ML endpoint configured', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('uses Vertex AI when endpoint is configured', async () => {
+    process.env.WATERING_PATTERN_ENDPOINT = 'ep-123';
+    vertexaiPredictFn = async () => [{ pattern: 'over_watered', confidence: 0.92, contributingFactors: ['ML detected overwatering'] }];
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-04T00:00:00.000Z' },
+        { date: '2026-01-07T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).toBe('over_watered');
+    expect(res.body.source).toBe('vertex_ai');
+    expect(res.body.confidence).toBe(0.92);
+    delete process.env.WATERING_PATTERN_ENDPOINT;
+  });
+
+  it('falls back to heuristic when Vertex AI prediction fails', async () => {
+    process.env.WATERING_PATTERN_ENDPOINT = 'ep-123';
+    vertexaiPredictFn = async () => { throw new Error('Vertex AI down'); };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('heuristic');
+    delete process.env.WATERING_PATTERN_ENDPOINT;
+  });
+
+  it('returns cached result within TTL', async () => {
+    const cachedResult = { pattern: 'optimal', confidence: 0.85, contributingFactors: ['Cached'], source: 'vertex_ai' };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [{ date: '2026-01-01T00:00:00.000Z' }],
+      mlCache: { wateringPattern: { result: cachedResult, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).toBe('optimal');
+    expect(res.body.source).toBe('vertex_ai');
+    expect(res.body.contributingFactors).toEqual(['Cached']);
+  });
+
+  it('ignores expired cache and recomputes', async () => {
+    const expired = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(); // 25h ago
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      mlCache: { wateringPattern: { result: { pattern: 'stale' }, cachedAt: expired } },
+    };
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pattern).not.toBe('stale');
+    expect(res.body.source).toBe('heuristic');
+  });
+});
+
+describe('POST /plants/:id/water — ML cache invalidation', () => {
+  it('clears wateringPattern cache on new watering event', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [{ date: '2026-01-01T00:00:00.000Z' }],
+      mlCache: { wateringPattern: { result: { pattern: 'optimal' }, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).post('/plants/p1/water').set('Authorization', authHeader()).send({});
+    expect(res.status).toBe(200);
+    // Verify cache was cleared
+    const data = store[plantPath('p1')];
+    expect(data.mlCache.wateringPattern).toBeUndefined();
+  });
+});
+
 // ── Gemini retry logic ───────────────────────────────────────────────────────
 
 describe('POST /analyse — Gemini retry logic', () => {
@@ -941,6 +1087,658 @@ describe('GET /ml/export', () => {
     expect(res.status).toBe(200);
     expect(res.text).toBe('');
     delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('returns CSV format when format=csv', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/user-csv-1'] = { email: 'a@b.com' };
+    store['users/user-csv-1/plants/p1'] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/ml/export?format=csv').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    const lines = res.text.trim().split('\n');
+    expect(lines[0]).toBe('species,days_between_waterings,recommended_frequency,adherence_ratio,health_at_watering,health_7d_after,season,consecutive_overdue_days,pot_size,room');
+    expect(lines[1]).toContain('Nephrolepis');
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('rejects invalid format parameter', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    const res = await request(app).get('/ml/export?format=xml').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('format');
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('writes to GCS when dest=gcs', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    process.env.ML_DATA_BUCKET = 'my-ml-bucket';
+    store['users/user-gcs-1'] = { email: 'a@b.com' };
+    store['users/user-gcs-1/plants/p1'] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-03-01T00:00:00.000Z' },
+        { date: '2026-03-08T00:00:00.000Z' },
+      ],
+      healthLog: [],
+    };
+    const res = await request(app).get('/ml/export?dest=gcs&format=csv').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.body.rows).toBe(1);
+    expect(res.body.format).toBe('csv');
+    expect(res.body.written).toContain('gs://my-ml-bucket/exports/');
+    expect(res.body.written).toContain('.csv');
+    expect(storageSavedFiles.length).toBe(1);
+    expect(storageSavedFiles[0].content).toContain('Nephrolepis');
+    delete process.env.ML_ADMIN_TOKEN;
+    delete process.env.ML_DATA_BUCKET;
+  });
+
+  it('computes correct feature derivation values', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/user-feat-1'] = {};
+    store['users/user-feat-1/plants/p1'] = {
+      name: 'Aloe', species: 'Aloe Vera', frequencyDays: 14, potSize: 'medium', room: 'Living Room',
+      wateringLog: [
+        { date: '2026-06-01T00:00:00.000Z' },
+        { date: '2026-06-08T00:00:00.000Z' },  // 7 days gap (overdue: < 14)
+        { date: '2026-06-22T00:00:00.000Z' },  // 14 days gap (on time)
+      ],
+      healthLog: [
+        { date: '2026-06-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-06-10T00:00:00.000Z', health: 'Fair' },
+      ],
+    };
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
+    const rows = res.text.trim().split('\n').map(l => JSON.parse(l));
+    expect(rows).toHaveLength(2);
+
+    // First row: gap of 7 days, freq 14 → adherence 0.5
+    expect(rows[0].species).toBe('Aloe Vera');
+    expect(rows[0].days_between_waterings).toBe(7);
+    expect(rows[0].adherence_ratio).toBe(0.5);
+    expect(rows[0].season).toBe('summer');
+    expect(rows[0].pot_size).toBe('medium');
+    expect(rows[0].room).toBe('Living Room');
+
+    // Second row: gap of 14 days, freq 14 → adherence 1.0
+    expect(rows[1].days_between_waterings).toBe(14);
+    expect(rows[1].adherence_ratio).toBe(1);
+    expect(rows[1].consecutive_overdue_days).toBe(0);
+
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+
+  it('derives correct season from watering dates', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/user-season-1'] = {};
+    store['users/user-season-1/plants/p1'] = {
+      name: 'Plant', species: 'Test', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },  // winter
+        { date: '2026-03-15T00:00:00.000Z' },  // spring
+        { date: '2026-07-01T00:00:00.000Z' },  // summer
+        { date: '2026-10-15T00:00:00.000Z' },  // autumn
+        { date: '2026-12-25T00:00:00.000Z' },  // winter
+      ],
+      healthLog: [],
+    };
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
+    const rows = res.text.trim().split('\n').map(l => JSON.parse(l));
+    expect(rows.map(r => r.season)).toEqual(['spring', 'summer', 'autumn', 'winter']);
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+});
+
+// ── GET /plants/:id/watering-recommendation ─────────────────────────────────
+
+describe('GET /plants/:id/watering-recommendation', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/plants/p1/watering-recommendation');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns heuristic recommendation for plant with sufficient data', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera Deliciosa', frequencyDays: 10,
+      lastWatered: '2026-03-01T00:00:00.000Z',
+      wateringLog: [
+        { date: '2026-02-01T00:00:00.000Z' },
+        { date: '2026-02-11T00:00:00.000Z' },
+        { date: '2026-02-21T00:00:00.000Z' },
+        { date: '2026-03-01T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-02-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBe(10);
+    expect(res.body.confidenceInterval).toHaveLength(2);
+    expect(res.body.basis).toContain('10-day');
+    expect(res.body.nextWateringDate).toBeTruthy();
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('adjusts recommendation when plant is over-watered and declining', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+      lastWatered: '2026-03-10T00:00:00.000Z',
+      wateringLog: [
+        { date: '2026-03-01T00:00:00.000Z' },
+        { date: '2026-03-03T00:00:00.000Z' },
+        { date: '2026-03-05T00:00:00.000Z' },
+        { date: '2026-03-07T00:00:00.000Z' },
+        { date: '2026-03-10T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-03-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-03-10T00:00:00.000Z', health: 'Poor' },
+      ],
+      health: 'Poor',
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBeGreaterThan(7);
+    expect(res.body.basis).toContain('over-watered');
+  });
+
+  it('uses Vertex AI when endpoint is configured', async () => {
+    process.env.WATERING_RECOMMENDATION_ENDPOINT = 'rec-ep-1';
+    vertexaiPredictFn = async () => [{
+      recommendedFrequencyDays: 8,
+      confidenceInterval: [7, 10],
+      basis: 'Based on 20 waterings — Monstera in spring does best every 8-10 days',
+    }];
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera Deliciosa', frequencyDays: 10,
+      lastWatered: '2026-03-15T00:00:00.000Z',
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-11T00:00:00.000Z' },
+        { date: '2026-01-21T00:00:00.000Z' },
+        { date: '2026-02-01T00:00:00.000Z' },
+        { date: '2026-02-11T00:00:00.000Z' },
+        { date: '2026-03-15T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBe(8);
+    expect(res.body.source).toBe('vertex_ai');
+    delete process.env.WATERING_RECOMMENDATION_ENDPOINT;
+  });
+
+  it('returns cached recommendation within TTL', async () => {
+    const cached = {
+      recommendedFrequencyDays: 9, confidenceInterval: [8, 10],
+      basis: 'Cached', nextWateringDate: '2026-04-01', source: 'vertex_ai',
+    };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      mlCache: { wateringRecommendation: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/watering-recommendation').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBe(9);
+    expect(res.body.source).toBe('vertex_ai');
+  });
+
+  it('invalidates recommendation cache on watering', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [{ date: '2026-01-01T00:00:00.000Z' }],
+      mlCache: {
+        wateringRecommendation: { result: { recommendedFrequencyDays: 9 }, cachedAt: new Date().toISOString() },
+        wateringPattern: { result: { pattern: 'optimal' }, cachedAt: new Date().toISOString() },
+      },
+    };
+    await request(app).post('/plants/p1/water').set('Authorization', authHeader()).send({});
+    const data = store[plantPath('p1')];
+    expect(data.mlCache.wateringRecommendation).toBeUndefined();
+    expect(data.mlCache.wateringPattern).toBeUndefined();
+  });
+});
+
+// ── GET /plants/:id/health-prediction ────────────────────────────────────────
+
+describe('GET /plants/:id/health-prediction', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns heuristic prediction for healthy plant', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera', frequencyDays: 7, health: 'Good',
+      lastWatered: new Date().toISOString(),
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-01-15T00:00:00.000Z', health: 'Good' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.predictedHealth).toBeTruthy();
+    expect(res.body.horizon).toBe('14d');
+    expect(res.body.trend).toBeTruthy();
+    expect(res.body.keyRisks).toBeInstanceOf(Array);
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('detects risk when plant is overdue for watering', async () => {
+    const oldDate = new Date(Date.now() - 30 * 86400000).toISOString(); // 30 days ago
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7, health: 'Good',
+      lastWatered: oldDate,
+      wateringLog: [{ date: oldDate }],
+      healthLog: [{ date: oldDate, health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.keyRisks.some(r => r.includes('Not watered'))).toBe(true);
+    expect(res.body.trend).toBe('declining');
+  });
+
+  it('uses Vertex AI when endpoint configured', async () => {
+    process.env.HEALTH_PREDICTION_ENDPOINT = 'health-ep-1';
+    vertexaiPredictFn = async () => [{
+      predictedHealth: 'Fair', probability: 0.82, trend: 'declining',
+      keyRisks: ['Low watering adherence', 'Season change approaching'],
+    }];
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7, health: 'Good',
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Good' }],
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.predictedHealth).toBe('Fair');
+    expect(res.body.source).toBe('vertex_ai');
+    expect(res.body.keyRisks).toHaveLength(2);
+    delete process.env.HEALTH_PREDICTION_ENDPOINT;
+  });
+
+  it('returns cached prediction within TTL', async () => {
+    const cached = {
+      predictedHealth: 'Good', probability: 0.8, horizon: '14d',
+      trend: 'stable', keyRisks: ['Cached'], source: 'vertex_ai',
+    };
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      mlCache: { healthPrediction: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.predictedHealth).toBe('Good');
+    expect(res.body.keyRisks).toEqual(['Cached']);
+  });
+
+  it('invalidates health prediction cache on health change', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', health: 'Good',
+      mlCache: {
+        healthPrediction: { result: { predictedHealth: 'Good' }, cachedAt: new Date().toISOString() },
+      },
+    };
+    await request(app).put('/plants/p1').set('Authorization', authHeader())
+      .send({ health: 'Fair', healthReason: 'Wilting' });
+    const data = store[plantPath('p1')];
+    expect(data.mlCache.healthPrediction).toBeUndefined();
+  });
+});
+
+// ── GET /plants/:id/seasonal-adjustment ──────────────────────────────────────
+
+describe('GET /plants/:id/seasonal-adjustment', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns seasonal adjustment with heuristic', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera Deliciosa', frequencyDays: 10,
+    };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.season).toBeTruthy();
+    expect(res.body.multiplier).toBeGreaterThan(0);
+    expect(res.body.adjustedFrequencyDays).toBeGreaterThan(0);
+    expect(res.body.note).toContain('Monstera Deliciosa');
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('uses hemisphere from user config', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', species: 'Nephrolepis', frequencyDays: 7,
+    };
+    store[`users/${USER_SUB}/config/preferences`] = { hemisphere: 'south' };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    // Season should be valid
+    expect(['spring', 'summer', 'autumn', 'winter']).toContain(res.body.season);
+  });
+
+  it('defaults to north hemisphere when no config', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+    };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('uses Vertex AI when endpoint configured', async () => {
+    process.env.SEASONAL_ADJUSTMENT_ENDPOINT = 'season-ep-1';
+    vertexaiPredictFn = async () => [{ multiplier: 0.65, note: 'Winter dormancy for Monstera' }];
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera', frequencyDays: 10,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+        { date: '2026-01-22T00:00:00.000Z' },
+        { date: '2026-01-29T00:00:00.000Z' },
+        { date: '2026-02-05T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/seasonal-adjustment').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.multiplier).toBe(0.65);
+    expect(res.body.source).toBe('vertex_ai');
+    delete process.env.SEASONAL_ADJUSTMENT_ENDPOINT;
+  });
+});
+
+// ── GET /plants/:id/care-score ───────────────────────────────────────────────
+
+describe('GET /plants/:id/care-score', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/care-score').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns heuristic care score', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera', species: 'Monstera', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-01-15T00:00:00.000Z', health: 'Good' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/care-score').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.score).toBeGreaterThanOrEqual(0);
+    expect(res.body.score).toBeLessThanOrEqual(100);
+    expect(['A', 'B', 'C', 'D', 'F']).toContain(res.body.grade);
+    expect(res.body.dimensions).toHaveProperty('consistency');
+    expect(res.body.dimensions).toHaveProperty('timing');
+    expect(res.body.dimensions).toHaveProperty('healthOutcome');
+    expect(res.body.dimensions).toHaveProperty('responsiveness');
+    expect(res.body.source).toBe('heuristic');
+  });
+
+  it('scores well-cared-for plant higher than neglected one', async () => {
+    // Well-cared plant
+    store[plantPath('p1')] = {
+      name: 'Good Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+        { date: '2026-01-22T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Excellent' }],
+    };
+    // Neglected plant
+    store[plantPath('p2')] = {
+      name: 'Sad Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-20T00:00:00.000Z' },
+        { date: '2026-02-15T00:00:00.000Z' },
+      ],
+      healthLog: [
+        { date: '2026-01-01T00:00:00.000Z', health: 'Good' },
+        { date: '2026-02-15T00:00:00.000Z', health: 'Poor' },
+      ],
+    };
+    const res1 = await request(app).get('/plants/p1/care-score').set('Authorization', authHeader());
+    const res2 = await request(app).get('/plants/p2/care-score').set('Authorization', authHeader());
+    expect(res1.body.score).toBeGreaterThan(res2.body.score);
+  });
+
+  it('returns cached care score', async () => {
+    const cached = { score: 85, grade: 'B', dimensions: {}, trend: 0, scoredAt: '2026-01-01', source: 'vertex_ai' };
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      mlCache: { careScore: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/care-score').set('Authorization', authHeader());
+    expect(res.body.score).toBe(85);
+    expect(res.body.source).toBe('vertex_ai');
+  });
+});
+
+// ── GET /ml/care-scores ─────────────────────────────────────────────────────
+
+describe('GET /ml/care-scores', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/ml/care-scores');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns scores for all plants sorted worst-first', async () => {
+    store[plantPath('p1')] = {
+      name: 'Good Plant', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Excellent' }],
+    };
+    store[plantPath('p2')] = {
+      name: 'OK Plant', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-20T00:00:00.000Z' },
+        { date: '2026-02-10T00:00:00.000Z' },
+      ],
+      healthLog: [{ date: '2026-01-01T00:00:00.000Z', health: 'Fair' }],
+    };
+    const res = await request(app).get('/ml/care-scores').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+    expect(res.body[0].score).toBeLessThanOrEqual(res.body[1].score);
+    expect(res.body[0]).toHaveProperty('plantId');
+    expect(res.body[0]).toHaveProperty('name');
+  });
+
+  it('returns empty array when no plants', async () => {
+    const res = await request(app).get('/ml/care-scores').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+});
+
+// ── GET /species/:name/cluster ───────────────────────────────────────────────
+
+describe('GET /species/:name/cluster', () => {
+  it('returns cluster for known tropical species', async () => {
+    const res = await request(app).get('/species/Calathea/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('thirsty_tropicals');
+    expect(res.body.clusterLabel).toBe('Thirsty Tropicals');
+    expect(res.body.similarSpecies).toBeInstanceOf(Array);
+    expect(res.body.clusterCareProfile.droughtTolerance).toBe('low');
+  });
+
+  it('returns cluster for known drought-tolerant species', async () => {
+    const res = await request(app).get('/species/Snake%20Plant/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('drought_tolerant');
+  });
+
+  it('returns cluster for known forgiving foliage', async () => {
+    const res = await request(app).get('/species/Monstera%20Deliciosa/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('forgiving_foliage');
+  });
+
+  it('returns unknown for unrecognised species', async () => {
+    const res = await request(app).get('/species/Xyloplantia/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBeNull();
+    expect(res.body.clusterLabel).toBe('Unknown');
+    expect(res.body.source).toBe('none');
+  });
+
+  it('uses Firestore cluster assignments when available', async () => {
+    store['config/clusters'] = {
+      assignments: {
+        'rare plant': { clusterId: 'forgiving_foliage', clusterLabel: 'Forgiving Foliage', similarSpecies: ['pothos'] },
+      },
+    };
+    const res = await request(app).get('/species/Rare%20Plant/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.clusterId).toBe('forgiving_foliage');
+    expect(res.body.source).toBe('trained');
+  });
+
+  it('uses Vertex AI when endpoint configured', async () => {
+    process.env.SPECIES_CLUSTER_ENDPOINT = 'cluster-ep-1';
+    vertexaiPredictFn = async () => [{ clusterId: 'seasonal_bloomers', clusterLabel: 'Seasonal Bloomers', similarSpecies: ['orchid'] }];
+    const res = await request(app).get('/species/Christmas%20Cactus/cluster').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.source).toBe('vertex_ai');
+    delete process.env.SPECIES_CLUSTER_ENDPOINT;
+  });
+});
+
+// ── POST /ml/anomaly-scan ────────────────────────────────────────────────────
+
+describe('POST /ml/anomaly-scan', () => {
+  it('returns 403 without admin token', async () => {
+    const res = await request(app).post('/ml/anomaly-scan');
+    expect(res.status).toBe(403);
+  });
+
+  it('scans plants and detects anomalies', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    store['users/u1'] = {};
+    store['users/u1/plants/p1'] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).post('/ml/anomaly-scan').set('x-admin-token', 'test-token');
+    expect(res.status).toBe(200);
+    expect(res.body.scanned).toBe(1);
+    expect(typeof res.body.anomalies).toBe('number');
+    // Verify cache was written
+    const data = store['users/u1/plants/p1'];
+    expect(data.mlCache.anomaly).toBeTruthy();
+    delete process.env.ML_ADMIN_TOKEN;
+  });
+});
+
+// ── GET /plants/:id/anomaly ─────────────────────────────────────────────────
+
+describe('GET /plants/:id/anomaly', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns cached anomaly result', async () => {
+    const cached = { isAnomaly: true, score: 0.9, flags: ['Big gap'], detectedAt: '2026-03-01T00:00:00.000Z' };
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      mlCache: { anomaly: { result: cached, cachedAt: new Date().toISOString() } },
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.isAnomaly).toBe(true);
+    expect(res.body.score).toBe(0.9);
+    expect(res.body.flags).toEqual(['Big gap']);
+  });
+
+  it('computes on-demand when no cache exists', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-01-08T00:00:00.000Z' },
+        { date: '2026-01-15T00:00:00.000Z' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(typeof res.body.isAnomaly).toBe('boolean');
+    expect(typeof res.body.score).toBe('number');
+    expect(res.body.flags).toBeInstanceOf(Array);
+  });
+
+  it('detects anomaly for severely under-watered plant', async () => {
+    const longAgo = new Date(Date.now() - 60 * 86400000).toISOString();
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: new Date(Date.now() - 90 * 86400000).toISOString() },
+        { date: new Date(Date.now() - 60 * 86400000).toISOString() },
+        { date: longAgo },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.score).toBeGreaterThan(0);
+    expect(res.body.flags.length).toBeGreaterThan(0);
+  });
+
+  it('returns no anomaly for well-maintained plant', async () => {
+    const now = Date.now();
+    store[plantPath('p1')] = {
+      name: 'Fern', frequencyDays: 7,
+      wateringLog: [
+        { date: new Date(now - 14 * 86400000).toISOString() },
+        { date: new Date(now - 7 * 86400000).toISOString() },
+        { date: new Date(now - 1 * 86400000).toISOString() },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/anomaly').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.isAnomaly).toBe(false);
   });
 });
 

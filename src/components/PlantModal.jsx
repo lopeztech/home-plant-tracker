@@ -30,6 +30,12 @@ const SUN_EXPOSURE_OPTIONS = [
   { value: 'part-sun', label: 'Part Sun' },
   { value: 'shade', label: 'Shade' },
 ]
+const POT_SIZES = [
+  { value: 'small', label: 'Small (< 15cm)' },
+  { value: 'medium', label: 'Medium (15-25cm)' },
+  { value: 'large', label: 'Large (25-40cm)' },
+  { value: 'xl', label: 'Extra Large (> 40cm)' },
+]
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function today() { return new Date().toISOString().split('T')[0] }
@@ -273,6 +279,15 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             </Col>
           </Row>
           <Row className="mb-3">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Pot Size</Form.Label>
+                <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {POT_SIZES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
             <Col md={6}>
               <Form.Group>
                 <Form.Label>Sun Exposure</Form.Label>

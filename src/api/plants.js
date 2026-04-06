@@ -41,6 +41,13 @@ export const plantsApi = {
   delete: (id) => request(`/plants/${id}`, { method: 'DELETE' }),
   water: (id) => request(`/plants/${id}/water`, { method: 'POST' }),
   wateringPattern: (id) => request(`/plants/${id}/watering-pattern`),
+  wateringRecommendation: (id) => request(`/plants/${id}/watering-recommendation`),
+  healthPrediction: (id) => request(`/plants/${id}/health-prediction`),
+  anomaly: (id) => request(`/plants/${id}/anomaly`),
+  seasonalAdjustment: (id) => request(`/plants/${id}/seasonal-adjustment`),
+  speciesCluster: (name) => request(`/species/${encodeURIComponent(name)}/cluster`),
+  careScore: (id) => request(`/plants/${id}/care-score`),
+  careScores: () => request('/ml/care-scores'),
   getFloorplan: () => request('/config/floorplan'),
   saveFloorplan: (imageUrl) => request('/config/floorplan', { method: 'PUT', body: JSON.stringify({ imageUrl }) }),
 }
