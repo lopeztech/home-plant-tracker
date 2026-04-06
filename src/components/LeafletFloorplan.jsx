@@ -363,43 +363,83 @@ export default function LeafletFloorplan({
   }, [floor, editMode])
 
   // ── Re-render plant markers when plants list changes ──────────────────────
+  // Track markers by plant ID to update positions without destroying/recreating
+  const plantMarkersRef = useRef({})
+
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
-    markerLayerRef.current.clearLayers()
+    const currentIds = new Set(plants.map((p) => p.id))
+    const existingIds = new Set(Object.keys(plantMarkersRef.current))
+
+    // Remove markers for plants no longer on this floor
+    for (const id of existingIds) {
+      if (!currentIds.has(id)) {
+        markerLayerRef.current.removeLayer(plantMarkersRef.current[id])
+        delete plantMarkersRef.current[id]
+      }
+    }
 
     for (const plant of plants) {
-      const marker = L.marker(toLL(plant.x, plant.y), {
-        icon: makePlantIcon(plant, weather, floors),
-        draggable: true,
-      })
+      const existing = plantMarkersRef.current[plant.id]
 
-      marker.on('click', (e) => {
-        L.DomEvent.stopPropagation(e)
-        markerClickRef.current?.(plant)
-      })
-
-      marker.on('dragend', (e) => {
-        const pos = fromLL(e.target.getLatLng())
-        markerDragRef.current?.(
-          plant,
-          Math.max(2, Math.min(98, pos.x)),
-          Math.max(2, Math.min(98, pos.y)),
+      if (existing) {
+        // Update existing marker position (don't recreate)
+        const currentPos = fromLL(existing.getLatLng())
+        if (Math.abs(currentPos.x - plant.x) > 0.1 || Math.abs(currentPos.y - plant.y) > 0.1) {
+          // Only move if the marker isn't currently being dragged
+          if (!existing.dragging?._enabled || !existing.dragging?._moved) {
+            existing.setLatLng(toLL(plant.x, plant.y))
+          }
+        }
+        // Update icon (status color may change)
+        existing.setIcon(makePlantIcon(plant, weather, floors))
+        // Update tooltip
+        const { color, label } = getWateringStatus(plant, weather, floors)
+        existing.unbindTooltip()
+        existing.bindTooltip(
+          `<div class="lf-plant-tip">
+             <div class="lf-plant-tip-name">${plant.name}</div>
+             ${plant.species ? `<div class="lf-plant-tip-species">${plant.species}</div>` : ''}
+             <div style="color:${color};font-size:11px;margin-top:2px;">${label}</div>
+           </div>`,
+          { direction: 'top', offset: [0, -18], className: 'lf-plant-tip-wrap' },
         )
-      })
+      } else {
+        // Create new marker
+        const marker = L.marker(toLL(plant.x, plant.y), {
+          icon: makePlantIcon(plant, weather, floors),
+          draggable: true,
+        })
 
-      const { color, label } = getWateringStatus(plant, weather, floors)
-      marker.bindTooltip(
-        `<div class="lf-plant-tip">
-           <div class="lf-plant-tip-name">${plant.name}</div>
-           ${plant.species ? `<div class="lf-plant-tip-species">${plant.species}</div>` : ''}
-           <div style="color:${color};font-size:11px;margin-top:2px;">${label}</div>
-         </div>`,
-        { direction: 'top', offset: [0, -18], className: 'lf-plant-tip-wrap' },
-      )
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e)
+          markerClickRef.current?.(plant)
+        })
 
-      marker.addTo(markerLayerRef.current)
+        marker.on('dragend', (e) => {
+          const pos = fromLL(e.target.getLatLng())
+          markerDragRef.current?.(
+            plant,
+            Math.max(2, Math.min(98, pos.x)),
+            Math.max(2, Math.min(98, pos.y)),
+          )
+        })
+
+        const { color, label } = getWateringStatus(plant, weather, floors)
+        marker.bindTooltip(
+          `<div class="lf-plant-tip">
+             <div class="lf-plant-tip-name">${plant.name}</div>
+             ${plant.species ? `<div class="lf-plant-tip-species">${plant.species}</div>` : ''}
+             <div style="color:${color};font-size:11px;margin-top:2px;">${label}</div>
+           </div>`,
+          { direction: 'top', offset: [0, -18], className: 'lf-plant-tip-wrap' },
+        )
+
+        marker.addTo(markerLayerRef.current)
+        plantMarkersRef.current[plant.id] = marker
+      }
     }
   }, [plants, weather, floors])
 
