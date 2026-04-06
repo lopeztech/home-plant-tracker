@@ -1474,7 +1474,7 @@ function computeAnomalyFeatures(plant) {
 
   // Rolling 30-day window
   const thirtyDaysAgo = Date.now() - 30 * 86400000;
-  const recent = wlog.filter(w => new Date(w.date).getTime() > thirtyDaysAgo);
+  const _recent = wlog.filter(w => new Date(w.date).getTime() > thirtyDaysAgo);
   const gaps = [];
   const sorted = [...wlog].sort((a, b) => new Date(a.date) - new Date(b.date));
   for (let i = 1; i < sorted.length; i++) {
