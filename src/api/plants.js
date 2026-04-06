@@ -44,6 +44,14 @@ export const plantsApi = {
   wateringRecommendation: (id) => request(`/plants/${id}/watering-recommendation`),
   healthPrediction: (id) => request(`/plants/${id}/health-prediction`),
   anomaly: (id) => request(`/plants/${id}/anomaly`),
+  diagnostic: async (id, file) => {
+    const base64 = await fileToBase64(file)
+    const [, data] = base64.split(',')
+    return request(`/plants/${id}/diagnostic`, {
+      method: 'POST',
+      body: JSON.stringify({ imageBase64: data, mimeType: file.type }),
+    })
+  },
   seasonalAdjustment: (id) => request(`/plants/${id}/seasonal-adjustment`),
   speciesCluster: (name) => request(`/species/${encodeURIComponent(name)}/cluster`),
   careScore: (id) => request(`/plants/${id}/care-score`),

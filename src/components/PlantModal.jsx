@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
-import { imagesApi, recommendApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 
@@ -56,6 +56,56 @@ const POT_SIZES = [
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function today() { return new Date().toISOString().split('T')[0] }
+
+function DiagnosticUpload({ plantId }) {
+  const [uploading, setUploading] = useState(false)
+  const [result, setResult] = useState(null)
+  const [error, setError] = useState(null)
+  const fileRef = useRef(null)
+
+  const handleFile = async (file) => {
+    if (!file?.type.startsWith('image/')) return
+    setUploading(true); setError(null); setResult(null)
+    try {
+      const data = await plantsApi.diagnostic(plantId, file)
+      setResult(data)
+    } catch (err) { setError(err.message) }
+    finally { setUploading(false) }
+  }
+
+  return (
+    <div>
+      <Button variant="outline-warning" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+        {uploading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#camera"></use></svg>}
+        {uploading ? 'Analysing...' : 'Take / Upload Photo'}
+      </Button>
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" className="d-none"
+        onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = '' }} />
+
+      {error && <p className="text-danger fs-xs mt-2">{error}</p>}
+
+      {result?.analysis && (
+        <div className="mt-2 p-2 rounded border bg-body-tertiary">
+          <div className="d-flex align-items-center gap-2 mb-1">
+            <Badge bg={result.analysis.severity === 'severe' ? 'danger' : result.analysis.severity === 'moderate' ? 'warning' : 'info'}>
+              {result.analysis.severity}
+            </Badge>
+            <strong className="fs-sm">{result.analysis.issue}</strong>
+          </div>
+          <p className="fs-xs text-muted mb-1"><strong>Cause:</strong> {result.analysis.cause}</p>
+          <p className="fs-xs text-muted mb-1"><strong>Treatment:</strong> {result.analysis.treatment}</p>
+          {result.analysis.preventionTips?.length > 0 && (
+            <ul className="list-unstyled mb-0">
+              {result.analysis.preventionTips.map((tip, i) => (
+                <li key={i} className="fs-xs text-muted">• {tip}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onClose }) {
   const isEditing = !!plant
@@ -209,7 +259,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Tab nav for editing */}
       {isEditing && (
         <Nav variant="tabs" className="px-3 pt-2">
-          {[{ id: 'edit', label: 'Edit Plant' }, { id: 'watering', label: 'Watering' }, { id: 'care', label: 'Care' }].map((tab) => (
+          {[{ id: 'edit', label: 'Edit Plant' }, { id: 'watering', label: 'Watering' }, { id: 'gallery', label: 'Gallery' }, { id: 'care', label: 'Care' }].map((tab) => (
             <Nav.Item key={tab.id}>
               <Nav.Link active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}</Nav.Link>
             </Nav.Item>
@@ -451,6 +501,53 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         </Modal.Body>
       )}
 
+      {/* Gallery tab */}
+      {isEditing && activeTab === 'gallery' && (
+        <Modal.Body>
+          {(() => {
+            const photos = [
+              ...(plant.photoLog || []),
+              ...(plant.imageUrl ? [{ url: plant.imageUrl, date: plant.updatedAt || plant.createdAt, type: 'growth', analysis: null }] : []),
+            ].sort((a, b) => new Date(b.date) - new Date(a.date))
+
+            if (photos.length === 0) {
+              return <p className="text-muted text-center py-4">No photos yet. Upload a photo in the Edit tab.</p>
+            }
+
+            return (
+              <div>
+                <h6 className="text-muted text-uppercase fs-xs fw-600 mb-3">Growth Timeline ({photos.length} photos)</h6>
+                <Row className="g-2">
+                  {photos.map((photo, i) => (
+                    <Col xs={6} md={4} key={i}>
+                      <div className="border rounded overflow-hidden position-relative">
+                        <img src={photo.url} alt={`Photo ${i + 1}`} className="w-100" style={{ height: 120, objectFit: 'cover' }} />
+                        <div className="position-absolute bottom-0 start-0 end-0 px-2 py-1" style={{ background: 'rgba(0,0,0,0.6)' }}>
+                          <div className="d-flex align-items-center justify-content-between">
+                            <small className="text-white" style={{ fontSize: '0.65rem' }}>
+                              {new Date(photo.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}
+                            </small>
+                            <Badge bg={photo.type === 'diagnostic' ? 'warning' : 'success'} style={{ fontSize: '0.55rem' }}>
+                              {photo.type === 'diagnostic' ? 'Diagnostic' : 'Growth'}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                      {photo.type === 'diagnostic' && photo.analysis && (
+                        <div className="border border-top-0 rounded-bottom px-2 py-1 bg-body-tertiary">
+                          <small className="fw-500 d-block">{photo.analysis.issue}</small>
+                          <small className="text-muted">{photo.analysis.treatment}</small>
+                        </div>
+                      )}
+                    </Col>
+                  ))}
+                </Row>
+              </div>
+            )
+          })()}
+        </Modal.Body>
+      )}
+
       {/* Care tab */}
       {isEditing && activeTab === 'care' && (
         <Modal.Body>
@@ -493,6 +590,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               )}
             </div>
           )}
+
+          {/* Diagnostic photo */}
+          <hr />
+          <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Diagnose an Issue</h6>
+          <p className="text-muted fs-xs mb-2">Take a photo of a leaf, root, or affected area to identify problems.</p>
+          <DiagnosticUpload plantId={plant.id} />
         </Modal.Body>
       )}
 

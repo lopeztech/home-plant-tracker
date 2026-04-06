@@ -735,10 +735,11 @@ app.put('/plants/:id', requireUser, async (req, res) => {
       updates.mlCache = mlCache;
     }
 
-    // Delete old GCS image when replaced with a new one
+    // Preserve old image in photoLog when replaced with a new one
     if (body.imageUrl && existing.imageUrl && body.imageUrl !== existing.imageUrl) {
-      const oldPath = gcsPath(existing.imageUrl);
-      if (oldPath) await storage.bucket(IMAGES_BUCKET).file(oldPath).delete().catch(() => {});
+      const photoLog = [...(existing.photoLog || [])];
+      photoLog.push({ url: existing.imageUrl, date: existing.updatedAt || new Date().toISOString(), type: 'growth', analysis: null });
+      updates.photoLog = photoLog;
     }
 
     await ref.set(updates, { merge: true });
@@ -772,6 +773,73 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
     const data = { id: updated.id, ...updated.data() };
     data.imageUrl = await signReadUrl(data.imageUrl);
     res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Plant diagnostic photo analysis ──────────────────────────────────────────
+
+const DIAGNOSTIC_PROMPT = `Analyse this photo of a plant issue and respond ONLY with valid JSON:
+{
+  "issue": "Brief description of the problem",
+  "severity": "mild|moderate|severe",
+  "cause": "Most likely cause",
+  "treatment": "Recommended treatment in 1-2 sentences",
+  "preventionTips": ["tip 1", "tip 2"]
+}
+Rules:
+- Look for signs of disease, pests, nutrient deficiency, overwatering, underwatering, sunburn, etc.
+- severity must be exactly one of: mild, moderate, severe
+- preventionTips should have 2 items
+- Respond with JSON only, no markdown or extra text`;
+
+app.post('/plants/:id/diagnostic', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { imageBase64, mimeType } = req.body;
+    if (!imageBase64 || !mimeType) {
+      return res.status(400).json({ error: 'imageBase64 and mimeType are required' });
+    }
+
+    // Upload diagnostic image to GCS
+    const ext = mimeType.split('/')[1] || 'jpg';
+    const filename = `diagnostics/${crypto.randomUUID()}.${ext}`;
+    const file = storage.bucket(IMAGES_BUCKET).file(filename);
+    const buffer = Buffer.from(imageBase64, 'base64');
+    await file.save(buffer, { contentType: mimeType, resumable: false });
+    const publicUrl = `https://storage.googleapis.com/${IMAGES_BUCKET}/${filename}`;
+
+    // Analyse with Gemini
+    let analysis = null;
+    try {
+      const result = await geminiWithRetry({
+        contents: [{
+          role: 'user',
+          parts: [
+            { inlineData: { mimeType, data: imageBase64 } },
+            { text: DIAGNOSTIC_PROMPT },
+          ],
+        }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      });
+      analysis = parseGeminiJson(result.response.text());
+    } catch (err) {
+      console.error('Diagnostic analysis failed:', err.message);
+    }
+
+    // Append to photoLog
+    const existing = doc.data();
+    const photoLog = [...(existing.photoLog || [])];
+    const entry = { url: publicUrl, date: new Date().toISOString(), type: 'diagnostic', analysis };
+    photoLog.push(entry);
+
+    await ref.set({ photoLog, updatedAt: new Date().toISOString() }, { merge: true });
+
+    res.status(200).json(entry);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
