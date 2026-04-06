@@ -193,11 +193,11 @@ export function PlantProvider({ children }) {
     setPlants((prev) => prev.map((p) => (p.id === plant.id ? { ...p, ...updatedFields } : p)))
     if (isGuest) return
     try {
-      const saved = await plantsApi.update(plant.id, updatedFields)
-      setPlants((prev) => prev.map((p) => (p.id === plant.id ? saved : p)))
+      await plantsApi.update(plant.id, updatedFields)
+      // Don't replace with API response — keep the optimistic update
+      // to avoid re-rendering markers with potentially different signed URLs
     } catch (err) {
       console.error('Failed to save plant position:', err)
-      // Don't revert — keep the optimistic position
     }
   }, [isGuest, floors, activeFloorId])
 

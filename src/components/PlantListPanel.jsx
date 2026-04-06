@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react'
-import { Button, FormControl, InputGroup, Badge, ListGroup } from 'react-bootstrap'
+import { Button, FormControl, InputGroup, Badge, ListGroup, Form } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS } from '../utils/watering.js'
 import PlantIcon from './PlantIcon.jsx'
@@ -168,19 +168,17 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
                 />
               </InputGroup>
               {rooms.length > 1 && (
-                <div className="d-flex gap-1 mt-2 flex-wrap">
+                <Form.Select
+                  size="sm"
+                  className="mt-2"
+                  value={roomFilter || ''}
+                  onChange={(e) => setRoomFilter(e.target.value || null)}
+                >
+                  <option value="">All zones ({rooms.length})</option>
                   {rooms.map((room) => (
-                    <Button
-                      key={room}
-                      variant={roomFilter === room ? 'primary' : 'outline-secondary'}
-                      size="sm"
-                      className="py-0 px-2 fs-nano"
-                      onClick={() => setRoomFilter((f) => (f === room ? null : room))}
-                    >
-                      {room}
-                    </Button>
+                    <option key={room} value={room}>{room}</option>
                   ))}
-                </div>
+                </Form.Select>
               )}
             </div>
           )}
