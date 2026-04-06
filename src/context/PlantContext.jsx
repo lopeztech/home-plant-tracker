@@ -249,13 +249,14 @@ export function PlantProvider({ children }) {
     overdueCount, isAnalysingFloorplan,
     isGuest,
     handleSavePlant, handleWaterPlant, handleBatchWater,
-    handleDeletePlant, handleMarkerDrag,
+    handleDeletePlant,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
+    updatePlantsLocally: (updates) => setPlants((prev) => prev.map((p) => updates[p.id] ? { ...p, ...updates[p.id] } : p)),
   }), [
     plants, plantsLoading, plantsError, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
     handleSavePlant, handleWaterPlant, handleBatchWater,
-    handleDeletePlant, handleMarkerDrag,
+    handleDeletePlant,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
   ])
 

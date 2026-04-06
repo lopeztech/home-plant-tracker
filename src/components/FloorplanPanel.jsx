@@ -10,12 +10,14 @@ const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   const {
     plants, floors, activeFloorId, setActiveFloorId,
-    weather, location, handleMarkerDrag, handleFloorRoomsChange,
-    isAnalysingFloorplan,
+    weather, location, handleFloorRoomsChange,
+    isAnalysingFloorplan, isGuest, updatePlantsLocally,
   } = usePlantContext()
 
   const navigate = useNavigate()
   const [viewMode, setViewMode] = useState('2d')
+  const [pendingMoves, setPendingMoves] = useState({}) // { plantId: { x, y, room } }
+  const [saving, setSaving] = useState(false)
 
   const visibleFloors = useMemo(
     () => [...floors].filter((f) => !f.hidden).sort((a, b) => b.order - a.order),
@@ -27,10 +29,52 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
     [floors, activeFloorId],
   )
 
-  const plantsOnFloor = useMemo(
-    () => plants.filter((p) => (p.floor || 'ground') === activeFloorId),
-    [plants, activeFloorId],
-  )
+  // Merge pending moves into plants for display
+  const plantsOnFloor = useMemo(() => {
+    return plants
+      .filter((p) => (p.floor || 'ground') === activeFloorId)
+      .map((p) => pendingMoves[p.id] ? { ...p, ...pendingMoves[p.id] } : p)
+  }, [plants, activeFloorId, pendingMoves])
+
+  const hasPendingMoves = Object.keys(pendingMoves).length > 0
+
+  // Local drag handler — doesn't call API, just stores pending position
+  const handleLocalDrag = useCallback((plant, x, y) => {
+    const floor = floors.find((f) => f.id === (plant.floor || activeFloorId))
+    let room = plant.room
+    if (floor?.rooms?.length) {
+      for (const r of floor.rooms) {
+        if (r.hidden) continue
+        if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) {
+          room = r.name
+          break
+        }
+      }
+    }
+    setPendingMoves((prev) => ({ ...prev, [plant.id]: { x, y, room } }))
+  }, [floors, activeFloorId])
+
+  // Save all pending moves to API
+  const handleSaveMoves = useCallback(async () => {
+    setSaving(true)
+    // Apply to local state first
+    updatePlantsLocally(pendingMoves)
+    // Persist to API
+    if (!isGuest) {
+      try {
+        const { plantsApi } = await import('../api/plants.js')
+        await Promise.all(
+          Object.entries(pendingMoves).map(([id, fields]) =>
+            plantsApi.update(id, fields)
+          )
+        )
+      } catch (err) {
+        console.error('Failed to save plant positions:', err)
+      }
+    }
+    setPendingMoves({})
+    setSaving(false)
+  }, [pendingMoves, isGuest, updatePlantsLocally])
 
   return (
     <HouseWeatherFrame weather={weather} location={location} onLocationClick={() => navigate('/settings')}>
@@ -89,7 +133,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
             weather={weather}
             onFloorplanClick={onFloorplanClick}
             onMarkerClick={onPlantClick}
-            onMarkerDrag={handleMarkerDrag}
+            onMarkerDrag={handleLocalDrag}
             editMode={false}
             onRoomsChange={handleFloorRoomsChange}
           />
@@ -107,6 +151,21 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
           </Suspense>
         )}
       </div>
+
+      {/* Save positions button */}
+      {hasPendingMoves && (
+        <div className="d-flex align-items-center justify-content-between px-3 py-2 border-top bg-warning bg-opacity-10">
+          <small className="text-muted">{Object.keys(pendingMoves).length} plant{Object.keys(pendingMoves).length !== 1 ? 's' : ''} moved</small>
+          <div className="d-flex gap-2">
+            <Button variant="outline-secondary" size="sm" onClick={() => setPendingMoves({})}>
+              Discard
+            </Button>
+            <Button variant="primary" size="sm" onClick={handleSaveMoves} disabled={saving}>
+              {saving ? 'Saving...' : 'Save Positions'}
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Legend */}
       {plantsOnFloor.length > 0 && (
