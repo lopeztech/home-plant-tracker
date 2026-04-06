@@ -183,6 +183,9 @@ export default function SettingsPage() {
   const [newName, setNewName] = useState('')
   const [newType, setNewType] = useState('indoor')
   const [expandedFloorId, setExpandedFloorId] = useState(null)
+  const [locationSearch, setLocationSearch] = useState('')
+  const [locationResults, setLocationResults] = useState([])
+  const [locationSearching, setLocationSearching] = useState(false)
 
   const handleFloorChange = useCallback((updated) => {
     setEditableFloors((prev) => prev.map((f) => (f.id === updated.id ? updated : f)))
@@ -311,20 +314,72 @@ export default function SettingsPage() {
                 )}
                 <div>
                   <span className="d-block mb-1">Location</span>
-                  <div className="d-flex gap-2 align-items-center">
-                    <Form.Control
-                      size="sm"
-                      value={location?.name || ''}
-                      onChange={(e) => setLocation(e.target.value ? { ...location, name: e.target.value } : null)}
-                      placeholder="Auto-detected from GPS"
-                    />
-                    {location?.name && (
-                      <Button variant="outline-danger" size="sm" className="flex-shrink-0" onClick={() => setLocation(null)} title="Reset to GPS">
+                  {location?.name && (
+                    <div className="d-flex align-items-center gap-2 mb-2">
+                      <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#map-pin"></use></svg>
+                      <span className="fw-500">{location.name}</span>
+                      {location.country && <small className="text-muted">({location.country})</small>}
+                      <Button variant="link" size="sm" className="p-0 text-danger ms-auto" onClick={() => setLocation(null)} title="Reset to GPS">
                         <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
                       </Button>
-                    )}
+                    </div>
+                  )}
+                  <div className="d-flex gap-2">
+                    <Form.Control
+                      size="sm"
+                      value={locationSearch}
+                      onChange={(e) => setLocationSearch(e.target.value)}
+                      placeholder="Search city..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          if (!locationSearch.trim()) return
+                          setLocationSearching(true)
+                          fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationSearch.trim())}&count=5&language=en`)
+                            .then((r) => r.json())
+                            .then((data) => setLocationResults(data.results || []))
+                            .catch(() => setLocationResults([]))
+                            .finally(() => setLocationSearching(false))
+                        }
+                      }}
+                    />
+                    <Button
+                      variant="outline-primary"
+                      size="sm"
+                      className="flex-shrink-0"
+                      disabled={!locationSearch.trim() || locationSearching}
+                      onClick={() => {
+                        if (!locationSearch.trim()) return
+                        setLocationSearching(true)
+                        fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationSearch.trim())}&count=5&language=en`)
+                          .then((r) => r.json())
+                          .then((data) => setLocationResults(data.results || []))
+                          .catch(() => setLocationResults([]))
+                          .finally(() => setLocationSearching(false))
+                      }}
+                    >
+                      {locationSearching ? '...' : 'Search'}
+                    </Button>
                   </div>
-                  {location?.country && <small className="text-muted">{location.country}</small>}
+                  {locationResults.length > 0 && (
+                    <div className="mt-2 border rounded">
+                      {locationResults.map((r) => (
+                        <button
+                          key={`${r.id}`}
+                          type="button"
+                          className="btn btn-sm w-100 text-start border-bottom d-flex justify-content-between align-items-center"
+                          onClick={() => {
+                            setLocation({ name: r.name, country: r.country || '', lat: r.latitude, lon: r.longitude })
+                            setLocationResults([])
+                            setLocationSearch('')
+                          }}
+                        >
+                          <span>{r.name}{r.admin1 ? `, ${r.admin1}` : ''}</span>
+                          <small className="text-muted">{r.country}</small>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div></div>
             </div>
