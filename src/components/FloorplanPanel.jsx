@@ -57,7 +57,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   // Save all pending moves to API
   const handleSaveMoves = useCallback(async () => {
     setSaving(true)
-    // Apply to local state first
+    // Apply to context state
     updatePlantsLocally(pendingMoves)
     // Persist to API
     if (!isGuest) {
@@ -72,8 +72,12 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
         console.error('Failed to save plant positions:', err)
       }
     }
-    setPendingMoves({})
-    setSaving(false)
+    // Wait for React to process the context update before clearing
+    // pendingMoves, so plantsOnFloor picks up the new positions
+    requestAnimationFrame(() => {
+      setPendingMoves({})
+      setSaving(false)
+    })
   }, [pendingMoves, isGuest, updatePlantsLocally])
 
   return (
