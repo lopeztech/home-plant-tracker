@@ -156,10 +156,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     try {
       const data = await recommendApi.get(form.name, form.species)
       setCareData(data)
-      // Save recommendations to the plant so they persist
-      if (plant && onSave) {
-        onSave({ ...form, lastWatered: new Date(form.lastWatered).toISOString(), frequencyDays: Number(form.frequencyDays), careRecommendations: data })
-      }
     }
     catch (err) { setCareError(err.message) }
     finally { setCareLoading(false) }
