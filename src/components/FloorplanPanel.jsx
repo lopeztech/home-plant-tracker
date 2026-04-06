@@ -18,8 +18,8 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
   const [viewMode, setViewMode] = useState('2d')
   const [saving, setSaving] = useState(false)
 
-  // Track which plant IDs have been dragged since last save
-  const dirtyIdsRef = useRef(new Set())
+  // Track dragged positions directly — { plantId: { x, y, room } }
+  const dirtyMovesRef = useRef({})
 
   const visibleFloors = useMemo(
     () => [...floors].filter((f) => !f.hidden).sort((a, b) => b.order - a.order),
@@ -51,38 +51,36 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
         }
       }
     }
-    // Update context directly — markers won't snap because draggedIdsRef in LeafletFloorplan protects them
-    updatePlantsLocally({ [plant.id]: { x, y, room } })
-    dirtyIdsRef.current.add(plant.id)
+    const move = { x, y, room }
+    updatePlantsLocally({ [plant.id]: move })
+    dirtyMovesRef.current[plant.id] = move
     setHasDirty(true)
   }, [floors, activeFloorId, updatePlantsLocally])
 
-  // Save dirty plants to API
+  // Save dirty plants to API — uses stored positions, not plants array
   const handleSaveMoves = useCallback(async () => {
     setSaving(true)
-    const ids = [...dirtyIdsRef.current]
-    if (!isGuest && ids.length > 0) {
+    const moves = { ...dirtyMovesRef.current }
+    if (!isGuest && Object.keys(moves).length > 0) {
       try {
         const { plantsApi } = await import('../api/plants.js')
         await Promise.all(
-          ids.map((id) => {
-            const p = plants.find((pl) => pl.id === id)
-            if (!p) return Promise.resolve()
-            return plantsApi.update(id, { x: p.x, y: p.y, room: p.room })
-          })
+          Object.entries(moves).map(([id, { x, y, room }]) =>
+            plantsApi.update(id, { x, y, room })
+          )
         )
       } catch (err) {
         console.error('Failed to save plant positions:', err)
       }
     }
-    dirtyIdsRef.current.clear()
+    dirtyMovesRef.current = {}
     setHasDirty(false)
     setSaving(false)
-  }, [isGuest, plants])
+  }, [isGuest])
 
   // Discard — reload from server
   const handleDiscard = useCallback(() => {
-    dirtyIdsRef.current.clear()
+    dirtyMovesRef.current = {}
     setHasDirty(false)
     window.location.reload()
   }, [])
@@ -166,7 +164,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
       {/* Save positions button */}
       {hasDirty && (
         <div className="d-flex align-items-center justify-content-between px-3 py-2 border-top bg-warning bg-opacity-10">
-          <small className="text-muted">{dirtyIdsRef.current.size} plant{dirtyIdsRef.current.size !== 1 ? 's' : ''} moved</small>
+          <small className="text-muted">{Object.keys(dirtyMovesRef.current).length} plant{Object.keys(dirtyMovesRef.current).length !== 1 ? 's' : ''} moved</small>
           <div className="d-flex gap-2">
             <Button variant="outline-secondary" size="sm" onClick={handleDiscard}>
               Discard
