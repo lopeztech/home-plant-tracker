@@ -242,6 +242,10 @@ export function PlantProvider({ children }) {
     }
   }, [])
 
+  const updatePlantsLocally = useCallback((updates) => {
+    setPlants((prev) => prev.map((p) => updates[p.id] ? { ...p, ...updates[p.id] } : p))
+  }, [])
+
   const value = useMemo(() => ({
     plants, plantsLoading, plantsError,
     floors, activeFloorId, setActiveFloorId,
@@ -251,13 +255,14 @@ export function PlantProvider({ children }) {
     handleSavePlant, handleWaterPlant, handleBatchWater,
     handleDeletePlant,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
-    updatePlantsLocally: (updates) => setPlants((prev) => prev.map((p) => updates[p.id] ? { ...p, ...updates[p.id] } : p)),
+    updatePlantsLocally,
   }), [
     plants, plantsLoading, plantsError, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
     handleSavePlant, handleWaterPlant, handleBatchWater,
     handleDeletePlant,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
+    updatePlantsLocally,
   ])
 
   return <PlantContext.Provider value={value}>{children}</PlantContext.Provider>

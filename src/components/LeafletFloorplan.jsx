@@ -421,10 +421,12 @@ export default function LeafletFloorplan({
         marker.on('dragend', (e) => {
           draggedIdsRef.current.add(plant.id)
           const pos = fromLL(e.target.getLatLng())
+          const newX = Math.max(0, Math.min(100, pos.x))
+          const newY = Math.max(0, Math.min(100, pos.y))
           markerDragRef.current?.(
             plant,
-            Math.max(2, Math.min(98, pos.x)),
-            Math.max(2, Math.min(98, pos.y)),
+            newX,
+            newY,
           )
         })
 
