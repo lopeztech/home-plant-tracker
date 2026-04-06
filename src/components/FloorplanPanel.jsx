@@ -2,6 +2,7 @@ import { useMemo, useState, useCallback, lazy, Suspense, useRef } from 'react'
 import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
 import { useNavigate } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
+import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
 
@@ -57,20 +58,23 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
     setHasDirty(true)
   }, [floors, activeFloorId, updatePlantsLocally])
 
-  // Save dirty plants to API — uses stored positions, not plants array
+  // Save dirty plants to API — uses stored positions from ref
   const handleSaveMoves = useCallback(async () => {
-    setSaving(true)
     const moves = { ...dirtyMovesRef.current }
-    if (!isGuest && Object.keys(moves).length > 0) {
-      try {
-        const { plantsApi } = await import('../api/plants.js')
-        await Promise.all(
-          Object.entries(moves).map(([id, { x, y, room }]) =>
-            plantsApi.update(id, { x, y, room })
-          )
-        )
-      } catch (err) {
-        console.error('Failed to save plant positions:', err)
+    const entries = Object.entries(moves)
+    if (entries.length === 0) return
+
+    setSaving(true)
+    if (!isGuest) {
+      const results = await Promise.allSettled(
+        entries.map(([id, { x, y, room }]) => {
+          console.log(`Saving plant ${id}: x=${x}, y=${y}, room=${room}`)
+          return plantsApi.update(id, { x, y, room })
+        })
+      )
+      const failed = results.filter((r) => r.status === 'rejected')
+      if (failed.length > 0) {
+        console.error('Some saves failed:', failed.map((r) => r.reason?.message))
       }
     }
     dirtyMovesRef.current = {}
