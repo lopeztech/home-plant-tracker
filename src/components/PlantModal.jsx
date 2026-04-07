@@ -47,12 +47,6 @@ const SUN_EXPOSURE_OPTIONS = [
   { value: 'part-sun', label: 'Part Sun' },
   { value: 'shade', label: 'Shade' },
 ]
-const POT_SIZES = [
-  { value: 'small', label: 'Small (< 15cm)' },
-  { value: 'medium', label: 'Medium (15-25cm)' },
-  { value: 'large', label: 'Large (25-40cm)' },
-  { value: 'xl', label: 'Extra Large (> 40cm)' },
-]
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function today() { return new Date().toISOString().split('T')[0] }
@@ -116,7 +110,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     name: '', species: '', room: getRoomAtPosition(floors, activeFloorId, position) || getRoomsFromFloors(floors)[0] || '', floor: activeFloorId ?? 'ground',
     lastWatered: today(), frequencyDays: 7, notes: '',
     imageFile: null, imageUrl: null, health: null, healthReason: null,
-    maturity: null, potSize: null, recommendations: [],
+    maturity: null, recommendations: [],
     waterAmount: null, waterMethod: null,
     irrigationDuration: null, irrigationSchedule: null,
     sunExposure: null, sunHoursPerDay: null,
@@ -137,7 +131,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         frequencyDays: plant.frequencyDays ?? 7, notes: plant.notes || '',
         imageFile: null, imageUrl: plant.imageUrl || null,
         health: plant.health || null, healthReason: plant.healthReason || null,
-        maturity: plant.maturity || null, potSize: plant.potSize || null,
+        maturity: plant.maturity || null,
         recommendations: plant.recommendations || [],
         waterAmount: plant.waterAmount || null, waterMethod: plant.waterMethod || null,
         irrigationDuration: plant.irrigationDuration || null,
@@ -186,7 +180,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       name: form.name.trim(), species: form.species.trim(), room: form.room, floor: form.floor,
       lastWatered: new Date(form.lastWatered).toISOString(), frequencyDays: Number(form.frequencyDays),
       notes: form.notes.trim(), imageUrl, health: form.health, healthReason: form.healthReason,
-      maturity: form.maturity, potSize: form.potSize, recommendations: form.recommendations,
+      maturity: form.maturity, recommendations: form.recommendations,
       waterAmount: form.waterAmount, waterMethod: form.waterMethod,
       irrigationDuration: form.irrigationDuration ? Number(form.irrigationDuration) : null,
       irrigationSchedule: form.irrigationSchedule,
@@ -318,15 +312,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             </Col>
           </Row>
           <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Pot Size</Form.Label>
-                <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {POT_SIZES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
             <Col md={6}>
               <Form.Group>
                 <Form.Label>Sun Exposure</Form.Label>

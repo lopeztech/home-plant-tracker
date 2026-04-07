@@ -729,6 +729,13 @@ app.put('/plants/:id', requireUser, async (req, res) => {
     const { imageBase64: _img, ...body } = req.body;
     const now = new Date().toISOString();
     const existing = doc.data();
+
+    // Normalize imageUrl: strip signed-URL query params so we always store
+    // the raw GCS public URL (prevents phantom photoLog entries on every save)
+    if (body.imageUrl) {
+      try { body.imageUrl = body.imageUrl.split('?')[0]; } catch {}
+    }
+
     const updates = { ...body, updatedAt: now };
 
     // Track health changes in healthLog
@@ -748,9 +755,10 @@ app.put('/plants/:id', requireUser, async (req, res) => {
     }
 
     // Preserve old image in photoLog when replaced with a new one
-    if (body.imageUrl && existing.imageUrl && body.imageUrl !== existing.imageUrl) {
+    const existingImageNorm = existing.imageUrl ? existing.imageUrl.split('?')[0] : null;
+    if (body.imageUrl && existingImageNorm && body.imageUrl !== existingImageNorm) {
       const photoLog = [...(existing.photoLog || [])];
-      photoLog.push({ url: existing.imageUrl, date: existing.updatedAt || new Date().toISOString(), type: 'growth', analysis: null });
+      photoLog.push({ url: existingImageNorm, date: existing.updatedAt || new Date().toISOString(), type: 'growth', analysis: null });
       updates.photoLog = photoLog;
     }
 
