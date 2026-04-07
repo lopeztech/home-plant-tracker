@@ -139,8 +139,8 @@ export default function LeafletFloorplan({
       if (editModeRef.current) return
       const { x, y } = fromLL(e.latlng)
       clickRef.current?.(
-        Math.max(2, Math.min(98, x)),
-        Math.max(2, Math.min(98, y)),
+        Math.round(x * 10) / 10,
+        Math.round(y * 10) / 10,
       )
     })
 
@@ -237,6 +237,23 @@ export default function LeafletFloorplan({
     }
 
     if (floor?.rooms?.length > 0) {
+      // Calculate bounds that encompass all rooms (including outdoor zones with negative coords)
+      let minX = 0, minY = 0, maxX = 100, maxY = 100
+      for (const room of floor.rooms) {
+        if (room.hidden) continue
+        minX = Math.min(minX, room.x)
+        minY = Math.min(minY, room.y)
+        maxX = Math.max(maxX, room.x + room.width)
+        maxY = Math.max(maxY, room.y + room.height)
+      }
+      // Add padding
+      const pad = 5
+      const dynamicBounds = L.latLngBounds(
+        toLL(minX - pad, maxY + pad),
+        toLL(maxX + pad, minY - pad)
+      )
+      map.fitBounds(dynamicBounds)
+
       for (const room of floor.rooms) {
         if (room.hidden) continue
         const roomType = room.type || floor.type || 'interior'
@@ -421,8 +438,8 @@ export default function LeafletFloorplan({
         marker.on('dragend', (e) => {
           draggedIdsRef.current.add(plant.id)
           const pos = fromLL(e.target.getLatLng())
-          const newX = Math.max(0, Math.min(100, pos.x))
-          const newY = Math.max(0, Math.min(100, pos.y))
+          const newX = Math.round(pos.x * 10) / 10
+          const newY = Math.round(pos.y * 10) / 10
           markerDragRef.current?.(
             plant,
             newX,
