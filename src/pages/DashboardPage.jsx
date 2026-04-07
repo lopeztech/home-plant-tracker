@@ -6,7 +6,7 @@ import PlantListPanel from '../components/PlantListPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 
 export default function DashboardPage() {
-  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError, plants } = usePlantContext()
+  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError, plants, plantsLoading } = usePlantContext()
 
   const hasFloors = floors.length > 0
 
@@ -72,7 +72,16 @@ export default function DashboardPage() {
             Failed to load plants: {plantsError}
           </Alert>
         )}
-        {hasFloors ? (
+        {plantsLoading ? (
+          <div className="panel panel-icon">
+            <div className="panel-container"><div className="panel-content text-center py-5">
+              <div className="spinner-border text-primary mb-3" role="status">
+                <span className="visually-hidden">Loading...</span>
+              </div>
+              <p className="text-muted mb-0">Loading your plants and floorplan...</p>
+            </div></div>
+          </div>
+        ) : hasFloors ? (
           <>
             <FloorplanPanel
               onPlantClick={handlePlantClick}
