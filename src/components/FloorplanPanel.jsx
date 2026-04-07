@@ -41,8 +41,9 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
 
   // Drag handler — update context immediately (no API call)
   const handleLocalDrag = useCallback((plant, x, y) => {
-    const floor = floors.find((f) => f.id === (plant.floor || activeFloorId))
-    let room = plant.room
+    // Always use the active floor (not plant.floor which may be stale in closure)
+    const floor = activeFloor
+    let room = null
     if (floor?.rooms?.length) {
       for (const r of floor.rooms) {
         if (r.hidden) continue
@@ -52,11 +53,14 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
         }
       }
     }
+    // Fall back to current room if drop position isn't inside any zone
+    if (!room) room = dirtyMovesRef.current[plant.id]?.room || plant.room
     const move = { x, y, room }
+    console.log(`Drag ${plant.name} to x=${x.toFixed(1)}, y=${y.toFixed(1)}, room=${room}`)
     updatePlantsLocally({ [plant.id]: move })
     dirtyMovesRef.current[plant.id] = move
     setHasDirty(true)
-  }, [floors, activeFloorId, updatePlantsLocally])
+  }, [activeFloor, updatePlantsLocally])
 
   // Save dirty plants to API — uses stored positions from ref
   const handleSaveMoves = useCallback(async () => {
