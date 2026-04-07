@@ -71,7 +71,8 @@ describe('AuthContext', () => {
   // ── Restore from localStorage ─────────────────────────────────────────────
 
   it('restores user from localStorage on mount', async () => {
-    const stored = { name: 'Bob', email: 'bob@example.com', picture: '', sub: '99', credential: 'tok' }
+    const cred = makeCredential({ name: 'Bob', email: 'bob@example.com', picture: '', sub: '99', exp: Math.floor(Date.now() / 1000) + 3600 })
+    const stored = { name: 'Bob', email: 'bob@example.com', picture: '', sub: '99', credential: cred }
     localStorage.setItem('plant_tracker_user', JSON.stringify(stored))
 
     renderWithProvider()
@@ -81,12 +82,13 @@ describe('AuthContext', () => {
   })
 
   it('calls setApiCredential with the stored credential on restore', async () => {
-    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '2', credential: 'stored-tok' }
+    const cred = makeCredential({ name: 'Bob', email: 'b@c.com', picture: '', sub: '2', exp: Math.floor(Date.now() / 1000) + 3600 })
+    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '2', credential: cred }
     localStorage.setItem('plant_tracker_user', JSON.stringify(stored))
 
     renderWithProvider()
     await waitFor(() => expect(screen.getByTestId('loading')).toHaveTextContent('false'))
-    expect(setApiCredential).toHaveBeenCalledWith('stored-tok')
+    expect(setApiCredential).toHaveBeenCalledWith(cred)
   })
 
   it('handles corrupt localStorage gracefully and stays logged out', async () => {
@@ -142,7 +144,8 @@ describe('AuthContext', () => {
   // ── Logout ────────────────────────────────────────────────────────────────
 
   it('clears user after logout', async () => {
-    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '3', credential: 'tok3' }
+    const cred3 = makeCredential({ name: 'Bob', email: 'b@c.com', picture: '', sub: '3', exp: Math.floor(Date.now() / 1000) + 3600 })
+    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '3', credential: cred3 }
     localStorage.setItem('plant_tracker_user', JSON.stringify(stored))
 
     renderWithProvider()
@@ -155,7 +158,8 @@ describe('AuthContext', () => {
   })
 
   it('removes localStorage entry on logout', async () => {
-    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '3', credential: 'tok3' }
+    const cred3 = makeCredential({ name: 'Bob', email: 'b@c.com', picture: '', sub: '3', exp: Math.floor(Date.now() / 1000) + 3600 })
+    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '3', credential: cred3 }
     localStorage.setItem('plant_tracker_user', JSON.stringify(stored))
 
     renderWithProvider()
@@ -167,7 +171,8 @@ describe('AuthContext', () => {
   })
 
   it('calls setApiCredential(null) on logout', async () => {
-    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '3', credential: 'tok3' }
+    const cred3 = makeCredential({ name: 'Bob', email: 'b@c.com', picture: '', sub: '3', exp: Math.floor(Date.now() / 1000) + 3600 })
+    const stored = { name: 'Bob', email: 'b@c.com', picture: '', sub: '3', credential: cred3 }
     localStorage.setItem('plant_tracker_user', JSON.stringify(stored))
 
     renderWithProvider()
