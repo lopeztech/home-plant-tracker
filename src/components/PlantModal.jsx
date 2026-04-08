@@ -51,7 +51,44 @@ const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function today() { return new Date().toISOString().split('T')[0] }
 
-function DiagnosticUpload({ plantId }) {
+function GrowthUpload({ plantId, onComplete }) {
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef(null)
+
+  const handleFile = async (file) => {
+    if (!file?.type.startsWith('image/')) return
+    setUploading(true)
+    try {
+      const imageUrl = await imagesApi.upload(file, 'plants')
+      // Update plant with new photo and re-analyse for maturity/health
+      await plantsApi.update(plantId, { imageUrl })
+      // Analyse the photo for growth status
+      const base64 = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result.split(',')[1])
+        reader.readAsDataURL(file)
+      })
+      try {
+        const analysis = await (await import('../api/plants.js')).analyseApi.analyse(file)
+        onComplete?.(analysis)
+      } catch { /* analysis optional */ }
+    } catch (err) { console.error('Growth upload failed:', err) }
+    finally { setUploading(false) }
+  }
+
+  return (
+    <div>
+      <Button variant="outline-success" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
+        {uploading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#camera"></use></svg>}
+        {uploading ? 'Recording...' : 'Record Growth'}
+      </Button>
+      <input ref={fileRef} type="file" accept="image/*" capture="environment" className="d-none"
+        onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = '' }} />
+    </div>
+  )
+}
+
+function DiagnosticUpload({ plantId, onComplete }) {
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
   const [error, setError] = useState(null)
@@ -63,6 +100,7 @@ function DiagnosticUpload({ plantId }) {
     try {
       const data = await plantsApi.diagnostic(plantId, file)
       setResult(data)
+      onComplete?.(data)
     } catch (err) { setError(err.message) }
     finally { setUploading(false) }
   }
@@ -70,8 +108,8 @@ function DiagnosticUpload({ plantId }) {
   return (
     <div>
       <Button variant="outline-warning" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-        {uploading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#camera"></use></svg>}
-        {uploading ? 'Analysing...' : 'Take / Upload Photo'}
+        {uploading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#search"></use></svg>}
+        {uploading ? 'Analysing...' : 'Diagnose Issue'}
       </Button>
       <input ref={fileRef} type="file" accept="image/*" capture="environment" className="d-none"
         onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = '' }} />
@@ -253,7 +291,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Tab nav for editing */}
       {isEditing && (
         <Nav variant="tabs" className="px-3 pt-2">
-          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'gallery', label: 'Growth' }, { id: 'care', label: 'Care' }].map((tab) => (
+          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'care', label: 'Care' }].map((tab) => (
             <Nav.Item key={tab.id}>
               <Nav.Link active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}</Nav.Link>
             </Nav.Item>
@@ -303,17 +341,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           <Row className="mb-3">
             <Col md={6}>
               <Form.Group>
-                <Form.Label>Maturity</Form.Label>
-                <Form.Select value={form.maturity || ''} onChange={(e) => update('maturity', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {MATURITY_OPTIONS.map((m) => <option key={m} value={m}>{m}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
                 <Form.Label>Sun Exposure</Form.Label>
                 <Form.Select value={form.sunExposure || ''} onChange={(e) => update('sunExposure', e.target.value || null)}>
                   <option value="">— Select —</option>
@@ -329,10 +356,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Form.Group>
             </Col>
           </Row>
-          <Form.Group className="mb-3">
-            <Form.Label>Notes</Form.Label>
-            <Form.Control as="textarea" rows={3} placeholder="Any special care instructions..." value={form.notes} onChange={(e) => update('notes', e.target.value)} />
-          </Form.Group>
         </Modal.Body>
       )}
 
@@ -402,6 +425,18 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Form.Group>
             </Col>
           </Row>
+          {/* Suggested water amount */}
+          {plant.waterAmount && (() => {
+            const adjusted = getAdjustedWaterAmount(plant, weather, floors)
+            return (
+              <div className="d-flex align-items-center gap-2 mb-3 p-2 rounded bg-body-tertiary fs-sm">
+                <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                <span>Suggested: <strong className={adjusted.adjusted ? 'text-primary' : ''}>{adjusted.amount}</strong></span>
+                {adjusted.adjusted && <small className="text-muted">({adjusted.reason})</small>}
+                {!adjusted.adjusted && <small className="text-muted">(base amount)</small>}
+              </div>
+            )
+          })()}
           {onWater && (
             <div className="d-flex justify-content-center mb-3">
               <Button variant="outline-info" size="sm" onClick={() => onWater(plant.id)}>
@@ -428,42 +463,76 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         </Modal.Body>
       )}
 
-      {/* Gallery tab */}
-      {isEditing && activeTab === 'gallery' && (
+      {/* Care tab — consolidated: health, maturity, notes, photos, recommendations */}
+      {isEditing && activeTab === 'care' && (
         <Modal.Body>
+          {/* Health & Maturity (read-only, updated by AI) */}
+          <Row className="mb-3">
+            <Col md={4}>
+              <Form.Group>
+                <Form.Label className="text-muted fs-xs">Health</Form.Label>
+                <div className="fw-500">{form.health || <span className="text-muted">—</span>}</div>
+              </Form.Group>
+            </Col>
+            <Col md={4}>
+              <Form.Group>
+                <Form.Label className="text-muted fs-xs">Maturity</Form.Label>
+                <div className="fw-500">{form.maturity || <span className="text-muted">—</span>}</div>
+              </Form.Group>
+            </Col>
+            <Col md={4} className="d-flex align-items-end">
+              <small className="text-muted fs-xs">Updated automatically from photo analysis</small>
+            </Col>
+          </Row>
+
+          {/* Notes */}
+          <Form.Group className="mb-3">
+            <Form.Label>Notes</Form.Label>
+            <Form.Control as="textarea" rows={2} placeholder="Any special care instructions..." value={form.notes} onChange={(e) => update('notes', e.target.value)} />
+          </Form.Group>
+
+          <hr />
+
+          {/* Take a photo — Record Growth or Diagnose */}
+          <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Take a Photo</h6>
+          <div className="d-flex gap-2 mb-3">
+            <GrowthUpload plantId={plant.id} onComplete={(result) => {
+              if (result?.maturity) update('maturity', result.maturity)
+              if (result?.health) update('health', result.health)
+            }} />
+            <DiagnosticUpload plantId={plant.id} onComplete={(result) => {
+              if (result?.analysis?.severity === 'severe') update('health', 'Poor')
+              else if (result?.analysis?.severity === 'moderate') update('health', 'Fair')
+            }} />
+          </div>
+
+          {/* Photo timeline */}
           {(() => {
             const photoLog = plant.photoLog || []
-            // Only add current imageUrl if it's not already in photoLog
             const hasCurrentImage = plant.imageUrl && !photoLog.some((p) => p.url === plant.imageUrl)
             const photos = [
               ...photoLog,
               ...(hasCurrentImage ? [{ url: plant.imageUrl, date: plant.updatedAt || plant.createdAt, type: 'growth', analysis: null }] : []),
             ].sort((a, b) => new Date(b.date) - new Date(a.date))
 
-            if (photos.length === 0) {
-              return <p className="text-muted text-center py-4">No photos yet. Use the button below to add your first growth photo.</p>
-            }
+            if (photos.length === 0) return null
 
             return (
-              <div>
-                <h6 className="text-muted text-uppercase fs-xs fw-600 mb-3">Growth Timeline ({photos.length} photos)</h6>
-                <Row className="g-2">
+              <>
+                <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Photo History ({photos.length})</h6>
+                <Row className="g-2 mb-3">
                   {photos.map((photo, i) => (
                     <Col xs={6} md={4} key={i}>
-                      <div className="border rounded overflow-hidden position-relative" style={{ minHeight: 150 }}>
-                        <img
-                          src={photo.url}
-                          alt={`Photo ${i + 1}`}
-                          className="w-100"
-                          style={{ height: 150, objectFit: 'cover', display: 'block' }}
-                          onError={(e) => { e.target.style.display = 'none'; e.target.parentElement.classList.add('bg-body-tertiary', 'd-flex', 'align-items-center', 'justify-content-center') }}
-                        />
+                      <div className="border rounded overflow-hidden position-relative" style={{ minHeight: 120 }}>
+                        <img src={photo.url} alt={`Photo ${i + 1}`} className="w-100"
+                          style={{ height: 120, objectFit: 'cover', display: 'block' }}
+                          onError={(e) => { e.target.style.display = 'none' }} />
                         <div className="position-absolute bottom-0 start-0 end-0 px-2 py-1" style={{ background: 'rgba(0,0,0,0.6)' }}>
                           <div className="d-flex align-items-center justify-content-between">
-                            <small className="text-white" style={{ fontSize: '0.65rem' }}>
+                            <small className="text-white" style={{ fontSize: '0.6rem' }}>
                               {new Date(photo.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}
                             </small>
-                            <Badge bg={photo.type === 'diagnostic' ? 'warning' : 'success'} style={{ fontSize: '0.55rem' }}>
+                            <Badge bg={photo.type === 'diagnostic' ? 'warning' : 'success'} style={{ fontSize: '0.5rem' }}>
                               {photo.type === 'diagnostic' ? 'Diagnostic' : 'Growth'}
                             </Badge>
                           </div>
@@ -472,46 +541,29 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                       {photo.type === 'diagnostic' && photo.analysis && (
                         <div className="border border-top-0 rounded-bottom px-2 py-1 bg-body-tertiary">
                           <small className="fw-500 d-block">{photo.analysis.issue}</small>
-                          <small className="text-muted">{photo.analysis.treatment}</small>
                         </div>
                       )}
                     </Col>
                   ))}
                 </Row>
-              </div>
+              </>
             )
           })()}
-        </Modal.Body>
-      )}
 
-      {/* Care tab */}
-      {isEditing && activeTab === 'care' && (
-        <Modal.Body>
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Health</Form.Label>
-                <Form.Select value={form.health || ''} onChange={(e) => update('health', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {HEALTH_OPTIONS.map((h) => <option key={h} value={h}>{h}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6} className="d-flex align-items-end">
-              <small className="text-muted fs-xs">Health is auto-updated when you analyse a plant photo via AI.</small>
-            </Col>
-          </Row>
           <hr />
-          <div className="d-flex justify-content-end mb-3">
+
+          {/* AI Recommendations */}
+          <div className="d-flex align-items-center justify-content-between mb-3">
+            <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">Recommendations</h6>
             <Button variant="outline-success" size="sm" onClick={handleGetRecommendations} disabled={careLoading}>
               {careLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
-              {careLoading ? 'Loading...' : careData ? 'Refresh' : 'Get Recommendations'}
+              {careLoading ? 'Loading...' : careData ? 'Refresh' : 'Get'}
             </Button>
           </div>
           {careError && <p className="text-danger text-center fs-sm">{careError}</p>}
           {careData && (
             <div>
-              {careData.summary && <p className="mb-3">{careData.summary}</p>}
+              {careData.summary && <p className="fs-sm mb-2">{careData.summary}</p>}
               <Row>
                 {[
                   { label: 'Watering', value: careData.watering },
@@ -521,32 +573,23 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   { label: 'Temperature', value: careData.temperature },
                   { label: 'Fertilising', value: careData.fertilising },
                 ].map(({ label, value }) => value && (
-                  <Col md={6} key={label} className="mb-3">
+                  <Col md={6} key={label} className="mb-2">
                     <h6 className="text-muted text-uppercase fs-xs fw-600">{label}</h6>
-                    <p className="fs-sm text-muted mb-0">{value}</p>
+                    <p className="fs-xs text-muted mb-0">{value}</p>
                   </Col>
                 ))}
               </Row>
               {careData.tips?.length > 0 && (
-                <div className="mt-2">
-                  <h6 className="text-muted text-uppercase fs-xs fw-600">Tips</h6>
-                  <ul className="list-unstyled">
-                    {careData.tips.map((tip, i) => (
-                      <li key={i} className="d-flex gap-2 fs-sm text-muted mb-1">
-                        <span className="text-success">•</span>{tip}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+                <ul className="list-unstyled mt-1">
+                  {careData.tips.map((tip, i) => (
+                    <li key={i} className="d-flex gap-2 fs-xs text-muted mb-1">
+                      <span className="text-success">•</span>{tip}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           )}
-
-          {/* Diagnostic photo */}
-          <hr />
-          <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Diagnose an Issue</h6>
-          <p className="text-muted fs-xs mb-2">Take a photo of a leaf, root, or affected area to identify problems.</p>
-          <DiagnosticUpload plantId={plant.id} />
         </Modal.Body>
       )}
 
