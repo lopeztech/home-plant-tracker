@@ -508,12 +508,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
           {/* Photo timeline */}
           {(() => {
-            const photoLog = plant.photoLog || []
-            const hasCurrentImage = plant.imageUrl && !photoLog.some((p) => p.url === plant.imageUrl)
-            const photos = [
-              ...photoLog,
-              ...(hasCurrentImage ? [{ url: plant.imageUrl, date: plant.updatedAt || plant.createdAt, type: 'growth', analysis: null }] : []),
-            ].sort((a, b) => new Date(b.date) - new Date(a.date))
+            const photos = [...(plant.photoLog || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
 
             if (photos.length === 0) return null
 
