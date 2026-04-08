@@ -164,9 +164,9 @@ describe('PlantModal', () => {
     expect(nameInput).toHaveValue('My Monstera')
   })
 
-  it('updates the notes field as the user types', () => {
-    renderModal()
-    selectMode('manual')
+  it('updates the notes field as the user types on the Care tab', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByText('Care'))
     const notes = screen.getByPlaceholderText(/special care/i)
     fireEvent.change(notes, { target: { value: 'Water twice a week' } })
     expect(notes).toHaveValue('Water twice a week')
@@ -317,14 +317,14 @@ describe('PlantModal', () => {
   it('shows Get Recommendations button on the Care tab', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
-    expect(screen.getByRole('button', { name: /get recommendations/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /get|refresh/i })).toBeInTheDocument()
   })
 
   it('calls recommendApi.get and shows results when Get Recommendations is clicked', async () => {
     const { recommendApi } = await import('../api/plants.js')
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
-    fireEvent.click(screen.getByRole('button', { name: /get recommendations/i }))
+    fireEvent.click(screen.getByRole('button', { name: /get|refresh/i }))
     await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis'))
     expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
     expect(screen.getByText('Water weekly.')).toBeInTheDocument()
@@ -335,7 +335,7 @@ describe('PlantModal', () => {
     recommendApi.get.mockRejectedValueOnce(new Error('Network error'))
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
-    fireEvent.click(screen.getByRole('button', { name: /get recommendations/i }))
+    fireEvent.click(screen.getByRole('button', { name: /get|refresh/i }))
     expect(await screen.findByText(/network error/i)).toBeInTheDocument()
   })
 
