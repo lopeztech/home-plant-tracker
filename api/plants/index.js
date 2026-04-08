@@ -82,8 +82,10 @@ const DEFAULT_FLOORS = [
 // Extract the GCS object path from a full public URL or return as-is if already a path.
 function gcsPath(urlOrPath) {
   if (!urlOrPath) return null;
+  // Strip query params (signed URLs have ?X-Goog-* params)
+  const clean = urlOrPath.split('?')[0];
   const prefix = `https://storage.googleapis.com/${IMAGES_BUCKET}/`;
-  return urlOrPath.startsWith(prefix) ? urlOrPath.slice(prefix.length) : urlOrPath;
+  return clean.startsWith(prefix) ? clean.slice(prefix.length) : clean;
 }
 
 // Extract the authenticated user's Google `sub` from the request.
@@ -143,10 +145,18 @@ async function signReadUrl(urlOrPath) {
 async function signPlantData(data) {
   if (data.imageUrl) data.imageUrl = await signReadUrl(data.imageUrl);
   if (data.photoLog?.length) {
-    data.photoLog = await Promise.all(data.photoLog.map(async (entry) => ({
-      ...entry,
-      url: entry.url ? await signReadUrl(entry.url) : entry.url,
-    })));
+    // Deduplicate by normalized URL path and sign valid entries
+    const seen = new Set();
+    const signed = [];
+    for (const entry of data.photoLog) {
+      if (!entry.url) continue;
+      const norm = entry.url.split('?')[0];
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      const url = await signReadUrl(norm);
+      if (url) signed.push({ ...entry, url });
+    }
+    data.photoLog = signed;
   }
   return data;
 }
