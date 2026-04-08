@@ -152,6 +152,7 @@ async function signPlantData(data) {
 }
 
 const app = express();
+app.set('trust proxy', true); // Behind API Gateway — trust X-Forwarded-For
 app.use(express.json({ limit: '10mb' }));
 app.use(cors({
   origin: ['https://plants.lopezcloud.dev', 'http://localhost:5173'],
@@ -174,6 +175,7 @@ app.use(rateLimit({
   max: 200,
   standardHeaders: true,
   legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
   message: { error: 'Too many requests, please try again later.' },
 }));
 app.use((req, _res, next) => {
