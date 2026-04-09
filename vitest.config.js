@@ -12,12 +12,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['src/**'],
-      exclude: ['src/__tests__/**', 'src/**/*.test.*', 'src/**/*.spec.*'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: ['src/__tests__/**', 'src/**/*.test.*', 'src/**/*.spec.*', 'src/data/guestFloorSvgs.js'],
       thresholds: {
-        lines: 30,
+        lines: 35,
         functions: 30,
-        branches: 30,
+        branches: 35,
       },
     },
   },
