@@ -1,0 +1,12 @@
+{
+  "projects": {
+    "default": "home-plant-tracker-lcd"
+  },
+  "targets": {
+    "home-plant-tracker-lcd": {
+      "hosting": {
+        "plant-tracker": ["plant-tracker-prod"]
+      }
+    }
+  }
+}
