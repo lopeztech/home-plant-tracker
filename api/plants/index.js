@@ -312,6 +312,8 @@ const ANALYSE_SCHEMA = {
     recommendations: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
     waterAmount:     { type: SchemaType.STRING },
     waterMethod:     { type: SchemaType.STRING },
+    potSize:         { type: SchemaType.STRING },
+    soilType:        { type: SchemaType.STRING },
   },
   required: ['species', 'frequencyDays', 'health', 'healthReason', 'maturity', 'recommendations'],
 };
@@ -325,16 +327,28 @@ const ANALYSE_PROMPT = `Analyse this plant photo and respond ONLY with valid JSO
   "maturity": "Mature",
   "recommendations": ["tip 1", "tip 2", "tip 3"],
   "waterAmount": "250ml",
-  "waterMethod": "jug"
+  "waterMethod": "jug",
+  "potSize": "medium",
+  "soilType": "standard"
 }
 Rules:
 - health must be exactly one of: Excellent, Good, Fair, Poor
 - maturity must be exactly one of: Seedling, Young, Mature, Established
-- frequencyDays is an integer representing days between waterings
+- frequencyDays is an integer 1-30 representing days between waterings — choose based on species needs:
+  - Succulents & cacti: 10-21 days
+  - Tropical foliage (Monstera, Pothos, Philodendron): 7-10 days
+  - Ferns & calatheas (moisture-loving): 2-5 days
+  - Herbs & annuals: 2-4 days
+  - Snake plants, ZZ plants (drought-tolerant): 10-14 days
+  - Flowering houseplants: 5-7 days
+  - Outdoor garden plants: 2-5 days depending on type
+  - Adjust DOWN for seedlings (need more frequent watering) and UP for established plants
 - recommendations must have exactly 3 items
-- waterAmount is the recommended amount of water per watering (e.g. "100ml", "250ml", "500ml", "1L")
+- waterAmount is the recommended amount of water per watering (e.g. "100ml", "250ml", "500ml", "1L") — scale with pot size
 - waterMethod must be one of: jug, spray, bottom-water, hose, irrigation, drip
 - Choose waterMethod based on plant type: small indoor plants = jug or spray, large indoor = jug or bottom-water, outdoor/garden = hose or irrigation
+- potSize must be one of: small, medium, large, xlarge — estimate from the photo (small < 15cm, medium 15-25cm, large 25-40cm, xlarge > 40cm)
+- soilType must be one of: standard, well-draining, moisture-retaining, succulent-mix, orchid-mix — choose the best match for the species
 - Respond with JSON only, no markdown or extra text`;
 
 const RECOMMEND_SCHEMA = {

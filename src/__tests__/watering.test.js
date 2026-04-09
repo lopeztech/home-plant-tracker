@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency } from '../utils/watering.js'
 
 function makePlant(overrides = {}) {
   return {
@@ -416,5 +416,233 @@ describe('getAdjustedWaterAmount — seasonal adjustments', () => {
     const result = getAdjustedWaterAmount(plant, weather)
     expect(result.adjusted).toBe(false)
     expect(result.amount).toBe('300ml')
+  })
+})
+
+// ── getPlantAttributeMultiplier ────────────────────────────────────────────
+
+describe('getPlantAttributeMultiplier', () => {
+  it('returns 1 for a plant with no attributes set', () => {
+    expect(getPlantAttributeMultiplier({})).toBe(1)
+  })
+
+  it('small pot dries out faster (multiplier > 1)', () => {
+    expect(getPlantAttributeMultiplier({ potSize: 'small' })).toBe(1.2)
+  })
+
+  it('large pot retains moisture (multiplier < 1)', () => {
+    expect(getPlantAttributeMultiplier({ potSize: 'large' })).toBe(0.9)
+  })
+
+  it('well-draining soil dries faster', () => {
+    expect(getPlantAttributeMultiplier({ soilType: 'well-draining' })).toBe(1.15)
+  })
+
+  it('moisture-retaining soil retains moisture', () => {
+    expect(getPlantAttributeMultiplier({ soilType: 'moisture-retaining' })).toBe(0.85)
+  })
+
+  it('full sun dries soil faster', () => {
+    expect(getPlantAttributeMultiplier({ sunExposure: 'full-sun' })).toBe(1.15)
+  })
+
+  it('shade retains moisture', () => {
+    expect(getPlantAttributeMultiplier({ sunExposure: 'shade' })).toBe(0.85)
+  })
+
+  it('stacks all attributes together', () => {
+    // small (1.2) * succulent-mix (1.2) * full-sun (1.15) = 1.656
+    const m = getPlantAttributeMultiplier({ potSize: 'small', soilType: 'succulent-mix', sunExposure: 'full-sun' })
+    expect(m).toBeCloseTo(1.656, 2)
+  })
+
+  it('stacks moisture-retaining attributes', () => {
+    // xlarge (0.85) * moisture-retaining (0.85) * shade (0.85) = 0.614
+    const m = getPlantAttributeMultiplier({ potSize: 'xlarge', soilType: 'moisture-retaining', sunExposure: 'shade' })
+    expect(m).toBeCloseTo(0.614, 2)
+  })
+})
+
+// ── getWateringStatus — plant attribute adjustments ────────────────────────
+
+describe('getWateringStatus — plant attribute adjustments', () => {
+  it('small pot + full sun → waters sooner than default', () => {
+    const base = makePlant({ frequencyDays: 10 })
+    const withAttrs = makePlant({ frequencyDays: 10, potSize: 'small', sunExposure: 'full-sun' })
+    const statusBase = getWateringStatus(base)
+    const statusAttrs = getWateringStatus(withAttrs)
+    expect(statusAttrs.daysUntil).toBeLessThan(statusBase.daysUntil)
+  })
+
+  it('large pot + shade → waters later than default', () => {
+    const base = makePlant({ frequencyDays: 7 })
+    const withAttrs = makePlant({ frequencyDays: 7, potSize: 'large', sunExposure: 'shade' })
+    const statusBase = getWateringStatus(base)
+    const statusAttrs = getWateringStatus(withAttrs)
+    expect(statusAttrs.daysUntil).toBeGreaterThanOrEqual(statusBase.daysUntil)
+  })
+
+  it('succulent-mix soil shortens effective interval', () => {
+    const base = makePlant({ frequencyDays: 14 })
+    const withSoil = makePlant({ frequencyDays: 14, soilType: 'succulent-mix' })
+    const statusBase = getWateringStatus(base)
+    const statusSoil = getWateringStatus(withSoil)
+    expect(statusSoil.daysUntil).toBeLessThanOrEqual(statusBase.daysUntil)
+  })
+})
+
+// ── getWateringStatus — indoor humidity adjustments ────────────────────────
+
+describe('getWateringStatus — indoor humidity', () => {
+  it('dry indoor air (< 30%) reduces effective interval by 1 day', () => {
+    const plant = makePlant({ frequencyDays: 7 })
+    const dryWeather = {
+      current: { temp: 22, condition: { sky: 'clear' }, humidity: 20 },
+      days: [],
+    }
+    const normalWeather = {
+      current: { temp: 22, condition: { sky: 'clear' }, humidity: 50 },
+      days: [],
+    }
+    const dry = getWateringStatus(plant, dryWeather)
+    const normal = getWateringStatus(plant, normalWeather)
+    expect(dry.daysUntil).toBeLessThan(normal.daysUntil)
+    expect(dry.note).toBe('Dry air — watering sooner')
+  })
+
+  it('does not apply dry air adjustment to outdoor plants', () => {
+    const plant = makePlant({ frequencyDays: 7, room: 'Garden' })
+    const dryWeather = {
+      current: { temp: 22, condition: { sky: 'clear' }, humidity: 20 },
+      days: [],
+    }
+    const status = getWateringStatus(plant, dryWeather)
+    expect(status.note).not.toBe('Dry air — watering sooner')
+  })
+
+  it('heat note takes priority over dry air note', () => {
+    const plant = makePlant({ frequencyDays: 7 })
+    const weather = {
+      current: { temp: 36, condition: { sky: 'clear' }, humidity: 20 },
+      days: [],
+    }
+    const status = getWateringStatus(plant, weather)
+    expect(status.note).toMatch(/Very hot/)
+  })
+})
+
+// ── getAdjustedWaterAmount — plant attributes + humidity ───────────────────
+
+describe('getAdjustedWaterAmount — plant attributes', () => {
+  it('small pot + full sun increases water amount', () => {
+    const plant = { waterAmount: '200ml', room: 'Living Room', floor: 'ground', potSize: 'small', sunExposure: 'full-sun' }
+    const result = getAdjustedWaterAmount(plant)
+    expect(result.adjusted).toBe(true)
+    expect(result.multiplier).toBeGreaterThan(1)
+    expect(parseInt(result.amount)).toBeGreaterThan(200)
+  })
+
+  it('large pot + shade + moisture-retaining decreases water amount', () => {
+    const plant = { waterAmount: '500ml', room: 'Living Room', floor: 'ground', potSize: 'large', soilType: 'moisture-retaining', sunExposure: 'shade' }
+    const result = getAdjustedWaterAmount(plant)
+    expect(result.adjusted).toBe(true)
+    expect(result.multiplier).toBeLessThan(1)
+    expect(parseInt(result.amount)).toBeLessThan(500)
+  })
+
+  it('dry indoor air increases water amount by 15%', () => {
+    const plant = { waterAmount: '200ml', room: 'Living Room', floor: 'ground' }
+    const weather = {
+      current: { temp: 22, condition: { sky: 'clear' }, humidity: 20 },
+      days: [],
+    }
+    const result = getAdjustedWaterAmount(plant, weather)
+    expect(result.adjusted).toBe(true)
+    expect(result.amount).toBe('230ml') // 200 * 1.15 = 230
+  })
+
+  it('does not apply dry air bonus to outdoor plants', () => {
+    const plant = { waterAmount: '200ml', room: 'Garden', floor: 'ground' }
+    const weather = {
+      current: { temp: 22, condition: { sky: 'clear' }, humidity: 20 },
+      days: [],
+    }
+    const result = getAdjustedWaterAmount(plant, weather)
+    expect(result.adjusted).toBe(false)
+  })
+})
+
+// ── getSuggestedFrequency — adaptive frequency ─────────────────────────────
+
+describe('getSuggestedFrequency', () => {
+  function makeLog(count, gapDays, startDate = '2026-01-01T09:00:00Z') {
+    const log = []
+    let d = new Date(startDate)
+    for (let i = 0; i < count; i++) {
+      log.push({ date: d.toISOString(), note: '' })
+      d = new Date(d.getTime() + gapDays * 86400000)
+    }
+    return log
+  }
+
+  it('returns null with fewer than 5 watering events', () => {
+    const plant = { frequencyDays: 7, wateringLog: makeLog(3, 7) }
+    expect(getSuggestedFrequency(plant)).toBeNull()
+  })
+
+  it('suggests decreasing frequency when user waters more often and plant is healthy', () => {
+    // Schedule says 14d but user waters every ~7d, plant is Good
+    const plant = {
+      frequencyDays: 14,
+      wateringLog: makeLog(8, 7),
+      health: 'Good',
+      healthLog: [{ date: '2026-02-01T09:00:00Z', health: 'Good', reason: 'Healthy' }],
+    }
+    const suggestion = getSuggestedFrequency(plant)
+    expect(suggestion).not.toBeNull()
+    expect(suggestion.direction).toBe('decrease')
+    expect(suggestion.suggestedDays).toBe(7)
+  })
+
+  it('suggests increasing frequency when user waters less often and plant is healthy', () => {
+    // Schedule says 5d but user waters every ~10d, plant is Good
+    const plant = {
+      frequencyDays: 5,
+      wateringLog: makeLog(8, 10),
+      health: 'Good',
+      healthLog: [{ date: '2026-02-01T09:00:00Z', health: 'Good', reason: 'Healthy' }],
+    }
+    const suggestion = getSuggestedFrequency(plant)
+    expect(suggestion).not.toBeNull()
+    expect(suggestion.direction).toBe('increase')
+    expect(suggestion.suggestedDays).toBe(10)
+  })
+
+  it('suggests increasing frequency when health declines despite regular watering', () => {
+    // User follows the 7d schedule, but health declined from Good to Fair
+    const plant = {
+      frequencyDays: 7,
+      wateringLog: makeLog(8, 7),
+      health: 'Fair',
+      healthLog: [
+        { date: '2026-01-15T09:00:00Z', health: 'Good', reason: 'Fine' },
+        { date: '2026-02-15T09:00:00Z', health: 'Fair', reason: 'Yellowing' },
+      ],
+    }
+    const suggestion = getSuggestedFrequency(plant)
+    expect(suggestion).not.toBeNull()
+    expect(suggestion.direction).toBe('increase')
+    expect(suggestion.suggestedDays).toBeGreaterThan(7)
+    expect(suggestion.reason).toMatch(/over-watering/)
+  })
+
+  it('returns null when user follows schedule and plant is healthy', () => {
+    const plant = {
+      frequencyDays: 7,
+      wateringLog: makeLog(8, 7),
+      health: 'Good',
+      healthLog: [{ date: '2026-02-01T09:00:00Z', health: 'Good', reason: 'Fine' }],
+    }
+    expect(getSuggestedFrequency(plant)).toBeNull()
   })
 })

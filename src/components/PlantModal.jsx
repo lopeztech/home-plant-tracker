@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi } from '../api/plants.js'
-import { getWateringStatus, getAdjustedWaterAmount } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 
 // Derive rooms from configured floors
@@ -46,6 +46,19 @@ const SUN_EXPOSURE_OPTIONS = [
   { value: 'full-sun', label: 'Full Sun' },
   { value: 'part-sun', label: 'Part Sun' },
   { value: 'shade', label: 'Shade' },
+]
+const POT_SIZE_OPTIONS = [
+  { value: 'small', label: 'Small (< 15cm)' },
+  { value: 'medium', label: 'Medium (15–25cm)' },
+  { value: 'large', label: 'Large (25–40cm)' },
+  { value: 'xlarge', label: 'X-Large (> 40cm)' },
+]
+const SOIL_TYPE_OPTIONS = [
+  { value: 'standard', label: 'Standard potting mix' },
+  { value: 'well-draining', label: 'Well-draining (perlite/sand)' },
+  { value: 'moisture-retaining', label: 'Moisture-retaining (peat/coir)' },
+  { value: 'succulent-mix', label: 'Succulent / cactus mix' },
+  { value: 'orchid-mix', label: 'Orchid mix (bark)' },
 ]
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -152,6 +165,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     waterAmount: null, waterMethod: null,
     irrigationDuration: null, irrigationSchedule: null,
     sunExposure: null, sunHoursPerDay: null,
+    potSize: null, soilType: null,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -176,6 +190,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         irrigationSchedule: plant.irrigationSchedule || null,
         sunExposure: plant.sunExposure || null,
         sunHoursPerDay: plant.sunHoursPerDay ?? null,
+        potSize: plant.potSize || null,
+        soilType: plant.soilType || null,
       })
     }
   }, [plant, activeFloorId])
@@ -199,6 +215,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         maturity: result.maturity, recommendations: result.recommendations || [],
         ...(result.waterAmount ? { waterAmount: result.waterAmount } : {}),
         ...(result.waterMethod ? { waterMethod: result.waterMethod } : {}),
+        ...(result.potSize ? { potSize: result.potSize } : {}),
+        ...(result.soilType ? { soilType: result.soilType } : {}),
       }
     })
   }, [])
@@ -224,6 +242,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       irrigationSchedule: form.irrigationSchedule,
       sunExposure: form.sunExposure,
       sunHoursPerDay: form.sunHoursPerDay ? Number(form.sunHoursPerDay) : null,
+      potSize: form.potSize,
+      soilType: form.soilType,
     })
     setIsSaving(false)
   }, [form, onSave])
@@ -356,12 +376,38 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Form.Group>
             </Col>
           </Row>
+          <Row className="mb-3">
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Pot Size</Form.Label>
+                <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {POT_SIZE_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={6}>
+              <Form.Group>
+                <Form.Label>Soil Type</Form.Label>
+                <Form.Select value={form.soilType || ''} onChange={(e) => update('soilType', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {SOIL_TYPE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+          </Row>
         </Modal.Body>
       )}
 
       {/* Watering tab */}
       {isEditing && activeTab === 'watering' && (
         <Modal.Body>
+          {wateringStatus?.seasonNote && (
+            <div className="mb-3 p-2 rounded border fs-sm d-flex align-items-center gap-2" style={{ borderColor: '#60a5fa', background: 'rgba(96,165,250,0.08)' }}>
+              <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#sun"></use></svg>
+              <span>{wateringStatus.seasonNote}</span>
+            </div>
+          )}
           {(plant.waterMethod || plant.waterAmount) && (() => {
             const adjusted = getAdjustedWaterAmount(plant, weather, floors)
             return (
@@ -408,6 +454,22 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Form.Group>
             </Col>
           </Row>
+          {/* Adaptive frequency suggestion */}
+          {(() => {
+            const suggestion = plant ? getSuggestedFrequency(plant) : null
+            if (!suggestion || suggestion.suggestedDays === Number(form.frequencyDays)) return null
+            return (
+              <div className="mb-3 p-2 rounded border border-info bg-body-tertiary fs-sm">
+                <div className="d-flex align-items-center gap-2">
+                  <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#trending-up"></use></svg>
+                  <span>{suggestion.reason}</span>
+                </div>
+                <Button variant="outline-info" size="sm" className="mt-2" onClick={() => update('frequencyDays', suggestion.suggestedDays)}>
+                  Update to {suggestion.suggestedDays}d
+                </Button>
+              </div>
+            )
+          })()}
           <Row className="mb-3">
             <Col md={6}>
               <Form.Group>
