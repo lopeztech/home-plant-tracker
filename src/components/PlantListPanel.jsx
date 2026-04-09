@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback } from 'react'
-import { Button, FormControl, InputGroup, Badge, ListGroup, Form } from 'react-bootstrap'
+import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS } from '../utils/watering.js'
 import PlantIcon from './PlantIcon.jsx'
@@ -12,7 +12,7 @@ function UrgencyIcon({ days, skippedRain }) {
   return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#check-circle"></use></svg>
 }
 
-function PlantCard({ plant, onClick, onWater, weather, floors }) {
+function PlantCard({ plant, onClick, onWater, weather, floors, isReanalysing }) {
   const status = getWateringStatus(plant, weather, floors)
   const { daysUntil, color, label, skippedRain } = status
 
@@ -48,6 +48,12 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
             {plant.health}
           </Badge>
         )}
+        {isReanalysing && (
+          <div className="d-flex align-items-center gap-1 mt-1">
+            <Spinner size="sm" variant="primary" style={{ width: 10, height: 10 }} />
+            <small className="text-primary" style={{ fontSize: '0.6rem' }}>Updating schedule...</small>
+          </div>
+        )}
       </div>
 
       {onWater && (
@@ -68,7 +74,7 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
 }
 
 export default function PlantListPanel({ onPlantClick, onAddPlant }) {
-  const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading } = usePlantContext()
+  const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading, reanalysingPlants } = usePlantContext()
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
 
@@ -235,6 +241,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
                             onWater={handleWaterPlant}
                             weather={weather}
                             floors={floors}
+                            isReanalysing={reanalysingPlants.has(plant.id)}
                           />
                         ))}
                       </ListGroup>

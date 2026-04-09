@@ -6,7 +6,7 @@ import PlantListPanel from '../components/PlantListPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 
 export default function DashboardPage() {
-  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError, plants, plantsLoading } = usePlantContext()
+  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError, plants, plantsLoading, reanalysePlant, reanalysingPlants } = usePlantContext()
 
   const hasFloors = floors.length > 0
 
@@ -116,6 +116,8 @@ export default function DashboardPage() {
           onDelete={handleDelete}
           onWater={handleWaterPlant}
           onClose={handleCloseModal}
+          onReanalyse={reanalysePlant}
+          isReanalysing={editingPlant ? reanalysingPlants.has(editingPlant.id) : false}
         />
       )}
     </div>

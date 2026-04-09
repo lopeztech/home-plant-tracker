@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi } from '../api/plants.js'
 import { useWeather } from '../hooks/useWeather.js'
@@ -27,6 +27,10 @@ export function PlantProvider({ children }) {
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
   const [activeFloorId, setActiveFloorId] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
+
+  // Track which plants are being reanalysed (set of plant IDs)
+  const [reanalysingPlants, setReanalysingPlants] = useState(new Set())
+  const reanalysingRef = useRef(new Set())
 
   const overdueCount = useMemo(
     () => plants.filter((p) => getWateringStatus(p, weather, floors).daysUntil < 0).length,
@@ -134,6 +138,31 @@ export function PlantProvider({ children }) {
     }
   }, [activeFloorId, isGuest])
 
+  // Reanalyse watering recommendation for a plant (calls backend which uses Gemini/heuristic)
+  const reanalysePlant = useCallback(async (plantId) => {
+    if (isGuest) return
+    reanalysingRef.current = new Set([...reanalysingRef.current, plantId])
+    setReanalysingPlants(new Set(reanalysingRef.current))
+    try {
+      const rec = await plantsApi.wateringRecommendation(plantId)
+      if (rec?.recommendedFrequencyDays) {
+        const updates = { frequencyDays: rec.recommendedFrequencyDays }
+        await plantsApi.update(plantId, updates)
+        setPlants((prev) => prev.map((p) => p.id === plantId ? { ...p, ...updates } : p))
+      }
+    } catch { /* non-critical — keep existing schedule */ }
+    finally {
+      reanalysingRef.current = new Set([...reanalysingRef.current].filter((id) => id !== plantId))
+      setReanalysingPlants(new Set(reanalysingRef.current))
+    }
+  }, [isGuest])
+
+  // Reanalyse multiple plants in parallel
+  const reanalysePlants = useCallback(async (plantIds) => {
+    if (isGuest || plantIds.length === 0) return
+    await Promise.allSettled(plantIds.map((id) => reanalysePlant(id)))
+  }, [isGuest, reanalysePlant])
+
   const handleWaterPlant = useCallback(async (plantId) => {
     if (isGuest) {
       const now = new Date().toISOString()
@@ -144,7 +173,9 @@ export function PlantProvider({ children }) {
     }
     const updated = await plantsApi.water(plantId)
     setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
-  }, [isGuest])
+    // Auto-reanalyse in background after watering
+    reanalysePlant(plantId)
+  }, [isGuest, reanalysePlant])
 
   const handleBatchWater = useCallback(async (plantIds) => {
     if (isGuest) {
@@ -158,15 +189,19 @@ export function PlantProvider({ children }) {
       return plantIds.length
     }
     const results = await Promise.allSettled(plantIds.map((id) => plantsApi.water(id)))
+    const wateredIds = []
     let count = 0
     results.forEach((result, i) => {
       if (result.status === 'fulfilled') {
         count++
+        wateredIds.push(plantIds[i])
         setPlants((prev) => prev.map((p) => (p.id === plantIds[i] ? result.value : p)))
       }
     })
+    // Auto-reanalyse all watered plants in background
+    reanalysePlants(wateredIds)
     return count
-  }, [isGuest])
+  }, [isGuest, reanalysePlants])
 
   const handleDeletePlant = useCallback(async (plantId) => {
     if (isGuest) {
@@ -257,6 +292,7 @@ export function PlantProvider({ children }) {
     handleDeletePlant,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
+    reanalysePlant, reanalysePlants, reanalysingPlants,
   }), [
     plants, plantsLoading, plantsError, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
@@ -264,6 +300,7 @@ export function PlantProvider({ children }) {
     handleDeletePlant,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
+    reanalysePlant, reanalysePlants, reanalysingPlants,
   ])
 
   return <PlantContext.Provider value={value}>{children}</PlantContext.Provider>

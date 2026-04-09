@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col } from 'react-bootstrap'
+import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col, ProgressBar } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency } from '../utils/watering.js'
@@ -152,7 +152,7 @@ function DiagnosticUpload({ plantId, onComplete }) {
   )
 }
 
-export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onClose }) {
+export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onClose, onReanalyse, isReanalysing }) {
   const isEditing = !!plant
   const [mode, setMode] = useState(() => (plant ? 'edit' : null))
   const [activeTab, setActiveTab] = useState('edit')
@@ -402,43 +402,122 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Watering tab */}
       {isEditing && activeTab === 'watering' && (
         <Modal.Body>
+          {/* Reanalysis progress bar */}
+          {isReanalysing && (
+            <div className="mb-3">
+              <div className="d-flex align-items-center gap-2 mb-1 fs-sm">
+                <Spinner size="sm" variant="primary" />
+                <span className="text-primary fw-500">Updating watering schedule...</span>
+              </div>
+              <ProgressBar animated now={100} variant="info" style={{ height: 4 }} />
+            </div>
+          )}
+
+          {/* Seasonal note */}
           {wateringStatus?.seasonNote && (
             <div className="mb-3 p-2 rounded border fs-sm d-flex align-items-center gap-2" style={{ borderColor: '#60a5fa', background: 'rgba(96,165,250,0.08)' }}>
               <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#sun"></use></svg>
               <span>{wateringStatus.seasonNote}</span>
             </div>
           )}
-          {(plant.waterMethod || plant.waterAmount) && (() => {
-            const adjusted = getAdjustedWaterAmount(plant, weather, floors)
+
+          {/* AI-driven watering summary — read-only display */}
+          <div className="mb-3 p-3 rounded bg-body-tertiary">
+            <div className="d-flex align-items-center justify-content-between mb-2">
+              <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">
+                <svg className="sa-icon me-1 text-primary" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>
+                AI Watering Schedule
+              </h6>
+              {onReanalyse && (
+                <Button variant="outline-primary" size="sm" onClick={() => onReanalyse(plant.id)} disabled={isReanalysing}>
+                  {isReanalysing
+                    ? <><Spinner size="sm" className="me-1" />Analysing...</>
+                    : <><svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#refresh-cw"></use></svg>Reanalyse</>}
+                </Button>
+              )}
+            </div>
+            <Row>
+              <Col xs={4} className="text-center">
+                <div className="fs-3 fw-bold text-primary">{plant.frequencyDays ?? 7}d</div>
+                <div className="fs-xs text-muted">Frequency</div>
+              </Col>
+              <Col xs={4} className="text-center">
+                <div className="fs-6 fw-500">{WATER_METHODS.find((m) => m.value === plant.waterMethod)?.label || plant.waterMethod || '—'}</div>
+                <div className="fs-xs text-muted">Method</div>
+              </Col>
+              <Col xs={4} className="text-center">
+                {(() => {
+                  const adjusted = getAdjustedWaterAmount(plant, weather, floors)
+                  return (
+                    <>
+                      <div className={`fs-6 fw-500 ${adjusted.adjusted ? 'text-primary' : ''}`}>
+                        {adjusted.amount || plant.waterAmount || '—'}
+                        {adjusted.adjusted && plant.waterAmount && adjusted.amount !== 'Skip' && adjusted.amount !== plant.waterAmount && (
+                          <small className="text-muted ms-1 d-block" style={{ textDecoration: 'line-through', fontSize: '0.65rem' }}>{plant.waterAmount}</small>
+                        )}
+                      </div>
+                      <div className="fs-xs text-muted">Amount</div>
+                    </>
+                  )
+                })()}
+              </Col>
+            </Row>
+            {(() => {
+              const adjusted = getAdjustedWaterAmount(plant, weather, floors)
+              return adjusted.reason ? (
+                <small className="text-primary d-block mt-2 text-center">
+                  <svg className="sa-icon me-1" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#info"></use></svg>
+                  {adjusted.reason}
+                </small>
+              ) : null
+            })()}
+          </div>
+
+          {/* Adaptive frequency suggestion */}
+          {(() => {
+            const suggestion = plant ? getSuggestedFrequency(plant) : null
+            if (!suggestion || suggestion.suggestedDays === plant.frequencyDays) return null
             return (
-              <div className="mb-3 p-2 rounded bg-body-tertiary fs-sm">
-                <div className="d-flex align-items-center gap-3">
-                  {plant.waterMethod && (
-                    <span className="d-flex align-items-center gap-1">
-                      <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                      <strong>{WATER_METHODS.find((m) => m.value === plant.waterMethod)?.label || plant.waterMethod}</strong>
-                    </span>
-                  )}
-                  {adjusted.amount && (
-                    <span className={adjusted.adjusted ? 'fw-bold text-primary' : ''}>
-                      {adjusted.amount}
-                      {adjusted.adjusted && plant.waterAmount && adjusted.amount !== 'Skip' && (
-                        <small className="text-muted ms-1" style={{ textDecoration: 'line-through' }}>{plant.waterAmount}</small>
-                      )}
-                    </span>
-                  )}
-                  {plant.irrigationDuration && <span>{plant.irrigationDuration} min</span>}
-                  {plant.irrigationSchedule && <span className="text-muted">{plant.irrigationSchedule}</span>}
+              <div className="mb-3 p-2 rounded border border-info bg-body-tertiary fs-sm">
+                <div className="d-flex align-items-center gap-2">
+                  <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#trending-up"></use></svg>
+                  <span>{suggestion.reason}</span>
                 </div>
-                {adjusted.reason && (
-                  <small className="text-primary d-block mt-1">
-                    <svg className="sa-icon me-1" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#info"></use></svg>
-                    {adjusted.reason}
-                  </small>
-                )}
               </div>
             )
           })()}
+
+          {/* Manual overrides (collapsed) */}
+          <details className="mb-3">
+            <summary className="fs-sm text-muted" style={{ cursor: 'pointer' }}>Manual overrides</summary>
+            <div className="mt-2">
+              <Row className="mb-2">
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fs-xs">Frequency</Form.Label>
+                    <Form.Range min={1} max={30} value={form.frequencyDays} onChange={(e) => update('frequencyDays', e.target.value)} />
+                    <div className="text-center fs-xs text-muted">{form.frequencyDays}d</div>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fs-xs">Method</Form.Label>
+                    <Form.Select size="sm" value={form.waterMethod || ''} onChange={(e) => update('waterMethod', e.target.value || null)}>
+                      <option value="">— Select —</option>
+                      {WATER_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={4}>
+                  <Form.Group>
+                    <Form.Label className="fs-xs">Amount</Form.Label>
+                    <Form.Control size="sm" type="text" placeholder="e.g. 250ml" value={form.waterAmount || ''} onChange={(e) => update('waterAmount', e.target.value || null)} />
+                  </Form.Group>
+                </Col>
+              </Row>
+            </div>
+          </details>
+
           <Row className="mb-3">
             <Col md={6}>
               <Form.Group>
@@ -446,71 +525,20 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <Form.Control type="date" value={form.lastWatered} max={today()} onChange={(e) => update('lastWatered', e.target.value)} />
               </Form.Group>
             </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Frequency: {form.frequencyDays}d</Form.Label>
-                <Form.Range min={1} max={30} value={form.frequencyDays} onChange={(e) => update('frequencyDays', e.target.value)} className="mt-2" />
-                <div className="d-flex justify-content-between fs-xs text-muted"><span>1d</span><span>30d</span></div>
-              </Form.Group>
-            </Col>
-          </Row>
-          {/* Adaptive frequency suggestion */}
-          {(() => {
-            const suggestion = plant ? getSuggestedFrequency(plant) : null
-            if (!suggestion || suggestion.suggestedDays === Number(form.frequencyDays)) return null
-            return (
-              <div className="mb-3 p-2 rounded border border-info bg-body-tertiary fs-sm">
-                <div className="d-flex align-items-center gap-2">
-                  <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#trending-up"></use></svg>
-                  <span>{suggestion.reason}</span>
-                </div>
-                <Button variant="outline-info" size="sm" className="mt-2" onClick={() => update('frequencyDays', suggestion.suggestedDays)}>
-                  Update to {suggestion.suggestedDays}d
+            <Col md={6} className="d-flex align-items-end justify-content-center">
+              {onWater && (
+                <Button variant="info" onClick={() => onWater(plant.id)}>
+                  <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                  Mark as Watered
                 </Button>
-              </div>
-            )
-          })()}
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Watering Method</Form.Label>
-                <Form.Select value={form.waterMethod || ''} onChange={(e) => update('waterMethod', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {WATER_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Water Amount</Form.Label>
-                <Form.Control type="text" placeholder="e.g. 250ml, 1L, 2 cups" value={form.waterAmount || ''} onChange={(e) => update('waterAmount', e.target.value || null)} />
-              </Form.Group>
+              )}
             </Col>
           </Row>
-          {/* Suggested water amount */}
-          {plant.waterAmount && (() => {
-            const adjusted = getAdjustedWaterAmount(plant, weather, floors)
-            return (
-              <div className="d-flex align-items-center gap-2 mb-3 p-2 rounded bg-body-tertiary fs-sm">
-                <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                <span>Suggested: <strong className={adjusted.adjusted ? 'text-primary' : ''}>{adjusted.amount}</strong></span>
-                {adjusted.adjusted && <small className="text-muted">({adjusted.reason})</small>}
-                {!adjusted.adjusted && <small className="text-muted">(base amount)</small>}
-              </div>
-            )
-          })()}
-          {onWater && (
-            <div className="d-flex justify-content-center mb-3">
-              <Button variant="outline-info" size="sm" onClick={() => onWater(plant.id)}>
-                <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                Mark as Watered
-              </Button>
-            </div>
-          )}
+
           {plant.wateringLog?.length > 0 ? (
             <div>
               <h6 className="text-muted text-uppercase fs-xs fw-600 mb-3">Watering History</h6>
-              {[...plant.wateringLog].reverse().map((entry, i) => (
+              {[...plant.wateringLog].reverse().slice(0, 10).map((entry, i) => (
                 <div key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm text-muted">
                   <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
                   {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -518,6 +546,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   {entry.note && <span>— {entry.note}</span>}
                 </div>
               ))}
+              {plant.wateringLog.length > 10 && (
+                <p className="text-muted fs-xs text-center">+ {plant.wateringLog.length - 10} more entries</p>
+              )}
             </div>
           ) : (
             <p className="text-muted text-center py-4">No watering history yet.</p>
