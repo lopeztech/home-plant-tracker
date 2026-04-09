@@ -35,7 +35,7 @@ Do NOT modify Terraform files in this repository.
 **Request flow:**
 ```
 Browser (React SPA)
-  → Cloud Load Balancer + CDN
+  → Firebase Hosting (CDN, SPA rewrites)
   → GCP API Gateway (validates x-api-key + Google JWT)
   → Cloud Run Function (Express, api/plants/index.js)
   → Firestore (users/{userId}/plants, users/{userId}/config/floors)
@@ -69,7 +69,7 @@ Browser (React SPA)
 
 **Auth** is Google OAuth via `@react-oauth/google`. `AuthContext.jsx` stores the credential and passes the ID token as `Authorization: Bearer` on every API request. The login gate is in `MainLayout.jsx` (redirects to `/login` if not authenticated).
 
-**Infrastructure** is managed by Terraform in the `platform-infra` repository. Key resources: Cloud Run (frontend Docker container with nginx), Cloud Run Function (backend), API Gateway (OpenAPI 2.0 spec), Firestore, Cloud Storage, Secret Manager. The GitHub Actions workflow (`deploy.yml`) in this repo only deploys the **frontend** (Docker image → Cloud Run `plant-tracker`). The **backend** Cloud Run Function (`plant-tracker-plants-api`) is deployed via `platform-infra`.
+**Infrastructure** is managed by Terraform in the `platform-infra` repository. Key resources: Firebase Hosting (frontend SPA), Cloud Run Function (backend), API Gateway (OpenAPI 2.0 spec), Firestore, Cloud Storage, Secret Manager. The GitHub Actions workflow (`deploy.yml`) in this repo deploys the **frontend** to Firebase Hosting via `firebase-tools` CLI (authenticated with WIF). The **backend** Cloud Run Function (`plant-tracker-plants-api`) is deployed from this repo's CI when `api/plants/` files change — it packages a zip, uploads to GCS, and triggers a Terraform apply in `platform-infra`.
 
 ## Environment Variables
 
@@ -91,4 +91,6 @@ Backend env vars (`IMAGES_BUCKET`, `GEMINI_API_KEY`) are injected by Terraform/C
 - **Icons:** Use Smart's SVG sprite: `<svg className="sa-icon"><use href="/icons/sprite.svg#icon-name"></use></svg>`. Icon sizes: `sa-icon-2x`, `sa-icon-5x`.
 - **Theming:** 9 themes available (olive, earth, aurora, lunar, nebula, night, solar, storm, flare). Selected via `LayoutContext.changeThemeStyle()`. Dark mode via `LayoutContext.changeTheme('dark')`.
 - **Test mocks:** Backend tests use proxyquire + in-memory Firestore mock in `index.test.js`. Frontend tests mock `src/api/plants.js`
-- **CI/CD:** Tests run on every push/PR; Docker build + Cloud Run deploy only runs on `main` pushes. Do NOT run tests locally — rely on GitHub Actions CI.
+- **CI/CD:** Tests run on every push/PR; Firebase Hosting deploy + Cloud Function deploy only run on `main` pushes. Do NOT run tests locally — rely on GitHub Actions CI.
+- **New API routes:** `POST /recommend-watering` for Gemini-powered watering advice; `POST /recommend` accepts optional `plantedIn` and `isOutdoor` context. New routes must be added to the API Gateway OpenAPI spec in `platform-infra`.
+- **Plant fields:** `plantedIn` (ground, garden-bed, pot) controls conditional display of `potSize` and `soilType` in the Plant tab.
