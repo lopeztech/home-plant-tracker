@@ -119,6 +119,7 @@ export function useWeather(tempUnit = 'celsius') {
         .then(data => {
           if (cancelled) return
           const parsed = parseWeather(data, tempUnit)
+          parsed.location = { lat, lon }
           writeCache(lat, lon, parsed)
           setWeather(parsed)
         })
