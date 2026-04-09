@@ -264,6 +264,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     else setConfirmDelete(true)
   }, [confirmDelete, plant, onDelete])
 
+  const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
+
   const handleGetRecommendations = useCallback(async () => {
     setCareLoading(true); setCareError(null)
     try {
@@ -292,8 +294,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     catch (err) { setWateringRecError(err.message) }
     finally { setWateringRecLoading(false) }
   }, [form, plant, floors, wateringStatus])
-
-  const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
 
   return (
     <Modal show onHide={onClose} size="lg" centered scrollable>
