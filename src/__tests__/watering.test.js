@@ -570,6 +570,43 @@ describe('getAdjustedWaterAmount — plant attributes', () => {
     const result = getAdjustedWaterAmount(plant, weather)
     expect(result.adjusted).toBe(false)
   })
+
+  it('high humidity reduces water amount by 25%', () => {
+    const plant = { waterAmount: '200ml', room: 'Living Room', floor: 'ground' }
+    const weather = {
+      current: { temp: 22, condition: { sky: 'clear' }, humidity: 90 },
+      days: [],
+    }
+    const result = getAdjustedWaterAmount(plant, weather)
+    expect(result.adjusted).toBe(true)
+    expect(result.amount).toBe('150ml') // 200 * 0.75 = 150
+    expect(result.reason).toBe('High humidity — 25% less water')
+  })
+
+  it('returns Skip for outdoor plants when raining', () => {
+    const plant = { waterAmount: '200ml', room: 'Garden', floor: 'ground' }
+    const weather = {
+      current: { temp: 18, condition: { sky: 'rainy' } },
+      days: [],
+    }
+    const result = getAdjustedWaterAmount(plant, weather)
+    expect(result.amount).toBe('Skip')
+    expect(result.multiplier).toBe(0)
+    expect(result.reason).toBe('Raining — no watering needed')
+  })
+
+  it('high humidity stacks with seasonal multiplier', () => {
+    // Southern hemisphere April = autumn (0.85) + high humidity (0.75) = 0.6375
+    const plant = { waterAmount: '400ml', room: 'Living Room', floor: 'ground' }
+    const weather = {
+      current: { temp: 22, condition: { sky: 'clear' }, humidity: 85 },
+      days: [],
+      location: { lat: -33, lon: 0 },
+    }
+    const result = getAdjustedWaterAmount(plant, weather)
+    expect(result.adjusted).toBe(true)
+    expect(result.multiplier).toBeCloseTo(0.6375, 2)
+  })
 })
 
 // ── getSuggestedFrequency — adaptive frequency ─────────────────────────────
@@ -634,6 +671,25 @@ describe('getSuggestedFrequency', () => {
     expect(suggestion.direction).toBe('increase')
     expect(suggestion.suggestedDays).toBeGreaterThan(7)
     expect(suggestion.reason).toMatch(/over-watering/)
+  })
+
+  it('suggests decreasing frequency when health declines with slightly infrequent watering', () => {
+    // User waters every ~8d on a 7d schedule (adherence ~1.14), health declined
+    // This hits the under-watering branch (adherence > 1 within tolerance)
+    const plant = {
+      frequencyDays: 7,
+      wateringLog: makeLog(8, 8), // watering every 8 days
+      health: 'Fair',
+      healthLog: [
+        { date: '2026-01-15T09:00:00Z', health: 'Good', reason: 'Fine' },
+        { date: '2026-02-15T09:00:00Z', health: 'Fair', reason: 'Drooping leaves' },
+      ],
+    }
+    const suggestion = getSuggestedFrequency(plant)
+    expect(suggestion).not.toBeNull()
+    expect(suggestion.direction).toBe('decrease')
+    expect(suggestion.suggestedDays).toBeLessThan(7)
+    expect(suggestion.reason).toMatch(/infrequent watering/)
   })
 
   it('returns null when user follows schedule and plant is healthy', () => {
