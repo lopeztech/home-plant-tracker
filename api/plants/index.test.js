@@ -655,6 +655,27 @@ describe('PUT /plants/:id — image replacement', () => {
     expect(saved.photoLog[1].type).toBe('growth');
   });
 
+  it('adds first imageUrl to photoLog when plant had no image', async () => {
+    store[plantPath('p1')] = { name: 'Fern', createdAt: '2026-01-01T00:00:00.000Z' };
+    const newUrl = 'https://storage.googleapis.com/undefined/plants/first.jpg';
+    await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ name: 'Fern', imageUrl: newUrl });
+    const saved = store[plantPath('p1')];
+    expect(saved.photoLog).toHaveLength(1);
+    expect(saved.photoLog[0].url).toBe(newUrl);
+  });
+
+  it('does not duplicate photoLog entry when imageUrl unchanged', async () => {
+    const url = 'https://storage.googleapis.com/undefined/plants/same.jpg';
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: url, photoLog: [{ url, type: 'growth', date: '2026-01-01' }], createdAt: '2026-01-01T00:00:00.000Z' };
+    await request(app)
+      .put('/plants/p1').set('Authorization', authHeader())
+      .send({ name: 'Fern', imageUrl: url });
+    const saved = store[plantPath('p1')];
+    expect(saved.photoLog).toHaveLength(1);
+  });
+
   it('does not delete GCS image when imageUrl stays the same', async () => {
     const url = 'https://storage.googleapis.com/undefined/plants/same.jpg';
     store[plantPath('p1')] = { name: 'Fern', imageUrl: url, createdAt: '2026-01-01T00:00:00.000Z' };
