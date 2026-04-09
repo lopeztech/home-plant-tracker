@@ -197,12 +197,29 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const gemini = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 const MAX_RETRIES = 2;
+
+function friendlyGeminiError(err) {
+  const msg = err.message || '';
+  let friendly;
+  if (msg.includes('503') || msg.includes('overloaded') || msg.includes('high demand')) {
+    friendly = new Error('Our AI plant assistant is temporarily unavailable due to high demand. Please try again in a few moments.');
+    friendly.status = 503;
+  } else if (msg.includes('429') || msg.includes('rate limit') || msg.includes('quota') || msg.includes('RESOURCE_EXHAUSTED')) {
+    friendly = new Error('Our AI plant assistant has received too many requests. Please wait a moment and try again.');
+    friendly.status = 429;
+  } else {
+    return err;
+  }
+  log.error('gemini error', { originalError: msg });
+  return friendly;
+}
+
 async function geminiWithRetry(request, retries = MAX_RETRIES) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       return await gemini.generateContent(request);
     } catch (err) {
-      if (attempt === retries) throw err;
+      if (attempt === retries) throw friendlyGeminiError(err);
       log.warn('gemini retry', { attempt: attempt + 1, error: err.message });
       await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
     }
@@ -539,7 +556,7 @@ app.post('/analyse-floorplan', async (req, res) => {
 
     res.status(200).json({ floors });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -566,7 +583,7 @@ app.post('/analyse', async (req, res) => {
     const parsed = parseGeminiJson(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
@@ -593,7 +610,7 @@ app.post('/recommend', async (req, res) => {
     const parsed = parseGeminiJson(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
