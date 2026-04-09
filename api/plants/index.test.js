@@ -648,9 +648,11 @@ describe('PUT /plants/:id — image replacement', () => {
     expect(res.status).toBe(200);
     const saved = store[plantPath('p1')];
     expect(saved.photoLog).toBeDefined();
-    expect(saved.photoLog).toHaveLength(1);
+    expect(saved.photoLog).toHaveLength(2);
     expect(saved.photoLog[0].url).toBe(oldUrl);
     expect(saved.photoLog[0].type).toBe('growth');
+    expect(saved.photoLog[1].url).toBe('https://storage.googleapis.com/undefined/plants/new.jpg');
+    expect(saved.photoLog[1].type).toBe('growth');
   });
 
   it('does not delete GCS image when imageUrl stays the same', async () => {
