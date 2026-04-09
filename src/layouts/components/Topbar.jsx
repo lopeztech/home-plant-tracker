@@ -1,5 +1,6 @@
 import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import { usePlantContext } from '../../context/PlantContext.jsx'
+import SeasonBadge from '../../components/SeasonBadge.jsx'
 
 export default function Topbar() {
   const { showBackdrop, hideBackdrop } = useLayoutContext()
@@ -21,12 +22,13 @@ export default function Topbar() {
           </svg>
         </button>
 
-        {/* Weather widget */}
+        {/* Weather widget + season */}
         {weather && (
           <div className="d-flex align-items-center gap-2 ms-2">
             <span className="fs-4">{weather.current.condition.emoji}</span>
             <span className="fw-500">{weather.current.temp}°{tempUnit.unit === 'fahrenheit' ? 'F' : 'C'}</span>
             <span className="text-muted fs-sm hidden-mobile">{weather.current.condition.label}</span>
+            <SeasonBadge lat={weather.location?.lat} />
           </div>
         )}
       </div>
