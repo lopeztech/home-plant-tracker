@@ -23,6 +23,14 @@ vi.mock('../api/plants.js', () => ({
       commonIssues: ['Brown tips', 'Root rot'],
       tips: ['Mist leaves', 'Avoid cold drafts'],
     }),
+    getWatering: vi.fn().mockResolvedValue({
+      amount: '250ml',
+      frequency: 'Every 5-7 days',
+      method: 'Bottom watering',
+      seasonalTips: 'Reduce in winter',
+      signs: 'Yellow leaves = overwatering',
+      summary: 'Water moderately.',
+    }),
   },
 }))
 
@@ -164,12 +172,11 @@ describe('PlantModal', () => {
     expect(nameInput).toHaveValue('My Monstera')
   })
 
-  it('updates the notes field as the user types on the Care tab', () => {
+  it('shows health and maturity on the Care tab', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
-    const notes = screen.getByPlaceholderText(/special care/i)
-    fireEvent.change(notes, { target: { value: 'Water twice a week' } })
-    expect(notes).toHaveValue('Water twice a week')
+    expect(screen.getByText('Good')).toBeInTheDocument()
+    expect(screen.getByText('Mature')).toBeInTheDocument()
   })
 
   it('does not show the Save button on the mode-choice screen', () => {
@@ -325,7 +332,7 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
     fireEvent.click(screen.getByRole('button', { name: /get|refresh/i }))
-    await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis'))
+    await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis', expect.anything()))
     expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
     expect(screen.getByText('Water weekly.')).toBeInTheDocument()
   })
@@ -471,5 +478,52 @@ describe('PlantModal', () => {
     // Check that a Badge element exists in the modal title area
     const modal = screen.getByRole('dialog')
     expect(modal).toBeTruthy()
+  })
+
+  it('shows Planted In dropdown on Plant tab', () => {
+    renderModal()
+    selectMode('manual')
+    expect(screen.getByRole('option', { name: 'In the Ground' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Garden Bed' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Pot' })).toBeInTheDocument()
+  })
+
+  it('shows Pot Size and Soil Type only when Pot is selected', () => {
+    renderModal()
+    selectMode('manual')
+    // Initially no pot size visible (plantedIn not set to pot)
+    expect(screen.queryByRole('option', { name: 'Small (< 15cm)' })).not.toBeInTheDocument()
+
+    // Select Pot
+    const plantedInSelect = screen.getByRole('option', { name: 'Pot' }).closest('select')
+    fireEvent.change(plantedInSelect, { target: { value: 'pot' } })
+
+    // Now pot size and soil type should be visible
+    expect(screen.getByRole('option', { name: 'Small (< 15cm)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Standard potting mix' })).toBeInTheDocument()
+  })
+
+  it('hides Pot Size and Soil Type when In the Ground is selected', () => {
+    renderModal()
+    selectMode('manual')
+    const plantedInSelect = screen.getByRole('option', { name: 'Pot' }).closest('select')
+
+    // Select Pot first
+    fireEvent.change(plantedInSelect, { target: { value: 'pot' } })
+    expect(screen.getByRole('option', { name: 'Small (< 15cm)' })).toBeInTheDocument()
+
+    // Switch to In the Ground
+    fireEvent.change(plantedInSelect, { target: { value: 'ground' } })
+    expect(screen.queryByRole('option', { name: 'Small (< 15cm)' })).not.toBeInTheDocument()
+  })
+
+  it('calls recommendApi.getWatering and shows results on Watering tab', async () => {
+    const { recommendApi } = await import('../api/plants.js')
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByText('Watering'))
+    fireEvent.click(screen.getByRole('button', { name: /get watering recommendation/i }))
+    await waitFor(() => expect(recommendApi.getWatering).toHaveBeenCalled())
+    expect(await screen.findByText('Water moderately.')).toBeInTheDocument()
+    expect(screen.getByText('250ml')).toBeInTheDocument()
   })
 })

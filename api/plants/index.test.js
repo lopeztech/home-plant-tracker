@@ -311,6 +311,45 @@ describe('POST /recommend', () => {
     expect(res.status).toBe(200);
     expect(res.body.watering).toBeTruthy();
   });
+
+  it('accepts plantedIn and isOutdoor context', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(carePayload) } });
+    const res = await request(app).post('/recommend').send({ name: 'Rose', species: 'Rosa', plantedIn: 'ground', isOutdoor: true });
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toBeTruthy();
+  });
+});
+
+// ── POST /recommend-watering ──────────────────────────────────────────────────
+
+describe('POST /recommend-watering', () => {
+  const wateringPayload = { amount: '500ml', frequency: 'Every 3-5 days', method: 'Deep soak', seasonalTips: 'Reduce in winter', signs: 'Yellow leaves = overwatering', summary: 'Water deeply but infrequently.' };
+
+  it('returns 400 when name is missing', async () => {
+    const res = await request(app).post('/recommend-watering').send({ species: 'Ficus' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns watering recommendations with full context', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(wateringPayload) } });
+    const res = await request(app).post('/recommend-watering').send({
+      name: 'Fern', species: 'Nephrolepis', plantedIn: 'pot', isOutdoor: false,
+      potSize: 'medium', soilType: 'well-draining', sunExposure: 'part-sun', health: 'Good', season: 'spring',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.amount).toBe('500ml');
+    expect(res.body.frequency).toBeTruthy();
+    expect(res.body.method).toBeTruthy();
+    expect(res.body.signs).toBeTruthy();
+    expect(res.body.summary).toBeTruthy();
+  });
+
+  it('works with name only', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(wateringPayload) } });
+    const res = await request(app).post('/recommend-watering').send({ name: 'Cactus' });
+    expect(res.status).toBe(200);
+    expect(res.body.amount).toBeTruthy();
+  });
 });
 
 // ── POST /images/upload-url ───────────────────────────────────────────────────

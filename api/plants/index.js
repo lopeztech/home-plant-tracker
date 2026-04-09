@@ -367,11 +367,51 @@ const RECOMMEND_SCHEMA = {
   required: ['summary', 'watering', 'light', 'humidity', 'soil', 'temperature', 'fertilising', 'commonIssues', 'tips'],
 };
 
-const RECOMMEND_PROMPT = (name, species) =>
-  `You are a plant care expert. Provide detailed care guidance for: ${name}${species ? ` (${species})` : ''}.
+const RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor } = {}) => {
+  const context = [];
+  if (plantedIn) context.push(`planted in: ${plantedIn === 'ground' ? 'the ground' : plantedIn === 'garden-bed' ? 'a garden bed' : 'a pot'}`);
+  if (isOutdoor !== undefined) context.push(`location: ${isOutdoor ? 'outdoors' : 'indoors'}`);
+  const extra = context.length ? `\nContext: ${context.join(', ')}.` : '';
+  return `You are a plant care expert. Provide detailed care guidance for: ${name}${species ? ` (${species})` : ''}.${extra}
 Rules:
 - commonIssues and tips must each have 2–4 items
-- Be concise and practical`;
+- Be concise and practical
+- Tailor advice to the plant's specific planting situation (pot vs ground vs garden bed, indoor vs outdoor)`;
+};
+
+const WATERING_RECOMMEND_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    amount:       { type: SchemaType.STRING },
+    frequency:    { type: SchemaType.STRING },
+    method:       { type: SchemaType.STRING },
+    seasonalTips: { type: SchemaType.STRING },
+    signs:        { type: SchemaType.STRING },
+    summary:      { type: SchemaType.STRING },
+  },
+  required: ['amount', 'frequency', 'method', 'seasonalTips', 'signs', 'summary'],
+};
+
+const WATERING_RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, potSize, soilType, sunExposure, health, season } = {}) => {
+  const details = [];
+  if (plantedIn) details.push(`planted in: ${plantedIn === 'ground' ? 'the ground' : plantedIn === 'garden-bed' ? 'a garden bed' : 'a pot'}`);
+  if (isOutdoor !== undefined) details.push(`location: ${isOutdoor ? 'outdoors' : 'indoors'}`);
+  if (potSize) details.push(`pot size: ${potSize}`);
+  if (soilType) details.push(`soil: ${soilType}`);
+  if (sunExposure) details.push(`sun exposure: ${sunExposure}`);
+  if (health) details.push(`current health: ${health}`);
+  if (season) details.push(`current season: ${season}`);
+  const ctx = details.length ? `\nPlant details: ${details.join(', ')}.` : '';
+  return `You are a plant watering expert. Provide specific watering guidance for: ${name}${species ? ` (${species})` : ''}.${ctx}
+Rules:
+- amount: specific volume (e.g. "200-300ml" for pots, "deep soak to 15cm" for ground)
+- frequency: specific schedule (e.g. "every 5-7 days in summer")
+- method: best watering method for this setup
+- seasonalTips: how to adjust watering across seasons
+- signs: how to tell if over/under-watered
+- summary: one sentence overall recommendation
+- Tailor all advice to the specific planting situation`;
+};
 
 // ── Health ────────────────────────────────────────────────────────────────────
 
@@ -605,19 +645,44 @@ app.post('/analyse', async (req, res) => {
 
 app.post('/recommend', async (req, res) => {
   try {
-    const { name, species } = req.body;
+    const { name, species, plantedIn, isOutdoor } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     const result = await geminiWithRetry({
       contents: [{
         role: 'user',
-        parts: [{ text: RECOMMEND_PROMPT(name, species) }],
+        parts: [{ text: RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor }) }],
       }],
       generationConfig: {
         maxOutputTokens: 1024,
         temperature: 0.3,
         responseMimeType: 'application/json',
         responseSchema: RECOMMEND_SCHEMA,
+      },
+    });
+
+    const parsed = parseGeminiJson(result.response.text());
+    res.status(200).json(parsed);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.post('/recommend-watering', async (req, res) => {
+  try {
+    const { name, species, plantedIn, isOutdoor, potSize, soilType, sunExposure, health, season } = req.body;
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const result = await geminiWithRetry({
+      contents: [{
+        role: 'user',
+        parts: [{ text: WATERING_RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, potSize, soilType, sunExposure, health, season }) }],
+      }],
+      generationConfig: {
+        maxOutputTokens: 1024,
+        temperature: 0.3,
+        responseMimeType: 'application/json',
+        responseSchema: WATERING_RECOMMEND_SCHEMA,
       },
     });
 
