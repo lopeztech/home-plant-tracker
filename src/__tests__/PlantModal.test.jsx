@@ -164,12 +164,11 @@ describe('PlantModal', () => {
     expect(nameInput).toHaveValue('My Monstera')
   })
 
-  it('updates the notes field as the user types on the Care tab', () => {
+  it('shows health and maturity on the Care tab', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
-    const notes = screen.getByPlaceholderText(/special care/i)
-    fireEvent.change(notes, { target: { value: 'Water twice a week' } })
-    expect(notes).toHaveValue('Water twice a week')
+    expect(screen.getByText('Good')).toBeInTheDocument()
+    expect(screen.getByText('Mature')).toBeInTheDocument()
   })
 
   it('does not show the Save button on the mode-choice screen', () => {
@@ -325,7 +324,7 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
     fireEvent.click(screen.getByRole('button', { name: /get|refresh/i }))
-    await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis'))
+    await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis', expect.anything()))
     expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
     expect(screen.getByText('Water weekly.')).toBeInTheDocument()
   })
