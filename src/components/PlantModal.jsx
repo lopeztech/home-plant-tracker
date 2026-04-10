@@ -341,7 +341,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Tab nav for editing */}
       {isEditing && (
         <Nav variant="tabs" className="px-3 pt-2">
-          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'care', label: 'Care' }].map((tab) => (
+          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'care', label: 'Care' }, { id: 'recommendations', label: 'Recommendations' }].map((tab) => (
             <Nav.Item key={tab.id}>
               <Nav.Link active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}</Nav.Link>
             </Nav.Item>
@@ -676,14 +676,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             )
           })()}
 
-          <hr />
+        </Modal.Body>
+      )}
 
-          {/* AI Recommendations */}
+      {/* Recommendations tab */}
+      {isEditing && activeTab === 'recommendations' && (
+        <Modal.Body>
           <div className="d-flex align-items-center justify-content-between mb-3">
-            <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">Recommendations</h6>
+            <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">AI Care Recommendations</h6>
             <Button variant="outline-success" size="sm" onClick={handleGetRecommendations} disabled={careLoading}>
               {careLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
-              {careLoading ? 'Loading...' : careData ? 'Refresh' : 'Get'}
+              {careLoading ? 'Loading...' : careData ? 'Refresh' : 'Get Recommendations'}
             </Button>
           </div>
           {careError && <p className="text-danger text-center fs-sm">{careError}</p>}
@@ -705,16 +708,34 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   </Col>
                 ))}
               </Row>
+              {careData.commonIssues?.length > 0 && (
+                <>
+                  <h6 className="text-muted text-uppercase fs-xs fw-600 mt-2">Common Issues</h6>
+                  <ul className="list-unstyled">
+                    {careData.commonIssues.map((issue, i) => (
+                      <li key={i} className="d-flex gap-2 fs-xs text-muted mb-1">
+                        <span className="text-warning">•</span>{issue}
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
               {careData.tips?.length > 0 && (
-                <ul className="list-unstyled mt-1">
-                  {careData.tips.map((tip, i) => (
-                    <li key={i} className="d-flex gap-2 fs-xs text-muted mb-1">
-                      <span className="text-success">•</span>{tip}
-                    </li>
-                  ))}
-                </ul>
+                <>
+                  <h6 className="text-muted text-uppercase fs-xs fw-600">Tips</h6>
+                  <ul className="list-unstyled">
+                    {careData.tips.map((tip, i) => (
+                      <li key={i} className="d-flex gap-2 fs-xs text-muted mb-1">
+                        <span className="text-success">•</span>{tip}
+                      </li>
+                    ))}
+                  </ul>
+                </>
               )}
             </div>
+          )}
+          {!careData && !careLoading && !careError && (
+            <p className="text-muted text-center py-4">Click "Get Recommendations" for AI-powered care advice tailored to your plant.</p>
           )}
         </Modal.Body>
       )}

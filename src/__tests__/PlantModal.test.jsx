@@ -321,17 +321,19 @@ describe('PlantModal', () => {
 
   // ── Care tab ──────────────────────────────────────────────────────────────
 
-  it('shows Get Recommendations button on the Care tab', () => {
+  // ── Recommendations tab ──────────────────────────────────────────────────
+
+  it('shows Get Recommendations button on the Recommendations tab', () => {
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Care'))
-    expect(screen.getByRole('button', { name: /get|refresh/i })).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Recommendations'))
+    expect(screen.getByRole('button', { name: /get recommendations|refresh/i })).toBeInTheDocument()
   })
 
   it('calls recommendApi.get and shows results when Get Recommendations is clicked', async () => {
     const { recommendApi } = await import('../api/plants.js')
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Care'))
-    fireEvent.click(screen.getByRole('button', { name: /get|refresh/i }))
+    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
     await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis', expect.anything()))
     expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
     expect(screen.getByText('Water weekly.')).toBeInTheDocument()
@@ -341,8 +343,8 @@ describe('PlantModal', () => {
     const { recommendApi } = await import('../api/plants.js')
     recommendApi.get.mockRejectedValueOnce(new Error('Network error'))
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Care'))
-    fireEvent.click(screen.getByRole('button', { name: /get|refresh/i }))
+    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
     expect(await screen.findByText(/network error/i)).toBeInTheDocument()
   })
 
