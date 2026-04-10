@@ -71,21 +71,15 @@ function today() { return new Date().toISOString().split('T')[0] }
 
 function GrowthUpload({ plantId, onComplete }) {
   const [uploading, setUploading] = useState(false)
-  const fileRef = useRef(null)
+  const galleryRef = useRef(null)
+  const cameraRef = useRef(null)
 
   const handleFile = async (file) => {
     if (!file?.type.startsWith('image/')) return
     setUploading(true)
     try {
       const imageUrl = await imagesApi.upload(file, 'plants')
-      // Update plant with new photo and re-analyse for maturity/health
       await plantsApi.update(plantId, { imageUrl })
-      // Analyse the photo for growth status
-      const base64 = await new Promise((resolve) => {
-        const reader = new FileReader()
-        reader.onload = (e) => resolve(e.target.result.split(',')[1])
-        reader.readAsDataURL(file)
-      })
       try {
         const analysis = await (await import('../api/plants.js')).analyseApi.analyse(file)
         onComplete?.(analysis)
@@ -94,14 +88,20 @@ function GrowthUpload({ plantId, onComplete }) {
     finally { setUploading(false) }
   }
 
+  const onFileChange = (e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = '' }
+
   return (
-    <div>
-      <Button variant="outline-success" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
-        {uploading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#camera"></use></svg>}
-        {uploading ? 'Recording...' : 'Record Growth'}
+    <div className="d-flex gap-1">
+      <Button variant="outline-success" size="sm" onClick={() => galleryRef.current?.click()} disabled={uploading}>
+        {uploading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#image"></use></svg>}
+        {uploading ? 'Recording...' : 'Photo Gallery'}
       </Button>
-      <input ref={fileRef} type="file" accept="image/*" capture="environment" className="d-none"
-        onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = '' }} />
+      <Button variant="outline-success" size="sm" onClick={() => cameraRef.current?.click()} disabled={uploading}>
+        <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#camera"></use></svg>
+        Take Photo
+      </Button>
+      <input ref={galleryRef} type="file" accept="image/*" className="d-none" onChange={onFileChange} />
+      <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="d-none" onChange={onFileChange} />
     </div>
   )
 }
