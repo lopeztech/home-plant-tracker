@@ -866,24 +866,26 @@ app.put('/plants/:id', requireUser, async (req, res) => {
       updates.mlCache = mlCache;
     }
 
-    // Add images to photoLog for growth history
+    // Add images to photoLog for growth history — only when image actually changed
     if (body.imageUrl) {
       const newImageNorm = body.imageUrl.split('?')[0];
       const existingImageNorm = existing.imageUrl ? existing.imageUrl.split('?')[0] : null;
-      const photoLog = [...(existing.photoLog || [])];
-      // Push old image if being replaced
-      if (existingImageNorm && newImageNorm !== existingImageNorm) {
-        const alreadyInLog = photoLog.some((e) => e.url?.split('?')[0] === existingImageNorm);
-        if (!alreadyInLog) {
-          photoLog.push({ url: existingImageNorm, date: existing.updatedAt || new Date().toISOString(), type: 'growth', analysis: null });
+      if (newImageNorm !== existingImageNorm) {
+        const photoLog = [...(existing.photoLog || [])];
+        // Push old image if being replaced
+        if (existingImageNorm) {
+          const alreadyInLog = photoLog.some((e) => e.url?.split('?')[0] === existingImageNorm);
+          if (!alreadyInLog) {
+            photoLog.push({ url: existingImageNorm, date: existing.updatedAt || new Date().toISOString(), type: 'growth', analysis: null });
+          }
         }
+        // Push new image
+        const newAlreadyInLog = photoLog.some((e) => e.url?.split('?')[0] === newImageNorm);
+        if (!newAlreadyInLog) {
+          photoLog.push({ url: newImageNorm, date: new Date().toISOString(), type: 'growth', analysis: null });
+        }
+        updates.photoLog = photoLog;
       }
-      // Always push new image to photoLog
-      const newAlreadyInLog = photoLog.some((e) => e.url?.split('?')[0] === newImageNorm);
-      if (!newAlreadyInLog) {
-        photoLog.push({ url: newImageNorm, date: new Date().toISOString(), type: 'growth', analysis: null });
-      }
-      updates.photoLog = photoLog;
     }
 
     await ref.set(updates, { merge: true });
