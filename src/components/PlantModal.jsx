@@ -538,23 +538,19 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </div>
             )
           })()}
-          {onWater && (
-            <div className="d-flex justify-content-center mb-3">
+          <div className="d-flex justify-content-center gap-2 mb-3">
+            {onWater && (
               <Button variant="outline-info" size="sm" onClick={() => onWater(plant.id)}>
                 <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
                 Mark as Watered
               </Button>
-            </div>
-          )}
-          {/* AI Watering Recommendation */}
+            )}
+            <Button variant="outline-success" size="sm" onClick={handleGetWateringRec} disabled={wateringRecLoading}>
+              {wateringRecLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
+              {wateringRecLoading ? 'Loading...' : wateringRec ? 'Refresh' : 'Get Watering Recommendation'}
+            </Button>
+          </div>
           <div className="mb-3">
-            <div className="d-flex align-items-center justify-content-between mb-2">
-              <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">AI Watering Advice</h6>
-              <Button variant="outline-success" size="sm" onClick={handleGetWateringRec} disabled={wateringRecLoading}>
-                {wateringRecLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
-                {wateringRecLoading ? 'Loading...' : wateringRec ? 'Refresh' : 'Get Watering Recommendation'}
-              </Button>
-            </div>
             {wateringRecError && <p className="text-danger fs-sm">{wateringRecError}</p>}
             {wateringRec && (
               <div className="p-2 rounded border bg-body-tertiary fs-sm">

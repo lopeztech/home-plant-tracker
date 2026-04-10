@@ -808,6 +808,10 @@ app.post('/plants', requireUser, async (req, res) => {
   try {
     const now = new Date().toISOString();
     const { imageBase64: _img, ...body } = req.body;
+    if (body.imageUrl) {
+      try { body.imageUrl = body.imageUrl.split('?')[0]; } catch {}
+      body.photoLog = [{ url: body.imageUrl, date: now, type: 'growth', analysis: null }];
+    }
     const data = { ...body, createdAt: now, updatedAt: now };
     const docRef = await userPlants(req.userId).add(data);
     res.status(201).json({ id: docRef.id, ...data });
