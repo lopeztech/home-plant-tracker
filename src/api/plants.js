@@ -56,6 +56,7 @@ export const plantsApi = {
   speciesCluster: (name) => request(`/species/${encodeURIComponent(name)}/cluster`),
   careScore: (id) => request(`/plants/${id}/care-score`),
   careScores: () => request('/ml/care-scores'),
+  recalculateFrequencies: (params) => request('/plants/recalculate-frequencies', { method: 'POST', body: JSON.stringify(params || {}) }),
   getFloorplan: () => request('/config/floorplan'),
   saveFloorplan: (imageUrl) => request('/config/floorplan', { method: 'PUT', body: JSON.stringify({ imageUrl }) }),
 }

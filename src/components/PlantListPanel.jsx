@@ -1,7 +1,8 @@
 import { useMemo, useState, useCallback } from 'react'
-import { Button, FormControl, InputGroup, Badge, ListGroup, Form } from 'react-bootstrap'
+import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
-import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS } from '../utils/watering.js'
+import { plantsApi } from '../api/plants.js'
+import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS, getSeason } from '../utils/watering.js'
 import PlantIcon from './PlantIcon.jsx'
 
 function UrgencyIcon({ days, skippedRain }) {
@@ -72,6 +73,20 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
   const [gnomeActive, setGnomeActive] = useState(false)
+  const [recalculating, setRecalculating] = useState(false)
+  const [recalcResult, setRecalcResult] = useState(null)
+
+  const handleRecalculate = useCallback(async () => {
+    setRecalculating(true); setRecalcResult(null)
+    try {
+      const season = getSeason(weather?.location?.lat)
+      const data = await plantsApi.recalculateFrequencies({ season, temperature: weather?.current?.temp })
+      setRecalcResult(data)
+      // Reload plants to reflect new frequencies
+      window.location.reload()
+    } catch (err) { setRecalcResult({ error: err.message }) }
+    finally { setRecalculating(false) }
+  }, [weather])
 
   const handleGnomeBatchWater = useCallback((targetPlants) => {
     if (gnomeActive) return
@@ -165,6 +180,22 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
               >
                 {gnomeActive ? <span className="spinner-border spinner-border-sm me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>}
                 {gnomeActive ? 'Watering...' : `Water All on Floor (${floorPlants.length} plants)`}
+              </Button>
+            </div>
+          )}
+
+          {/* Recalculate all frequencies */}
+          {floorPlants.length > 0 && (
+            <div className="px-3 pb-2">
+              <Button
+                variant="outline-warning"
+                size="sm"
+                className="w-100"
+                disabled={recalculating}
+                onClick={handleRecalculate}
+              >
+                {recalculating ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
+                {recalculating ? 'Recalculating...' : 'Recalculate All Watering Frequencies'}
               </Button>
             </div>
           )}
