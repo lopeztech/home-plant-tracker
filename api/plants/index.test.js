@@ -373,9 +373,9 @@ describe('POST /plants/recalculate-frequencies', () => {
 
   it('returns updated count for existing plants', async () => {
     // Create a test plant first
-    await request(app).post('/plants').set('Authorization', 'Bearer test-token').send({ name: 'Test Fern', species: 'Nephrolepis', frequencyDays: 7 });
+    await request(app).post('/plants').set('Authorization', authHeader()).send({ name: 'Test Fern', species: 'Nephrolepis', frequencyDays: 7 });
     geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(wateringPayload) } });
-    const res = await request(app).post('/plants/recalculate-frequencies').set('Authorization', 'Bearer test-token').send({ season: 'autumn', temperature: 22 });
+    const res = await request(app).post('/plants/recalculate-frequencies').set('Authorization', authHeader()).send({ season: 'autumn', temperature: 22 });
     expect(res.status).toBe(200);
     expect(res.body.updated).toBeGreaterThanOrEqual(1);
     expect(res.body.results.some((r) => r.newFrequency === 5)).toBe(true);
