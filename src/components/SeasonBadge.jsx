@@ -45,7 +45,7 @@ const ANIMATIONS = `
 }
 `
 
-export default function SeasonBadge({ lat }) {
+export default function SeasonBadge({ lat, light = false }) {
   const season = useMemo(() => getSeason(lat), [lat])
 
   if (!season) return null
@@ -61,9 +61,9 @@ export default function SeasonBadge({ lat }) {
         gap: 4,
         padding: '2px 10px 2px 6px',
         borderRadius: 20,
-        background: cfg.bg,
-        border: `1px solid ${cfg.border}`,
-        color: cfg.color,
+        background: light ? 'rgba(255,255,255,0.15)' : cfg.bg,
+        border: `1px solid ${light ? 'rgba(255,255,255,0.25)' : cfg.border}`,
+        color: light ? '#fff' : cfg.color,
         fontSize: '0.75rem',
         fontWeight: 600,
         overflow: 'hidden',

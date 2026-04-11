@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import SeasonBadge from './SeasonBadge.jsx'
 
 const WEATHER_CONFIGS = {
   sunny:  { sky: '#87CEEB', ground: '#90C695', sunVisible: true, clouds: 0, rainDrops: 0, snowFlakes: 0 },
@@ -182,6 +183,7 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
             <span style={{ fontSize: '1.2rem' }}>{weather.current.condition.emoji}</span>
             <strong>{temp}°{unit}</strong>
             <span style={{ opacity: 0.8 }}>{label}</span>
+            <SeasonBadge lat={weather.location?.lat} light />
             {location?.name && (
               <span
                 onClick={onLocationClick}
