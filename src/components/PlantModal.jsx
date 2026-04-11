@@ -60,6 +60,13 @@ const SOIL_TYPE_OPTIONS = [
   { value: 'succulent-mix', label: 'Succulent / cactus mix' },
   { value: 'orchid-mix', label: 'Orchid mix (bark)' },
 ]
+const POT_MATERIAL_OPTIONS = [
+  { value: 'terracotta', label: 'Terracotta / Clay' },
+  { value: 'plastic', label: 'Plastic' },
+  { value: 'ceramic', label: 'Ceramic / Glazed' },
+  { value: 'fabric', label: 'Fabric / Grow Bag' },
+  { value: 'metal', label: 'Metal' },
+]
 const PLANTED_IN_OPTIONS = [
   { value: 'ground', label: 'In the Ground' },
   { value: 'garden-bed', label: 'Garden Bed' },
@@ -170,7 +177,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     waterAmount: null, waterMethod: null,
     irrigationDuration: null, irrigationSchedule: null,
     sunExposure: null, sunHoursPerDay: null,
-    potSize: null, soilType: null,
+    potSize: null, soilType: null, potMaterial: null,
     plantedIn: null,
   })
   const [isSaving, setIsSaving] = useState(false)
@@ -201,6 +208,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         sunHoursPerDay: plant.sunHoursPerDay ?? null,
         potSize: plant.potSize || null,
         soilType: plant.soilType || null,
+        potMaterial: plant.potMaterial || null,
         plantedIn: plant.plantedIn || null,
       })
     }
@@ -254,6 +262,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       sunHoursPerDay: form.sunHoursPerDay ? Number(form.sunHoursPerDay) : null,
       potSize: form.plantedIn === 'pot' ? form.potSize : null,
       soilType: form.plantedIn === 'pot' ? form.soilType : null,
+      potMaterial: form.plantedIn === 'pot' ? form.potMaterial : null,
       plantedIn: form.plantedIn,
     })
     setIsSaving(false)
@@ -285,9 +294,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         name: form.name, species: form.species,
         plantedIn: form.plantedIn, isOutdoor: outdoor,
         potSize: form.plantedIn === 'pot' ? form.potSize : null,
+        potMaterial: form.plantedIn === 'pot' ? form.potMaterial : null,
         soilType: form.plantedIn === 'pot' ? form.soilType : null,
         sunExposure: form.sunExposure, health: form.health,
+        maturity: form.maturity,
         season: wateringStatus?.season || null,
+        temperature: weather?.current?.temp || null,
       })
       setWateringRec(data)
     }
@@ -414,26 +426,35 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             </Form.Select>
           </Form.Group>
           {form.plantedIn === 'pot' && (
-            <Row className="mb-3">
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label>Pot Size</Form.Label>
-                  <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
-                    <option value="">— Select —</option>
-                    {POT_SIZE_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-              <Col md={6}>
-                <Form.Group>
-                  <Form.Label>Soil Type</Form.Label>
-                  <Form.Select value={form.soilType || ''} onChange={(e) => update('soilType', e.target.value || null)}>
-                    <option value="">— Select —</option>
-                    {SOIL_TYPE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </Form.Select>
-                </Form.Group>
-              </Col>
-            </Row>
+            <>
+              <Row className="mb-3">
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label>Pot Size</Form.Label>
+                    <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
+                      <option value="">— Select —</option>
+                      {POT_SIZE_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label>Soil Type</Form.Label>
+                    <Form.Select value={form.soilType || ''} onChange={(e) => update('soilType', e.target.value || null)}>
+                      <option value="">— Select —</option>
+                      {SOIL_TYPE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+              </Row>
+              <Form.Group className="mb-3">
+                <Form.Label>Pot Material</Form.Label>
+                <Form.Select value={form.potMaterial || ''} onChange={(e) => update('potMaterial', e.target.value || null)}>
+                  <option value="">— Select —</option>
+                  {POT_MATERIAL_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                </Form.Select>
+              </Form.Group>
+            </>
           )}
         </Modal.Body>
       )}
@@ -577,6 +598,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   <div className="mt-2 pt-2 border-top">
                     <strong className="text-uppercase fs-xs">Signs to Watch</strong>
                     <p className="text-muted mb-0 fs-xs">{wateringRec.signs}</p>
+                  </div>
+                )}
+                {wateringRec.recommendedFrequencyDays && wateringRec.recommendedFrequencyDays !== Number(form.frequencyDays) && (
+                  <div className="mt-2 pt-2 border-top d-flex align-items-center justify-content-between">
+                    <span className="fs-xs">
+                      AI recommends watering every <strong>{wateringRec.recommendedFrequencyDays}d</strong>
+                      {form.frequencyDays ? <span className="text-muted"> (currently {form.frequencyDays}d)</span> : null}
+                    </span>
+                    <Button variant="outline-primary" size="sm" className="ms-2" onClick={() => update('frequencyDays', wateringRec.recommendedFrequencyDays)}>
+                      Apply
+                    </Button>
                   </div>
                 )}
               </div>

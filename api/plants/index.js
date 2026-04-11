@@ -161,6 +161,8 @@ async function signPlantData(data) {
   return data;
 }
 
+const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace', 'Deck', 'Yard', 'Courtyard', 'Porch', 'Veranda']);
+
 const app = express();
 app.set('trust proxy', true); // Behind API Gateway — trust X-Forwarded-For
 app.use(express.json({ limit: '10mb' }));
@@ -382,30 +384,35 @@ Rules:
 const WATERING_RECOMMEND_SCHEMA = {
   type: SchemaType.OBJECT,
   properties: {
-    amount:       { type: SchemaType.STRING },
-    frequency:    { type: SchemaType.STRING },
-    method:       { type: SchemaType.STRING },
-    seasonalTips: { type: SchemaType.STRING },
-    signs:        { type: SchemaType.STRING },
-    summary:      { type: SchemaType.STRING },
+    amount:                  { type: SchemaType.STRING },
+    frequency:               { type: SchemaType.STRING },
+    recommendedFrequencyDays: { type: SchemaType.INTEGER },
+    method:                  { type: SchemaType.STRING },
+    seasonalTips:            { type: SchemaType.STRING },
+    signs:                   { type: SchemaType.STRING },
+    summary:                 { type: SchemaType.STRING },
   },
-  required: ['amount', 'frequency', 'method', 'seasonalTips', 'signs', 'summary'],
+  required: ['amount', 'frequency', 'recommendedFrequencyDays', 'method', 'seasonalTips', 'signs', 'summary'],
 };
 
-const WATERING_RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, potSize, soilType, sunExposure, health, season } = {}) => {
+const WATERING_RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature } = {}) => {
   const details = [];
   if (plantedIn) details.push(`planted in: ${plantedIn === 'ground' ? 'the ground' : plantedIn === 'garden-bed' ? 'a garden bed' : 'a pot'}`);
   if (isOutdoor !== undefined) details.push(`location: ${isOutdoor ? 'outdoors' : 'indoors'}`);
   if (potSize) details.push(`pot size: ${potSize}`);
+  if (potMaterial) details.push(`pot material: ${potMaterial}`);
   if (soilType) details.push(`soil: ${soilType}`);
   if (sunExposure) details.push(`sun exposure: ${sunExposure}`);
   if (health) details.push(`current health: ${health}`);
+  if (maturity) details.push(`maturity: ${maturity}`);
   if (season) details.push(`current season: ${season}`);
+  if (temperature) details.push(`current temperature: ${temperature}°C`);
   const ctx = details.length ? `\nPlant details: ${details.join(', ')}.` : '';
   return `You are a plant watering expert. Provide specific watering guidance for: ${name}${species ? ` (${species})` : ''}.${ctx}
 Rules:
 - amount: specific volume (e.g. "200-300ml" for pots, "deep soak to 15cm" for ground)
 - frequency: specific schedule (e.g. "every 5-7 days in summer")
+- recommendedFrequencyDays: a single integer (1-30) for the ideal watering interval in days for the CURRENT season and conditions. Consider the species' water needs, container type (terracotta dries faster than plastic), soil drainage, sun exposure, indoor vs outdoor, temperature, and plant maturity
 - method: best watering method for this setup
 - seasonalTips: how to adjust watering across seasons
 - signs: how to tell if over/under-watered
@@ -670,13 +677,13 @@ app.post('/recommend', async (req, res) => {
 
 app.post('/recommend-watering', async (req, res) => {
   try {
-    const { name, species, plantedIn, isOutdoor, potSize, soilType, sunExposure, health, season } = req.body;
+    const { name, species, plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     const result = await geminiWithRetry({
       contents: [{
         role: 'user',
-        parts: [{ text: WATERING_RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, potSize, soilType, sunExposure, health, season }) }],
+        parts: [{ text: WATERING_RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature }) }],
       }],
       generationConfig: {
         maxOutputTokens: 1024,
@@ -688,6 +695,54 @@ app.post('/recommend-watering', async (req, res) => {
 
     const parsed = parseGeminiJson(result.response.text());
     res.status(200).json(parsed);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/recalculate-frequencies', requireUser, async (req, res) => {
+  try {
+    const { season, temperature } = req.body || {};
+    const snapshot = await userPlants(req.userId).get();
+    const plants = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (plants.length === 0) return res.status(200).json({ updated: 0, results: [] });
+
+    const results = [];
+    for (const plant of plants) {
+      try {
+        const outdoor = OUTDOOR_ROOMS.has(plant.room);
+        const result = await geminiWithRetry({
+          contents: [{
+            role: 'user',
+            parts: [{ text: WATERING_RECOMMEND_PROMPT(plant.name, plant.species, {
+              plantedIn: plant.plantedIn, isOutdoor: outdoor,
+              potSize: plant.potSize, potMaterial: plant.potMaterial,
+              soilType: plant.soilType, sunExposure: plant.sunExposure,
+              health: plant.health, maturity: plant.maturity,
+              season, temperature,
+            }) }],
+          }],
+          generationConfig: {
+            maxOutputTokens: 1024, temperature: 0.3,
+            responseMimeType: 'application/json',
+            responseSchema: WATERING_RECOMMEND_SCHEMA,
+          },
+        });
+        const parsed = parseGeminiJson(result.response.text());
+        const freq = parsed.recommendedFrequencyDays;
+        if (freq && freq >= 1 && freq <= 30) {
+          await userPlants(req.userId).doc(plant.id).set(
+            { frequencyDays: freq, updatedAt: new Date().toISOString() },
+            { merge: true },
+          );
+          results.push({ id: plant.id, name: plant.name, oldFrequency: plant.frequencyDays, newFrequency: freq });
+        }
+      } catch (err) {
+        log.warn('recalculate frequency failed for plant', { plantId: plant.id, error: err.message });
+        results.push({ id: plant.id, name: plant.name, error: err.message });
+      }
+    }
+    res.status(200).json({ updated: results.filter((r) => r.newFrequency).length, results });
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
   }
