@@ -529,14 +529,14 @@ export default function LeafletFloorplan({
         }))
         await sleep(800)
 
-        // Brief flash on the plant marker
+        // Brief flash on the plant marker inner div (not the Leaflet container which uses transform for positioning)
         const plantMarker = plantMarkersRef.current[plant.id]
         if (plantMarker) {
-          const el = plantMarker.getElement()
-          if (el) {
-            el.style.transition = 'transform 0.2s'
-            el.style.transform = 'scale(1.3)'
-            setTimeout(() => { el.style.transform = '' }, 300)
+          const inner = plantMarker.getElement()?.querySelector('.plant-lf-inner')
+          if (inner) {
+            inner.style.transition = 'transform 0.2s'
+            inner.style.transform = 'scale(1.3)'
+            setTimeout(() => { inner.style.transform = '' }, 300)
           }
         }
 
