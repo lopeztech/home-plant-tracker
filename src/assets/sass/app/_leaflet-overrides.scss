@@ -78,6 +78,63 @@
   animation: pulse-ring 1.5s ease-in-out infinite;
 }
 
+@keyframes plant-bounce {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-6px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-3px); }
+}
+
+.plant-lf-attention {
+  animation: plant-bounce 1.8s ease-in-out infinite;
+}
+
+/* Gnome watering animation */
+@keyframes gnome-walk {
+  0%, 100% { transform: translateY(0) scaleX(var(--gnome-dir, 1)); }
+  25% { transform: translateY(-3px) scaleX(var(--gnome-dir, 1)); }
+  50% { transform: translateY(0) scaleX(var(--gnome-dir, 1)); }
+  75% { transform: translateY(-2px) scaleX(var(--gnome-dir, 1)); }
+}
+
+@keyframes gnome-water {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-25deg); }
+  60% { transform: rotate(-25deg); }
+}
+
+@keyframes water-splash {
+  0% { opacity: 0; transform: translateY(-4px); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+
+.gnome-marker {
+  transition: none;
+  z-index: 9999 !important;
+}
+
+.gnome-body {
+  font-size: 28px;
+  line-height: 1;
+  animation: gnome-walk 0.4s ease-in-out infinite;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+}
+
+.gnome-body.watering {
+  animation: gnome-water 0.8s ease-in-out;
+}
+
+.gnome-splash {
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 14px;
+  animation: water-splash 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
 .lf-room-label {
   background: transparent !important;
   border: none !important;

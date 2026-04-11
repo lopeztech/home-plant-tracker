@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Row, Col, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { isOutdoor } from '../utils/watering.js'
+import SeasonBadge from '../components/SeasonBadge.jsx'
 
 function dayLabel(dateStr, index) {
   if (index === 0) return 'Today'
@@ -46,6 +47,9 @@ export default function ForecastPage() {
               <div>
                 <h2 className="mb-0">{weather.current.temp}°{weather.unit === 'fahrenheit' ? 'F' : 'C'}</h2>
                 <span className="text-muted">{weather.current.condition.label}</span>
+              </div>
+              <div className="ms-auto">
+                <SeasonBadge lat={weather.location?.lat} />
               </div>
             </div>
           </div></div>

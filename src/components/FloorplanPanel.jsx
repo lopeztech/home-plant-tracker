@@ -8,7 +8,7 @@ import HouseWeatherFrame from './HouseWeatherFrame.jsx'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 
-export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
+export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWaterRef }) {
   const {
     plants, floors, activeFloorId, setActiveFloorId,
     weather, location, handleFloorRoomsChange,
@@ -153,6 +153,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick }) {
             onMarkerDrag={handleLocalDrag}
             editMode={false}
             onRoomsChange={handleFloorRoomsChange}
+            gnomeWaterRef={gnomeWaterRef}
           />
         )}
         {activeFloor && viewMode === '3d' && (

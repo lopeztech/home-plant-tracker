@@ -67,10 +67,24 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
   )
 }
 
-export default function PlantListPanel({ onPlantClick, onAddPlant }) {
+export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef }) {
   const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading } = usePlantContext()
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
+  const [gnomeActive, setGnomeActive] = useState(false)
+
+  const handleGnomeBatchWater = useCallback((targetPlants) => {
+    if (gnomeActive) return
+    if (gnomeWaterRef?.current) {
+      setGnomeActive(true)
+      gnomeWaterRef.current(targetPlants, () => {
+        handleBatchWater(targetPlants.map((p) => p.id))
+        setGnomeActive(false)
+      })
+    } else {
+      handleBatchWater(targetPlants.map((p) => p.id))
+    }
+  }, [gnomeActive, gnomeWaterRef, handleBatchWater])
 
   const floorPlants = useMemo(() => {
     if (!activeFloorId) return plants
@@ -146,10 +160,11 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
                 variant="outline-info"
                 size="sm"
                 className="w-100"
-                onClick={() => handleBatchWater(floorPlants.map((p) => p.id))}
+                disabled={gnomeActive}
+                onClick={() => handleGnomeBatchWater(floorPlants)}
               >
-                <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                Water All on Floor ({floorPlants.length} plants)
+                {gnomeActive ? <span className="spinner-border spinner-border-sm me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>}
+                {gnomeActive ? 'Watering...' : `Water All on Floor (${floorPlants.length} plants)`}
               </Button>
             </div>
           )}
@@ -219,7 +234,8 @@ export default function PlantListPanel({ onPlantClick, onAddPlant }) {
                             variant="outline-primary"
                             size="sm"
                             className="py-0 px-2 fs-xs"
-                            onClick={() => handleBatchWater(grouped[room].map((p) => p.id))}
+                            disabled={gnomeActive}
+                            onClick={() => handleGnomeBatchWater(grouped[room])}
                           >
                             <svg className="sa-icon me-1" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#droplet"></use></svg>
                             Water all
