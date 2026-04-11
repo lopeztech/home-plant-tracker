@@ -323,7 +323,7 @@ describe('POST /recommend', () => {
 // ── POST /recommend-watering ──────────────────────────────────────────────────
 
 describe('POST /recommend-watering', () => {
-  const wateringPayload = { amount: '500ml', frequency: 'Every 3-5 days', method: 'Deep soak', seasonalTips: 'Reduce in winter', signs: 'Yellow leaves = overwatering', summary: 'Water deeply but infrequently.' };
+  const wateringPayload = { amount: '500ml', frequency: 'Every 3-5 days', recommendedFrequencyDays: 4, method: 'Deep soak', seasonalTips: 'Reduce in winter', signs: 'Yellow leaves = overwatering', summary: 'Water deeply but infrequently.' };
 
   it('returns 400 when name is missing', async () => {
     const res = await request(app).post('/recommend-watering').send({ species: 'Ficus' });
@@ -349,6 +349,36 @@ describe('POST /recommend-watering', () => {
     const res = await request(app).post('/recommend-watering').send({ name: 'Cactus' });
     expect(res.status).toBe(200);
     expect(res.body.amount).toBeTruthy();
+  });
+
+  it('returns recommendedFrequencyDays', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(wateringPayload) } });
+    const res = await request(app).post('/recommend-watering').send({
+      name: 'Fern', plantedIn: 'pot', potMaterial: 'terracotta', temperature: 25,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.recommendedFrequencyDays).toBe(4);
+  });
+});
+
+// ── POST /plants/recalculate-frequencies ──────────────────────────────────────
+
+describe('POST /plants/recalculate-frequencies', () => {
+  const wateringPayload = { amount: '300ml', frequency: 'Every 5 days', recommendedFrequencyDays: 5, method: 'Top water', seasonalTips: 'Less in winter', signs: 'Wilting', summary: 'Water every 5 days.' };
+
+  it('returns 401 without auth header', async () => {
+    const res = await request(app).post('/plants/recalculate-frequencies').send({});
+    expect(res.status).toBe(401);
+  });
+
+  it('returns updated count for existing plants', async () => {
+    // Create a test plant first
+    await request(app).post('/plants').set('Authorization', 'Bearer test-token').send({ name: 'Test Fern', species: 'Nephrolepis', frequencyDays: 7 });
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(wateringPayload) } });
+    const res = await request(app).post('/plants/recalculate-frequencies').set('Authorization', 'Bearer test-token').send({ season: 'autumn', temperature: 22 });
+    expect(res.status).toBe(200);
+    expect(res.body.updated).toBeGreaterThanOrEqual(1);
+    expect(res.body.results.some((r) => r.newFrequency === 5)).toBe(true);
   });
 });
 
