@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Row, Col, Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
@@ -6,7 +6,8 @@ import PlantListPanel from '../components/PlantListPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 
 export default function DashboardPage() {
-  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, isGuest, plantsError, plants, plantsLoading } = usePlantContext()
+  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleBatchWater, isGuest, plantsError, plants, plantsLoading } = usePlantContext()
+  const gnomeWaterRef = useRef(null)
 
   const hasFloors = floors.length > 0
 
@@ -86,11 +87,13 @@ export default function DashboardPage() {
             <FloorplanPanel
               onPlantClick={handlePlantClick}
               onFloorplanClick={handleFloorplanClick}
+              gnomeWaterRef={gnomeWaterRef}
             />
             <div className="mt-4">
               <PlantListPanel
                 onPlantClick={handlePlantClick}
                 onAddPlant={handleAddPlant}
+                gnomeWaterRef={gnomeWaterRef}
               />
             </div>
           </>

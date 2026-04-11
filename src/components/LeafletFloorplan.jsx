@@ -28,11 +28,13 @@ function getPlantEmoji(plant) {
 function makePlantIcon(plant, weather, floors) {
   const { color, daysUntil } = getWateringStatus(plant, weather, floors)
   const overdue = daysUntil < 0
+  const attention = daysUntil >= 0 && daysUntil <= 2
   const emoji = getPlantEmoji(plant)
+  const cls = overdue ? ' plant-lf-overdue' : attention ? ' plant-lf-attention' : ''
 
   return L.divIcon({
     className: 'plant-lf-icon',
-    html: `<div class="plant-lf-inner${overdue ? ' plant-lf-overdue' : ''}"
+    html: `<div class="plant-lf-inner${cls}"
                 style="width:32px;height:32px;border-radius:50%;
                        border:2px solid ${color};
                        background:#fff;
@@ -90,6 +92,7 @@ export default function LeafletFloorplan({
   onMarkerDrag,
   editMode = false,
   onRoomsChange,
+  gnomeWaterRef,
 }) {
   const containerRef   = useRef(null)
   const mapRef         = useRef(null)
@@ -462,6 +465,109 @@ export default function LeafletFloorplan({
       }
     }
   }, [plants, weather, floors])
+
+  // ── Gnome watering animation ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!gnomeWaterRef) return
+    gnomeWaterRef.current = async (targetPlants, onComplete) => {
+      const map = mapRef.current
+      if (!map || !targetPlants.length) { onComplete?.(); return }
+
+      // Sort plants left-to-right for a natural walking path
+      const sorted = [...targetPlants].sort((a, b) => a.x - b.x)
+
+      // Create gnome marker
+      const startX = Math.max(0, sorted[0].x - 10)
+      const startY = sorted[0].y
+      const gnomeIcon = L.divIcon({
+        className: 'gnome-marker',
+        html: `<div class="gnome-body">🧑‍🌾</div>`,
+        iconSize: [32, 32],
+        iconAnchor: [16, 28],
+      })
+      const gnome = L.marker(toLL(startX, startY), { icon: gnomeIcon, interactive: false, zIndexOffset: 9999 })
+      gnome.addTo(map)
+
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+      // Walk to each plant and water it
+      for (let i = 0; i < sorted.length; i++) {
+        const plant = sorted[i]
+        const targetLL = toLL(plant.x, plant.y)
+
+        // Determine walking direction for flip
+        const gnomePos = fromLL(gnome.getLatLng())
+        const dir = plant.x >= gnomePos.x ? 1 : -1
+
+        // Update gnome direction
+        gnome.setIcon(L.divIcon({
+          className: 'gnome-marker',
+          html: `<div class="gnome-body" style="--gnome-dir:${dir}">🧑‍🌾</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 28],
+        }))
+
+        // Animate walk: move in steps
+        const startLL = gnome.getLatLng()
+        const steps = 20
+        const duration = 600
+        for (let s = 1; s <= steps; s++) {
+          const t = s / steps
+          const lat = startLL.lat + (targetLL.lat - startLL.lat) * t
+          const lng = startLL.lng + (targetLL.lng - startLL.lng) * t
+          gnome.setLatLng([lat, lng])
+          await sleep(duration / steps)
+        }
+
+        // Watering animation
+        gnome.setIcon(L.divIcon({
+          className: 'gnome-marker',
+          html: `<div class="gnome-body watering" style="--gnome-dir:${dir}">🧑‍🌾</div>
+                 <div class="gnome-splash">💧</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 28],
+        }))
+        await sleep(800)
+
+        // Brief flash on the plant marker
+        const plantMarker = plantMarkersRef.current[plant.id]
+        if (plantMarker) {
+          const el = plantMarker.getElement()
+          if (el) {
+            el.style.transition = 'transform 0.2s'
+            el.style.transform = 'scale(1.3)'
+            setTimeout(() => { el.style.transform = '' }, 300)
+          }
+        }
+
+        // Reset gnome to walking
+        gnome.setIcon(L.divIcon({
+          className: 'gnome-marker',
+          html: `<div class="gnome-body" style="--gnome-dir:${dir}">🧑‍🌾</div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 28],
+        }))
+        await sleep(200)
+      }
+
+      // Walk gnome off screen to the right
+      const lastPos = fromLL(gnome.getLatLng())
+      const exitLL = toLL(Math.min(100, lastPos.x + 15), lastPos.y)
+      const startExit = gnome.getLatLng()
+      const exitSteps = 15
+      for (let s = 1; s <= exitSteps; s++) {
+        const t = s / exitSteps
+        gnome.setLatLng([
+          startExit.lat + (exitLL.lat - startExit.lat) * t,
+          startExit.lng + (exitLL.lng - startExit.lng) * t,
+        ])
+        await sleep(400 / exitSteps)
+      }
+
+      map.removeLayer(gnome)
+      onComplete?.()
+    }
+  }, [gnomeWaterRef])
 
   // ── Pending room name prompt ──────────────────────────────────────────────
   const handleConfirmRoom = () => {
