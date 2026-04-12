@@ -3,6 +3,7 @@ import { Outlet, Navigate } from 'react-router'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
+import Topbar from './components/Topbar.jsx'
 import Onboarding from '../components/Onboarding.jsx'
 
 function Loader() {
@@ -23,8 +24,8 @@ export default function MainLayout() {
 
   return (
     <PlantProvider>
-      <div className="app-wrap set-header-fixed" style={{ gridTemplateRows: '0 auto' }}>
-        <header className="app-header" style={{ display: 'none' }} />
+      <div className="app-wrap set-header-fixed">
+        <Topbar />
         <Sidebar />
         <main className="app-body">
           <div className="app-content">
