@@ -247,6 +247,29 @@ export function PlantProvider({ children }) {
     setPlants((prev) => prev.map((p) => updates[p.id] ? { ...p, ...updates[p.id] } : p))
   }, [])
 
+  const handleBulkCreatePlants = useCallback(async (plantsData) => {
+    if (isGuest) {
+      const newPlants = plantsData.map((data) => ({
+        ...data,
+        id: `guest-new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        floor: data.floor ?? activeFloorId,
+        x: 50, y: 50,
+      }))
+      setPlants((prev) => [...newPlants, ...prev])
+      return newPlants.map((p) => ({ status: 'fulfilled', value: p }))
+    }
+    const results = await Promise.allSettled(
+      plantsData.map((data) => plantsApi.create({
+        ...data,
+        floor: data.floor ?? activeFloorId,
+        x: 50, y: 50,
+      })),
+    )
+    const created = results.filter((r) => r.status === 'fulfilled').map((r) => r.value)
+    if (created.length) setPlants((prev) => [...created, ...prev])
+    return results
+  }, [activeFloorId, isGuest])
+
   const value = useMemo(() => ({
     plants, plantsLoading, plantsError,
     floors, activeFloorId, setActiveFloorId,
@@ -254,14 +277,14 @@ export function PlantProvider({ children }) {
     overdueCount, isAnalysingFloorplan,
     isGuest,
     handleSavePlant, handleWaterPlant, handleBatchWater,
-    handleDeletePlant,
+    handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
   }), [
     plants, plantsLoading, plantsError, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
     handleSavePlant, handleWaterPlant, handleBatchWater,
-    handleDeletePlant,
+    handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
   ])

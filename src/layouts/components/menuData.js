@@ -8,5 +8,6 @@ export const menuItems = [
   { key: 'forecast', label: 'Forecast', icon: '/icons/sprite.svg#cloud', url: '/forecast' },
   ...(mlInsightsEnabled ? [{ key: 'insights', label: 'Insights', icon: '/icons/sprite.svg#zap', url: '/insights' }] : []),
   { key: 'manage', label: 'Manage', isTitle: true },
+  { key: 'bulk-upload', label: 'Bulk Upload', icon: '/icons/sprite.svg#upload', url: '/bulk-upload' },
   { key: 'settings', label: 'Settings', icon: '/icons/sprite.svg#settings', url: '/settings' },
 ]
