@@ -45,7 +45,15 @@ export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove
   const { previewUrl, status, form, error } = entry
 
   const update = (field, value) => {
-    onChange({ ...entry, form: { ...form, [field]: value } })
+    const updatedForm = { ...form, [field]: value }
+    // When floor changes, auto-select the first room on the new floor
+    if (field === 'floor') {
+      const newFloorRooms = (floors.find((f) => f.id === value)?.rooms || []).map((r) => r.name).filter(Boolean)
+      if (newFloorRooms.length > 0 && !newFloorRooms.includes(form.room)) {
+        updatedForm.room = newFloorRooms[0]
+      }
+    }
+    onChange({ ...entry, form: updatedForm })
   }
 
   const floorRooms = form.floor

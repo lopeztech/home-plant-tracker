@@ -5,6 +5,7 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
+import { calculateReorganisedPositions } from '../utils/reorganise.js'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 
@@ -38,6 +39,21 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   )
 
   const [hasDirty, setHasDirty] = useState(false)
+
+  // Reorganise plants — evenly distribute within their assigned room bounds
+  const handleReorganise = useCallback(() => {
+    if (!activeFloor?.rooms?.length || plantsOnFloor.length === 0) return
+
+    const updates = calculateReorganisedPositions(plantsOnFloor, activeFloor.rooms)
+
+    if (Object.keys(updates).length > 0) {
+      for (const [id, move] of Object.entries(updates)) {
+        dirtyMovesRef.current[id] = move
+      }
+      updatePlantsLocally(updates)
+      setHasDirty(true)
+    }
+  }, [activeFloor, plantsOnFloor, updatePlantsLocally])
 
   // Drag handler — update context immediately (no API call)
   const handleLocalDrag = useCallback((plant, x, y) => {
@@ -117,16 +133,24 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
             </Nav.Item>
           ))}
         </Nav>
-        <ButtonGroup size="sm" className="flex-shrink-0">
-          <Button variant={viewMode === '2d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('2d')} title="2D View">
-            <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
-            2D
-          </Button>
-          <Button variant={viewMode === '3d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('3d')} title="3D View">
-            <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#box"></use></svg>
-            3D
-          </Button>
-        </ButtonGroup>
+        <div className="d-flex gap-2 flex-shrink-0">
+          {plantsOnFloor.length > 0 && activeFloor?.rooms?.length > 0 && (
+            <Button variant="outline-secondary" size="sm" onClick={handleReorganise} title="Evenly space plants within their rooms">
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
+              Reorganise
+            </Button>
+          )}
+          <ButtonGroup size="sm">
+            <Button variant={viewMode === '2d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('2d')} title="2D View">
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
+              2D
+            </Button>
+            <Button variant={viewMode === '3d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('3d')} title="3D View">
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#box"></use></svg>
+              3D
+            </Button>
+          </ButtonGroup>
+        </div>
       </div>
 
       {/* Map view */}
