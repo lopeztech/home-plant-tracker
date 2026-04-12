@@ -11,6 +11,14 @@ vi.mock('../components/ImageAnalyser.jsx', () => ({
 // Stub imagesApi and recommendApi so no real network calls happen.
 vi.mock('../api/plants.js', () => ({
   imagesApi: { upload: vi.fn().mockResolvedValue('https://example.com/img.jpg') },
+  plantsApi: {
+    update: vi.fn().mockResolvedValue({}),
+    deletePhoto: vi.fn().mockResolvedValue({}),
+    diagnostic: vi.fn().mockResolvedValue({}),
+  },
+  analyseApi: {
+    analyse: vi.fn().mockResolvedValue({ species: 'Fern', health: 'Good', maturity: 'Mature' }),
+  },
   recommendApi: {
     get: vi.fn().mockResolvedValue({
       summary: 'A lovely fern.',
@@ -320,6 +328,98 @@ describe('PlantModal', () => {
   })
 
   // ── Care tab ──────────────────────────────────────────────────────────────
+
+  it('shows photo history on the Care tab when photoLog exists', () => {
+    const plant = {
+      ...existingPlant,
+      photoLog: [
+        { url: 'https://example.com/photo1.jpg', date: '2026-03-01T00:00:00.000Z', type: 'growth', analysis: null },
+        { url: 'https://example.com/photo2.jpg', date: '2026-03-15T00:00:00.000Z', type: 'diagnostic', analysis: { issue: 'Root rot', severity: 'moderate' } },
+      ],
+    }
+    renderModal({ plant })
+    fireEvent.click(screen.getByText('Care'))
+    expect(screen.getByText(/photo history/i)).toBeInTheDocument()
+    expect(screen.getByText('Growth')).toBeInTheDocument()
+    expect(screen.getByText('Diagnostic')).toBeInTheDocument()
+    expect(screen.getByText('Root rot')).toBeInTheDocument()
+  })
+
+  it('shows delete buttons on photo cards', () => {
+    const plant = {
+      ...existingPlant,
+      photoLog: [
+        { url: 'https://example.com/photo1.jpg', date: '2026-03-01T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    }
+    renderModal({ plant })
+    fireEvent.click(screen.getByText('Care'))
+    expect(screen.getByTitle('Delete photo')).toBeInTheDocument()
+  })
+
+  it('shows delete confirmation when delete button is clicked', () => {
+    const plant = {
+      ...existingPlant,
+      photoLog: [
+        { url: 'https://example.com/photo1.jpg', date: '2026-03-01T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    }
+    renderModal({ plant })
+    fireEvent.click(screen.getByText('Care'))
+    fireEvent.click(screen.getByTitle('Delete photo'))
+    expect(screen.getByText(/delete this photo/i)).toBeInTheDocument()
+  })
+
+  it('calls plantsApi.deletePhoto when delete is confirmed', async () => {
+    const { plantsApi } = await import('../api/plants.js')
+    const plant = {
+      ...existingPlant,
+      photoLog: [
+        { url: 'https://example.com/photo1.jpg', date: '2026-03-01T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    }
+    renderModal({ plant })
+    fireEvent.click(screen.getByText('Care'))
+    fireEvent.click(screen.getByTitle('Delete photo'))
+    // Click the Delete button inside the photo confirmation bar (btn-danger btn-sm)
+    const confirmBar = screen.getByText(/delete this photo/i).closest('.alert')
+    const deleteBtn = confirmBar.querySelector('.btn-danger')
+    fireEvent.click(deleteBtn)
+    await waitFor(() => expect(plantsApi.deletePhoto).toHaveBeenCalledWith('plant-1', 'https://example.com/photo1.jpg'))
+  })
+
+  it('hides deleted photo from the list after deletion', async () => {
+    const { plantsApi } = await import('../api/plants.js')
+    plantsApi.deletePhoto.mockResolvedValue({})
+    const plant = {
+      ...existingPlant,
+      photoLog: [
+        { url: 'https://example.com/photo1.jpg', date: '2026-03-01T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    }
+    renderModal({ plant })
+    fireEvent.click(screen.getByText('Care'))
+    fireEvent.click(screen.getByTitle('Delete photo'))
+    const confirmBar = screen.getByText(/delete this photo/i).closest('.alert')
+    fireEvent.click(confirmBar.querySelector('.btn-danger'))
+    await waitFor(() => expect(screen.queryByText(/photo history/i)).not.toBeInTheDocument())
+  })
+
+  it('dismisses photo delete confirmation when Cancel is clicked', () => {
+    const plant = {
+      ...existingPlant,
+      photoLog: [
+        { url: 'https://example.com/photo1.jpg', date: '2026-03-01T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    }
+    renderModal({ plant })
+    fireEvent.click(screen.getByText('Care'))
+    fireEvent.click(screen.getByTitle('Delete photo'))
+    expect(screen.getByText(/delete this photo/i)).toBeInTheDocument()
+    const confirmBar = screen.getByText(/delete this photo/i).closest('.alert')
+    fireEvent.click(confirmBar.querySelector('.btn-light'))
+    expect(screen.queryByText(/delete this photo/i)).not.toBeInTheDocument()
+  })
 
   // ── Recommendations tab ──────────────────────────────────────────────────
 
