@@ -52,6 +52,7 @@ export const plantsApi = {
       body: JSON.stringify({ imageBase64: data, mimeType: file.type }),
     })
   },
+  deletePhoto: (id, url) => request(`/plants/${id}/photos`, { method: 'DELETE', body: JSON.stringify({ url }) }),
   seasonalAdjustment: (id) => request(`/plants/${id}/seasonal-adjustment`),
   speciesCluster: (name) => request(`/species/${encodeURIComponent(name)}/cluster`),
   careScore: (id) => request(`/plants/${id}/care-score`),
@@ -81,6 +82,14 @@ export const analyseApi = {
     return request('/analyse', {
       method: 'POST',
       body: JSON.stringify({ imageBase64: data, mimeType: file.type }),
+    })
+  },
+  async analyseWithHint(file, speciesHint) {
+    const base64 = await fileToBase64(file)
+    const [, data] = base64.split(',')
+    return request('/analyse-with-hint', {
+      method: 'POST',
+      body: JSON.stringify({ imageBase64: data, mimeType: file.type, speciesHint }),
     })
   },
   async analyseFloorplan(file) {
