@@ -41,7 +41,11 @@ export default function BulkUploadPage() {
 
   const rooms = getRoomsFromFloors(floors)
   const defaultFloor = activeFloorId || floors?.[0]?.id || ''
-  const defaultRoom = rooms[0] || ''
+  // Use rooms from active floor so bulk uploads default to a room on the current floor
+  const activeFloorRooms = defaultFloor
+    ? (floors.find((f) => f.id === defaultFloor)?.rooms || []).map((r) => r.name).filter(Boolean)
+    : rooms
+  const defaultRoom = activeFloorRooms[0] || rooms[0] || ''
 
   // Rotate analysis stage text for entries being analysed
   useEffect(() => {
@@ -88,9 +92,12 @@ export default function BulkUploadPage() {
         const result = await analyseApi.analyse(entry.file)
         const species = result.species || ''
         const shortSpecies = species ? species.split('(')[0].split(',')[0].trim() : ''
-        const autoName = shortSpecies ? `${shortSpecies} - ${defaultRoom}` : ''
 
-        setEntries((prev) => prev.map((e) => e.id === entry.id ? {
+        setEntries((prev) => prev.map((e) => {
+          if (e.id !== entry.id) return e
+          const roomLabel = e.form.room || defaultRoom
+          const autoName = shortSpecies ? `${shortSpecies} - ${roomLabel}` : ''
+          return {
           ...e,
           status: 'ready',
           form: {
@@ -106,7 +113,8 @@ export default function BulkUploadPage() {
             ...(result.potSize ? { potSize: result.potSize } : {}),
             ...(result.soilType ? { soilType: result.soilType } : {}),
           },
-        } : e))
+        }
+        }))
       } catch (err) {
         setEntries((prev) => prev.map((e) => e.id === entry.id ? {
           ...e,

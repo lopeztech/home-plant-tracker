@@ -162,4 +162,50 @@ describe('BulkPlantCard', () => {
     const removeBtn = document.querySelector('use[href*="#x"]')
     expect(removeBtn).not.toBeInTheDocument()
   })
+
+  it('auto-updates room when floor changes to a floor without the current room', () => {
+    renderCard()
+    // Change floor from 'ground' (Kitchen, Living Room) to 'first' (Bedroom)
+    const selects = screen.getAllByRole('combobox')
+    const floorSelect = selects.find((s) =>
+      Array.from(s.options).some((o) => o.textContent === 'First Floor'),
+    )
+    fireEvent.change(floorSelect, { target: { value: 'first' } })
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        form: expect.objectContaining({ floor: 'first', room: 'Bedroom' }),
+      }),
+    )
+  })
+
+  it('keeps room when switching to a floor that has the same room', () => {
+    // Entry has room 'Kitchen' on floor 'ground'
+    // Switching to a floor that also has 'Kitchen' should keep it
+    const floorsWithShared = [
+      { id: 'ground', name: 'Ground Floor', rooms: [{ name: 'Kitchen' }, { name: 'Living Room' }] },
+      { id: 'first', name: 'First Floor', rooms: [{ name: 'Kitchen' }, { name: 'Bedroom' }] },
+    ]
+    const entry = makeEntry()
+    render(
+      <BulkPlantCard
+        entry={entry}
+        floors={floorsWithShared}
+        rooms={rooms}
+        onChange={onChange}
+        onRemove={onRemove}
+        onRetry={onRetry}
+      />,
+    )
+    const selects = screen.getAllByRole('combobox')
+    const floorSelect = selects.find((s) =>
+      Array.from(s.options).some((o) => o.textContent === 'First Floor'),
+    )
+    fireEvent.change(floorSelect, { target: { value: 'first' } })
+    // Room should stay as 'Kitchen' since 'first' floor also has it
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        form: expect.objectContaining({ floor: 'first', room: 'Kitchen' }),
+      }),
+    )
+  })
 })
