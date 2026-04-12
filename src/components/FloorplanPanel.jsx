@@ -44,16 +44,20 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   const handleReorganise = useCallback(() => {
     if (!activeFloor?.rooms?.length || plantsOnFloor.length === 0) return
 
-    const updates = calculateReorganisedPositions(plantsOnFloor, activeFloor.rooms)
+    const { plantUpdates, expandedRooms } = calculateReorganisedPositions(plantsOnFloor, activeFloor.rooms)
 
-    if (Object.keys(updates).length > 0) {
-      for (const [id, move] of Object.entries(updates)) {
+    if (Object.keys(plantUpdates).length > 0) {
+      // If rooms were expanded, persist the new room bounds
+      if (expandedRooms) {
+        handleFloorRoomsChange(expandedRooms)
+      }
+      for (const [id, move] of Object.entries(plantUpdates)) {
         dirtyMovesRef.current[id] = move
       }
-      updatePlantsLocally(updates)
+      updatePlantsLocally(plantUpdates)
       setHasDirty(true)
     }
-  }, [activeFloor, plantsOnFloor, updatePlantsLocally])
+  }, [activeFloor, plantsOnFloor, updatePlantsLocally, handleFloorRoomsChange])
 
   // Drag handler — update context immediately (no API call)
   const handleLocalDrag = useCallback((plant, x, y) => {
