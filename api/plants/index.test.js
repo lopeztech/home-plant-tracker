@@ -1891,3 +1891,134 @@ describe('POST /plants/:id/diagnostic', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ── DELETE /plants/:id/photos ────────────────────────────────────────────────
+
+describe('DELETE /plants/:id/photos', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).delete('/plants/p1/photos').send({ url: 'http://example.com/photo.jpg' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app)
+      .delete('/plants/missing/photos').set('Authorization', authHeader())
+      .send({ url: 'http://example.com/photo.jpg' });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when url is missing', async () => {
+    store[plantPath('p1')] = { name: 'Fern', photoLog: [] };
+    const res = await request(app)
+      .delete('/plants/p1/photos').set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 when photo url not found in log', async () => {
+    store[plantPath('p1')] = { name: 'Fern', photoLog: [] };
+    const res = await request(app)
+      .delete('/plants/p1/photos').set('Authorization', authHeader())
+      .send({ url: 'https://storage.googleapis.com/undefined/plants/missing.jpg' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Photo not found in log');
+  });
+
+  it('removes the photo from photoLog and deletes from GCS', async () => {
+    const photoUrl = 'https://storage.googleapis.com/undefined/plants/growth1.jpg';
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      imageUrl: 'https://storage.googleapis.com/undefined/plants/other.jpg',
+      photoLog: [
+        { url: photoUrl, date: '2026-01-01T00:00:00.000Z', type: 'growth', analysis: null },
+        { url: 'https://storage.googleapis.com/undefined/plants/other.jpg', date: '2026-01-02T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    };
+    const res = await request(app)
+      .delete('/plants/p1/photos').set('Authorization', authHeader())
+      .send({ url: photoUrl });
+    expect(res.status).toBe(200);
+    const saved = store[plantPath('p1')];
+    expect(saved.photoLog).toHaveLength(1);
+    expect(saved.photoLog[0].url).toBe('https://storage.googleapis.com/undefined/plants/other.jpg');
+    expect(storageDeletedPaths).toContain('plants/growth1.jpg');
+  });
+
+  it('falls back imageUrl to latest growth photo when current image is deleted', async () => {
+    const currentUrl = 'https://storage.googleapis.com/undefined/plants/current.jpg';
+    const olderUrl = 'https://storage.googleapis.com/undefined/plants/older.jpg';
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      imageUrl: currentUrl,
+      photoLog: [
+        { url: olderUrl, date: '2026-01-01T00:00:00.000Z', type: 'growth', analysis: null },
+        { url: currentUrl, date: '2026-01-02T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    };
+    const res = await request(app)
+      .delete('/plants/p1/photos').set('Authorization', authHeader())
+      .send({ url: currentUrl });
+    expect(res.status).toBe(200);
+    const saved = store[plantPath('p1')];
+    expect(saved.imageUrl).toBe(olderUrl);
+    expect(saved.photoLog).toHaveLength(1);
+  });
+
+  it('sets imageUrl to null when last photo is deleted', async () => {
+    const onlyUrl = 'https://storage.googleapis.com/undefined/plants/only.jpg';
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      imageUrl: onlyUrl,
+      photoLog: [
+        { url: onlyUrl, date: '2026-01-01T00:00:00.000Z', type: 'growth', analysis: null },
+      ],
+    };
+    const res = await request(app)
+      .delete('/plants/p1/photos').set('Authorization', authHeader())
+      .send({ url: onlyUrl });
+    expect(res.status).toBe(200);
+    const saved = store[plantPath('p1')];
+    expect(saved.imageUrl).toBeNull();
+    expect(saved.photoLog).toHaveLength(0);
+  });
+});
+
+// ── POST /analyse-with-hint ──────────────────────────────────────────────────
+
+describe('POST /analyse-with-hint', () => {
+  it('returns 400 when imageBase64 is missing', async () => {
+    const res = await request(app).post('/analyse-with-hint').send({ mimeType: 'image/jpeg', speciesHint: 'Monstera' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when mimeType is missing', async () => {
+    const res = await request(app).post('/analyse-with-hint').send({ imageBase64: 'abc', speciesHint: 'Monstera' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when speciesHint is missing', async () => {
+    const res = await request(app).post('/analyse-with-hint').send({ imageBase64: 'abc', mimeType: 'image/jpeg' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns parsed Gemini response with hint included in prompt', async () => {
+    const payload = { species: 'Monstera deliciosa', frequencyDays: 7, health: 'Good', healthReason: 'Healthy', maturity: 'Mature', recommendations: ['Indirect light', 'Water weekly', 'Wipe leaves'] };
+    geminiGenerateFn = async (args) => {
+      // Verify the hint is included in the prompt text
+      const promptText = args.contents[0].parts[1].text;
+      expect(promptText).toContain('Monstera');
+      return { response: { text: () => JSON.stringify(payload) } };
+    };
+    const res = await request(app).post('/analyse-with-hint').send({ imageBase64: 'abc123', mimeType: 'image/jpeg', speciesHint: 'Monstera' });
+    expect(res.status).toBe(200);
+    expect(res.body.species).toBe('Monstera deliciosa');
+    expect(res.body.frequencyDays).toBe(7);
+  });
+
+  it('returns 500 if Gemini throws', async () => {
+    geminiGenerateFn = async () => { throw new Error('Gemini unavailable'); };
+    const res = await request(app).post('/analyse-with-hint').send({ imageBase64: 'abc', mimeType: 'image/jpeg', speciesHint: 'Fern' });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Gemini unavailable');
+  });
+});

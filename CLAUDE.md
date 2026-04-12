@@ -92,5 +92,6 @@ Backend env vars (`IMAGES_BUCKET`, `GEMINI_API_KEY`) are injected by Terraform/C
 - **Theming:** 9 themes available (olive, earth, aurora, lunar, nebula, night, solar, storm, flare). Selected via `LayoutContext.changeThemeStyle()`. Dark mode via `LayoutContext.changeTheme('dark')`.
 - **Test mocks:** Backend tests use proxyquire + in-memory Firestore mock in `index.test.js`. Frontend tests mock `src/api/plants.js`
 - **CI/CD:** Tests run on every push/PR; Firebase Hosting deploy + Cloud Function deploy only run on `main` pushes. Do NOT run tests locally — rely on GitHub Actions CI.
+- **Coverage gates:** Before committing, always add tests for new code and run `npm run test:coverage` (frontend) and `cd api/plants && npm run test:coverage` (backend) to verify thresholds pass. Backend thresholds are tight (80% statements/lines/functions, 65% branches) — new endpoints or significant logic must have corresponding tests.
 - **New API routes:** `POST /recommend-watering` for Gemini-powered watering advice; `POST /recommend` accepts optional `plantedIn` and `isOutdoor` context. New routes must be added to the API Gateway OpenAPI spec in `platform-infra`.
 - **Plant fields:** `plantedIn` (ground, garden-bed, pot) controls conditional display of `potSize` and `soilType` in the Plant tab.
