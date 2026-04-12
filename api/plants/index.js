@@ -648,6 +648,38 @@ app.post('/analyse', async (req, res) => {
   }
 });
 
+// ── Re-analyse with species hint ─────────────────────────────────────────────
+
+app.post('/analyse-with-hint', async (req, res) => {
+  try {
+    const { imageBase64, mimeType, speciesHint } = req.body;
+    if (!imageBase64 || !mimeType) {
+      return res.status(400).json({ error: 'imageBase64 and mimeType are required' });
+    }
+    if (!speciesHint) {
+      return res.status(400).json({ error: 'speciesHint is required' });
+    }
+
+    const hintPrompt = ANALYSE_PROMPT + `\n\nIMPORTANT: The user believes this plant is "${speciesHint}". Use this as the species identification (look up the scientific name) and tailor all care recommendations, watering frequency, soil type, and other advice specifically for this species. If the hint seems plausible from the photo, trust it.`;
+
+    const result = await geminiWithRetry({
+      contents: [{
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType, data: imageBase64 } },
+          { text: hintPrompt },
+        ],
+      }],
+      generationConfig: { temperature: 0.1, responseMimeType: 'application/json', responseSchema: ANALYSE_SCHEMA },
+    });
+
+    const parsed = parseGeminiJson(result.response.text());
+    res.status(200).json(parsed);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 // ── Care recommendations via Gemini ──────────────────────────────────────────
 
 app.post('/recommend', async (req, res) => {
@@ -1041,6 +1073,48 @@ app.post('/plants/:id/diagnostic', requireUser, async (req, res) => {
     await ref.set({ photoLog, updatedAt: new Date().toISOString() }, { merge: true });
 
     res.status(200).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Delete a photo from photoLog ─────────────────────────────────────────────
+
+app.delete('/plants/:id/photos', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { url } = req.body;
+    if (!url) return res.status(400).json({ error: 'url is required' });
+
+    const existing = doc.data();
+    const photoLog = [...(existing.photoLog || [])];
+    const normalised = url.split('?')[0];
+    const idx = photoLog.findIndex((e) => e.url?.split('?')[0] === normalised);
+    if (idx === -1) return res.status(404).json({ error: 'Photo not found in log' });
+
+    photoLog.splice(idx, 1);
+
+    // Delete the file from GCS (best-effort)
+    const path = gcsPath(normalised);
+    if (path) await storage.bucket(IMAGES_BUCKET).file(path).delete().catch(() => {});
+
+    // If the deleted photo was the current plant image, fall back to latest remaining photo
+    const updates = { photoLog, updatedAt: new Date().toISOString() };
+    const existingImageNorm = existing.imageUrl ? existing.imageUrl.split('?')[0] : null;
+    if (existingImageNorm === normalised) {
+      const latest = [...photoLog].filter((e) => e.type === 'growth').sort((a, b) => new Date(b.date) - new Date(a.date))[0];
+      updates.imageUrl = latest?.url || null;
+    }
+
+    await ref.set(updates, { merge: true });
+
+    const updated = await ref.get();
+    const data = { id: updated.id, ...updated.data() };
+    await signPlantData(data);
+    res.status(200).json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
-import { imagesApi, recommendApi, plantsApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency, isOutdoor } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 
@@ -85,12 +85,12 @@ function GrowthUpload({ plantId, onComplete }) {
     if (!file?.type.startsWith('image/')) return
     setUploading(true)
     try {
-      const imageUrl = await imagesApi.upload(file, 'plants')
+      // Run upload and AI analysis in parallel for speed
+      const uploadPromise = imagesApi.upload(file, 'plants')
+      const analysisPromise = analyseApi.analyse(file).catch(() => null)
+      const [imageUrl, analysis] = await Promise.all([uploadPromise, analysisPromise])
       await plantsApi.update(plantId, { imageUrl })
-      try {
-        const analysis = await (await import('../api/plants.js')).analyseApi.analyse(file)
-        onComplete?.(analysis)
-      } catch { /* analysis optional */ }
+      if (analysis) onComplete?.(analysis)
     } catch (err) { console.error('Growth upload failed:', err) }
     finally { setUploading(false) }
   }
@@ -189,6 +189,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [wateringRec, setWateringRec] = useState(null)
   const [wateringRecLoading, setWateringRecLoading] = useState(false)
   const [wateringRecError, setWateringRecError] = useState(null)
+  const [deletedPhotoUrls, setDeletedPhotoUrls] = useState([])
+  const [confirmDeletePhoto, setConfirmDeletePhoto] = useState(null)
+  const [deletingPhoto, setDeletingPhoto] = useState(false)
 
   useEffect(() => {
     if (plant) {
@@ -272,6 +275,15 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     if (confirmDelete) { onDelete(plant.id); setConfirmDelete(false) }
     else setConfirmDelete(true)
   }, [confirmDelete, plant, onDelete])
+
+  const handleDeletePhoto = useCallback(async (url) => {
+    setDeletingPhoto(true)
+    try {
+      await plantsApi.deletePhoto(plant.id, url)
+      setDeletedPhotoUrls((prev) => [...prev, url.split('?')[0]])
+    } catch (err) { console.error('Photo delete failed:', err) }
+    finally { setDeletingPhoto(false); setConfirmDeletePhoto(null) }
+  }, [plant])
 
   const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
 
@@ -671,7 +683,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
           {/* Photo timeline */}
           {(() => {
-            const photos = [...(plant.photoLog || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
+            const photos = [...(plant.photoLog || [])]
+              .filter((p) => !deletedPhotoUrls.includes(p.url?.split('?')[0]))
+              .sort((a, b) => new Date(b.date) - new Date(a.date))
 
             if (photos.length === 0) return null
 
@@ -680,11 +694,19 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Photo History ({photos.length})</h6>
                 <Row className="g-2 mb-3">
                   {photos.map((photo, i) => (
-                    <Col xs={6} md={4} key={i}>
+                    <Col xs={6} md={4} key={photo.url || i}>
                       <div className="border rounded overflow-hidden position-relative" style={{ minHeight: 120 }}>
                         <img src={photo.url} alt={`Photo ${i + 1}`} className="w-100"
                           style={{ height: 120, objectFit: 'cover', display: 'block' }}
                           onError={(e) => { e.target.style.display = 'none' }} />
+                        <Button variant="dark" size="sm"
+                          className="position-absolute top-0 end-0 m-1 rounded-circle p-0"
+                          style={{ width: 22, height: 22, opacity: 0.8 }}
+                          disabled={deletingPhoto}
+                          onClick={() => setConfirmDeletePhoto(photo.url)}
+                          title="Delete photo">
+                          <svg className="sa-icon" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#trash-2"></use></svg>
+                        </Button>
                         <div className="position-absolute bottom-0 start-0 end-0 px-2 py-1" style={{ background: 'rgba(0,0,0,0.6)' }}>
                           <div className="d-flex align-items-center justify-content-between">
                             <small className="text-white" style={{ fontSize: '0.6rem' }}>
@@ -704,6 +726,19 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                     </Col>
                   ))}
                 </Row>
+
+                {/* Photo delete confirmation */}
+                {confirmDeletePhoto && (
+                  <div className="alert alert-warning py-2 d-flex align-items-center justify-content-between">
+                    <small>Delete this photo? This cannot be undone.</small>
+                    <div className="d-flex gap-1">
+                      <Button variant="light" size="sm" onClick={() => setConfirmDeletePhoto(null)} disabled={deletingPhoto}>Cancel</Button>
+                      <Button variant="danger" size="sm" onClick={() => handleDeletePhoto(confirmDeletePhoto)} disabled={deletingPhoto}>
+                        {deletingPhoto ? <Spinner size="sm" /> : 'Delete'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </>
             )
           })()}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button, Card, Spinner, Alert, Badge, Form } from 'react-bootstrap'
+import { Button, Card, Spinner, Alert, Badge, Form, InputGroup } from 'react-bootstrap'
 import { analyseApi } from '../api/plants.js'
 
 const ANALYSIS_STAGES = [
@@ -25,6 +25,8 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
   const [stageIndex, setStageIndex] = useState(0)
   const [error, setError] = useState(null)
   const [isDragging, setIsDragging] = useState(false)
+  const [showSpeciesHint, setShowSpeciesHint] = useState(false)
+  const [speciesHint, setSpeciesHint] = useState('')
   const fileInputRef = useRef(null)
   const objectUrlRef = useRef(null)
 
@@ -45,16 +47,22 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
     setImageFile(file)
     setError(null)
     setAnalysisResult(null)
+    setShowSpeciesHint(false)
+    setSpeciesHint('')
     onImageChange(file)
     runAnalysis(file)
   }, [onImageChange])
 
-  const runAnalysis = useCallback(async (file) => {
+  const runAnalysis = useCallback(async (file, hint) => {
     setIsAnalysing(true); setError(null)
     try {
-      const result = await analyseApi.analyse(file)
+      const result = hint
+        ? await analyseApi.analyseWithHint(file, hint)
+        : await analyseApi.analyse(file)
       setAnalysisResult(result)
       onAnalysisComplete(result)
+      setShowSpeciesHint(false)
+      setSpeciesHint('')
     } catch (err) { setError(err.message) }
     finally { setIsAnalysing(false) }
   }, [onAnalysisComplete])
@@ -63,10 +71,15 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
     if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
     objectUrlRef.current = null
     setPreviewSrc(null); setImageFile(null); setAnalysisResult(null); setError(null)
+    setShowSpeciesHint(false); setSpeciesHint('')
     onImageChange(null)
   }
 
   const handleReanalyse = () => { if (imageFile) runAnalysis(imageFile) }
+
+  const handleSubmitHint = () => {
+    if (imageFile && speciesHint.trim()) runAnalysis(imageFile, speciesHint.trim())
+  }
 
   return (
     <div>
@@ -119,7 +132,30 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
               </span>
               <Button variant="link" size="sm" className="p-0 fs-xs text-muted" onClick={handleReanalyse}>Re-analyse</Button>
             </div>
-            {analysisResult.species && <p className="fw-500 fs-sm mb-2">{analysisResult.species}</p>}
+            {analysisResult.species && (
+              <div className="mb-2">
+                <p className="fw-500 fs-sm mb-1">{analysisResult.species}</p>
+                {!showSpeciesHint && !isAnalysing && (
+                  <Button variant="link" size="sm" className="p-0 fs-xs text-muted" onClick={() => setShowSpeciesHint(true)}>
+                    Not right? Suggest species
+                  </Button>
+                )}
+              </div>
+            )}
+            {showSpeciesHint && (
+              <InputGroup size="sm" className="mb-2">
+                <Form.Control
+                  placeholder="e.g. Monstera, Peace Lily..."
+                  value={speciesHint}
+                  onChange={(e) => setSpeciesHint(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSubmitHint() }}
+                  disabled={isAnalysing}
+                />
+                <Button variant="primary" onClick={handleSubmitHint} disabled={!speciesHint.trim() || isAnalysing}>
+                  {isAnalysing ? <Spinner size="sm" /> : 'Re-analyse'}
+                </Button>
+              </InputGroup>
+            )}
             <div className="d-flex flex-wrap gap-2">
               {analysisResult.health && <Badge bg={HEALTH_COLORS[analysisResult.health] || 'secondary'}>Health: {analysisResult.health}</Badge>}
               {analysisResult.maturity && <Badge bg={MATURITY_COLORS[analysisResult.maturity] || 'secondary'}>Maturity: {analysisResult.maturity}</Badge>}
