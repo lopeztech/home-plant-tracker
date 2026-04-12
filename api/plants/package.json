@@ -14,7 +14,7 @@
     "test:integration": "vitest run --config integration/vitest.config.mjs integration/api.test.js"
   },
   "dependencies": {
-    "@google-cloud/aiplatform": "^3.35.0",
+    "@google-cloud/aiplatform": "^6.5.0",
     "@google-cloud/firestore": "^8.3.0",
     "@google-cloud/functions-framework": "^3.0.0",
     "@google-cloud/storage": "^7.19.0",
