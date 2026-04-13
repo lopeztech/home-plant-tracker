@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import SeasonBadge from './SeasonBadge.jsx'
+import { getSeason } from '../utils/watering.js'
 
 const WEATHER_CONFIGS = {
   sunny:  { sky: '#87CEEB', ground: '#90C695', sunVisible: true, clouds: 0, rainDrops: 0, snowFlakes: 0 },
@@ -12,6 +13,13 @@ const WEATHER_CONFIGS = {
   night:  { sky: '#1A237E', ground: '#2E4A32', sunVisible: false, clouds: 1, rainDrops: 0, snowFlakes: 0, night: true },
 }
 
+const SEASON_PARTICLES = {
+  spring: { emojis: ['🌸', '🌷', '🌱', '🌸'], count: 12 },
+  summer: { emojis: ['🦋', '🐝', '✨'], count: 6 },
+  autumn: { emojis: ['🍂', '🍁', '🍃', '🍂'], count: 18 },
+  winter: { emojis: ['❄️', '✨', '❄️'], count: 10 },
+}
+
 export default function HouseWeatherFrame({ weather, location, onLocationClick, children }) {
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
@@ -19,6 +27,8 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
   const temp = weather?.current?.temp
   const unit = weather?.unit === 'fahrenheit' ? 'F' : 'C'
   const label = weather?.current?.condition?.label || ''
+  const season = useMemo(() => getSeason(weather?.location?.lat), [weather?.location?.lat])
+  const seasonParticles = SEASON_PARTICLES[season]
 
   const rainDrops = useMemo(() =>
     Array.from({ length: config.rainDrops }, (_, i) => ({
@@ -46,6 +56,19 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
       speed: 30 + Math.random() * 40,
     })),
   [config.clouds])
+
+  const fallingLeaves = useMemo(() =>
+    seasonParticles
+      ? Array.from({ length: seasonParticles.count }, (_, i) => ({
+          x: Math.random() * 100,
+          delay: Math.random() * 8,
+          duration: 4 + Math.random() * 6,
+          emoji: seasonParticles.emojis[i % seasonParticles.emojis.length],
+          size: 12 + Math.random() * 10,
+          drift: -30 + Math.random() * 60,
+        }))
+      : [],
+  [seasonParticles])
 
   return (
     <div className="position-relative" style={{ overflow: 'hidden' }}>
@@ -160,7 +183,25 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
           />
         ))}
 
-        {/* Weather info is rendered outside this div, above the house */}
+        {/* Seasonal falling particles (leaves, petals, snowflakes) */}
+        {fallingLeaves.map((leaf, i) => (
+          <div
+            key={`leaf-${i}`}
+            className="position-absolute"
+            style={{
+              left: `${leaf.x}%`,
+              top: '-5%',
+              fontSize: leaf.size,
+              animation: `leaf-fall ${leaf.duration}s ease-in-out infinite`,
+              animationDelay: `${leaf.delay}s`,
+              opacity: 0,
+              pointerEvents: 'none',
+              ['--drift']: `${leaf.drift}px`,
+            }}
+          >
+            {leaf.emoji}
+          </div>
+        ))}
 
         {/* Ground/grass line */}
         <div
@@ -218,31 +259,36 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
       )}
 
       {/* House shape with floorplan inside */}
-      <div className="position-relative" style={{ zIndex: 1, padding: '10px 8px 15px' }}>
+      <div className="position-relative" style={{ zIndex: 1, padding: '0 8px 15px' }}>
         {/* Roof */}
-        <div
-          className="mx-auto d-none d-md-block"
-          style={{
-            width: '95%',
-            maxWidth: 900,
-            height: 0,
-            borderLeft: '30px solid transparent',
-            borderRight: '30px solid transparent',
-            borderBottom: '40px solid var(--bs-body-bg, #fff)',
-            position: 'relative',
-            zIndex: 2,
-            filter: 'drop-shadow(0 -2px 4px rgba(0,0,0,0.1))',
-          }}
-        />
+        <div className="mx-auto d-none d-md-block position-relative" style={{ width: '95%', maxWidth: 920, zIndex: 2 }}>
+          <svg viewBox="0 0 920 60" preserveAspectRatio="none" style={{ width: '100%', height: 60, display: 'block', filter: 'drop-shadow(0 -2px 4px rgba(0,0,0,0.1))' }}>
+            <polygon points="460,0 0,55 0,60 920,60 920,55" fill="var(--bs-body-bg, #fff)" />
+            <polygon points="460,0 0,55 920,55" fill="var(--bs-body-bg, #fff)" stroke="rgba(0,0,0,0.08)" strokeWidth="1" />
+          </svg>
+          {/* Chimney */}
+          <div
+            className="position-absolute"
+            style={{
+              right: '18%', top: -10, width: 28, height: 35,
+              background: 'var(--bs-body-bg, #fff)',
+              border: '1px solid rgba(0,0,0,0.08)',
+              borderBottom: 'none',
+              borderRadius: '3px 3px 0 0',
+            }}
+          />
+        </div>
         {/* House body */}
         <div
           className="mx-auto"
           style={{
             width: '100%',
-            maxWidth: 900,
+            maxWidth: 920,
             background: 'var(--bs-body-bg, #fff)',
             borderRadius: '0 0 8px 8px',
             boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            border: '1px solid rgba(0,0,0,0.06)',
+            borderTop: 'none',
             overflow: 'hidden',
             position: 'relative',
             zIndex: 2,
@@ -272,6 +318,12 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
         @keyframes glow-pulse {
           0%, 100% { opacity: 0.7; }
           50% { opacity: 1; }
+        }
+        @keyframes leaf-fall {
+          0%   { transform: translateY(0) translateX(0) rotate(0deg); opacity: 0; }
+          10%  { opacity: 0.9; }
+          50%  { transform: translateY(300px) translateX(var(--drift, 20px)) rotate(180deg); opacity: 0.8; }
+          100% { transform: translateY(600px) translateX(calc(var(--drift, 20px) * 2)) rotate(360deg); opacity: 0; }
         }
       `}</style>
     </div>
