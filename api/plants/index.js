@@ -901,7 +901,9 @@ app.post('/plants', requireUser, async (req, res) => {
     }
     const data = { ...body, createdAt: now, updatedAt: now };
     const docRef = await userPlants(req.userId).add(data);
-    res.status(201).json({ id: docRef.id, ...data });
+    const response = { id: docRef.id, ...data };
+    await signPlantData(response);
+    res.status(201).json(response);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
