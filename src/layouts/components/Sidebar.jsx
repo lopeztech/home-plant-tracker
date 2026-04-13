@@ -1,12 +1,14 @@
 import { useAuth } from '../../contexts/AuthContext.jsx'
+import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
 import { menuItems } from './menuData.js'
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
+  const { navMinified, toggleSetting } = useLayoutContext()
 
   const toggleSidenav = () => {
-    document.documentElement.classList.toggle('set-nav-minified')
+    toggleSetting('navMinified', !navMinified)
   }
 
   return (
