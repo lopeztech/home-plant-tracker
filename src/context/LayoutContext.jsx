@@ -7,6 +7,9 @@ const INIT_STATE = {
   navMinified: false,
   darkNavigation: true,
   selectedTheme: 'olive',
+  houseHeight: 500,
+  outdoorHeight: 200,
+  sideWidth: 140,
 }
 
 const LS_KEY = '__PLANT_TRACKER_LAYOUT__'

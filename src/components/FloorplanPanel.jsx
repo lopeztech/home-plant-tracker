@@ -7,6 +7,7 @@ import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
 import { calculateReorganisedPositions } from '../utils/reorganise.js'
 import { isOutdoor, YARD_AREAS } from '../utils/watering.js'
+import { useLayoutContext } from '../context/LayoutContext.jsx'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 
@@ -18,6 +19,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   } = usePlantContext()
 
   const navigate = useNavigate()
+  const { houseHeight, outdoorHeight, sideWidth } = useLayoutContext()
   const [viewMode, setViewMode] = useState('2d')
   const [saving, setSaving] = useState(false)
 
@@ -206,7 +208,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     for (const [areaId, { floor: areaFloor, plants: areaPlants }] of Object.entries(yardAreaContent)) {
       const isSide = areaId === 'side-left' || areaId === 'side-right'
       rendered[areaId] = (
-        <div style={{ height: isSide ? '100%' : 200, minHeight: isSide ? 400 : undefined }}>
+        <div style={{ height: isSide ? '100%' : outdoorHeight, minHeight: isSide ? (houseHeight || 500) : undefined }}>
           <LeafletFloorplan
             key={areaFloor.id}
             floor={areaFloor}
@@ -231,6 +233,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       location={location}
       onLocationClick={() => navigate('/settings')}
       yardAreas={renderYardAreas}
+      sideWidth={sideWidth}
     >
       {/* Floor tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
@@ -275,7 +278,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       </div>
 
       {/* Map view */}
-      <div className="floorplan-wrapper" style={{ height: isOutdoorFloor ? 0 : 500 }}>
+      <div className="floorplan-wrapper" style={{ height: isOutdoorFloor ? 0 : (houseHeight || 500) }}>
         {isAnalysingFloorplan && (
           <div
             className="position-absolute d-flex flex-column align-items-center justify-content-center gap-2 w-100 h-100"

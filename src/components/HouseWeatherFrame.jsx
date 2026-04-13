@@ -51,7 +51,7 @@ function YardAreaBox({ label, children, vertical }) {
   )
 }
 
-export default function HouseWeatherFrame({ weather, location, onLocationClick, children, yardAreas }) {
+export default function HouseWeatherFrame({ weather, location, onLocationClick, children, yardAreas, sideWidth = 140 }) {
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
   const config = isNight ? { ...WEATHER_CONFIGS.night } : (WEATHER_CONFIGS[condition] || WEATHER_CONFIGS.sunny)
@@ -302,7 +302,7 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
         <div className="mx-auto d-flex gap-2" style={{ width: '100%', maxWidth: 1100, position: 'relative', zIndex: 2 }}>
           {/* Side Left */}
           {yardAreas?.['side-left'] && (
-            <div className="d-none d-lg-block flex-shrink-0" style={{ width: 140 }}>
+            <div className="d-none d-lg-block flex-shrink-0" style={{ width: sideWidth || 140 }}>
               <YardAreaBox label="Side Left" vertical>{yardAreas['side-left']}</YardAreaBox>
             </div>
           )}
@@ -349,7 +349,7 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
 
           {/* Side Right */}
           {yardAreas?.['side-right'] && (
-            <div className="d-none d-lg-block flex-shrink-0" style={{ width: 140 }}>
+            <div className="d-none d-lg-block flex-shrink-0" style={{ width: sideWidth || 140 }}>
               <YardAreaBox label="Side Right" vertical>{yardAreas['side-right']}</YardAreaBox>
             </div>
           )}

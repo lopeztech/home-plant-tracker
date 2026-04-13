@@ -187,7 +187,7 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
 
 export default function SettingsPage() {
   const { floors, handleSaveFloors, handleFloorplanUpload, isAnalysingFloorplan, tempUnit, isGuest, location, setLocation } = usePlantContext()
-  const { theme, changeTheme, selectedTheme, changeThemeStyle } = useLayoutContext()
+  const { theme, changeTheme, selectedTheme, changeThemeStyle, houseHeight, outdoorHeight, sideWidth, toggleSetting } = useLayoutContext()
   const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
     () => (floors || []).map((f) => ({ ...f, rooms: (f.rooms || []).map((r) => ({ ...r })) })),
@@ -394,6 +394,46 @@ export default function SettingsPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              </div></div>
+            </div>
+
+            {/* Layout sizes */}
+            <div className="panel panel-icon mb-4">
+              <div className="panel-hdr"><span>Layout Sizes</span></div>
+              <div className="panel-container"><div className="panel-content">
+                <div className="mb-3">
+                  <div className="d-flex justify-content-between mb-1">
+                    <small className="fw-500">House Height</small>
+                    <small className="text-muted">{houseHeight || 500}px</small>
+                  </div>
+                  <Form.Range
+                    min={200} max={800} step={25}
+                    value={houseHeight || 500}
+                    onChange={(e) => toggleSetting('houseHeight', Number(e.target.value))}
+                  />
+                </div>
+                <div className="mb-3">
+                  <div className="d-flex justify-content-between mb-1">
+                    <small className="fw-500">Outdoor Area Height</small>
+                    <small className="text-muted">{outdoorHeight || 200}px</small>
+                  </div>
+                  <Form.Range
+                    min={100} max={500} step={25}
+                    value={outdoorHeight || 200}
+                    onChange={(e) => toggleSetting('outdoorHeight', Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <div className="d-flex justify-content-between mb-1">
+                    <small className="fw-500">Side Yard Width</small>
+                    <small className="text-muted">{sideWidth || 140}px</small>
+                  </div>
+                  <Form.Range
+                    min={80} max={300} step={10}
+                    value={sideWidth || 140}
+                    onChange={(e) => toggleSetting('sideWidth', Number(e.target.value))}
+                  />
                 </div>
               </div></div>
             </div>
