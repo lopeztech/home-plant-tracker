@@ -101,6 +101,7 @@ export default function LeafletFloorplan({
   const markerLayerRef = useRef(null)
   const editLayerRef   = useRef(null)
   const drawRef        = useRef(null) // { startLL, tempRect }
+  const prevFloorIdRef = useRef(null)
 
   const [pendingRoom, setPendingRoom]         = useState(null)
   const [pendingRoomName, setPendingRoomName] = useState('')
@@ -240,22 +241,28 @@ export default function LeafletFloorplan({
     }
 
     if (floor?.rooms?.length > 0) {
-      // Calculate bounds that encompass all rooms (including outdoor zones with negative coords)
-      let minX = 0, minY = 0, maxX = 100, maxY = 100
-      for (const room of floor.rooms) {
-        if (room.hidden) continue
-        minX = Math.min(minX, room.x)
-        minY = Math.min(minY, room.y)
-        maxX = Math.max(maxX, room.x + room.width)
-        maxY = Math.max(maxY, room.y + room.height)
+      // Only fit bounds when switching to a different floor, not on every re-render
+      const floorChanged = prevFloorIdRef.current !== floor.id
+      prevFloorIdRef.current = floor.id
+
+      if (floorChanged) {
+        // Calculate bounds that encompass all rooms (including outdoor zones with negative coords)
+        let minX = 0, minY = 0, maxX = 100, maxY = 100
+        for (const room of floor.rooms) {
+          if (room.hidden) continue
+          minX = Math.min(minX, room.x)
+          minY = Math.min(minY, room.y)
+          maxX = Math.max(maxX, room.x + room.width)
+          maxY = Math.max(maxY, room.y + room.height)
+        }
+        // Add padding
+        const pad = 5
+        const dynamicBounds = L.latLngBounds(
+          toLL(minX - pad, maxY + pad),
+          toLL(maxX + pad, minY - pad)
+        )
+        map.fitBounds(dynamicBounds)
       }
-      // Add padding
-      const pad = 5
-      const dynamicBounds = L.latLngBounds(
-        toLL(minX - pad, maxY + pad),
-        toLL(maxX + pad, minY - pad)
-      )
-      map.fitBounds(dynamicBounds)
 
       for (const room of floor.rooms) {
         if (room.hidden) continue

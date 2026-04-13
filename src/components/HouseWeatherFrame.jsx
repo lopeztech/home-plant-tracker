@@ -25,7 +25,7 @@ function YardAreaBox({ label, children, vertical }) {
     <div
       style={{
         borderRadius: 8,
-        overflow: 'hidden',
+        overflow: 'visible',
         border: '2px dashed rgba(255,255,255,0.4)',
         background: 'rgba(255,255,255,0.1)',
         backdropFilter: 'blur(2px)',
