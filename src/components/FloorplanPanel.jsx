@@ -6,6 +6,7 @@ import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
 import { calculateReorganisedPositions } from '../utils/reorganise.js'
+import { isOutdoor } from '../utils/watering.js'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 
@@ -37,6 +38,48 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     () => plants.filter((p) => (p.floor || 'ground') === activeFloorId),
     [plants, activeFloorId],
   )
+
+  // Split rooms and plants into indoor vs outdoor
+  const isOutdoorFloor = activeFloor?.type === 'outdoor'
+  const indoorRooms = useMemo(
+    () => (activeFloor?.rooms || []).filter((r) => {
+      if (r.hidden) return false
+      const t = r.type || activeFloor?.type || 'interior'
+      return t !== 'outdoor'
+    }),
+    [activeFloor],
+  )
+  const outdoorRooms = useMemo(
+    () => (activeFloor?.rooms || []).filter((r) => {
+      if (r.hidden) return false
+      const t = r.type || activeFloor?.type || 'interior'
+      return t === 'outdoor'
+    }),
+    [activeFloor],
+  )
+  const hasIndoorOutdoorSplit = !isOutdoorFloor && indoorRooms.length > 0 && outdoorRooms.length > 0
+
+  const indoorFloor = useMemo(() => {
+    if (!hasIndoorOutdoorSplit || !activeFloor) return activeFloor
+    return { ...activeFloor, rooms: indoorRooms }
+  }, [activeFloor, indoorRooms, hasIndoorOutdoorSplit])
+
+  const outdoorFloor = useMemo(() => {
+    if (!hasIndoorOutdoorSplit || !activeFloor) return null
+    return { ...activeFloor, id: `${activeFloor.id}-outdoor`, type: 'outdoor', rooms: outdoorRooms }
+  }, [activeFloor, outdoorRooms, hasIndoorOutdoorSplit])
+
+  const indoorPlants = useMemo(() => {
+    if (!hasIndoorOutdoorSplit) return plantsOnFloor
+    const outdoorRoomNames = new Set(outdoorRooms.map((r) => r.name))
+    return plantsOnFloor.filter((p) => !outdoorRoomNames.has(p.room))
+  }, [plantsOnFloor, outdoorRooms, hasIndoorOutdoorSplit])
+
+  const outdoorPlants = useMemo(() => {
+    if (!hasIndoorOutdoorSplit) return []
+    const outdoorRoomNames = new Set(outdoorRooms.map((r) => r.name))
+    return plantsOnFloor.filter((p) => outdoorRoomNames.has(p.room))
+  }, [plantsOnFloor, outdoorRooms, hasIndoorOutdoorSplit])
 
   const [hasDirty, setHasDirty] = useState(false)
 
@@ -114,7 +157,27 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   }, [])
 
   return (
-    <HouseWeatherFrame weather={weather} location={location} onLocationClick={() => navigate('/settings')}>
+    <HouseWeatherFrame
+      weather={weather}
+      location={location}
+      onLocationClick={() => navigate('/settings')}
+      outdoorContent={hasIndoorOutdoorSplit && outdoorFloor && viewMode === '2d' ? (
+        <div style={{ height: 250 }}>
+          <LeafletFloorplan
+            key={outdoorFloor.id}
+            floor={outdoorFloor}
+            floors={floors}
+            plants={outdoorPlants}
+            weather={weather}
+            onFloorplanClick={onFloorplanClick}
+            onMarkerClick={onPlantClick}
+            onMarkerDrag={handleLocalDrag}
+            editMode={false}
+            onRoomsChange={handleFloorRoomsChange}
+          />
+        </div>
+      ) : null}
+    >
       {/* Floor tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
         <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
@@ -171,10 +234,10 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
         )}
         {activeFloor && viewMode === '2d' && (
           <LeafletFloorplan
-            key={activeFloor.id}
-            floor={activeFloor}
+            key={indoorFloor?.id || activeFloor.id}
+            floor={hasIndoorOutdoorSplit ? indoorFloor : activeFloor}
             floors={floors}
-            plants={plantsOnFloor}
+            plants={hasIndoorOutdoorSplit ? indoorPlants : plantsOnFloor}
             weather={weather}
             onFloorplanClick={onFloorplanClick}
             onMarkerClick={onPlantClick}

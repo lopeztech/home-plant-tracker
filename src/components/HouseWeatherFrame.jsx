@@ -20,7 +20,7 @@ const SEASON_PARTICLES = {
   winter: { emojis: ['❄️', '✨', '❄️'], count: 10 },
 }
 
-export default function HouseWeatherFrame({ weather, location, onLocationClick, children }) {
+export default function HouseWeatherFrame({ weather, location, onLocationClick, children, outdoorContent }) {
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
   const config = isNight ? { ...WEATHER_CONFIGS.night } : (WEATHER_CONFIGS[condition] || WEATHER_CONFIGS.sunny)
@@ -296,6 +296,26 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
         >
           {children}
         </div>
+
+        {/* Outdoor / yard area — outside the house */}
+        {outdoorContent && (
+          <div
+            className="mx-auto mt-2"
+            style={{
+              width: '100%',
+              maxWidth: 920,
+              borderRadius: 8,
+              overflow: 'hidden',
+              position: 'relative',
+              zIndex: 2,
+              border: '2px dashed rgba(255,255,255,0.4)',
+              background: 'rgba(255,255,255,0.1)',
+              backdropFilter: 'blur(2px)',
+            }}
+          >
+            {outdoorContent}
+          </div>
+        )}
       </div>
 
       <style>{`
