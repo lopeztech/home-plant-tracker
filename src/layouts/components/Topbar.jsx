@@ -1,16 +1,12 @@
 import { useLayoutContext } from '../../context/LayoutContext.jsx'
 
 export default function Topbar() {
-  const { showBackdrop, hideBackdrop, navMinified, toggleSetting } = useLayoutContext()
+  const { showBackdrop, hideBackdrop } = useLayoutContext()
 
   const toggleMobileMenu = () => {
     const isOpen = document.documentElement.classList.toggle('app-mobile-menu-open')
     if (isOpen) showBackdrop()
     else hideBackdrop()
-  }
-
-  const toggleDesktopNav = () => {
-    toggleSetting('navMinified', !navMinified)
   }
 
   return (

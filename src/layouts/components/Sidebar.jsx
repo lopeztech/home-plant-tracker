@@ -13,13 +13,15 @@ export default function Sidebar() {
 
   return (
     <aside className="app-sidebar d-flex flex-column">
-      {/* Profile area */}
-      <div className="d-flex align-items-center gap-2 px-3 py-3" style={{ height: 'var(--app-header-height)' }}>
-        <button type="button" className="btn btn-sm p-1 text-white-50 d-none d-md-inline-flex flex-shrink-0" onClick={toggleSidenav} aria-label="Collapse sidebar">
-          <svg className="sa-icon" style={{ width: 20, height: 20 }}>
-            <use href="/icons/sprite.svg#menu"></use>
+      {/* Collapse toggle + Profile area */}
+      <div className="d-none d-md-flex align-items-center justify-content-end px-3 pt-2">
+        <button type="button" className="btn btn-sm p-1 text-white-50" onClick={toggleSidenav} title="Collapse sidebar">
+          <svg className="sa-icon" style={{ width: 16, height: 16 }}>
+            <use href="/icons/sprite.svg#chevrons-left"></use>
           </svg>
         </button>
+      </div>
+      <div className="d-flex align-items-center gap-2 px-4 py-3" style={{ height: 'var(--app-header-height)' }}>
         {user && (
           <>
             {user.picture ? (
@@ -55,12 +57,6 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Footer: collapse toggle */}
-      <div className="nav-footer d-flex align-items-center justify-content-end px-3 py-2">
-        <button type="button" className="btn btn-sm text-white-50" onClick={toggleSidenav} title="Collapse sidebar">
-          <svg className="sa-icon"><use href="/icons/sprite.svg#chevrons-left"></use></svg>
-        </button>
-      </div>
     </aside>
   )
 }
