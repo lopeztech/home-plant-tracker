@@ -1011,6 +1011,46 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
   }
 });
 
+// ── Moisture meter reading ──────────────────────────────────────────────────
+
+app.post('/plants/:id/moisture', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { reading, note } = req.body || {};
+    const parsed = Number(reading);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 10) {
+      return res.status(400).json({ error: 'reading must be an integer between 1 and 10' });
+    }
+
+    const now = new Date().toISOString();
+    const existing = doc.data();
+    const moistureLog = [...(existing.moistureLog || []), { date: now, reading: parsed, note: note || '' }];
+
+    // Invalidate ML caches that depend on moisture data
+    const mlCache = { ...(existing.mlCache || {}) };
+    delete mlCache.wateringRecommendation;
+    delete mlCache.healthPrediction;
+
+    await ref.set({
+      moistureLog,
+      lastMoistureReading: parsed,
+      lastMoistureDate: now,
+      updatedAt: now,
+      mlCache,
+    }, { merge: true });
+
+    const updated = await ref.get();
+    const data = { id: updated.id, ...updated.data() };
+    await signPlantData(data);
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Plant diagnostic photo analysis ──────────────────────────────────────────
 
 const DIAGNOSTIC_PROMPT = `Analyse this photo of a plant issue and respond ONLY with valid JSON:

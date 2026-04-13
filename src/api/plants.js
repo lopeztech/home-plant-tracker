@@ -40,6 +40,7 @@ export const plantsApi = {
   update: (id, data) => request(`/plants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/plants/${id}`, { method: 'DELETE' }),
   water: (id) => request(`/plants/${id}/water`, { method: 'POST' }),
+  moisture: (id, reading, note) => request(`/plants/${id}/moisture`, { method: 'POST', body: JSON.stringify({ reading, note }) }),
   wateringPattern: (id) => request(`/plants/${id}/watering-pattern`),
   wateringRecommendation: (id) => request(`/plants/${id}/watering-recommendation`),
   healthPrediction: (id) => request(`/plants/${id}/health-prediction`),

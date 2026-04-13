@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
-import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency, isOutdoor } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 
 // Derive rooms from configured floors
@@ -192,6 +192,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [deletedPhotoUrls, setDeletedPhotoUrls] = useState([])
   const [confirmDeletePhoto, setConfirmDeletePhoto] = useState(null)
   const [deletingPhoto, setDeletingPhoto] = useState(false)
+  const [moistureReading, setMoistureReading] = useState(5)
+  const [moistureNote, setMoistureNote] = useState('')
+  const [moistureLogging, setMoistureLogging] = useState(false)
 
   useEffect(() => {
     if (plant) {
@@ -623,6 +626,73 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                     </Button>
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+          {/* Moisture meter reading */}
+          <div className="mb-3">
+            <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Moisture Meter</h6>
+            {plant.lastMoistureReading && plant.lastMoistureDate && (() => {
+              const display = getMoistureDisplay(plant.lastMoistureReading)
+              const ago = Math.round((Date.now() - new Date(plant.lastMoistureDate).getTime()) / 3600000)
+              const agoLabel = ago < 1 ? 'just now' : ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`
+              return (
+                <div className="d-flex align-items-center gap-2 mb-2 fs-sm">
+                  <span className="rounded-circle d-inline-block" style={{ width: 10, height: 10, background: display.color }} />
+                  <span>Last: <strong>{plant.lastMoistureReading}/10</strong> ({display.label})</span>
+                  <span className="text-muted">— {agoLabel}</span>
+                </div>
+              )
+            })()}
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <span className="fs-xs text-muted" style={{ width: 28 }}>Dry</span>
+              <Form.Range
+                min={1} max={10} value={moistureReading}
+                onChange={(e) => setMoistureReading(Number(e.target.value))}
+                className="flex-grow-1"
+                style={{
+                  accentColor: moistureReading <= 3 ? '#d97706' : moistureReading <= 6 ? '#22c55e' : '#3b82f6',
+                }}
+              />
+              <span className="fs-xs text-muted" style={{ width: 28 }}>Wet</span>
+              <Badge bg={moistureReading <= 3 ? 'warning' : moistureReading <= 6 ? 'success' : 'primary'} className="fs-sm" style={{ minWidth: 32 }}>
+                {moistureReading}
+              </Badge>
+            </div>
+            <div className="d-flex gap-2">
+              <Form.Control
+                size="sm" placeholder="Note (optional)"
+                value={moistureNote} onChange={(e) => setMoistureNote(e.target.value)}
+                className="flex-grow-1"
+              />
+              <Button
+                variant="outline-success" size="sm" disabled={moistureLogging}
+                onClick={async () => {
+                  setMoistureLogging(true)
+                  try {
+                    await plantsApi.moisture(plant.id, moistureReading, moistureNote)
+                    setMoistureNote('')
+                  } catch (err) { console.error('Moisture log failed:', err) }
+                  finally { setMoistureLogging(false) }
+                }}
+              >
+                {moistureLogging ? <Spinner size="sm" /> : 'Log'}
+              </Button>
+            </div>
+            {plant.moistureLog?.length > 0 && (
+              <div className="mt-2">
+                {[...plant.moistureLog].reverse().slice(0, 5).map((entry, i) => {
+                  const d = getMoistureDisplay(entry.reading)
+                  return (
+                    <div key={i} className="d-flex align-items-center gap-2 mb-1 fs-xs text-muted">
+                      <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: d.color }} />
+                      <span><strong>{entry.reading}/10</strong></span>
+                      <span>{new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</span>
+                      <span>{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+                      {entry.note && <span>— {entry.note}</span>}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </div>

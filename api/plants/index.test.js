@@ -663,6 +663,73 @@ describe('POST /plants/:id/water', () => {
   });
 });
 
+// ── POST /plants/:id/moisture ─────────────────────────────────────────────────
+
+describe('POST /plants/:id/moisture', () => {
+  it('returns 404 for a non-existent plant', async () => {
+    const res = await request(app).post('/plants/missing/moisture').set('Authorization', authHeader()).send({ reading: 5 });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 for invalid reading (too low)', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/moisture').set('Authorization', authHeader()).send({ reading: 0 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('between 1 and 10');
+  });
+
+  it('returns 400 for invalid reading (too high)', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/moisture').set('Authorization', authHeader()).send({ reading: 11 });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for non-integer reading', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/moisture').set('Authorization', authHeader()).send({ reading: 'abc' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for missing reading', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/moisture').set('Authorization', authHeader()).send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('appends to moistureLog and sets convenience fields', async () => {
+    store[plantPath('p1')] = { name: 'Fern', moistureLog: [{ date: '2026-01-01T00:00:00Z', reading: 5, note: '' }] };
+    const res = await request(app).post('/plants/p1/moisture').set('Authorization', authHeader()).send({ reading: 3, note: 'Dry topsoil' });
+    expect(res.status).toBe(200);
+    expect(res.body.moistureLog).toHaveLength(2);
+    expect(res.body.moistureLog[1].reading).toBe(3);
+    expect(res.body.moistureLog[1].note).toBe('Dry topsoil');
+    expect(res.body.lastMoistureReading).toBe(3);
+    expect(res.body.lastMoistureDate).toBeTruthy();
+  });
+
+  it('creates moistureLog from scratch when none exists', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/moisture').set('Authorization', authHeader()).send({ reading: 7 });
+    expect(res.status).toBe(200);
+    expect(res.body.moistureLog).toHaveLength(1);
+    expect(res.body.moistureLog[0].reading).toBe(7);
+    expect(res.body.moistureLog[0].note).toBe('');
+  });
+
+  it('invalidates relevant ML caches', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      mlCache: { wateringRecommendation: { ts: 1 }, healthPrediction: { ts: 1 }, wateringPattern: { ts: 1 } },
+    };
+    const res = await request(app).post('/plants/p1/moisture').set('Authorization', authHeader()).send({ reading: 5 });
+    expect(res.status).toBe(200);
+    expect(res.body.mlCache.wateringRecommendation).toBeUndefined();
+    expect(res.body.mlCache.healthPrediction).toBeUndefined();
+    // wateringPattern is NOT invalidated by moisture
+    expect(res.body.mlCache.wateringPattern).toBeDefined();
+  });
+});
+
 // ── DELETE /plants/:id ────────────────────────────────────────────────────────
 
 describe('DELETE /plants/:id', () => {

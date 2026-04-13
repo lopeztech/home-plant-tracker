@@ -183,6 +183,12 @@ export function getWateringStatus(plant, weather = null, floors = []) {
     effective = Math.max(1, effective - 1)
   }
 
+  // Layer 5: Moisture meter — recent readings shift the schedule
+  const moistureAdj = getMoistureStatusAdjustment(plant)
+  if (moistureAdj) {
+    effective = Math.max(1, effective + moistureAdj.adjustment)
+  }
+
   if (!plant.lastWatered) {
     return {
       daysUntil:   0,
@@ -199,8 +205,9 @@ export function getWateringStatus(plant, weather = null, floors = []) {
   const next      = new Date(last.getTime() + effective * 86400000)
   const daysUntil = Math.ceil((next - new Date()) / 86400000)
 
-  // Note priority: heat > dry air > rain forecast > seasonal
+  // Note priority: heat > moisture meter > dry air > rain forecast > seasonal
   let note = heatNote(tempC)
+  if (!note && moistureAdj) note = moistureAdj.note
   if (!note && !outdoor && humidity !== null && humidity < 30) {
     note = 'Dry air — watering sooner'
   }
@@ -373,5 +380,97 @@ export function getSuggestedFrequency(plant) {
     }
   }
 
+  // Moisture-based suggestion: if we have paired moisture/watering data
+  const moistureSuggestion = getMoistureFrequencySuggestion(plant)
+  if (moistureSuggestion) return moistureSuggestion
+
   return null
+}
+
+// ── Moisture meter helpers ──────────────────────────────────────────────────
+
+/**
+ * Returns an immediate schedule adjustment based on the last moisture reading.
+ * Only applies if the reading is recent (within 48 hours).
+ */
+export function getMoistureStatusAdjustment(plant) {
+  if (!plant.lastMoistureReading || !plant.lastMoistureDate) return null
+
+  const hoursAgo = (Date.now() - new Date(plant.lastMoistureDate).getTime()) / 3600000
+  if (hoursAgo > 48) return null
+
+  const r = plant.lastMoistureReading
+  if (r <= 2) return { adjustment: -1, note: `Soil very dry (${r}/10) — water soon` }
+  if (r <= 3) return { adjustment: 0, note: `Soil dry (${r}/10)` }
+  if (r >= 9) return { adjustment: 2, note: `Soil saturated (${r}/10) — skip watering` }
+  if (r >= 8) return { adjustment: 1, note: `Soil still wet (${r}/10) — can wait` }
+  return null
+}
+
+/**
+ * Analyse moisture trends to suggest a frequency adjustment.
+ * Pairs moisture readings with watering events to detect over/under-watering.
+ * Requires at least 3 moisture readings and 3 watering events.
+ */
+export function getMoistureFrequencySuggestion(plant) {
+  const moistureLog = plant.moistureLog || []
+  const wateringLog = plant.wateringLog || []
+  if (moistureLog.length < 3 || wateringLog.length < 3) return null
+
+  const freq = plant.frequencyDays || 7
+
+  // For each watering event, find the nearest moisture reading within ±24h
+  const paired = []
+  for (const w of wateringLog) {
+    const wTime = new Date(w.date).getTime()
+    let closest = null
+    let closestDiff = Infinity
+    for (const m of moistureLog) {
+      const diff = Math.abs(new Date(m.date).getTime() - wTime)
+      if (diff < closestDiff && diff <= 86400000) {
+        closest = m
+        closestDiff = diff
+      }
+    }
+    if (closest) paired.push(closest.reading)
+  }
+
+  if (paired.length < 3) return null
+
+  const avgMoisture = paired.reduce((s, r) => s + r, 0) / paired.length
+
+  // Consistently dry at watering time → water more often
+  if (avgMoisture <= 3) {
+    const suggested = Math.max(1, Math.round(freq * 0.8))
+    if (suggested === freq) return null
+    return {
+      suggestedDays: suggested,
+      currentDays: freq,
+      reason: `Soil averages ${avgMoisture.toFixed(1)}/10 at watering time — try every ${suggested}d`,
+      direction: 'decrease',
+    }
+  }
+
+  // Consistently wet at watering time → water less often
+  if (avgMoisture >= 7) {
+    const suggested = Math.min(30, Math.round(freq * 1.3))
+    if (suggested === freq) return null
+    return {
+      suggestedDays: suggested,
+      currentDays: freq,
+      reason: `Soil averages ${avgMoisture.toFixed(1)}/10 at watering time — try every ${suggested}d`,
+      direction: 'increase',
+    }
+  }
+
+  return null
+}
+
+/**
+ * Returns a moisture label and color for display.
+ */
+export function getMoistureDisplay(reading) {
+  if (reading <= 3) return { label: 'Dry', color: '#d97706' }
+  if (reading <= 6) return { label: 'Moist', color: '#22c55e' }
+  return { label: 'Wet', color: '#3b82f6' }
 }

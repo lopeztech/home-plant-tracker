@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay } from '../utils/watering.js'
 
 function makePlant(overrides = {}) {
   return {
@@ -700,5 +700,193 @@ describe('getSuggestedFrequency', () => {
       healthLog: [{ date: '2026-02-01T09:00:00Z', health: 'Good', reason: 'Fine' }],
     }
     expect(getSuggestedFrequency(plant)).toBeNull()
+  })
+})
+
+// ── getMoistureStatusAdjustment ──────────────────────────────────────────────
+
+describe('getMoistureStatusAdjustment', () => {
+  it('returns null when no moisture data', () => {
+    expect(getMoistureStatusAdjustment(makePlant())).toBeNull()
+  })
+
+  it('returns null when reading is older than 48 hours', () => {
+    const plant = makePlant({
+      lastMoistureReading: 2,
+      lastMoistureDate: new Date(Date.now() - 49 * 3600000).toISOString(),
+    })
+    expect(getMoistureStatusAdjustment(plant)).toBeNull()
+  })
+
+  it('returns -1 adjustment for very dry soil (<=2)', () => {
+    const plant = makePlant({
+      lastMoistureReading: 2,
+      lastMoistureDate: new Date().toISOString(),
+    })
+    const result = getMoistureStatusAdjustment(plant)
+    expect(result.adjustment).toBe(-1)
+    expect(result.note).toContain('very dry')
+  })
+
+  it('returns 0 adjustment for dry soil (3)', () => {
+    const plant = makePlant({
+      lastMoistureReading: 3,
+      lastMoistureDate: new Date().toISOString(),
+    })
+    const result = getMoistureStatusAdjustment(plant)
+    expect(result.adjustment).toBe(0)
+    expect(result.note).toContain('dry')
+  })
+
+  it('returns +1 adjustment for wet soil (8)', () => {
+    const plant = makePlant({
+      lastMoistureReading: 8,
+      lastMoistureDate: new Date().toISOString(),
+    })
+    const result = getMoistureStatusAdjustment(plant)
+    expect(result.adjustment).toBe(1)
+    expect(result.note).toContain('still wet')
+  })
+
+  it('returns +2 adjustment for saturated soil (>=9)', () => {
+    const plant = makePlant({
+      lastMoistureReading: 10,
+      lastMoistureDate: new Date().toISOString(),
+    })
+    const result = getMoistureStatusAdjustment(plant)
+    expect(result.adjustment).toBe(2)
+    expect(result.note).toContain('saturated')
+  })
+
+  it('returns null for mid-range readings (4-7)', () => {
+    const plant = makePlant({
+      lastMoistureReading: 5,
+      lastMoistureDate: new Date().toISOString(),
+    })
+    expect(getMoistureStatusAdjustment(plant)).toBeNull()
+  })
+})
+
+// ── getMoistureFrequencySuggestion ───────────────────────────────────────────
+
+describe('getMoistureFrequencySuggestion', () => {
+  function makeTimedLog(count, gapDays, reading) {
+    const log = []
+    const now = Date.now()
+    for (let i = 0; i < count; i++) {
+      log.push({
+        date: new Date(now - (count - i) * gapDays * 86400000).toISOString(),
+        reading,
+        note: '',
+      })
+    }
+    return log
+  }
+
+  function makeTimedWateringLog(count, gapDays) {
+    const log = []
+    const now = Date.now()
+    for (let i = 0; i < count; i++) {
+      log.push({ date: new Date(now - (count - i) * gapDays * 86400000).toISOString(), note: '' })
+    }
+    return log
+  }
+
+  it('returns null with fewer than 3 moisture readings', () => {
+    const plant = {
+      frequencyDays: 7,
+      moistureLog: makeTimedLog(2, 3, 2),
+      wateringLog: makeTimedWateringLog(5, 7),
+    }
+    expect(getMoistureFrequencySuggestion(plant)).toBeNull()
+  })
+
+  it('returns null with fewer than 3 watering events', () => {
+    const plant = {
+      frequencyDays: 7,
+      moistureLog: makeTimedLog(5, 3, 2),
+      wateringLog: makeTimedWateringLog(2, 7),
+    }
+    expect(getMoistureFrequencySuggestion(plant)).toBeNull()
+  })
+
+  it('suggests shorter frequency when soil is consistently dry at watering time', () => {
+    // Moisture readings aligned with watering events (within 24h), all dry
+    const now = Date.now()
+    const wateringLog = [
+      { date: new Date(now - 21 * 86400000).toISOString(), note: '' },
+      { date: new Date(now - 14 * 86400000).toISOString(), note: '' },
+      { date: new Date(now - 7 * 86400000).toISOString(), note: '' },
+    ]
+    const moistureLog = [
+      { date: new Date(now - 21 * 86400000 + 3600000).toISOString(), reading: 2, note: '' },
+      { date: new Date(now - 14 * 86400000 + 3600000).toISOString(), reading: 3, note: '' },
+      { date: new Date(now - 7 * 86400000 + 3600000).toISOString(), reading: 2, note: '' },
+    ]
+    const plant = { frequencyDays: 7, wateringLog, moistureLog }
+    const result = getMoistureFrequencySuggestion(plant)
+    expect(result).not.toBeNull()
+    expect(result.direction).toBe('decrease')
+    expect(result.suggestedDays).toBeLessThan(7)
+  })
+
+  it('suggests longer frequency when soil is consistently wet at watering time', () => {
+    const now = Date.now()
+    const wateringLog = [
+      { date: new Date(now - 21 * 86400000).toISOString(), note: '' },
+      { date: new Date(now - 14 * 86400000).toISOString(), note: '' },
+      { date: new Date(now - 7 * 86400000).toISOString(), note: '' },
+    ]
+    const moistureLog = [
+      { date: new Date(now - 21 * 86400000 + 3600000).toISOString(), reading: 8, note: '' },
+      { date: new Date(now - 14 * 86400000 + 3600000).toISOString(), reading: 8, note: '' },
+      { date: new Date(now - 7 * 86400000 + 3600000).toISOString(), reading: 7, note: '' },
+    ]
+    const plant = { frequencyDays: 7, wateringLog, moistureLog }
+    const result = getMoistureFrequencySuggestion(plant)
+    expect(result).not.toBeNull()
+    expect(result.direction).toBe('increase')
+    expect(result.suggestedDays).toBeGreaterThan(7)
+  })
+
+  it('returns null when moisture readings are in the ideal range', () => {
+    const now = Date.now()
+    const wateringLog = [
+      { date: new Date(now - 21 * 86400000).toISOString(), note: '' },
+      { date: new Date(now - 14 * 86400000).toISOString(), note: '' },
+      { date: new Date(now - 7 * 86400000).toISOString(), note: '' },
+    ]
+    const moistureLog = [
+      { date: new Date(now - 21 * 86400000 + 3600000).toISOString(), reading: 5, note: '' },
+      { date: new Date(now - 14 * 86400000 + 3600000).toISOString(), reading: 5, note: '' },
+      { date: new Date(now - 7 * 86400000 + 3600000).toISOString(), reading: 5, note: '' },
+    ]
+    const plant = { frequencyDays: 7, wateringLog, moistureLog }
+    expect(getMoistureFrequencySuggestion(plant)).toBeNull()
+  })
+})
+
+// ── getMoistureDisplay ──────────────────────────────────────────────────────
+
+describe('getMoistureDisplay', () => {
+  it('returns Dry for low readings', () => {
+    expect(getMoistureDisplay(1).label).toBe('Dry')
+    expect(getMoistureDisplay(3).label).toBe('Dry')
+  })
+
+  it('returns Moist for mid-range readings', () => {
+    expect(getMoistureDisplay(4).label).toBe('Moist')
+    expect(getMoistureDisplay(6).label).toBe('Moist')
+  })
+
+  it('returns Wet for high readings', () => {
+    expect(getMoistureDisplay(7).label).toBe('Wet')
+    expect(getMoistureDisplay(10).label).toBe('Wet')
+  })
+
+  it('returns colors for each range', () => {
+    expect(getMoistureDisplay(2).color).toBe('#d97706')
+    expect(getMoistureDisplay(5).color).toBe('#22c55e')
+    expect(getMoistureDisplay(8).color).toBe('#3b82f6')
   })
 })

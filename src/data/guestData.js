@@ -60,6 +60,14 @@ export const GUEST_PLANTS = [
       { date: '2026-03-14T09:00:00Z', note: '' },
       { date: '2026-03-21T09:00:00Z', note: '' },
     ],
+    lastMoistureReading: 4,
+    lastMoistureDate: '2026-03-27T10:00:00Z',
+    moistureLog: [
+      { date: '2026-03-07T10:00:00Z', reading: 3, note: 'Before watering' },
+      { date: '2026-03-14T10:00:00Z', reading: 4, note: '' },
+      { date: '2026-03-21T09:30:00Z', reading: 2, note: 'Quite dry' },
+      { date: '2026-03-27T10:00:00Z', reading: 4, note: '' },
+    ],
   },
   {
     id: 'guest-2',
@@ -104,6 +112,15 @@ export const GUEST_PLANTS = [
       { date: '2026-03-19T08:00:00Z', note: '' },
       { date: '2026-03-22T08:00:00Z', note: '' },
       { date: '2026-03-25T08:00:00Z', note: '' },
+    ],
+    lastMoistureReading: 7,
+    lastMoistureDate: '2026-03-26T08:00:00Z',
+    moistureLog: [
+      { date: '2026-03-11T08:00:00Z', reading: 5, note: '' },
+      { date: '2026-03-14T08:00:00Z', reading: 3, note: 'Drooping' },
+      { date: '2026-03-19T08:00:00Z', reading: 6, note: '' },
+      { date: '2026-03-22T08:00:00Z', reading: 4, note: '' },
+      { date: '2026-03-26T08:00:00Z', reading: 7, note: 'After watering' },
     ],
   },
   {

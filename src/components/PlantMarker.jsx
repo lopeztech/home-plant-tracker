@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
 import { Move } from 'lucide-react'
+import { getMoistureDisplay } from '../utils/watering.js'
 
 const DRAG_THRESHOLD = 5 // px — minimum movement before treating as a drag
 const LONG_PRESS_MS = 400 // ms before showing drag hint on touch
@@ -200,6 +201,16 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
           <div className="text-xs mt-0.5" style={{ color }}>
             {label}
           </div>
+          {plant.lastMoistureReading && plant.lastMoistureDate &&
+            (Date.now() - new Date(plant.lastMoistureDate).getTime()) < 72 * 3600000 && (() => {
+              const m = getMoistureDisplay(plant.lastMoistureReading)
+              return (
+                <div className="text-xs mt-0.5 d-flex align-items-center gap-1">
+                  <span className="rounded-circle d-inline-block" style={{ width: 6, height: 6, background: m.color }} />
+                  <span style={{ color: m.color }}>{m.label} ({plant.lastMoistureReading}/10)</span>
+                </div>
+              )
+            })()}
         </div>
       )}
     </div>
