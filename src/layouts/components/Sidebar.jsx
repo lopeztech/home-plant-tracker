@@ -14,7 +14,12 @@ export default function Sidebar() {
   return (
     <aside className="app-sidebar d-flex flex-column">
       {/* Profile area */}
-      <div className="d-flex align-items-center gap-2 px-4 py-3" style={{ height: 'var(--app-header-height)' }}>
+      <div className="d-flex align-items-center gap-2 px-3 py-3" style={{ height: 'var(--app-header-height)' }}>
+        <button type="button" className="btn btn-sm p-1 text-white-50 d-none d-md-inline-flex flex-shrink-0" onClick={toggleSidenav} aria-label="Collapse sidebar">
+          <svg className="sa-icon" style={{ width: 20, height: 20 }}>
+            <use href="/icons/sprite.svg#menu"></use>
+          </svg>
+        </button>
         {user && (
           <>
             {user.picture ? (
