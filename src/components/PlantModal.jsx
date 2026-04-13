@@ -753,9 +753,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
           {/* Photo timeline */}
           {(() => {
-            const photos = [...(plant.photoLog || [])]
+            let photos = [...(plant.photoLog || [])]
               .filter((p) => !deletedPhotoUrls.includes(p.url?.split('?')[0]))
               .sort((a, b) => new Date(b.date) - new Date(a.date))
+
+            // Fallback: if no photoLog but imageUrl exists, show it
+            if (photos.length === 0 && plant.imageUrl) {
+              photos = [{ url: plant.imageUrl, date: plant.createdAt || plant.updatedAt, type: 'growth', analysis: null }]
+            }
 
             if (photos.length === 0) return null
 
