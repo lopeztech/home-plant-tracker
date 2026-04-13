@@ -184,18 +184,28 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
             </div>
           )}
 
-          {/* Recalculate all frequencies */}
+          {/* Recalculate + Water all */}
           {floorPlants.length > 0 && (
-            <div className="px-3 pb-2">
+            <div className="d-flex gap-2 px-3 pb-2">
               <Button
                 variant="outline-warning"
                 size="sm"
-                className="w-100"
+                className="flex-grow-1"
                 disabled={recalculating}
                 onClick={handleRecalculate}
               >
                 {recalculating ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
                 {recalculating ? 'Recalculating...' : 'Recalculate All Watering Frequencies'}
+              </Button>
+              <Button
+                variant="outline-info"
+                size="sm"
+                className="flex-grow-1"
+                disabled={gnomeActive}
+                onClick={() => handleGnomeBatchWater(floorPlants)}
+              >
+                {gnomeActive ? <span className="spinner-border spinner-border-sm me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>}
+                {gnomeActive ? 'Watering...' : 'Water All Plants'}
               </Button>
             </div>
           )}
