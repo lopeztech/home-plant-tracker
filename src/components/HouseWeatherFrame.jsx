@@ -20,7 +20,38 @@ const SEASON_PARTICLES = {
   winter: { emojis: ['❄️', '✨', '❄️'], count: 10 },
 }
 
-export default function HouseWeatherFrame({ weather, location, onLocationClick, children, outdoorContent }) {
+function YardAreaBox({ label, children, vertical }) {
+  return (
+    <div
+      style={{
+        borderRadius: 8,
+        overflow: 'hidden',
+        border: '2px dashed rgba(255,255,255,0.4)',
+        background: 'rgba(255,255,255,0.1)',
+        backdropFilter: 'blur(2px)',
+        height: vertical ? '100%' : undefined,
+      }}
+    >
+      <div
+        style={{
+          padding: '3px 10px',
+          fontSize: '0.65rem',
+          fontWeight: 600,
+          color: 'rgba(255,255,255,0.7)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.5px',
+          background: 'rgba(46,125,50,0.3)',
+          borderBottom: '1px solid rgba(255,255,255,0.15)',
+        }}
+      >
+        {label}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+export default function HouseWeatherFrame({ weather, location, onLocationClick, children, yardAreas }) {
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
   const config = isNight ? { ...WEATHER_CONFIGS.night } : (WEATHER_CONFIGS[condition] || WEATHER_CONFIGS.sunny)
@@ -258,62 +289,92 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
         </div>
       )}
 
-      {/* House shape with floorplan inside */}
+      {/* House shape with yard areas around it */}
       <div className="position-relative" style={{ zIndex: 1, padding: '0 8px 15px' }}>
-        {/* Roof */}
-        <div className="mx-auto d-none d-md-block position-relative" style={{ width: '95%', maxWidth: 920, zIndex: 2 }}>
-          <svg viewBox="0 0 920 60" preserveAspectRatio="none" style={{ width: '100%', height: 60, display: 'block', filter: 'drop-shadow(0 -2px 4px rgba(0,0,0,0.1))' }}>
-            <polygon points="460,0 0,55 0,60 920,60 920,55" fill="var(--bs-body-bg, #fff)" />
-            <polygon points="460,0 0,55 920,55" fill="var(--bs-body-bg, #fff)" stroke="rgba(0,0,0,0.08)" strokeWidth="1" />
-          </svg>
-          {/* Chimney */}
-          <div
-            className="position-absolute"
-            style={{
-              right: '18%', top: -10, width: 28, height: 35,
-              background: 'var(--bs-body-bg, #fff)',
-              border: '1px solid rgba(0,0,0,0.08)',
-              borderBottom: 'none',
-              borderRadius: '3px 3px 0 0',
-            }}
-          />
-        </div>
-        {/* House body */}
-        <div
-          className="mx-auto"
-          style={{
-            width: '100%',
-            maxWidth: 920,
-            background: 'var(--bs-body-bg, #fff)',
-            borderRadius: '0 0 8px 8px',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            border: '1px solid rgba(0,0,0,0.06)',
-            borderTop: 'none',
-            overflow: 'hidden',
-            position: 'relative',
-            zIndex: 2,
-          }}
-        >
-          {children}
+        {/* Backyard — behind the house */}
+        {yardAreas?.backyard && (
+          <div className="mx-auto mb-2" style={{ width: '100%', maxWidth: 920, position: 'relative', zIndex: 2 }}>
+            <YardAreaBox label="Backyard">{yardAreas.backyard}</YardAreaBox>
+          </div>
+        )}
+
+        {/* Main row: side-left + house + side-right */}
+        <div className="mx-auto d-flex gap-2" style={{ width: '100%', maxWidth: 1100, position: 'relative', zIndex: 2 }}>
+          {/* Side Left */}
+          {yardAreas?.['side-left'] && (
+            <div className="d-none d-lg-block flex-shrink-0" style={{ width: 140 }}>
+              <YardAreaBox label="Side Left" vertical>{yardAreas['side-left']}</YardAreaBox>
+            </div>
+          )}
+
+          {/* House column */}
+          <div className="flex-grow-1 min-w-0">
+            {/* Roof */}
+            <div className="mx-auto d-none d-md-block position-relative" style={{ width: '95%', maxWidth: 920, zIndex: 2 }}>
+              <svg viewBox="0 0 920 60" preserveAspectRatio="none" style={{ width: '100%', height: 60, display: 'block', filter: 'drop-shadow(0 -2px 4px rgba(0,0,0,0.1))' }}>
+                <polygon points="460,0 0,55 0,60 920,60 920,55" fill="var(--bs-body-bg, #fff)" />
+                <polygon points="460,0 0,55 920,55" fill="var(--bs-body-bg, #fff)" stroke="rgba(0,0,0,0.08)" strokeWidth="1" />
+              </svg>
+              {/* Chimney */}
+              <div
+                className="position-absolute"
+                style={{
+                  right: '18%', top: -10, width: 28, height: 35,
+                  background: 'var(--bs-body-bg, #fff)',
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  borderBottom: 'none',
+                  borderRadius: '3px 3px 0 0',
+                }}
+              />
+            </div>
+            {/* House body */}
+            <div
+              className="mx-auto"
+              style={{
+                width: '100%',
+                maxWidth: 920,
+                background: 'var(--bs-body-bg, #fff)',
+                borderRadius: '0 0 8px 8px',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                border: '1px solid rgba(0,0,0,0.06)',
+                borderTop: 'none',
+                overflow: 'hidden',
+                position: 'relative',
+                zIndex: 2,
+              }}
+            >
+              {children}
+            </div>
+          </div>
+
+          {/* Side Right */}
+          {yardAreas?.['side-right'] && (
+            <div className="d-none d-lg-block flex-shrink-0" style={{ width: 140 }}>
+              <YardAreaBox label="Side Right" vertical>{yardAreas['side-right']}</YardAreaBox>
+            </div>
+          )}
         </div>
 
-        {/* Outdoor / yard area — outside the house */}
-        {outdoorContent && (
-          <div
-            className="mx-auto mt-2"
-            style={{
-              width: '100%',
-              maxWidth: 920,
-              borderRadius: 8,
-              overflow: 'hidden',
-              position: 'relative',
-              zIndex: 2,
-              border: '2px dashed rgba(255,255,255,0.4)',
-              background: 'rgba(255,255,255,0.1)',
-              backdropFilter: 'blur(2px)',
-            }}
-          >
-            {outdoorContent}
+        {/* Side areas on mobile — stacked below house */}
+        {(yardAreas?.['side-left'] || yardAreas?.['side-right']) && (
+          <div className="d-lg-none mx-auto mt-2 d-flex gap-2" style={{ width: '100%', maxWidth: 920 }}>
+            {yardAreas?.['side-left'] && (
+              <div className="flex-grow-1">
+                <YardAreaBox label="Side Left">{yardAreas['side-left']}</YardAreaBox>
+              </div>
+            )}
+            {yardAreas?.['side-right'] && (
+              <div className="flex-grow-1">
+                <YardAreaBox label="Side Right">{yardAreas['side-right']}</YardAreaBox>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Front Yard — in front of the house */}
+        {yardAreas?.frontyard && (
+          <div className="mx-auto mt-2" style={{ width: '100%', maxWidth: 920, position: 'relative', zIndex: 2 }}>
+            <YardAreaBox label="Front Yard">{yardAreas.frontyard}</YardAreaBox>
           </div>
         )}
       </div>

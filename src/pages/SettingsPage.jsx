@@ -3,6 +3,7 @@ import { Button, Form, Table, Badge, Card, Row, Col } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
+import { YARD_AREAS } from '../utils/watering.js'
 
 const THEMES = [
   { id: 'olive', label: 'Olive', color: '#556B2F' },
@@ -142,6 +143,19 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                       >
                         {room.type === 'outdoor' ? '☀ outdoor' : '🏠 indoor'}
                       </Badge>
+                      {(room.type === 'outdoor' || floor.type === 'outdoor') && (
+                        <Form.Select
+                          size="sm"
+                          value={room.area || 'frontyard'}
+                          onChange={(e) => updateRoom(i, { area: e.target.value })}
+                          style={{ width: 120, fontSize: '0.7rem' }}
+                          title="Yard area"
+                        >
+                          {YARD_AREAS.map((a) => (
+                            <option key={a.id} value={a.id}>{a.label}</option>
+                          ))}
+                        </Form.Select>
+                      )}
                       <Button variant="link" size="sm" className="text-danger p-0 flex-shrink-0" onClick={() => deleteRoom(i)}>
                         <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
                       </Button>

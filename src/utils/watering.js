@@ -1,6 +1,14 @@
 // Plants in these room names are treated as outdoor for weather-aware watering
 export const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace', 'Verandah', 'Veranda', 'Deck', 'Courtyard'])
 
+// Yard areas for outdoor zones — rendered around the house
+export const YARD_AREAS = [
+  { id: 'frontyard', label: 'Front Yard' },
+  { id: 'side-left', label: 'Side Left' },
+  { id: 'side-right', label: 'Side Right' },
+  { id: 'backyard', label: 'Backyard' },
+]
+
 export function isOutdoor(plant, floors = []) {
   const floor = floors.find(f => f.id === (plant.floor || 'ground'))
   // Check room-level type first (most specific)

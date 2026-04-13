@@ -7,8 +7,8 @@ export const GUEST_FLOORS = [
     rooms: [
       { id: 'r1', name: 'Living Room', x: 5,  y: 5,  width: 40, height: 35, type: 'indoor' },
       { id: 'r2', name: 'Bedroom',     x: 52, y: 5,  width: 43, height: 35, type: 'indoor' },
-      { id: 'r8', name: 'Verandah',    x: 5,  y: 40, width: 40, height: 10, type: 'outdoor' },
-      { id: 'r9', name: 'Balcony',     x: 52, y: 40, width: 43, height: 10, type: 'outdoor' },
+      { id: 'r8', name: 'Verandah',    x: 5,  y: 40, width: 40, height: 10, type: 'outdoor', area: 'frontyard' },
+      { id: 'r9', name: 'Balcony',     x: 52, y: 40, width: 43, height: 10, type: 'outdoor', area: 'frontyard' },
       { id: 'r3', name: 'Hallway',     x: 20, y: 50, width: 60, height: 12, type: 'indoor' },
       { id: 'r4', name: 'Kitchen',     x: 5,  y: 62, width: 40, height: 33, type: 'indoor' },
       { id: 'r5', name: 'Office',      x: 52, y: 62, width: 43, height: 33, type: 'indoor' },
@@ -17,8 +17,8 @@ export const GUEST_FLOORS = [
   {
     id: 'garden', name: 'Garden', order: -1, type: 'outdoor', imageUrl: null,
     rooms: [
-      { id: 'r6', name: 'Garden Bed', x: 10, y: 10, width: 40, height: 80 },
-      { id: 'r7', name: 'Herb Patch', x: 55, y: 10, width: 35, height: 80 },
+      { id: 'r6', name: 'Garden Bed', x: 10, y: 10, width: 40, height: 80, area: 'frontyard' },
+      { id: 'r7', name: 'Herb Patch', x: 55, y: 10, width: 35, height: 80, area: 'backyard' },
     ],
   },
 ]
