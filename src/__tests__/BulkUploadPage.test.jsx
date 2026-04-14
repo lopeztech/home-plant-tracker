@@ -189,4 +189,70 @@ describe('BulkUploadPage', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /add more/i })).toBeInTheDocument())
   })
+
+  it('passes analysis recommendations and imageUrl in save data', async () => {
+    renderPage()
+
+    const input = document.querySelector('input[type="file"]')
+    const file = createImageFile()
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [file] } })
+    })
+    await waitFor(() => expect(screen.getByText(/1 ready/)).toBeInTheDocument())
+
+    const saveBtn = screen.getByRole('button', { name: /save 1 plant$/i })
+    await act(async () => {
+      fireEvent.click(saveBtn)
+    })
+
+    await waitFor(() => expect(mockHandleBulkCreatePlants).toHaveBeenCalledTimes(1))
+    const [plants] = mockHandleBulkCreatePlants.mock.calls[0]
+    expect(plants).toHaveLength(1)
+    expect(plants[0]).toMatchObject({
+      name: expect.stringContaining('Monstera'),
+      species: 'Monstera deliciosa',
+      imageUrl: 'https://storage.example.com/plants/img.jpg',
+      floor: 'ground',
+      room: 'Kitchen',
+      recommendations: expect.any(Array),
+    })
+  })
+
+  it('shows saved badge after successful save', async () => {
+    renderPage()
+
+    const input = document.querySelector('input[type="file"]')
+    await act(async () => {
+      fireEvent.change(input, { target: { files: [createImageFile()] } })
+    })
+    await waitFor(() => expect(screen.getByText(/1 ready/)).toBeInTheDocument())
+
+    const saveBtn = screen.getByRole('button', { name: /save 1 plant$/i })
+    await act(async () => {
+      fireEvent.click(saveBtn)
+    })
+
+    await waitFor(() => expect(screen.getByText(/1 saved/)).toBeInTheDocument())
+  })
+
+  it('saves multiple plants and all reach saved status', async () => {
+    renderPage()
+
+    const input = document.querySelector('input[type="file"]')
+    const files = [createImageFile('a.jpg'), createImageFile('b.jpg'), createImageFile('c.jpg')]
+
+    await act(async () => {
+      fireEvent.change(input, { target: { files } })
+    })
+    await waitFor(() => expect(screen.getByText(/3 ready/)).toBeInTheDocument())
+
+    const saveBtn = screen.getByRole('button', { name: /save 3 plants/i })
+    await act(async () => {
+      fireEvent.click(saveBtn)
+    })
+
+    await waitFor(() => expect(screen.getByText(/3 saved/)).toBeInTheDocument())
+    expect(mockHandleBulkCreatePlants).toHaveBeenCalledTimes(3)
+  })
 })

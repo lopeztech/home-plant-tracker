@@ -100,6 +100,7 @@ export default function BulkUploadPage() {
           return {
           ...e,
           status: 'ready',
+          analysisRecommendations: result.recommendations || [],
           form: {
             ...e.form,
             name: autoName,
@@ -158,10 +159,8 @@ export default function BulkUploadPage() {
         const plantData = {
           ...entry.form,
           imageUrl,
-          recommendations: [],
+          recommendations: entry.analysisRecommendations || [],
         }
-        // Remove the imageFile field if present
-        delete plantData.imageFile
         // Create via context
         const results = await handleBulkCreatePlants([plantData])
         const result = results[0]

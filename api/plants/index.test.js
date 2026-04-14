@@ -545,6 +545,18 @@ describe('POST /plants', () => {
     expect(store[plantPath(res.body.id)].imageBase64).toBeUndefined();
   });
 
+  it('returns 201 even when image signing fails after save', async () => {
+    storageSignedUrlFn = async () => { throw new Error('signing unavailable'); };
+    const res = await request(app)
+      .post('/plants').set('Authorization', authHeader())
+      .send({ name: 'Bulk Plant', imageUrl: 'https://storage.googleapis.com/bucket/plants/abc.jpg', floor: 'ground', x: 50, y: 50 });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeTruthy();
+    expect(res.body.name).toBe('Bulk Plant');
+    // Plant should be stored in Firestore despite signing failure
+    expect(store[plantPath(res.body.id)].name).toBe('Bulk Plant');
+  });
+
   it('stores sunExposure and sunHoursPerDay fields', async () => {
     const res = await request(app)
       .post('/plants').set('Authorization', authHeader())
