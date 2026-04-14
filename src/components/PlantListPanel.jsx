@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback } from 'react'
 import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
-import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS, getSeason } from '../utils/watering.js'
+import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS, getSeason, isOutdoor } from '../utils/watering.js'
 import PlantIcon from './PlantIcon.jsx'
 
 function UrgencyIcon({ days, skippedRain }) {
@@ -90,16 +90,27 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
 
   const handleGnomeBatchWater = useCallback((targetPlants) => {
     if (gnomeActive) return
-    if (gnomeWaterRef?.current) {
+    // Split indoor vs outdoor — gnome can only animate on the indoor map
+    const indoorPlants = targetPlants.filter((p) => !isOutdoor(p, floors))
+    const outdoorPlants = targetPlants.filter((p) => isOutdoor(p, floors))
+
+    // Water outdoor plants immediately (no gnome animation)
+    if (outdoorPlants.length > 0) {
+      handleBatchWater(outdoorPlants.map((p) => p.id))
+    }
+
+    if (gnomeWaterRef?.current && indoorPlants.length > 0) {
       setGnomeActive(true)
-      gnomeWaterRef.current(targetPlants, () => {
-        handleBatchWater(targetPlants.map((p) => p.id))
+      gnomeWaterRef.current(indoorPlants, () => {
+        handleBatchWater(indoorPlants.map((p) => p.id))
         setGnomeActive(false)
       })
+    } else if (indoorPlants.length > 0) {
+      handleBatchWater(indoorPlants.map((p) => p.id))
     } else {
-      handleBatchWater(targetPlants.map((p) => p.id))
+      // All plants were outdoor, already watered above
     }
-  }, [gnomeActive, gnomeWaterRef, handleBatchWater])
+  }, [gnomeActive, gnomeWaterRef, handleBatchWater, floors])
 
   const floorPlants = useMemo(() => {
     if (!activeFloorId) return plants
