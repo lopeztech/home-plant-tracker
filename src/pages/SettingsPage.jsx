@@ -174,7 +174,7 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
   )
 }
 
-function LayoutPreview({ houseHeight, outdoorHeight, sideWidth, onChangeHouseHeight, onChangeOutdoorHeight, onChangeSideWidth }) {
+function LayoutPreview({ houseHeight, outdoorHeight, sideWidth, onChangeHouseHeight, onChangeOutdoorHeight, onChangeSideWidth, hiddenYardAreas, onToggleYardArea }) {
   const SCALE = 0.4 // scale down for preview
   const MIN_HOUSE = 200, MAX_HOUSE = 800
   const MIN_OUTDOOR = 100, MAX_OUTDOOR = 500
@@ -223,29 +223,43 @@ function LayoutPreview({ houseHeight, outdoorHeight, sideWidth, onChangeHouseHei
     onMouseLeave: (e) => { e.currentTarget.style.opacity = '0.5' },
   }
 
+  const hidden = hiddenYardAreas || []
+  const isHidden = (id) => hidden.includes(id)
+
+  const areaBox = (id, label, style, children) => {
+    const off = isHidden(id)
+    return (
+      <div
+        className="position-relative"
+        style={{ ...style, opacity: off ? 0.35 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
+        onClick={() => onToggleYardArea(id)}
+        title={off ? `Show ${label}` : `Hide ${label}`}
+      >
+        <div className="d-flex align-items-center justify-content-center h-100">
+          <small className={`fw-500 fs-xs ${off ? 'text-decoration-line-through' : ''} text-muted`}>{label}{!off ? ` (${style.width === sW ? sideWidth : outdoorHeight}px)` : ''}</small>
+        </div>
+        {!off && children}
+      </div>
+    )
+  }
+
   return (
     <div className="d-flex flex-column align-items-center gap-1" style={{ userSelect: 'none' }}>
       {/* Backyard */}
-      <div className="position-relative" style={{ width: houseW, height: oH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
-        <div className="d-flex align-items-center justify-content-center h-100">
-          <small className="text-muted fw-500 fs-xs">Backyard ({outdoorHeight}px)</small>
-        </div>
-        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => onMouseDown('outdoor', e)} {...handleHoverProps} />
-      </div>
+      {areaBox('backyard', 'Backyard', { width: houseW + sW * 2 + 8, height: isHidden('backyard') ? 30 : oH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 },
+        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => { e.stopPropagation(); onMouseDown('outdoor', e) }} {...handleHoverProps} />
+      )}
 
       {/* House + sides row */}
       <div className="d-flex align-items-stretch gap-1">
         {/* Side Left */}
-        <div className="position-relative" style={{ width: sW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
-          <div className="d-flex align-items-center justify-content-center h-100">
-            <small className="text-muted fw-500 fs-xs" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Side ({sideWidth}px)</small>
-          </div>
+        {areaBox('side-left', 'Side L', { width: sW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 },
           <div style={{ position: 'absolute', top: 0, bottom: 0, right: -4, width: 8, cursor: 'ew-resize', background: 'var(--bs-primary)', opacity: 0.5, borderRadius: 4, zIndex: 10, transition: 'opacity 0.15s' }}
-            onMouseDown={(e) => onMouseDown('side', e)}
+            onMouseDown={(e) => { e.stopPropagation(); onMouseDown('side', e) }}
             onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
             onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
           />
-        </div>
+        )}
 
         {/* House */}
         <div className="position-relative" style={{ width: houseW, height: hH, background: 'var(--bs-body-bg)', border: '2px solid rgba(0,0,0,0.15)', borderRadius: 6, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
@@ -256,27 +270,20 @@ function LayoutPreview({ houseHeight, outdoorHeight, sideWidth, onChangeHouseHei
         </div>
 
         {/* Side Right */}
-        <div style={{ width: sW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
-          <div className="d-flex align-items-center justify-content-center h-100">
-            <small className="text-muted fw-500 fs-xs" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Side ({sideWidth}px)</small>
-          </div>
-        </div>
+        {areaBox('side-right', 'Side R', { width: sW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }, null)}
       </div>
 
       {/* Frontyard */}
-      <div className="position-relative" style={{ width: houseW, height: oH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
-        <div className="d-flex align-items-center justify-content-center h-100">
-          <small className="text-muted fw-500 fs-xs">Front Yard ({outdoorHeight}px)</small>
-        </div>
-        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => onMouseDown('outdoor', e)} {...handleHoverProps} />
-      </div>
+      {areaBox('frontyard', 'Front Yard', { width: houseW + sW * 2 + 8, height: isHidden('frontyard') ? 30 : oH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 },
+        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => { e.stopPropagation(); onMouseDown('outdoor', e) }} {...handleHoverProps} />
+      )}
     </div>
   )
 }
 
 export default function SettingsPage() {
   const { floors, handleSaveFloors, handleFloorplanUpload, isAnalysingFloorplan, tempUnit, isGuest, location, setLocation } = usePlantContext()
-  const { theme, changeTheme, houseHeight, outdoorHeight, sideWidth, toggleSetting } = useLayoutContext()
+  const { theme, changeTheme, houseHeight, outdoorHeight, sideWidth, hiddenYardAreas, toggleSetting } = useLayoutContext()
   const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
     () => (floors || []).map((f) => ({ ...f, rooms: (f.rooms || []).map((r) => ({ ...r })) })),
@@ -499,9 +506,15 @@ export default function SettingsPage() {
                   houseHeight={houseHeight || 500}
                   outdoorHeight={outdoorHeight || 200}
                   sideWidth={sideWidth || 140}
+                  hiddenYardAreas={hiddenYardAreas}
                   onChangeHouseHeight={(v) => toggleSetting('houseHeight', v)}
                   onChangeOutdoorHeight={(v) => toggleSetting('outdoorHeight', v)}
                   onChangeSideWidth={(v) => toggleSetting('sideWidth', v)}
+                  onToggleYardArea={(id) => {
+                    const current = hiddenYardAreas || []
+                    const next = current.includes(id) ? current.filter((a) => a !== id) : [...current, id]
+                    toggleSetting('hiddenYardAreas', next)
+                  }}
                 />
               </div></div>
             </div>

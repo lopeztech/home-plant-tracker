@@ -19,7 +19,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   } = usePlantContext()
 
   const navigate = useNavigate()
-  const { houseHeight, outdoorHeight, sideWidth } = useLayoutContext()
+  const { houseHeight, outdoorHeight, sideWidth, hiddenYardAreas } = useLayoutContext()
   const [viewMode, setViewMode] = useState('2d')
   const [saving, setSaving] = useState(false)
 
@@ -186,8 +186,10 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   // Build yard area content for each area that has rooms
   const yardAreaContent = useMemo(() => {
     if (!hasAnyOutdoorAreas || viewMode !== '2d') return null
+    const hidden = hiddenYardAreas || []
     const areas = {}
     for (const areaId of YARD_AREAS.map((a) => a.id)) {
+      if (hidden.includes(areaId)) continue
       const areaRooms = outdoorByArea[areaId]
       if (!areaRooms?.length) continue
       const areaFloor = {
@@ -200,7 +202,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       areas[areaId] = { floor: areaFloor, plants: areaPlants }
     }
     return Object.keys(areas).length > 0 ? areas : null
-  }, [hasAnyOutdoorAreas, viewMode, outdoorByArea, outdoorPlantsByArea, activeFloor])
+  }, [hasAnyOutdoorAreas, viewMode, outdoorByArea, outdoorPlantsByArea, activeFloor, hiddenYardAreas])
 
   const renderYardAreas = useMemo(() => {
     if (!yardAreaContent) return null

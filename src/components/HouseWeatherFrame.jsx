@@ -52,6 +52,7 @@ function YardAreaBox({ label, children, vertical }) {
 }
 
 export default function HouseWeatherFrame({ weather, location, onLocationClick, children, yardAreas, sideWidth = 140 }) {
+  const hasSides = !!(yardAreas?.['side-left'] || yardAreas?.['side-right'])
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
   const config = isNight ? { ...WEATHER_CONFIGS.night } : (WEATHER_CONFIGS[condition] || WEATHER_CONFIGS.sunny)
@@ -293,7 +294,7 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
       <div className="position-relative" style={{ zIndex: 1, padding: '0 8px 15px' }}>
         {/* Backyard — behind the house */}
         {yardAreas?.backyard && (
-          <div className="mx-auto mb-2" style={{ width: '100%', maxWidth: 920, position: 'relative', zIndex: 2 }}>
+          <div className="mx-auto mb-2" style={{ width: '100%', maxWidth: hasSides ? 1100 : 920, position: 'relative', zIndex: 2 }}>
             <YardAreaBox label="Backyard">{yardAreas.backyard}</YardAreaBox>
           </div>
         )}
@@ -353,7 +354,7 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
 
         {/* Front Yard — in front of the house */}
         {yardAreas?.frontyard && (
-          <div className="mx-auto mt-2" style={{ width: '100%', maxWidth: 920, position: 'relative', zIndex: 2 }}>
+          <div className="mx-auto mt-2" style={{ width: '100%', maxWidth: hasSides ? 1100 : 920, position: 'relative', zIndex: 2 }}>
             <YardAreaBox label="Front Yard">{yardAreas.frontyard}</YardAreaBox>
           </div>
         )}

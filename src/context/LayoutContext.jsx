@@ -10,6 +10,7 @@ const INIT_STATE = {
   houseHeight: 500,
   outdoorHeight: 200,
   sideWidth: 140,
+  hiddenYardAreas: [],
 }
 
 const LS_KEY = '__PLANT_TRACKER_LAYOUT__'
