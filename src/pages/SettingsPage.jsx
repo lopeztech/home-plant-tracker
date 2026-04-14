@@ -5,17 +5,6 @@ import { useLayoutContext } from '../context/LayoutContext.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
 
-const THEMES = [
-  { id: 'olive', label: 'Olive', color: '#556B2F' },
-  { id: 'earth', label: 'Earth', color: '#8B7355' },
-  { id: 'aurora', label: 'Aurora', color: '#9b2791' },
-  { id: 'lunar', label: 'Lunar', color: '#557596' },
-  { id: 'nebula', label: 'Nebula', color: '#5c6bc0' },
-  { id: 'night', label: 'Night', color: '#37508a' },
-  { id: 'solar', label: 'Solar', color: '#c97a1d' },
-  { id: 'storm', label: 'Storm', color: '#4a6fa5' },
-  { id: 'flare', label: 'Flare', color: '#c0392b' },
-]
 
 function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -287,7 +276,7 @@ function LayoutPreview({ houseHeight, outdoorHeight, sideWidth, onChangeHouseHei
 
 export default function SettingsPage() {
   const { floors, handleSaveFloors, handleFloorplanUpload, isAnalysingFloorplan, tempUnit, isGuest, location, setLocation } = usePlantContext()
-  const { theme, changeTheme, selectedTheme, changeThemeStyle, houseHeight, outdoorHeight, sideWidth, toggleSetting } = useLayoutContext()
+  const { theme, changeTheme, houseHeight, outdoorHeight, sideWidth, toggleSetting } = useLayoutContext()
   const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
     () => (floors || []).map((f) => ({ ...f, rooms: (f.rooms || []).map((r) => ({ ...r })) })),
@@ -514,25 +503,6 @@ export default function SettingsPage() {
               </div></div>
             </div>
 
-            {/* Theme selector */}
-            <div className="panel panel-icon">
-              <div className="panel-hdr"><span>Color Theme</span></div>
-              <div className="panel-container"><div className="panel-content">
-                <div className="d-flex flex-wrap gap-2">
-                  {THEMES.map((t) => (
-                    <button
-                      key={t.id}
-                      onClick={() => changeThemeStyle(t.id)}
-                      className={`btn btn-sm d-flex align-items-center gap-2 ${selectedTheme === t.id ? 'btn-primary' : 'btn-outline-secondary'}`}
-                      title={t.label}
-                    >
-                      <span className="rounded-circle d-inline-block" style={{ width: 12, height: 12, background: t.color }} />
-                      <span className="fs-xs">{t.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div></div>
-            </div>
           </Col>
         </Row>
 
