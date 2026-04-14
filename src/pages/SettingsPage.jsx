@@ -185,6 +185,106 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
   )
 }
 
+function LayoutPreview({ houseHeight, outdoorHeight, sideWidth, onChangeHouseHeight, onChangeOutdoorHeight, onChangeSideWidth }) {
+  const SCALE = 0.4 // scale down for preview
+  const MIN_HOUSE = 200, MAX_HOUSE = 800
+  const MIN_OUTDOOR = 100, MAX_OUTDOOR = 500
+  const MIN_SIDE = 80, MAX_SIDE = 300
+
+  const dragRef = useRef(null)
+
+  const onMouseDown = useCallback((type, e) => {
+    e.preventDefault()
+    dragRef.current = { type, startY: e.clientY, startX: e.clientX, startVal: type === 'house' ? houseHeight : type === 'outdoor' ? outdoorHeight : sideWidth }
+    const onMouseMove = (ev) => {
+      const d = dragRef.current
+      if (!d) return
+      if (d.type === 'house') {
+        const delta = (ev.clientY - d.startY) / SCALE
+        onChangeHouseHeight(Math.round(Math.max(MIN_HOUSE, Math.min(MAX_HOUSE, d.startVal + delta)) / 25) * 25)
+      } else if (d.type === 'outdoor') {
+        const delta = (ev.clientY - d.startY) / SCALE
+        onChangeOutdoorHeight(Math.round(Math.max(MIN_OUTDOOR, Math.min(MAX_OUTDOOR, d.startVal + delta)) / 25) * 25)
+      } else {
+        const delta = (ev.clientX - d.startX) / SCALE
+        onChangeSideWidth(Math.round(Math.max(MIN_SIDE, Math.min(MAX_SIDE, d.startVal + delta)) / 10) * 10)
+      }
+    }
+    const onMouseUp = () => {
+      dragRef.current = null
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }, [houseHeight, outdoorHeight, sideWidth, onChangeHouseHeight, onChangeOutdoorHeight, onChangeSideWidth])
+
+  const hH = houseHeight * SCALE
+  const oH = outdoorHeight * SCALE
+  const sW = sideWidth * SCALE
+  const houseW = 200 // fixed preview house width
+
+  const handleStyle = {
+    position: 'absolute', left: 0, right: 0, height: 8, cursor: 'ns-resize',
+    background: 'var(--bs-primary)', opacity: 0.5, borderRadius: 4, zIndex: 10,
+    transition: 'opacity 0.15s',
+  }
+  const handleHoverProps = {
+    onMouseEnter: (e) => { e.currentTarget.style.opacity = '1' },
+    onMouseLeave: (e) => { e.currentTarget.style.opacity = '0.5' },
+  }
+
+  return (
+    <div className="d-flex flex-column align-items-center gap-1" style={{ userSelect: 'none' }}>
+      {/* Backyard */}
+      <div className="position-relative" style={{ width: houseW, height: oH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
+        <div className="d-flex align-items-center justify-content-center h-100">
+          <small className="text-muted fw-500 fs-xs">Backyard ({outdoorHeight}px)</small>
+        </div>
+        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => onMouseDown('outdoor', e)} {...handleHoverProps} />
+      </div>
+
+      {/* House + sides row */}
+      <div className="d-flex align-items-stretch gap-1">
+        {/* Side Left */}
+        <div className="position-relative" style={{ width: sW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
+          <div className="d-flex align-items-center justify-content-center h-100">
+            <small className="text-muted fw-500 fs-xs" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Side ({sideWidth}px)</small>
+          </div>
+          <div style={{ position: 'absolute', top: 0, bottom: 0, right: -4, width: 8, cursor: 'ew-resize', background: 'var(--bs-primary)', opacity: 0.5, borderRadius: 4, zIndex: 10, transition: 'opacity 0.15s' }}
+            onMouseDown={(e) => onMouseDown('side', e)}
+            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
+            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
+          />
+        </div>
+
+        {/* House */}
+        <div className="position-relative" style={{ width: houseW, height: hH, background: 'var(--bs-body-bg)', border: '2px solid rgba(0,0,0,0.15)', borderRadius: 6, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+          <div className="d-flex align-items-center justify-content-center h-100">
+            <small className="fw-600 fs-xs">House ({houseHeight}px)</small>
+          </div>
+          <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => onMouseDown('house', e)} {...handleHoverProps} />
+        </div>
+
+        {/* Side Right */}
+        <div style={{ width: sW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
+          <div className="d-flex align-items-center justify-content-center h-100">
+            <small className="text-muted fw-500 fs-xs" style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>Side ({sideWidth}px)</small>
+          </div>
+        </div>
+      </div>
+
+      {/* Frontyard */}
+      <div className="position-relative" style={{ width: houseW, height: oH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 }}>
+        <div className="d-flex align-items-center justify-content-center h-100">
+          <small className="text-muted fw-500 fs-xs">Front Yard ({outdoorHeight}px)</small>
+        </div>
+        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => onMouseDown('outdoor', e)} {...handleHoverProps} />
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { floors, handleSaveFloors, handleFloorplanUpload, isAnalysingFloorplan, tempUnit, isGuest, location, setLocation } = usePlantContext()
   const { theme, changeTheme, selectedTheme, changeThemeStyle, houseHeight, outdoorHeight, sideWidth, toggleSetting } = useLayoutContext()
@@ -398,43 +498,19 @@ export default function SettingsPage() {
               </div></div>
             </div>
 
-            {/* Layout sizes */}
+            {/* Layout sizes — interactive preview */}
             <div className="panel panel-icon mb-4">
               <div className="panel-hdr"><span>Layout Sizes</span></div>
               <div className="panel-container"><div className="panel-content">
-                <div className="mb-3">
-                  <div className="d-flex justify-content-between mb-1">
-                    <small className="fw-500">House Height</small>
-                    <small className="text-muted">{houseHeight || 500}px</small>
-                  </div>
-                  <Form.Range
-                    min={200} max={800} step={25}
-                    value={houseHeight || 500}
-                    onChange={(e) => toggleSetting('houseHeight', Number(e.target.value))}
-                  />
-                </div>
-                <div className="mb-3">
-                  <div className="d-flex justify-content-between mb-1">
-                    <small className="fw-500">Outdoor Area Height</small>
-                    <small className="text-muted">{outdoorHeight || 200}px</small>
-                  </div>
-                  <Form.Range
-                    min={100} max={500} step={25}
-                    value={outdoorHeight || 200}
-                    onChange={(e) => toggleSetting('outdoorHeight', Number(e.target.value))}
-                  />
-                </div>
-                <div>
-                  <div className="d-flex justify-content-between mb-1">
-                    <small className="fw-500">Side Yard Width</small>
-                    <small className="text-muted">{sideWidth || 140}px</small>
-                  </div>
-                  <Form.Range
-                    min={80} max={300} step={10}
-                    value={sideWidth || 140}
-                    onChange={(e) => toggleSetting('sideWidth', Number(e.target.value))}
-                  />
-                </div>
+                <p className="text-muted fs-xs mb-3">Drag the edges of each area to resize. Changes apply instantly.</p>
+                <LayoutPreview
+                  houseHeight={houseHeight || 500}
+                  outdoorHeight={outdoorHeight || 200}
+                  sideWidth={sideWidth || 140}
+                  onChangeHouseHeight={(v) => toggleSetting('houseHeight', v)}
+                  onChangeOutdoorHeight={(v) => toggleSetting('outdoorHeight', v)}
+                  onChangeSideWidth={(v) => toggleSetting('sideWidth', v)}
+                />
               </div></div>
             </div>
 

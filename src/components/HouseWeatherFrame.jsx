@@ -309,35 +309,15 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
 
           {/* House column */}
           <div className="flex-grow-1 min-w-0">
-            {/* Roof */}
-            <div className="mx-auto d-none d-md-block position-relative" style={{ width: '95%', maxWidth: 920, zIndex: 2 }}>
-              <svg viewBox="0 0 920 60" preserveAspectRatio="none" style={{ width: '100%', height: 60, display: 'block', filter: 'drop-shadow(0 -2px 4px rgba(0,0,0,0.1))' }}>
-                <polygon points="460,0 0,55 0,60 920,60 920,55" fill="var(--bs-body-bg, #fff)" />
-                <polygon points="460,0 0,55 920,55" fill="var(--bs-body-bg, #fff)" stroke="rgba(0,0,0,0.08)" strokeWidth="1" />
-              </svg>
-              {/* Chimney */}
-              <div
-                className="position-absolute"
-                style={{
-                  right: '18%', top: -10, width: 28, height: 35,
-                  background: 'var(--bs-body-bg, #fff)',
-                  border: '1px solid rgba(0,0,0,0.08)',
-                  borderBottom: 'none',
-                  borderRadius: '3px 3px 0 0',
-                }}
-              />
-            </div>
-            {/* House body */}
             <div
               className="mx-auto"
               style={{
                 width: '100%',
                 maxWidth: 920,
                 background: 'var(--bs-body-bg, #fff)',
-                borderRadius: '0 0 8px 8px',
+                borderRadius: 8,
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
                 border: '1px solid rgba(0,0,0,0.06)',
-                borderTop: 'none',
                 overflow: 'hidden',
                 position: 'relative',
                 zIndex: 2,
