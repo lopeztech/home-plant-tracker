@@ -8,8 +8,10 @@ const INIT_STATE = {
   darkNavigation: true,
   selectedTheme: 'olive',
   houseHeight: 500,
-  outdoorHeight: 200,
-  sideWidth: 140,
+  frontyardHeight: 200,
+  backyardHeight: 200,
+  sideLeftWidth: 140,
+  sideRightWidth: 140,
   hiddenYardAreas: [],
 }
 

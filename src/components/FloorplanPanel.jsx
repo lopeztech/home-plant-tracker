@@ -19,7 +19,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   } = usePlantContext()
 
   const navigate = useNavigate()
-  const { houseHeight, outdoorHeight, sideWidth, hiddenYardAreas } = useLayoutContext()
+  const { houseHeight, frontyardHeight, backyardHeight, sideLeftWidth, sideRightWidth, hiddenYardAreas } = useLayoutContext()
   const [viewMode, setViewMode] = useState('2d')
   const [saving, setSaving] = useState(false)
 
@@ -209,8 +209,11 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     const rendered = {}
     for (const [areaId, { floor: areaFloor, plants: areaPlants }] of Object.entries(yardAreaContent)) {
       const isSide = areaId === 'side-left' || areaId === 'side-right'
+      const areaHeight = areaId === 'frontyard' ? (frontyardHeight || 200)
+        : areaId === 'backyard' ? (backyardHeight || 200)
+        : undefined
       rendered[areaId] = (
-        <div style={{ height: isSide ? '100%' : outdoorHeight, minHeight: isSide ? (houseHeight || 500) : undefined }}>
+        <div style={{ height: isSide ? '100%' : areaHeight, minHeight: isSide ? (houseHeight || 500) : undefined }}>
           <LeafletFloorplan
             key={areaFloor.id}
             floor={areaFloor}
@@ -235,7 +238,8 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       location={location}
       onLocationClick={() => navigate('/settings')}
       yardAreas={renderYardAreas}
-      sideWidth={sideWidth}
+      sideLeftWidth={sideLeftWidth}
+      sideRightWidth={sideRightWidth}
     >
       {/* Floor tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
