@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
-import { Button, Form, Table, Badge, Card, Row, Col } from 'react-bootstrap'
+import { Button, Form, Table, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
@@ -319,9 +319,9 @@ export default function SettingsPage() {
     <div className="content-wrapper">
       <h1 className="subheader-title mb-4">Settings</h1>
       <div className="main-content">
-        <Row>
+        <div>
           {/* Floors & Zones */}
-          <Col xl={8} className="mb-4">
+          <div className="mb-4">
             <div className="panel panel-icon">
               <div className="panel-hdr">
                 <span>
@@ -392,11 +392,11 @@ export default function SettingsPage() {
                 </div>
               </div></div>
             </div>
-          </Col>
+          </div>
 
           {/* Preferences */}
-          <Col xl={4} className="mb-4">
-            <div className="panel panel-icon mb-4">
+          <div className="mb-4">
+            <div className="panel panel-icon">
               <div className="panel-hdr"><span>Preferences</span></div>
               <div className="panel-container"><div className="panel-content">
                 <div className="d-flex align-items-center justify-content-between mb-3">
@@ -487,8 +487,11 @@ export default function SettingsPage() {
               </div></div>
             </div>
 
-            {/* Layout sizes — interactive preview */}
-            <div className="panel panel-icon mb-4">
+          </div>
+
+          {/* Layout sizes — interactive preview */}
+          <div className="mb-4">
+            <div className="panel panel-icon">
               <div className="panel-hdr"><span>Layout Sizes</span></div>
               <div className="panel-container"><div className="panel-content">
                 <p className="text-muted fs-xs mb-3">Drag the edges of each area to resize. Changes apply instantly.</p>
@@ -502,9 +505,8 @@ export default function SettingsPage() {
                 />
               </div></div>
             </div>
-
-          </Col>
-        </Row>
+          </div>
+        </div>
 
         {/* Version */}
         <div className="text-muted fs-xs mt-2">
