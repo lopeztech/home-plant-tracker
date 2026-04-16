@@ -104,23 +104,6 @@
   }
 }
 
-/* Navigation tabs */
-.nav-tab {
-  font-size: 0.8rem;
-  font-weight: 500;
-  padding: 0.375rem 0.75rem;
-  white-space: nowrap;
-
-  &.active {
-    font-weight: 600;
-  }
-}
-
-.nav-tabs-bar {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
 /* Watering ripple */
 @keyframes water-ripple {
   0% { transform: scale(0.8); opacity: 0.6; }
