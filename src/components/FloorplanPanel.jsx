@@ -1,6 +1,7 @@
 import { useMemo, useState, useCallback, lazy, Suspense, useRef } from 'react'
 import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
-import { useNavigate } from 'react-router'
+import { useNavigate, NavLink } from 'react-router'
+import { menuItems } from '../layouts/components/menuData.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
@@ -241,6 +242,32 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       sideLeftWidth={sideLeftWidth}
       sideRightWidth={sideRightWidth}
     >
+      {/* Page navigation tabs */}
+      <div className="d-flex align-items-center px-3 py-2 border-bottom overflow-auto">
+        <Nav variant="pills" className="gap-1 flex-nowrap">
+          {menuItems.filter((item) => !item.isTitle && item.url).map((item) => (
+            <Nav.Item key={item.key}>
+              <NavLink
+                to={item.url}
+                end={item.url === '/'}
+                className={({ isActive }) =>
+                  `nav-link nav-tab py-1 px-2${isActive ? ' active' : ''}`
+                }
+              >
+                <span className="d-inline-flex align-items-center gap-1">
+                  {item.icon && (
+                    <svg className="sa-icon" style={{ width: 12, height: 12 }}>
+                      <use href={item.icon}></use>
+                    </svg>
+                  )}
+                  {item.label}
+                </span>
+              </NavLink>
+            </Nav.Item>
+          ))}
+        </Nav>
+      </div>
+
       {/* Floor tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
         <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
