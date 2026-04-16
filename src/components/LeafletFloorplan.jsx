@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getWateringStatus } from '../utils/watering.js'
@@ -103,8 +103,6 @@ export default function LeafletFloorplan({
   const drawRef        = useRef(null) // { startLL, tempRect }
   const prevFloorIdRef = useRef(null)
 
-  const [pendingRoom, setPendingRoom]         = useState(null)
-  const [pendingRoomName, setPendingRoomName] = useState('')
 
   // Stable callback refs — avoid stale closures in Leaflet event handlers
   const clickRef       = useRef(onFloorplanClick)
@@ -202,13 +200,15 @@ export default function LeafletFloorplan({
 
       if (width < 3 || height < 3) return // too small, ignore
 
-      setPendingRoom({
+      const rooms = floorRef.current?.rooms ?? []
+      const newRoom = {
         x:      Math.round(Math.max(0, Math.min(98, x))),
         y:      Math.round(Math.max(0, Math.min(98, y))),
         width:  Math.round(Math.min(width,  100 - x)),
         height: Math.round(Math.min(height, 100 - y)),
-      })
-      setPendingRoomName('')
+        name:   `Zone ${rooms.length + 1}`,
+      }
+      onRoomsRef.current?.([...rooms, newRoom])
     }
 
     map.on('mousedown', onMouseDown)
@@ -576,90 +576,9 @@ export default function LeafletFloorplan({
     }
   }, [gnomeWaterRef])
 
-  // ── Pending room name prompt ──────────────────────────────────────────────
-  const handleConfirmRoom = () => {
-    if (!pendingRoom || !pendingRoomName.trim()) return
-    const rooms = floorRef.current?.rooms ?? []
-    onRoomsRef.current?.([...rooms, { ...pendingRoom, name: pendingRoomName.trim() }])
-    setPendingRoom(null)
-    setPendingRoomName('')
-  }
-
-  const handleCancelRoom = () => {
-    setPendingRoom(null)
-    setPendingRoomName('')
-  }
-
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-
-      {pendingRoom && (
-        <div style={{
-          position: 'absolute', top: '50%', left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 2000,
-          background: '#1f2937',
-          border: '1px solid #374151',
-          borderRadius: 12,
-          padding: '20px',
-          minWidth: 280,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-        }}>
-          <p style={{ color: '#e5e7eb', fontSize: 14, fontWeight: 600, margin: '0 0 4px 0' }}>Name this zone</p>
-          <p style={{ color: '#6b7280', fontSize: 12, margin: '0 0 12px 0' }}>
-            {pendingRoom.width}% wide × {pendingRoom.height}% tall
-          </p>
-          <input
-            autoFocus
-            value={pendingRoomName}
-            onChange={e => setPendingRoomName(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleConfirmRoom()
-              if (e.key === 'Escape') handleCancelRoom()
-            }}
-            placeholder="e.g. Living Room"
-            style={{
-              display: 'block',
-              width: '100%',
-              background: '#111827',
-              border: '1px solid #374151',
-              borderRadius: 8,
-              padding: '8px 12px',
-              color: '#fff',
-              fontSize: 14,
-              outline: 'none',
-              marginBottom: 12,
-              boxSizing: 'border-box',
-            }}
-          />
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button
-              onClick={handleCancelRoom}
-              style={{
-                padding: '6px 14px', borderRadius: 8,
-                background: 'transparent', border: '1px solid #374151',
-                color: '#9ca3af', cursor: 'pointer', fontSize: 13,
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleConfirmRoom}
-              disabled={!pendingRoomName.trim()}
-              style={{
-                padding: '6px 14px', borderRadius: 8, border: 'none',
-                fontSize: 13, fontWeight: 600,
-                background: pendingRoomName.trim() ? '#10b981' : '#374151',
-                color: pendingRoomName.trim() ? '#fff' : '#6b7280',
-                cursor: pendingRoomName.trim() ? 'pointer' : 'default',
-              }}
-            >
-              Add Zone
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

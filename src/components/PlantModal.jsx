@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col } from 'react-bootstrap'
+import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col, Pagination } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -164,7 +164,7 @@ function DiagnosticUpload({ plantId, onComplete }) {
   )
 }
 
-export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onClose }) {
+export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onMoisture, onClose }) {
   const isEditing = !!plant
   const [mode, setMode] = useState(() => (plant ? 'edit' : null))
   const [activeTab, setActiveTab] = useState('edit')
@@ -195,6 +195,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [moistureReading, setMoistureReading] = useState(5)
   const [moistureNote, setMoistureNote] = useState('')
   const [moistureLogging, setMoistureLogging] = useState(false)
+  const [moisturePage, setMoisturePage] = useState(1)
+  const [wateringPage, setWateringPage] = useState(1)
 
   useEffect(() => {
     if (plant) {
@@ -515,13 +517,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             )
           })()}
           <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Last Watered</Form.Label>
-                <Form.Control type="date" value={form.lastWatered} max={today()} onChange={(e) => update('lastWatered', e.target.value)} />
-              </Form.Group>
-            </Col>
-            <Col md={6}>
+            <Col>
               <Form.Group>
                 <Form.Label>Frequency: {form.frequencyDays}d</Form.Label>
                 <Form.Range min={1} max={30} value={form.frequencyDays} onChange={(e) => update('frequencyDays', e.target.value)} className="mt-2" />
@@ -658,19 +654,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <Badge bg={moistureReading <= 3 ? 'warning' : moistureReading <= 6 ? 'success' : 'primary'} className="fs-sm" style={{ minWidth: 32 }}>
                 {moistureReading}
               </Badge>
-            </div>
-            <div className="d-flex gap-2">
-              <Form.Control
-                size="sm" placeholder="Note (optional)"
-                value={moistureNote} onChange={(e) => setMoistureNote(e.target.value)}
-                className="flex-grow-1"
-              />
               <Button
                 variant="outline-success" size="sm" disabled={moistureLogging}
                 onClick={async () => {
                   setMoistureLogging(true)
                   try {
-                    await plantsApi.moisture(plant.id, moistureReading, moistureNote)
+                    await onMoisture(plant.id, moistureReading, moistureNote)
                     setMoistureNote('')
                   } catch (err) { console.error('Moisture log failed:', err) }
                   finally { setMoistureLogging(false) }
@@ -679,36 +668,70 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 {moistureLogging ? <Spinner size="sm" /> : 'Log'}
               </Button>
             </div>
-            {plant.moistureLog?.length > 0 && (
-              <div className="mt-2">
-                {[...plant.moistureLog].reverse().slice(0, 5).map((entry, i) => {
-                  const d = getMoistureDisplay(entry.reading)
-                  return (
-                    <div key={i} className="d-flex align-items-center gap-2 mb-1 fs-xs text-muted">
-                      <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: d.color }} />
-                      <span><strong>{entry.reading}/10</strong></span>
-                      <span>{new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</span>
-                      <span>{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
-                      {entry.note && <span>— {entry.note}</span>}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-          {plant.wateringLog?.length > 0 ? (
-            <div>
-              <h6 className="text-muted text-uppercase fs-xs fw-600 mb-3">Watering History</h6>
-              {[...plant.wateringLog].reverse().map((entry, i) => (
-                <div key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm text-muted">
-                  <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                  {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  <span className="text-muted">{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
-                  {entry.note && <span>— {entry.note}</span>}
+            <Form.Control
+              size="sm" placeholder=""
+              value={moistureNote} onChange={(e) => setMoistureNote(e.target.value)}
+            />
+            {plant.moistureLog?.length > 0 && (() => {
+              const reversed = [...plant.moistureLog].reverse()
+              const totalPages = Math.ceil(reversed.length / 5)
+              const page = Math.min(moisturePage, totalPages)
+              const paged = reversed.slice((page - 1) * 5, page * 5)
+              return (
+                <div className="mt-2">
+                  {paged.map((entry, i) => {
+                    const d = getMoistureDisplay(entry.reading)
+                    return (
+                      <div key={i} className="d-flex align-items-center gap-2 mb-1 fs-xs text-muted">
+                        <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: d.color }} />
+                        <span><strong>{entry.reading}/10</strong></span>
+                        <span>{new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</span>
+                        <span>{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+                        {entry.note && <span>— {entry.note}</span>}
+                      </div>
+                    )
+                  })}
+                  {totalPages > 1 && (
+                    <Pagination size="sm" className="mt-2 mb-0 justify-content-center">
+                      <Pagination.Prev disabled={page <= 1} onClick={() => setMoisturePage(page - 1)} />
+                      {[...Array(totalPages)].map((_, i) => (
+                        <Pagination.Item key={i + 1} active={i + 1 === page} onClick={() => setMoisturePage(i + 1)}>{i + 1}</Pagination.Item>
+                      ))}
+                      <Pagination.Next disabled={page >= totalPages} onClick={() => setMoisturePage(page + 1)} />
+                    </Pagination>
+                  )}
                 </div>
-              ))}
-            </div>
-          ) : (
+              )
+            })()}
+          </div>
+          {plant.wateringLog?.length > 0 ? (() => {
+            const reversed = [...plant.wateringLog].reverse()
+            const totalPages = Math.ceil(reversed.length / 5)
+            const page = Math.min(wateringPage, totalPages)
+            const paged = reversed.slice((page - 1) * 5, page * 5)
+            return (
+              <div>
+                <h6 className="text-muted text-uppercase fs-xs fw-600 mb-3">Watering History</h6>
+                {paged.map((entry, i) => (
+                  <div key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm text-muted">
+                    <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                    {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    <span className="text-muted">{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+                    {entry.note && <span>— {entry.note}</span>}
+                  </div>
+                ))}
+                {totalPages > 1 && (
+                  <Pagination size="sm" className="mt-2 mb-0 justify-content-center">
+                    <Pagination.Prev disabled={page <= 1} onClick={() => setWateringPage(page - 1)} />
+                    {[...Array(totalPages)].map((_, i) => (
+                      <Pagination.Item key={i + 1} active={i + 1 === page} onClick={() => setWateringPage(i + 1)}>{i + 1}</Pagination.Item>
+                    ))}
+                    <Pagination.Next disabled={page >= totalPages} onClick={() => setWateringPage(page + 1)} />
+                  </Pagination>
+                )}
+              </div>
+            )
+          })() : (
             <p className="text-muted text-center py-4">No watering history yet.</p>
           )}
         </Modal.Body>

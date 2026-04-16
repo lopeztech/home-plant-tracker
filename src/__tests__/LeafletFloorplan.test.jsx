@@ -183,11 +183,6 @@ describe('LeafletFloorplan', () => {
     expect(mockBindTooltip).toHaveBeenCalled()
   })
 
-  it('does not show the pending room modal by default', () => {
-    render(<LeafletFloorplan {...defaultProps} />)
-    expect(screen.queryByText('Name this zone')).not.toBeInTheDocument()
-  })
-
   it('renders with empty plants array', async () => {
     const L = (await import('leaflet')).default
     render(<LeafletFloorplan {...defaultProps} plants={[]} />)

@@ -146,6 +146,22 @@ export function PlantProvider({ children }) {
     setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
   }, [isGuest])
 
+  const handleMoisturePlant = useCallback(async (plantId, reading, note) => {
+    if (isGuest) {
+      const now = new Date().toISOString()
+      const entry = { date: now, reading, note: note || '' }
+      setPlants((prev) => prev.map((p) => p.id === plantId ? {
+        ...p,
+        lastMoistureReading: reading,
+        lastMoistureDate: now,
+        moistureLog: [...(p.moistureLog || []), entry],
+      } : p))
+      return
+    }
+    const updated = await plantsApi.moisture(plantId, reading, note)
+    setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+  }, [isGuest])
+
   const handleBatchWater = useCallback(async (plantIds) => {
     if (isGuest) {
       const now = new Date().toISOString()
@@ -276,14 +292,14 @@ export function PlantProvider({ children }) {
     weather, locationDenied, location, setLocation, tempUnit,
     overdueCount, isAnalysingFloorplan,
     isGuest,
-    handleSavePlant, handleWaterPlant, handleBatchWater,
+    handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
   }), [
     plants, plantsLoading, plantsError, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
-    handleSavePlant, handleWaterPlant, handleBatchWater,
+    handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
