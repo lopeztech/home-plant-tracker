@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
+import NavigationTabs from './components/NavigationTabs.jsx'
 import Onboarding from '../components/Onboarding.jsx'
 
 function Loader() {
@@ -28,6 +29,7 @@ export default function MainLayout() {
         <Topbar />
         <Sidebar />
         <main className="app-body">
+          <NavigationTabs />
           <div className="app-content">
             <Suspense fallback={<Loader />}>
               <Outlet />
