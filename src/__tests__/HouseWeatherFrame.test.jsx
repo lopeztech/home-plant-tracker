@@ -106,36 +106,25 @@ describe('HouseWeatherFrame', () => {
     expect(onLocationClick).toHaveBeenCalled()
   })
 
-  it('renders the front yard tile when provided', () => {
-    render(
-      <HouseWeatherFrame
-        weather={baseWeather}
-        yardAreas={{ frontyard: <div data-testid="fy">fy</div> }}
-      >
-        <div />
+  it('uses a solid background for indoor floors by default', () => {
+    const { container } = render(
+      <HouseWeatherFrame weather={baseWeather}>
+        <div data-testid="child">c</div>
       </HouseWeatherFrame>,
     )
-    expect(screen.getByTestId('fy')).toBeInTheDocument()
-    expect(screen.getByText('Front Yard')).toBeInTheDocument()
+    const houseCol = container.querySelector('[data-testid="child"]').parentElement
+    expect(houseCol.style.background).not.toBe('transparent')
+    expect(houseCol.style.background).toBeTruthy()
   })
 
-  it('renders backyard, side-left, and side-right tiles when provided', () => {
-    render(
-      <HouseWeatherFrame
-        weather={baseWeather}
-        yardAreas={{
-          backyard: <div data-testid="by">by</div>,
-          'side-left': <div data-testid="sl">sl</div>,
-          'side-right': <div data-testid="sr">sr</div>,
-        }}
-      >
-        <div />
+  it('uses a transparent background when isOutdoor is true', () => {
+    const { container } = render(
+      <HouseWeatherFrame weather={baseWeather} isOutdoor>
+        <div data-testid="child">c</div>
       </HouseWeatherFrame>,
     )
-    expect(screen.getByTestId('by')).toBeInTheDocument()
-    expect(screen.getAllByTestId('sl').length).toBeGreaterThan(0)
-    expect(screen.getAllByTestId('sr').length).toBeGreaterThan(0)
-    expect(screen.getByText('Backyard')).toBeInTheDocument()
+    const houseCol = container.querySelector('[data-testid="child"]').parentElement
+    expect(houseCol.style.background).toBe('transparent')
   })
 
   it('applies the night configuration when isDay is false', () => {

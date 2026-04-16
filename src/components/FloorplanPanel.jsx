@@ -6,7 +6,6 @@ import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
 import { calculateReorganisedPositions } from '../utils/reorganise.js'
-import { isOutdoor, YARD_AREAS } from '../utils/watering.js'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
@@ -19,10 +18,9 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   } = usePlantContext()
 
   const navigate = useNavigate()
-  const { houseHeight, frontyardHeight, backyardHeight, sideLeftWidth, sideRightWidth, hiddenYardAreas } = useLayoutContext()
+  const { houseHeight } = useLayoutContext()
   const [viewMode, setViewMode] = useState('2d')
   const [saving, setSaving] = useState(false)
-  const [activeYardArea, setActiveYardArea] = useState(null)
 
   // Track dragged positions directly — { plantId: { x, y, room } }
   const dirtyMovesRef = useRef({})
@@ -41,98 +39,6 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     () => plants.filter((p) => (p.floor || 'ground') === activeFloorId),
     [plants, activeFloorId],
   )
-
-  // Split rooms and plants into indoor vs outdoor
-  const isOutdoorFloor = activeFloor?.type === 'outdoor'
-  const indoorRooms = useMemo(
-    () => (activeFloor?.rooms || []).filter((r) => {
-      if (r.hidden) return false
-      const t = r.type || activeFloor?.type || 'interior'
-      return t !== 'outdoor'
-    }),
-    [activeFloor],
-  )
-  const outdoorRooms = useMemo(
-    () => (activeFloor?.rooms || []).filter((r) => {
-      if (r.hidden) return false
-      const t = r.type || activeFloor?.type || 'interior'
-      return t === 'outdoor'
-    }),
-    [activeFloor],
-  )
-  const hasIndoorOutdoorSplit = !isOutdoorFloor && indoorRooms.length > 0 && outdoorRooms.length > 0
-
-  const indoorFloor = useMemo(() => {
-    if (!hasIndoorOutdoorSplit || !activeFloor) return activeFloor
-    return { ...activeFloor, rooms: indoorRooms }
-  }, [activeFloor, indoorRooms, hasIndoorOutdoorSplit])
-
-  // Group outdoor rooms by yard area
-  const outdoorByArea = useMemo(() => {
-    if (!activeFloor) return {}
-    const allOutdoor = isOutdoorFloor ? (activeFloor.rooms || []).filter((r) => !r.hidden) : outdoorRooms
-    if (allOutdoor.length === 0) return {}
-    const grouped = {}
-    for (const room of allOutdoor) {
-      const area = room.area || 'frontyard'
-      if (!grouped[area]) grouped[area] = []
-      grouped[area].push(room)
-    }
-    return grouped
-  }, [activeFloor, isOutdoorFloor, outdoorRooms])
-
-  const hasAnyOutdoorAreas = isOutdoorFloor || (hasIndoorOutdoorSplit && outdoorRooms.length > 0)
-
-  const indoorPlants = useMemo(() => {
-    if (isOutdoorFloor) return []
-    if (!hasIndoorOutdoorSplit) return plantsOnFloor
-    const outdoorRoomNames = new Set(outdoorRooms.map((r) => r.name))
-    return plantsOnFloor.filter((p) => !outdoorRoomNames.has(p.room))
-  }, [plantsOnFloor, outdoorRooms, hasIndoorOutdoorSplit, isOutdoorFloor])
-
-  // Group outdoor plants by their room's area
-  const outdoorPlantsByArea = useMemo(() => {
-    if (!hasAnyOutdoorAreas) return {}
-    const roomAreaMap = {}
-    const allOutdoor = isOutdoorFloor ? (activeFloor?.rooms || []) : outdoorRooms
-    for (const room of allOutdoor) {
-      roomAreaMap[room.name] = room.area || 'frontyard'
-    }
-    const outdoorRoomNames = new Set(allOutdoor.map((r) => r.name))
-    const relevantPlants = isOutdoorFloor ? plantsOnFloor : plantsOnFloor.filter((p) => outdoorRoomNames.has(p.room))
-    const grouped = {}
-    for (const plant of relevantPlants) {
-      const area = roomAreaMap[plant.room] || 'frontyard'
-      if (!grouped[area]) grouped[area] = []
-      grouped[area].push(plant)
-    }
-    return grouped
-  }, [plantsOnFloor, outdoorRooms, hasAnyOutdoorAreas, isOutdoorFloor, activeFloor])
-
-  // Yard area tabs — only areas that have rooms
-  const yardAreaTabs = useMemo(() => {
-    if (!hasAnyOutdoorAreas) return []
-    const hidden = hiddenYardAreas || []
-    return YARD_AREAS.filter((a) => !hidden.includes(a.id) && outdoorByArea[a.id]?.length > 0)
-  }, [hasAnyOutdoorAreas, outdoorByArea, hiddenYardAreas])
-
-  // Active yard area floor + plants for rendering in main map
-  const activeYardFloor = useMemo(() => {
-    if (!activeYardArea || !activeFloor) return null
-    const areaRooms = outdoorByArea[activeYardArea]
-    if (!areaRooms?.length) return null
-    return {
-      ...activeFloor,
-      id: `${activeFloor.id}-${activeYardArea}`,
-      type: 'outdoor',
-      rooms: areaRooms,
-    }
-  }, [activeYardArea, activeFloor, outdoorByArea])
-
-  const activeYardPlants = useMemo(() => {
-    if (!activeYardArea) return []
-    return outdoorPlantsByArea[activeYardArea] || []
-  }, [activeYardArea, outdoorPlantsByArea])
 
   const [hasDirty, setHasDirty] = useState(false)
 
@@ -209,72 +115,23 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     window.location.reload()
   }, [])
 
-  // Build yard area content for each area that has rooms
-  const yardAreaContent = useMemo(() => {
-    if (!hasAnyOutdoorAreas || viewMode !== '2d') return null
-    const hidden = hiddenYardAreas || []
-    const areas = {}
-    for (const areaId of YARD_AREAS.map((a) => a.id)) {
-      if (hidden.includes(areaId)) continue
-      const areaRooms = outdoorByArea[areaId]
-      if (!areaRooms?.length) continue
-      const areaFloor = {
-        ...activeFloor,
-        id: `${activeFloor.id}-${areaId}`,
-        type: 'outdoor',
-        rooms: areaRooms,
-      }
-      const areaPlants = outdoorPlantsByArea[areaId] || []
-      areas[areaId] = { floor: areaFloor, plants: areaPlants }
-    }
-    return Object.keys(areas).length > 0 ? areas : null
-  }, [hasAnyOutdoorAreas, viewMode, outdoorByArea, outdoorPlantsByArea, activeFloor, hiddenYardAreas])
-
-  const renderYardAreas = useMemo(() => {
-    if (!yardAreaContent) return null
-    const rendered = {}
-    for (const [areaId, { floor: areaFloor, plants: areaPlants }] of Object.entries(yardAreaContent)) {
-      const isSide = areaId === 'side-left' || areaId === 'side-right'
-      const areaHeight = areaId === 'frontyard' ? (frontyardHeight || 200)
-        : areaId === 'backyard' ? (backyardHeight || 200)
-        : undefined
-      rendered[areaId] = (
-        <div style={{ height: isSide ? '100%' : areaHeight, minHeight: isSide ? (houseHeight || 500) : undefined }}>
-          <LeafletFloorplan
-            key={areaFloor.id}
-            floor={areaFloor}
-            floors={floors}
-            plants={areaPlants}
-            weather={weather}
-            onFloorplanClick={onFloorplanClick}
-            onMarkerClick={onPlantClick}
-            onMarkerDrag={handleLocalDrag}
-            editMode={false}
-            onRoomsChange={handleFloorRoomsChange}
-          />
-        </div>
-      )
-    }
-    return rendered
-  }, [yardAreaContent, floors, weather, onFloorplanClick, onPlantClick, handleLocalDrag, handleFloorRoomsChange])
+  const isOutdoorFloor = activeFloor?.type === 'outdoor'
 
   return (
     <HouseWeatherFrame
       weather={weather}
       location={location}
       onLocationClick={() => navigate('/settings')}
-      yardAreas={renderYardAreas}
-      sideLeftWidth={sideLeftWidth}
-      sideRightWidth={sideRightWidth}
+      isOutdoor={isOutdoorFloor}
     >
-      {/* Floor + yard area tabs + view toggle */}
+      {/* Floor tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
         <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
           {visibleFloors.map((f) => (
             <Nav.Item key={f.id}>
               <Nav.Link
-                active={!activeYardArea && f.id === activeFloorId}
-                onClick={() => { setActiveYardArea(null); setActiveFloorId(f.id) }}
+                active={f.id === activeFloorId}
+                onClick={() => setActiveFloorId(f.id)}
                 className="floor-tab py-1 px-2"
               >
                 <span className="d-inline-flex align-items-center gap-1">
@@ -284,22 +141,6 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
                     </svg>
                   )}
                   {f.name}
-                </span>
-              </Nav.Link>
-            </Nav.Item>
-          ))}
-          {yardAreaTabs.map((area) => (
-            <Nav.Item key={area.id}>
-              <Nav.Link
-                active={activeYardArea === area.id}
-                onClick={() => setActiveYardArea(area.id)}
-                className="floor-tab py-1 px-2"
-              >
-                <span className="d-inline-flex align-items-center gap-1">
-                  <svg className="sa-icon sa-thin" style={{ width: 12, height: 12 }}>
-                    <use href="/icons/sprite.svg#sun"></use>
-                  </svg>
-                  {area.label}
                 </span>
               </Nav.Link>
             </Nav.Item>
@@ -326,8 +167,8 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       </div>
 
       {/* Map view */}
-      <div className="floorplan-wrapper" style={{ height: activeYardArea ? (houseHeight || 500) : (isOutdoorFloor ? 0 : (houseHeight || 500)) }}>
-        {isAnalysingFloorplan && !activeYardArea && (
+      <div className="floorplan-wrapper" style={{ height: houseHeight || 500 }}>
+        {isAnalysingFloorplan && (
           <div
             className="position-absolute d-flex flex-column align-items-center justify-content-center gap-2 w-100 h-100"
             style={{ background: 'rgba(0,0,0,0.7)', zIndex: 1000, top: 0, left: 0 }}
@@ -337,26 +178,12 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
             <small className="text-muted">Identifying floors and rooms</small>
           </div>
         )}
-        {activeYardArea && activeYardFloor && viewMode === '2d' && (
+        {activeFloor && viewMode === '2d' && (
           <LeafletFloorplan
-            key={activeYardFloor.id}
-            floor={activeYardFloor}
+            key={activeFloor.id}
+            floor={activeFloor}
             floors={floors}
-            plants={activeYardPlants}
-            weather={weather}
-            onFloorplanClick={onFloorplanClick}
-            onMarkerClick={onPlantClick}
-            onMarkerDrag={handleLocalDrag}
-            editMode={false}
-            onRoomsChange={handleFloorRoomsChange}
-          />
-        )}
-        {!activeYardArea && activeFloor && viewMode === '2d' && !isOutdoorFloor && (
-          <LeafletFloorplan
-            key={indoorFloor?.id || activeFloor.id}
-            floor={hasIndoorOutdoorSplit ? indoorFloor : activeFloor}
-            floors={floors}
-            plants={hasIndoorOutdoorSplit ? indoorPlants : plantsOnFloor}
+            plants={plantsOnFloor}
             weather={weather}
             onFloorplanClick={onFloorplanClick}
             onMarkerClick={onPlantClick}

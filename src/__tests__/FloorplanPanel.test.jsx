@@ -35,10 +35,9 @@ vi.mock('../components/LeafletFloorplan.jsx', () => ({
 
 // Render the house frame's children directly so assertions are simple
 vi.mock('../components/HouseWeatherFrame.jsx', () => ({
-  default: ({ children, yardAreas }) => (
+  default: ({ children }) => (
     <div data-testid="house-frame">
       {children}
-      <div data-testid="yard-areas" data-area-keys={yardAreas ? Object.keys(yardAreas).join(',') : ''} />
     </div>
   ),
 }))
@@ -105,11 +104,6 @@ function setupContexts(overrides = {}) {
   }
   layoutContextValue = {
     houseHeight: 500,
-    frontyardHeight: 200,
-    backyardHeight: 200,
-    sideLeftWidth: 140,
-    sideRightWidth: 140,
-    hiddenYardAreas: overrides.hiddenYardAreas ?? [],
   }
 }
 
@@ -146,60 +140,25 @@ describe('FloorplanPanel', () => {
     expect(screen.queryByText('Secret')).not.toBeInTheDocument()
   })
 
-  it('renders yard area tabs for outdoor areas that have rooms', () => {
+  it('renders the full floor — indoor and outdoor rooms — in a single map', () => {
     render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
 
-    expect(screen.getByText('Front Yard')).toBeInTheDocument()
-    expect(screen.getByText('Backyard')).toBeInTheDocument()
-    expect(screen.queryByText('Side Left')).not.toBeInTheDocument()
-    expect(screen.queryByText('Side Right')).not.toBeInTheDocument()
+    const stub = screen.getByTestId('leaflet-stub')
+    expect(stub.dataset.floorId).toBe('ground')
+    // All 3 plants (indoor + outdoor) are rendered together
+    expect(stub.dataset.plantCount).toBe('3')
   })
 
-  it('omits yard tabs for areas hidden via layout settings', () => {
-    setupContexts({ hiddenYardAreas: ['backyard'] })
-
-    render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
-
-    expect(screen.getByText('Front Yard')).toBeInTheDocument()
-    expect(screen.queryByText('Backyard')).not.toBeInTheDocument()
-  })
-
-  it('switches to a yard area when its tab is clicked and renders only that area\u2019s plants', () => {
-    render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
-
-    // Initially the indoor floor view is active
-    const [initialStub] = screen.getAllByTestId('leaflet-stub')
-    expect(initialStub.dataset.floorId).toBe('ground')
-
-    fireEvent.click(screen.getByText('Front Yard'))
-
-    const stubs = screen.getAllByTestId('leaflet-stub')
-    const yardStub = stubs.find((s) => s.dataset.floorId === 'ground-frontyard')
-    expect(yardStub).toBeDefined()
-    expect(yardStub.dataset.floorType).toBe('outdoor')
-    // Only the Rose plant lives in the frontyard area
-    expect(yardStub.dataset.plantCount).toBe('1')
-  })
-
-  it('clicking a floor tab clears the active yard area and switches floors', () => {
+  it('clicking a floor tab switches floors', () => {
     const otherFloor = makeFloor({ id: 'first', name: 'First', order: 1, rooms: [] })
     const floors = [makeFloor(), otherFloor]
     setupContexts({ floors, floor: floors[0] })
 
     render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
 
-    fireEvent.click(screen.getByText('Front Yard'))
     fireEvent.click(screen.getByText('First'))
 
     expect(setActiveFloorIdMock).toHaveBeenCalledWith('first')
-  })
-
-  it('passes yard area tiles to HouseWeatherFrame', () => {
-    render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
-
-    const yardAreas = screen.getByTestId('yard-areas')
-    const keys = yardAreas.dataset.areaKeys.split(',').filter(Boolean)
-    expect(keys.sort()).toEqual(['backyard', 'frontyard'])
   })
 
   it('toggles between 2D and 3D views', () => {
@@ -227,15 +186,11 @@ describe('FloorplanPanel', () => {
     expect(screen.getByRole('button', { name: /Reorganise/i })).toBeInTheDocument()
   })
 
-  it('shows the analysing overlay only when no yard tab is active', () => {
+  it('shows the analysing overlay while the floorplan is being analysed', () => {
     setupContexts({ isAnalysingFloorplan: true })
 
-    const { rerender } = render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
+    render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
     expect(screen.getByText(/Analysing floorplan/i)).toBeInTheDocument()
-
-    fireEvent.click(screen.getByText('Front Yard'))
-
-    expect(screen.queryByText(/Analysing floorplan/i)).not.toBeInTheDocument()
   })
 
   it('renders only a legend but no map when activeFloorId does not match any floor', () => {
@@ -263,7 +218,7 @@ describe('FloorplanPanel', () => {
     expect(screen.queryByText('Overdue')).not.toBeInTheDocument()
   })
 
-  it('treats outdoor-type floors as a single outdoor map', () => {
+  it('renders outdoor-type floors as a single map', () => {
     const floor = makeFloor({
       id: 'yard',
       name: 'Yard',
@@ -284,9 +239,10 @@ describe('FloorplanPanel', () => {
 
     render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
 
-    // Both yard areas should still appear as tabs when floor itself is outdoor
-    expect(screen.getByText('Backyard')).toBeInTheDocument()
-    expect(screen.getByText('Front Yard')).toBeInTheDocument()
+    const stub = screen.getByTestId('leaflet-stub')
+    expect(stub.dataset.floorId).toBe('yard')
+    expect(stub.dataset.floorType).toBe('outdoor')
+    expect(stub.dataset.plantCount).toBe('1')
   })
 
   it('persists dragged positions locally and updates the ref for saving', () => {

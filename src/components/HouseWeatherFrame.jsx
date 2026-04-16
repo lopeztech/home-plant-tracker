@@ -20,39 +20,7 @@ const SEASON_PARTICLES = {
   winter: { emojis: ['❄️', '✨', '❄️'], count: 10 },
 }
 
-function YardAreaBox({ label, children, vertical }) {
-  return (
-    <div
-      style={{
-        borderRadius: 8,
-        overflow: 'visible',
-        border: '2px dashed rgba(255,255,255,0.4)',
-        background: 'rgba(255,255,255,0.1)',
-        backdropFilter: 'blur(2px)',
-        height: vertical ? '100%' : undefined,
-      }}
-    >
-      <div
-        style={{
-          padding: '3px 10px',
-          fontSize: '0.65rem',
-          fontWeight: 600,
-          color: 'rgba(255,255,255,0.7)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px',
-          background: 'rgba(46,125,50,0.3)',
-          borderBottom: '1px solid rgba(255,255,255,0.15)',
-        }}
-      >
-        {label}
-      </div>
-      {children}
-    </div>
-  )
-}
-
-export default function HouseWeatherFrame({ weather, location, onLocationClick, children, yardAreas, sideLeftWidth = 140, sideRightWidth = 140 }) {
-  const hasSides = !!(yardAreas?.['side-left'] || yardAreas?.['side-right'])
+export default function HouseWeatherFrame({ weather, location, onLocationClick, children, isOutdoor = false }) {
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
   const config = isNight ? { ...WEATHER_CONFIGS.night } : (WEATHER_CONFIGS[condition] || WEATHER_CONFIGS.sunny)
@@ -290,74 +258,24 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
         </div>
       )}
 
-      {/* House shape with yard areas around it */}
+      {/* House shape — solid for indoor floors, transparent for outdoor zones */}
       <div className="position-relative" style={{ zIndex: 1, padding: '0 8px 15px' }}>
-        {/* Backyard — behind the house */}
-        {yardAreas?.backyard && (
-          <div className="mx-auto mb-2" style={{ width: '100%', maxWidth: hasSides ? 1100 : 920, position: 'relative', zIndex: 2 }}>
-            <YardAreaBox label="Backyard">{yardAreas.backyard}</YardAreaBox>
-          </div>
-        )}
-
-        {/* Main row: side-left + house + side-right */}
-        <div className="mx-auto d-flex gap-2" style={{ width: '100%', maxWidth: 1100, position: 'relative', zIndex: 2 }}>
-          {/* Side Left */}
-          {yardAreas?.['side-left'] && (
-            <div className="d-none d-lg-block flex-shrink-0" style={{ width: sideLeftWidth || 140 }}>
-              <YardAreaBox label="Side Left" vertical>{yardAreas['side-left']}</YardAreaBox>
-            </div>
-          )}
-
-          {/* House column */}
-          <div className="flex-grow-1 min-w-0">
-            <div
-              className="mx-auto"
-              style={{
-                width: '100%',
-                maxWidth: 920,
-                background: 'var(--bs-body-bg, #fff)',
-                borderRadius: 8,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                border: '1px solid rgba(0,0,0,0.06)',
-                overflow: 'hidden',
-                position: 'relative',
-                zIndex: 2,
-              }}
-            >
-              {children}
-            </div>
-          </div>
-
-          {/* Side Right */}
-          {yardAreas?.['side-right'] && (
-            <div className="d-none d-lg-block flex-shrink-0" style={{ width: sideRightWidth || 140 }}>
-              <YardAreaBox label="Side Right" vertical>{yardAreas['side-right']}</YardAreaBox>
-            </div>
-          )}
+        <div
+          className="mx-auto"
+          style={{
+            width: '100%',
+            maxWidth: 920,
+            background: isOutdoor ? 'transparent' : 'var(--bs-body-bg, #fff)',
+            borderRadius: 8,
+            boxShadow: isOutdoor ? 'none' : '0 4px 20px rgba(0,0,0,0.15)',
+            border: isOutdoor ? 'none' : '1px solid rgba(0,0,0,0.06)',
+            overflow: 'hidden',
+            position: 'relative',
+            zIndex: 2,
+          }}
+        >
+          {children}
         </div>
-
-        {/* Side areas on mobile — stacked below house */}
-        {(yardAreas?.['side-left'] || yardAreas?.['side-right']) && (
-          <div className="d-lg-none mx-auto mt-2 d-flex gap-2" style={{ width: '100%', maxWidth: 920 }}>
-            {yardAreas?.['side-left'] && (
-              <div className="flex-grow-1">
-                <YardAreaBox label="Side Left">{yardAreas['side-left']}</YardAreaBox>
-              </div>
-            )}
-            {yardAreas?.['side-right'] && (
-              <div className="flex-grow-1">
-                <YardAreaBox label="Side Right">{yardAreas['side-right']}</YardAreaBox>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Front Yard — in front of the house */}
-        {yardAreas?.frontyard && (
-          <div className="mx-auto mt-2" style={{ width: '100%', maxWidth: hasSides ? 1100 : 920, position: 'relative', zIndex: 2 }}>
-            <YardAreaBox label="Front Yard">{yardAreas.frontyard}</YardAreaBox>
-          </div>
-        )}
       </div>
 
       <style>{`
