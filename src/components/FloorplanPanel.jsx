@@ -22,6 +22,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   const { houseHeight, frontyardHeight, backyardHeight, sideLeftWidth, sideRightWidth, hiddenYardAreas } = useLayoutContext()
   const [viewMode, setViewMode] = useState('2d')
   const [saving, setSaving] = useState(false)
+  const [activeYardArea, setActiveYardArea] = useState(null)
 
   // Track dragged positions directly — { plantId: { x, y, room } }
   const dirtyMovesRef = useRef({})
@@ -107,6 +108,31 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     }
     return grouped
   }, [plantsOnFloor, outdoorRooms, hasAnyOutdoorAreas, isOutdoorFloor, activeFloor])
+
+  // Yard area tabs — only areas that have rooms
+  const yardAreaTabs = useMemo(() => {
+    if (!hasAnyOutdoorAreas) return []
+    const hidden = hiddenYardAreas || []
+    return YARD_AREAS.filter((a) => !hidden.includes(a.id) && outdoorByArea[a.id]?.length > 0)
+  }, [hasAnyOutdoorAreas, outdoorByArea, hiddenYardAreas])
+
+  // Active yard area floor + plants for rendering in main map
+  const activeYardFloor = useMemo(() => {
+    if (!activeYardArea || !activeFloor) return null
+    const areaRooms = outdoorByArea[activeYardArea]
+    if (!areaRooms?.length) return null
+    return {
+      ...activeFloor,
+      id: `${activeFloor.id}-${activeYardArea}`,
+      type: 'outdoor',
+      rooms: areaRooms,
+    }
+  }, [activeYardArea, activeFloor, outdoorByArea])
+
+  const activeYardPlants = useMemo(() => {
+    if (!activeYardArea) return []
+    return outdoorPlantsByArea[activeYardArea] || []
+  }, [activeYardArea, outdoorPlantsByArea])
 
   const [hasDirty, setHasDirty] = useState(false)
 
@@ -241,14 +267,14 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       sideLeftWidth={sideLeftWidth}
       sideRightWidth={sideRightWidth}
     >
-      {/* Floor tabs + view toggle */}
+      {/* Floor + yard area tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
         <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
           {visibleFloors.map((f) => (
             <Nav.Item key={f.id}>
               <Nav.Link
-                active={f.id === activeFloorId}
-                onClick={() => setActiveFloorId(f.id)}
+                active={!activeYardArea && f.id === activeFloorId}
+                onClick={() => { setActiveYardArea(null); setActiveFloorId(f.id) }}
                 className="floor-tab py-1 px-2"
               >
                 <span className="d-inline-flex align-items-center gap-1">
@@ -258,6 +284,22 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
                     </svg>
                   )}
                   {f.name}
+                </span>
+              </Nav.Link>
+            </Nav.Item>
+          ))}
+          {yardAreaTabs.map((area) => (
+            <Nav.Item key={area.id}>
+              <Nav.Link
+                active={activeYardArea === area.id}
+                onClick={() => setActiveYardArea(area.id)}
+                className="floor-tab py-1 px-2"
+              >
+                <span className="d-inline-flex align-items-center gap-1">
+                  <svg className="sa-icon sa-thin" style={{ width: 12, height: 12 }}>
+                    <use href="/icons/sprite.svg#sun"></use>
+                  </svg>
+                  {area.label}
                 </span>
               </Nav.Link>
             </Nav.Item>
@@ -284,8 +326,8 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       </div>
 
       {/* Map view */}
-      <div className="floorplan-wrapper" style={{ height: isOutdoorFloor ? 0 : (houseHeight || 500) }}>
-        {isAnalysingFloorplan && (
+      <div className="floorplan-wrapper" style={{ height: activeYardArea ? (houseHeight || 500) : (isOutdoorFloor ? 0 : (houseHeight || 500)) }}>
+        {isAnalysingFloorplan && !activeYardArea && (
           <div
             className="position-absolute d-flex flex-column align-items-center justify-content-center gap-2 w-100 h-100"
             style={{ background: 'rgba(0,0,0,0.7)', zIndex: 1000, top: 0, left: 0 }}
@@ -295,7 +337,21 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
             <small className="text-muted">Identifying floors and rooms</small>
           </div>
         )}
-        {activeFloor && viewMode === '2d' && !isOutdoorFloor && (
+        {activeYardArea && activeYardFloor && viewMode === '2d' && (
+          <LeafletFloorplan
+            key={activeYardFloor.id}
+            floor={activeYardFloor}
+            floors={floors}
+            plants={activeYardPlants}
+            weather={weather}
+            onFloorplanClick={onFloorplanClick}
+            onMarkerClick={onPlantClick}
+            onMarkerDrag={handleLocalDrag}
+            editMode={false}
+            onRoomsChange={handleFloorRoomsChange}
+          />
+        )}
+        {!activeYardArea && activeFloor && viewMode === '2d' && !isOutdoorFloor && (
           <LeafletFloorplan
             key={indoorFloor?.id || activeFloor.id}
             floor={hasIndoorOutdoorSplit ? indoorFloor : activeFloor}
