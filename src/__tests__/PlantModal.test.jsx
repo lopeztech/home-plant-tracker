@@ -64,6 +64,7 @@ function renderModal(props = {}) {
       onSave={props.onSave ?? vi.fn()}
       onDelete={props.onDelete ?? vi.fn()}
       onWater={props.onWater}
+      onMoisture={props.onMoisture ?? vi.fn()}
       onClose={props.onClose ?? vi.fn()}
     />
   )
@@ -298,7 +299,7 @@ describe('PlantModal', () => {
     expect(screen.getByText(/watering history/i)).toBeInTheDocument()
   })
 
-  it('shows all watering entries on the Watering tab', () => {
+  it('paginates watering entries on the Watering tab', () => {
     const plant = {
       ...existingPlant,
       wateringLog: Array.from({ length: 7 }, (_, i) => ({
@@ -308,9 +309,14 @@ describe('PlantModal', () => {
     }
     renderModal({ plant })
     fireEvent.click(screen.getByText('Watering'))
-    // All entries should appear (no 5-entry cap)
-    expect(screen.getByText(/— entry 1/)).toBeInTheDocument()
+    // Page 1 shows 5 most recent (reversed: entries 7,6,5,4,3)
     expect(screen.getByText(/— entry 7/)).toBeInTheDocument()
+    expect(screen.getByText(/— entry 3/)).toBeInTheDocument()
+    expect(screen.queryByText(/— entry 2/)).not.toBeInTheDocument()
+    // Navigate to page 2
+    fireEvent.click(screen.getByText('2'))
+    expect(screen.getByText(/— entry 2/)).toBeInTheDocument()
+    expect(screen.getByText(/— entry 1/)).toBeInTheDocument()
   })
 
   it('shows empty state on the Watering tab when wateringLog is empty', () => {
