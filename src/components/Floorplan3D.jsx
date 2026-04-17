@@ -1312,7 +1312,14 @@ function Joystick({ joyRef }) {
 
 export default function Floorplan3D({ floor, floors, plants, weather, onPlantClick, onFloorplanClick }) {
   const { handleWaterPlant } = usePlantContext()
-  const [walkMode, setWalkMode] = useState(false)
+  // Walk mode is the default 3D experience. Remember the user's choice so
+  // they can turn it off once and have tour mode stick across sessions.
+  const [walkMode, setWalkMode] = useState(() => {
+    try { return localStorage.getItem('plantTracker_3dWalkMode') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('plantTracker_3dWalkMode', walkMode ? '1' : '0') } catch {}
+  }, [walkMode])
   const [nearest, setNearest] = useState(null)
   const [justWatered, setJustWatered] = useState(null)
   const [droplets, setDroplets] = useState([])
