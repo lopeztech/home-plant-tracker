@@ -6,12 +6,17 @@ import { getWateringStatus } from '../utils/watering.js'
 // The game world uses percent coordinates (same as plant.x/y and room bounds).
 // Camera maps percent → pixels with a tile size, centred on the gardener.
 
-const TILE = 18                  // px per percent unit (world → screen)
+const TILE_DEFAULT = 18          // px per percent unit (world → screen)
+const TILE_MIN = 10
+const TILE_MAX = 36
 const PLAYER_RADIUS = 1.5        // percent — also used for wall collision
 const WALL_THICKNESS = 1.5       // percent
 const DOOR_MIN = 5               // percent — min shared edge that counts as a doorway
 const WATER_RANGE = 6            // percent — distance you must be within to water
 const SPEED = 55                 // percent per second
+// Scale the whole floorplan toward its centroid so rooms pack closer together
+// and the gardener doesn't have to walk across half the lot to reach a plant.
+const CONDENSE_FACTOR = 0.6
 
 const COLORS = {
   grass:        '#7fb685',
@@ -37,6 +42,42 @@ const COLORS = {
   leafBright:   '#4caf50',
   leafDark:     '#2e7d32',
   flowerPink:   '#ec4899',
+}
+
+// Shrink every room (and every plant inside) toward the overall layout
+// centroid by `factor`. With factor < 1 the whole scene is tighter, so the
+// gardener has to walk less to get from one plant to the next.
+function condenseLayout(rooms, plants, factor) {
+  const visible = (rooms || []).filter((r) => !r.hidden)
+  if (!visible.length || factor === 1) return { rooms, plants }
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const r of visible) {
+    minX = Math.min(minX, r.x)
+    maxX = Math.max(maxX, r.x + r.width)
+    minY = Math.min(minY, r.y)
+    maxY = Math.max(maxY, r.y + r.height)
+  }
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+
+  const shrinkRoom = (r) => r.hidden ? r : ({
+    ...r,
+    x: (r.x - cx) * factor + cx,
+    y: (r.y - cy) * factor + cy,
+    width: r.width * factor,
+    height: r.height * factor,
+  })
+  const shrinkPlant = (p) => ({
+    ...p,
+    x: (p.x - cx) * factor + cx,
+    y: (p.y - cy) * factor + cy,
+  })
+
+  return {
+    rooms: (rooms || []).map(shrinkRoom),
+    plants: (plants || []).map(shrinkPlant),
+  }
 }
 
 // ── Wall geometry (re-uses the same approach as Floorplan3D) ─────────────────
@@ -337,7 +378,17 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const wrapperRef = useRef(null)
   const { handleWaterPlant } = usePlantContext()
 
-  const walls = useMemo(() => computeGameWalls(floor?.rooms || []), [floor])
+  // Apply the condense transform once per floor/plants change and reuse the
+  // shrunk world everywhere downstream (walls, rendering, collision).
+  const { rooms: gameRooms, plants: gamePlants } = useMemo(
+    () => condenseLayout(floor?.rooms || [], plants || [], CONDENSE_FACTOR),
+    [floor, plants],
+  )
+  const walls = useMemo(() => computeGameWalls(gameRooms), [gameRooms])
+
+  // Zoom — TILE is mutable via scroll wheel / +/- buttons. Using a ref so
+  // the canvas loop reads the latest value each frame without re-renders.
+  const tileRef = useRef(TILE_DEFAULT)
 
   // Mutable per-frame state
   const stateRef = useRef({
@@ -376,6 +427,22 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     stateRef.current.facing = 'down'
     stateRef.current.phase = 0
   }, [floor?.id])
+
+  // Scroll-wheel zoom
+  useEffect(() => {
+    const el = wrapperRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      e.preventDefault()
+      tileRef.current = Math.max(TILE_MIN, Math.min(TILE_MAX, tileRef.current - e.deltaY * 0.03))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  const zoomBy = useCallback((delta) => {
+    tileRef.current = Math.max(TILE_MIN, Math.min(TILE_MAX, tileRef.current + delta))
+  }, [])
 
   // Keyboard input
   useEffect(() => {
@@ -486,10 +553,10 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         s.phase = 0
       }
 
-      // Nearest plant + water action
+      // Nearest plant + water action (operates on condensed positions)
       let nearestPlant = null
       let nearestDist = Infinity
-      for (const p of plants) {
+      for (const p of gamePlants) {
         const pdx = p.x - s.x, pdy = p.y - s.y
         const d = Math.sqrt(pdx * pdx + pdy * pdy)
         if (d < nearestDist) { nearestDist = d; nearestPlant = p }
@@ -505,8 +572,9 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       // ── Draw ──
       const w = canvas.clientWidth
       const h = canvas.clientHeight
-      const cam = { x: s.x * TILE - w / 2, y: s.y * TILE - h / 2 }
-      const worldToScreen = (wx, wy) => [wx * TILE - cam.x, wy * TILE - cam.y]
+      const tile = tileRef.current
+      const cam = { x: s.x * tile - w / 2, y: s.y * tile - h / 2 }
+      const worldToScreen = (wx, wy) => [wx * tile - cam.x, wy * tile - cam.y]
 
       // Grass background, tiled
       const gridSize = 16
@@ -519,7 +587,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       }
 
       // Dirt path halo around rooms for "farm" vibe on indoor floors
-      const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
+      const rooms = (gameRooms || []).filter((r) => !r.hidden)
       if (rooms.length && floor?.type !== 'outdoor') {
         let minX = 100, maxX = 0, minY = 100, maxY = 0
         for (const r of rooms) {
@@ -531,14 +599,14 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         const pad = 3
         const [hx, hy] = worldToScreen(minX - pad, minY - pad)
         ctx.fillStyle = COLORS.dirt
-        ctx.fillRect(hx, hy, (maxX - minX + 2 * pad) * TILE, (maxY - minY + 2 * pad) * TILE)
+        ctx.fillRect(hx, hy, (maxX - minX + 2 * pad) * tile, (maxY - minY + 2 * pad) * tile)
       }
 
       // Rooms — floor + walls
       for (const r of rooms) {
         const [rx, ry] = worldToScreen(r.x, r.y)
-        const rw = r.width * TILE
-        const rh = r.height * TILE
+        const rw = r.width * tile
+        const rh = r.height * tile
         // floor
         const isOutdoorRoom = r.type === 'outdoor' || floor?.type === 'outdoor'
         ctx.fillStyle = isOutdoorRoom ? COLORS.grass : COLORS.floorIndoor
@@ -558,17 +626,17 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
 
       // Walls on top of floors (drawn per segment so doorways are visible gaps)
       for (const wall of walls) {
-        const t = (WALL_THICKNESS / 2) * TILE
+        const t = (WALL_THICKNESS / 2) * tile
         if (wall.axis === 'x') {
           const [sx, sy] = worldToScreen(wall.a, wall.v)
           ctx.fillStyle = COLORS.wall
-          ctx.fillRect(sx, sy - t, (wall.b - wall.a) * TILE, t * 2)
+          ctx.fillRect(sx, sy - t, (wall.b - wall.a) * tile, t * 2)
           ctx.fillStyle = COLORS.wallTop
-          ctx.fillRect(sx, sy - t, (wall.b - wall.a) * TILE, 2)
+          ctx.fillRect(sx, sy - t, (wall.b - wall.a) * tile, 2)
         } else {
           const [sx, sy] = worldToScreen(wall.v, wall.a)
           ctx.fillStyle = COLORS.wall
-          ctx.fillRect(sx - t, sy, t * 2, (wall.b - wall.a) * TILE)
+          ctx.fillRect(sx - t, sy, t * 2, (wall.b - wall.a) * tile)
           ctx.fillStyle = COLORS.wallTop
           ctx.fillRect(sx - t, sy, t * 2, 2)
         }
@@ -588,7 +656,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
 
       // Depth-sorted sprites: gardener + plants, back-to-front
       const sprites = []
-      for (const p of plants) {
+      for (const p of gamePlants) {
         sprites.push({ kind: 'plant', wy: p.y, data: p })
       }
       sprites.push({ kind: 'player', wy: s.y })
@@ -616,7 +684,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       cancelAnimationFrame(rafId)
       ro.disconnect()
     }
-  }, [walls, plants, weather, floors, floor, waterPlant])
+  }, [walls, gameRooms, gamePlants, weather, floors, floor, waterPlant])
 
   return (
     <div ref={wrapperRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: COLORS.grassDark }}>
@@ -637,6 +705,36 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       >
         <div><strong>WASD / arrows</strong> — move</div>
         <div><strong>Space</strong> or <strong>E</strong> — water nearest plant</div>
+        <div><strong>Scroll</strong> or +/− — zoom</div>
+      </div>
+
+      {/* Zoom buttons (work on both desktop + touch) */}
+      <div
+        style={{
+          position: 'absolute', top: 74, right: 10, zIndex: 3,
+          display: 'flex', flexDirection: 'column', gap: 4,
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => zoomBy(3)}
+          title="Zoom in"
+          style={{
+            width: 34, height: 34, borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)',
+            background: '#fff', color: '#2a1f14', fontSize: 18, lineHeight: 1,
+            cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+          }}
+        >+</button>
+        <button
+          type="button"
+          onClick={() => zoomBy(-3)}
+          title="Zoom out"
+          style={{
+            width: 34, height: 34, borderRadius: 6, border: '1px solid rgba(0,0,0,0.15)',
+            background: '#fff', color: '#2a1f14', fontSize: 18, lineHeight: 1,
+            cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+          }}
+        >−</button>
       </div>
 
       {/* Bottom-centre prompt */}
