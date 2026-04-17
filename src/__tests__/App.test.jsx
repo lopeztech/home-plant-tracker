@@ -133,7 +133,7 @@ describe('App', () => {
 
   it('displays plants in the list after loading', async () => {
     plantsApi.list.mockResolvedValue([samplePlant])
-    renderApp()
+    renderApp('/plants')
     await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
   })
 
