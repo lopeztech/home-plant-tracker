@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Button, Row, Col, Badge, ProgressBar } from 'react-bootstrap'
+import { Button, Row, Col, Badge, ProgressBar, Form } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { analyseApi, imagesApi } from '../api/plants.js'
 import BulkPlantCard from '../components/BulkPlantCard.jsx'
@@ -36,6 +36,7 @@ export default function BulkUploadPage() {
   const [entries, setEntries] = useState([])
   const [isDragging, setIsDragging] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [uploadHint, setUploadHint] = useState('')
   const fileInputRef = useRef(null)
   const stageTimerRef = useRef(null)
 
@@ -63,6 +64,7 @@ export default function BulkUploadPage() {
     const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'))
     if (!imageFiles.length) return
 
+    const hint = uploadHint.trim()
     const newEntries = imageFiles.map((file) => ({
       id: crypto.randomUUID(),
       file,
@@ -79,17 +81,19 @@ export default function BulkUploadPage() {
     }))
 
     setEntries((prev) => [...prev, ...newEntries])
-    runAnalysis(newEntries)
-  }, [defaultFloor, defaultRoom])
+    runAnalysis(newEntries, hint)
+  }, [defaultFloor, defaultRoom, uploadHint])
 
-  const runAnalysis = useCallback(async (newEntries) => {
+  const runAnalysis = useCallback(async (newEntries, hint = '') => {
     // Mark them as analysing
     const ids = new Set(newEntries.map((e) => e.id))
     setEntries((prev) => prev.map((e) => ids.has(e.id) ? { ...e, status: 'analysing' } : e))
 
     await withConcurrency(newEntries, async (entry) => {
       try {
-        const result = await analyseApi.analyse(entry.file)
+        const result = hint
+          ? await analyseApi.analyseWithHint(entry.file, hint)
+          : await analyseApi.analyse(entry.file)
         const species = result.species || ''
         const shortSpecies = species ? species.split('(')[0].split(',')[0].trim() : ''
 
@@ -131,6 +135,12 @@ export default function BulkUploadPage() {
     if (entry) runAnalysis([entry])
   }, [entries, runAnalysis])
 
+  const handleReanalyse = useCallback((entryId, hint) => {
+    const entry = entries.find((e) => e.id === entryId)
+    if (!entry) return
+    runAnalysis([entry], (hint || '').trim())
+  }, [entries, runAnalysis])
+
   const handleRemove = useCallback((entryId) => {
     setEntries((prev) => {
       const entry = prev.find((e) => e.id === entryId)
@@ -163,13 +173,15 @@ export default function BulkUploadPage() {
         }
         // Create via context
         const results = await handleBulkCreatePlants([plantData])
-        const result = results[0]
-        if (result.status === 'rejected') throw result.reason
+        const result = results?.[0]
+        if (!result) throw new Error('No response from save handler')
+        if (result.status === 'rejected') throw result.reason || new Error('Save rejected')
 
         setEntries((prev) => prev.map((e) => e.id === entry.id ? { ...e, status: 'saved' } : e))
       } catch (err) {
+        console.error('Bulk save failed for entry', entry.id, err)
         setEntries((prev) => prev.map((e) => e.id === entry.id ? {
-          ...e, status: 'error', error: `Save failed: ${err.message}`,
+          ...e, status: 'error', error: `Save failed: ${err?.message || 'unknown error'}`,
         } : e))
       }
     }, CONCURRENCY)
@@ -209,6 +221,20 @@ export default function BulkUploadPage() {
       </div>
 
       <div className="main-content">
+        {/* Optional species hint — improves analysis accuracy when the user already knows */}
+        <Form.Group className="mb-3">
+          <Form.Label className="fs-sm fw-500 mb-1">
+            What plant is this? <span className="text-muted fw-400">(optional, applies to next uploads)</span>
+          </Form.Label>
+          <Form.Control
+            size="sm"
+            placeholder="e.g. Monstera deliciosa, Peace Lily, Tomato..."
+            value={uploadHint}
+            onChange={(e) => setUploadHint(e.target.value)}
+            disabled={isSaving}
+          />
+        </Form.Group>
+
         {/* Drop zone */}
         <div
           className={`panel mb-4 ${isDragging ? 'border-primary' : ''}`}
@@ -261,6 +287,7 @@ export default function BulkUploadPage() {
                 onChange={handleChange}
                 onRemove={() => handleRemove(entry.id)}
                 onRetry={() => handleRetry(entry.id)}
+                onReanalyse={(hint) => handleReanalyse(entry.id, hint)}
               />
             </Col>
           ))}

@@ -268,7 +268,7 @@ export function PlantProvider({ children }) {
       const newPlants = plantsData.map((data) => ({
         ...data,
         id: `guest-new-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        floor: data.floor ?? activeFloorId,
+        floor: data.floor || activeFloorId,
         x: 50, y: 50,
       }))
       setPlants((prev) => [...newPlants, ...prev])
@@ -277,7 +277,7 @@ export function PlantProvider({ children }) {
     const results = await Promise.allSettled(
       plantsData.map((data) => plantsApi.create({
         ...data,
-        floor: data.floor ?? activeFloorId,
+        floor: data.floor || activeFloorId,
         x: 50, y: 50,
       })),
     )

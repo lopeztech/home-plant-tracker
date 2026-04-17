@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Card, Form, Badge, Spinner, Button, Row, Col, Collapse } from 'react-bootstrap'
+import { Card, Form, Badge, Spinner, Button, Row, Col, Collapse, InputGroup } from 'react-bootstrap'
 
 const HEALTH_COLORS = { Excellent: 'success', Good: 'success', Fair: 'warning', Poor: 'danger' }
 const MATURITY_COLORS = { Seedling: 'info', Young: 'info', Mature: 'primary', Established: 'primary' }
@@ -40,9 +40,18 @@ const ANALYSIS_STAGES = [
   'Calculating care schedule...',
 ]
 
-export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove, onRetry }) {
+export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove, onRetry, onReanalyse }) {
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [showHint, setShowHint] = useState(false)
+  const [hint, setHint] = useState('')
   const { previewUrl, status, form, error } = entry
+
+  const submitHint = () => {
+    if (!hint.trim() || !onReanalyse) return
+    onReanalyse(hint.trim())
+    setShowHint(false)
+    setHint('')
+  }
 
   const update = (field, value) => {
     const updatedForm = { ...form, [field]: value }
@@ -121,6 +130,32 @@ export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove
             <Form.Group className="mb-2">
               <Form.Control size="sm" placeholder="Species" value={form.species || ''}
                 onChange={(e) => update('species', e.target.value)} />
+              {onReanalyse && !showHint && (
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="p-0 fs-xs text-muted mt-1"
+                  onClick={() => setShowHint(true)}
+                >
+                  Not right? Suggest species
+                </Button>
+              )}
+              {showHint && (
+                <InputGroup size="sm" className="mt-1">
+                  <Form.Control
+                    placeholder="e.g. Monstera, Peace Lily..."
+                    value={hint}
+                    onChange={(e) => setHint(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') submitHint() }}
+                  />
+                  <Button variant="primary" onClick={submitHint} disabled={!hint.trim()}>
+                    Re-analyse
+                  </Button>
+                  <Button variant="outline-secondary" onClick={() => { setShowHint(false); setHint('') }}>
+                    Cancel
+                  </Button>
+                </InputGroup>
+              )}
             </Form.Group>
             <Row className="mb-2 g-2">
               <Col xs={6}>
