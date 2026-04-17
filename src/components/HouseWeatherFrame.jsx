@@ -210,8 +210,10 @@ export default function HouseWeatherFrame({ weather, children, isOutdoor = false
         />
       </div>
 
-      {/* House shape — solid for indoor floors, transparent for outdoor zones */}
-      <div className="position-relative" style={{ zIndex: 1, padding: fullWidth ? '0 0 15px' : '0 8px 15px' }}>
+      {/* House shape — solid for indoor floors, transparent for outdoor zones.
+          Top padding leaves a visible sky strip where clouds, rain/snow, and
+          seasonal falling particles animate above the house. */}
+      <div className="position-relative" style={{ zIndex: 1, padding: fullWidth ? '100px 0 15px' : '80px 8px 15px' }}>
         <div
           className={fullWidth ? '' : 'mx-auto'}
           style={{
