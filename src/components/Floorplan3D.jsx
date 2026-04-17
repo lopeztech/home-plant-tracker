@@ -169,6 +169,8 @@ const WALK_SPEED = 2.5             // world units per second
 const TURN_SPEED = 2.2             // radians per second
 const AVATAR_RADIUS = 0.18         // for wall/room collision
 
+const DOOR_MIN = 0.8   // shared-edge overlaps this long become passable doorways
+
 // Compute an axis-aligned bounding box that encloses every visible room so
 // the avatar is clamped to the house footprint. Returns null for outdoor-only
 // or empty floors (falls back to ground bounds).
@@ -185,6 +187,111 @@ function getRoomsBounds(rooms) {
   if (minX === Infinity) return null
   const pad = AVATAR_RADIUS + 0.05
   return { minX: minX + pad, maxX: maxX - pad, minZ: minZ + pad, maxZ: maxZ - pad }
+}
+
+// Break each room edge into one or more solid sub-segments by subtracting
+// overlaps ≥ DOOR_MIN with any collinear edge from another room. Those
+// overlaps become implicit doorways — no schema change required.
+//
+// Returns an array of { axis, v, a, b }:
+//   axis: 'x' — wall runs along X between a..b at constant z = v
+//   axis: 'z' — wall runs along Z between a..b at constant x = v
+function computeWallSegments(rooms) {
+  const eps = WALL_THICKNESS * 1.5
+  const scaled = (rooms || [])
+    .filter((r) => !r.hidden)
+    .map((r) => ({
+      x1: (r.x - 50) * SCALE,
+      x2: (r.x + r.width - 50) * SCALE,
+      z1: (r.y - 50) * SCALE,
+      z2: (r.y + r.height - 50) * SCALE,
+    }))
+
+  const raw = []
+  for (const r of scaled) {
+    raw.push({ axis: 'x', v: r.z1, a: r.x1, b: r.x2 }) // north (top edge)
+    raw.push({ axis: 'x', v: r.z2, a: r.x1, b: r.x2 }) // south (bottom edge)
+    raw.push({ axis: 'z', v: r.x1, a: r.z1, b: r.z2 }) // west (left edge)
+    raw.push({ axis: 'z', v: r.x2, a: r.z1, b: r.z2 }) // east (right edge)
+  }
+
+  const blockers = []
+  for (let i = 0; i < raw.length; i++) {
+    const s = raw[i]
+    const doors = []
+    for (let j = 0; j < raw.length; j++) {
+      if (j === i) continue
+      const o = raw[j]
+      if (o.axis !== s.axis) continue
+      if (Math.abs(o.v - s.v) > eps) continue
+      const start = Math.max(s.a, o.a)
+      const end = Math.min(s.b, o.b)
+      if (end - start >= DOOR_MIN) doors.push([start, end])
+    }
+    doors.sort((x, y) => x[0] - y[0])
+    const merged = []
+    for (const d of doors) {
+      if (merged.length && d[0] <= merged[merged.length - 1][1]) {
+        merged[merged.length - 1][1] = Math.max(merged[merged.length - 1][1], d[1])
+      } else {
+        merged.push([...d])
+      }
+    }
+    let cursor = s.a
+    for (const [a, b] of merged) {
+      if (a > cursor) blockers.push({ axis: s.axis, v: s.v, a: cursor, b: a })
+      cursor = Math.max(cursor, b)
+    }
+    if (cursor < s.b) blockers.push({ axis: s.axis, v: s.v, a: cursor, b: s.b })
+  }
+
+  // Dedupe identical sub-segments produced by adjacent rooms
+  const seen = new Set()
+  const out = []
+  for (const w of blockers) {
+    const k = `${w.axis}:${w.v.toFixed(3)}:${w.a.toFixed(3)}:${w.b.toFixed(3)}`
+    if (seen.has(k)) continue
+    seen.add(k); out.push(w)
+  }
+  return out
+}
+
+// Circle-vs-AABB slide: push the avatar out of every wall it overlaps. Axis
+// normals come out of the closest-point projection, so tangential motion is
+// preserved naturally (you slide along a wall when you press into it).
+function resolveWallCollisions(x, z, walls, radius) {
+  const t = WALL_THICKNESS / 2
+  let nx = x, nz = z
+  // Two passes so a corner hit between two perpendicular walls settles.
+  for (let pass = 0; pass < 2; pass++) {
+    for (const w of walls) {
+      let wMinX, wMaxX, wMinZ, wMaxZ
+      if (w.axis === 'x') {
+        wMinX = w.a; wMaxX = w.b; wMinZ = w.v - t; wMaxZ = w.v + t
+      } else {
+        wMinX = w.v - t; wMaxX = w.v + t; wMinZ = w.a; wMaxZ = w.b
+      }
+      const cx = Math.max(wMinX, Math.min(wMaxX, nx))
+      const cz = Math.max(wMinZ, Math.min(wMaxZ, nz))
+      const dx = nx - cx
+      const dz = nz - cz
+      const distSq = dx * dx + dz * dz
+      if (distSq < radius * radius) {
+        const dist = Math.sqrt(distSq)
+        if (dist > 1e-6) {
+          const push = radius - dist
+          nx += (dx / dist) * push
+          nz += (dz / dist) * push
+        } else if (w.axis === 'x') {
+          // centre exactly on wall — nudge off to a plausible side
+          nz += (nz < w.v ? -1 : 1) * (radius + t)
+        } else {
+          nx += (nx < w.v ? -1 : 1) * (radius + t)
+        }
+      }
+    }
+  }
+  return [nx, nz]
 }
 
 function Avatar({ positionRef, yawRef, walkStateRef }) {
@@ -400,7 +507,7 @@ function Drop({ d }) {
 
 function WalkController({
   positionRef, yawRef, camBackRef, joyRef, walkStateRef,
-  bounds, plants, onNearestChange, onWaterRequest,
+  walls, bounds, plants, onNearestChange, onWaterRequest,
 }) {
   const { camera } = useThree()
   const keysRef = useRef(new Set())
@@ -450,8 +557,11 @@ function WalkController({
       const step = magnitude * WALK_SPEED * dt
       let nx = positionRef.current[0] + (fx * nf + sx * ns) * step
       let nz = positionRef.current[2] + (fz * nf + sz * ns) * step
-      // Clamp to house footprint (bounds) or ground (fallback)
-      if (bounds) {
+      // Wall collision when we have real room walls; otherwise fall back
+      // to the outer bounding box or ground clamp for empty floors.
+      if (walls?.length) {
+        [nx, nz] = resolveWallCollisions(nx, nz, walls, AVATAR_RADIUS)
+      } else if (bounds) {
         nx = Math.max(bounds.minX, Math.min(bounds.maxX, nx))
         nz = Math.max(bounds.minZ, Math.min(bounds.maxZ, nz))
       } else {
@@ -519,6 +629,7 @@ function Scene({
 }) {
   const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
   const bounds = useMemo(() => getRoomsBounds(rooms), [rooms])
+  const walls = useMemo(() => computeWallSegments(rooms), [rooms])
 
   return (
     <>
@@ -580,6 +691,7 @@ function Scene({
             camBackRef={camBackRef}
             joyRef={joyRef}
             walkStateRef={walkStateRef}
+            walls={walls}
             bounds={bounds}
             plants={plants}
             onNearestChange={onWalkNearest}
