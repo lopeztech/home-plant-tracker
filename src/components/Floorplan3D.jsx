@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from 'react'
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Text, Billboard } from '@react-three/drei'
 import { getWateringStatus } from '../utils/watering.js'
@@ -693,7 +693,9 @@ function getRoomsBounds(rooms) {
 
 // Break each room edge into one or more solid sub-segments by subtracting
 // overlaps ≥ DOOR_MIN with any collinear edge from another room. Those
-// overlaps become implicit doorways — no schema change required.
+// overlaps become implicit doorways. Any room that has NO such overlap on
+// any of its 4 walls gets a forced doorway punched into the middle of its
+// longest wall so the avatar can always get in.
 //
 // Returns an array of { axis, v, a, b }:
 //   axis: 'x' — wall runs along X between a..b at constant z = v
@@ -709,18 +711,55 @@ function computeWallSegments(rooms) {
       z2: (r.y + r.height - 50) * SCALE,
     }))
 
+  // Build edges, tagged by room index so we can detect doorless rooms.
   const raw = []
-  for (const r of scaled) {
-    raw.push({ axis: 'x', v: r.z1, a: r.x1, b: r.x2 }) // north (top edge)
-    raw.push({ axis: 'x', v: r.z2, a: r.x1, b: r.x2 }) // south (bottom edge)
-    raw.push({ axis: 'z', v: r.x1, a: r.z1, b: r.z2 }) // west (left edge)
-    raw.push({ axis: 'z', v: r.x2, a: r.z1, b: r.z2 }) // east (right edge)
+  const roomEdges = []
+  for (let ri = 0; ri < scaled.length; ri++) {
+    const r = scaled[ri]
+    const edges = [
+      { axis: 'x', v: r.z1, a: r.x1, b: r.x2, roomIdx: ri }, // north
+      { axis: 'x', v: r.z2, a: r.x1, b: r.x2, roomIdx: ri }, // south
+      { axis: 'z', v: r.x1, a: r.z1, b: r.z2, roomIdx: ri }, // west
+      { axis: 'z', v: r.x2, a: r.z1, b: r.z2, roomIdx: ri }, // east
+    ]
+    raw.push(...edges)
+    roomEdges.push(edges)
+  }
+
+  // Forced doorways: synthetic "overlaps" injected into rooms that would
+  // otherwise have every wall solid. Modelled the same way as shared-edge
+  // doorways so the subtraction loop handles them uniformly.
+  const forcedDoors = []
+  for (let ri = 0; ri < scaled.length; ri++) {
+    const edges = roomEdges[ri]
+    let hasDoor = false
+    for (const e of edges) {
+      for (const o of raw) {
+        if (o.roomIdx === ri) continue
+        if (o.axis !== e.axis) continue
+        if (Math.abs(o.v - e.v) > eps) continue
+        const start = Math.max(e.a, o.a)
+        const end = Math.min(e.b, o.b)
+        if (end - start >= DOOR_MIN) { hasDoor = true; break }
+      }
+      if (hasDoor) break
+    }
+    if (hasDoor) continue
+    // No shared-edge doorway: cut one into the longest wall.
+    const longest = edges.reduce((best, e) => (e.b - e.a) > (best.b - best.a) ? e : best)
+    const wallLen = longest.b - longest.a
+    const doorLen = Math.min(DOOR_MIN * 1.25, wallLen - 0.6)
+    if (doorLen >= DOOR_MIN * 0.9) {
+      const mid = (longest.a + longest.b) / 2
+      forcedDoors.push({ axis: longest.axis, v: longest.v, a: mid - doorLen / 2, b: mid + doorLen / 2 })
+    }
   }
 
   const blockers = []
   for (let i = 0; i < raw.length; i++) {
     const s = raw[i]
     const doors = []
+    // Shared-edge doorways
     for (let j = 0; j < raw.length; j++) {
       if (j === i) continue
       const o = raw[j]
@@ -729,6 +768,14 @@ function computeWallSegments(rooms) {
       const start = Math.max(s.a, o.a)
       const end = Math.min(s.b, o.b)
       if (end - start >= DOOR_MIN) doors.push([start, end])
+    }
+    // Forced doors that land on this exact edge
+    for (const f of forcedDoors) {
+      if (f.axis !== s.axis) continue
+      if (Math.abs(f.v - s.v) > eps) continue
+      const start = Math.max(s.a, f.a)
+      const end = Math.min(s.b, f.b)
+      if (end - start > 0.1) doors.push([start, end])
     }
     doors.sort((x, y) => x[0] - y[0])
     const merged = []
@@ -1342,19 +1389,28 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     try { localStorage.setItem('plantTracker_3dCamMode', camMode) } catch {}
   }, [camMode])
 
-  // Sound preference — default OFF so we never autoplay. Lazy-init the
-  // AudioContext when the user first unmutes (counts as a user gesture).
+  // Sound preference — default OFF so we never autoplay. AudioContext is
+  // created + resumed INSIDE the toggle click so it counts as a user gesture
+  // (Chrome/Safari autoplay policy). The effect below only persists the
+  // preference to localStorage.
   const [soundOn, setSoundOn] = useState(() => {
     try { return localStorage.getItem('plantTracker_3dSoundOn') === '1' } catch { return false }
   })
   const audioRef = useRef(null)
   useEffect(() => {
     try { localStorage.setItem('plantTracker_3dSoundOn', soundOn ? '1' : '0') } catch {}
-    if (soundOn && !audioRef.current) audioRef.current = createWalkAudio()
-    // Resume after tab-switch suspend
-    if (soundOn && audioRef.current?.ctx?.state === 'suspended') {
-      audioRef.current.ctx.resume().catch(() => {})
+  }, [soundOn])
+
+  const toggleSound = useCallback(() => {
+    // If we're flipping ON, create/resume audio synchronously so the browser
+    // treats this click as the gesture that unlocks playback.
+    if (!soundOn) {
+      if (!audioRef.current) audioRef.current = createWalkAudio()
+      if (audioRef.current?.ctx?.state === 'suspended') {
+        audioRef.current.ctx.resume().catch(() => {})
+      }
     }
+    setSoundOn((v) => !v)
   }, [soundOn])
 
   // Reset avatar to the centre of the visible rooms when the floor changes
@@ -1507,7 +1563,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
         <button
           type="button"
           data-walk-ui
-          onClick={() => setSoundOn((v) => !v)}
+          onClick={toggleSound}
           title={soundOn ? 'Mute footsteps & splash' : 'Unmute footsteps & splash'}
           style={{
             position: 'absolute', top: 86, right: 10, zIndex: 5,
