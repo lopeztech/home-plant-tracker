@@ -665,9 +665,9 @@ function DynamicLighting({ weather }) {
 // Avatar state lives in refs so the render loop can mutate without triggering
 // React renders. Only proximity HUD state is lifted into React.
 
-const WATER_RANGE = 1.6           // must be within this world distance to water
-const WALK_SPEED = 4.5             // world units per second
-const TURN_SPEED = 2.2             // radians per second
+const WATER_RANGE = 2.2           // must be within this world distance to water
+const WALK_SPEED = 9.0             // world units per second
+const TURN_SPEED = 2.6             // radians per second
 const AVATAR_SCALE = 2.0           // applied to the whole avatar group
 const AVATAR_RADIUS = 0.4          // for wall/room collision (matches scaled shoulders)
 
@@ -864,7 +864,7 @@ function Avatar({ positionRef, yawRef, walkStateRef, camMode = 'tp' }) {
     // Walk cycle: advance phase while moving, decay toward 0 when idle so
     // legs come to rest instead of freezing mid-stride.
     if (s.moving) {
-      s.phase += dt * 9
+      s.phase += dt * 14
       s.swingAmp = Math.min(1, s.swingAmp + dt * 4)
     } else {
       s.swingAmp = Math.max(0, s.swingAmp - dt * 4)

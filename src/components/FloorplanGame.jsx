@@ -10,8 +10,8 @@ const TILE = 18                  // px per percent unit (world → screen)
 const PLAYER_RADIUS = 1.5        // percent — also used for wall collision
 const WALL_THICKNESS = 1.5       // percent
 const DOOR_MIN = 5               // percent — min shared edge that counts as a doorway
-const WATER_RANGE = 4            // percent — distance you must be within to water
-const SPEED = 28                 // percent per second
+const WATER_RANGE = 6            // percent — distance you must be within to water
+const SPEED = 55                 // percent per second
 
 const COLORS = {
   grass:        '#7fb685',
@@ -480,7 +480,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         // Facing: dominant axis
         if (Math.abs(dx) > Math.abs(dy)) s.facing = dx > 0 ? 'right' : 'left'
         else s.facing = dy > 0 ? 'down' : 'up'
-        s.phase += dt * 10
+        s.phase += dt * 16
       } else {
         // Decay phase so legs come to rest
         s.phase = 0
