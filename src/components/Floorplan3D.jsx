@@ -15,9 +15,9 @@ function getPlantEmoji(plant) {
   return '🪴'
 }
 
-const SCALE = 0.1 // 100% → 10 world units
-const WALL_HEIGHT = 0.8
-const WALL_THICKNESS = 0.05
+const SCALE = 0.2 // 100% → 20 world units (roughly 20m house footprint)
+const WALL_HEIGHT = 2.5
+const WALL_THICKNESS = 0.08
 
 const ROOM_COLORS = {
   indoor:   { wall: '#e0e0e0', floor: '#ffffff', edge: '#9e9e9e' },
@@ -70,11 +70,11 @@ function Room({ room, floorType }) {
       {/* Room label */}
       <Billboard position={[0, 0.15, 0]}>
         <Text
-          fontSize={0.2}
+          fontSize={0.4}
           color="#495057"
           anchorX="center"
           anchorY="middle"
-          maxWidth={w - 0.2}
+          maxWidth={w - 0.4}
         >
           {room.name?.toUpperCase()}
         </Text>
@@ -90,7 +90,7 @@ function PlantMarker({ plant, weather, floors, onClick }) {
   const meshRef = useRef()
 
   return (
-    <group position={[x, 0.3, z]}>
+    <group position={[x, 0.6, z]}>
       <Billboard>
         {/* Colored circle */}
         <mesh
@@ -99,18 +99,18 @@ function PlantMarker({ plant, weather, floors, onClick }) {
           onPointerOver={() => { if (meshRef.current) meshRef.current.scale.set(1.2, 1.2, 1.2); document.body.style.cursor = 'pointer' }}
           onPointerOut={() => { if (meshRef.current) meshRef.current.scale.set(1, 1, 1); document.body.style.cursor = 'default' }}
         >
-          <circleGeometry args={[0.18, 32]} />
+          <circleGeometry args={[0.36, 32]} />
           <meshBasicMaterial color={color} />
         </mesh>
 
         {/* Plant emoji icon */}
         <mesh position={[0, 0, 0.001]}>
-          <circleGeometry args={[0.14, 32]} />
+          <circleGeometry args={[0.28, 32]} />
           <meshBasicMaterial color="#ffffff" />
         </mesh>
         <Text
           position={[0, 0, 0.002]}
-          fontSize={0.16}
+          fontSize={0.32}
           anchorX="center"
           anchorY="middle"
         >
@@ -119,20 +119,20 @@ function PlantMarker({ plant, weather, floors, onClick }) {
 
         {/* Plant name label below */}
         <Text
-          position={[0, -0.28, 0]}
-          fontSize={0.08}
+          position={[0, -0.56, 0]}
+          fontSize={0.16}
           color="#495057"
           anchorX="center"
           anchorY="middle"
-          maxWidth={1}
+          maxWidth={2}
         >
           {plant.name}
         </Text>
 
         {/* Status label */}
         <Text
-          position={[0, -0.38, 0]}
-          fontSize={0.06}
+          position={[0, -0.76, 0]}
+          fontSize={0.12}
           color={color}
           anchorX="center"
           anchorY="middle"
@@ -142,8 +142,8 @@ function PlantMarker({ plant, weather, floors, onClick }) {
       </Billboard>
 
       {/* Ground dot */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.28, 0]}>
-        <circleGeometry args={[0.06, 16]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.58, 0]}>
+        <circleGeometry args={[0.12, 16]} />
         <meshBasicMaterial color={color} transparent opacity={0.5} />
       </mesh>
     </group>
@@ -154,7 +154,7 @@ function Ground({ floorType }) {
   const color = floorType === 'outdoor' ? '#e8f5e9' : '#f1f3f5'
   return (
     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-      <planeGeometry args={[12, 12]} />
+      <planeGeometry args={[30, 30]} />
       <meshStandardMaterial color={color} />
     </mesh>
   )
@@ -164,12 +164,12 @@ function Ground({ floorType }) {
 // Avatar state lives in refs so the render loop can mutate without triggering
 // React renders. Only proximity HUD state is lifted into React.
 
-const WATER_RANGE = 0.9           // must be within this world distance to water
-const WALK_SPEED = 2.5             // world units per second
+const WATER_RANGE = 1.6           // must be within this world distance to water
+const WALK_SPEED = 4.5             // world units per second
 const TURN_SPEED = 2.2             // radians per second
-const AVATAR_RADIUS = 0.18         // for wall/room collision
+const AVATAR_RADIUS = 0.3          // for wall/room collision
 
-const DOOR_MIN = 0.8   // shared-edge overlaps this long become passable doorways
+const DOOR_MIN = 1.2   // shared-edge overlaps this long become passable doorways
 
 // Compute an axis-aligned bounding box that encloses every visible room so
 // the avatar is clamped to the house footprint. Returns null for outdoor-only
@@ -565,8 +565,8 @@ function WalkController({
         nx = Math.max(bounds.minX, Math.min(bounds.maxX, nx))
         nz = Math.max(bounds.minZ, Math.min(bounds.maxZ, nz))
       } else {
-        nx = Math.max(-5.8, Math.min(5.8, nx))
-        nz = Math.max(-5.8, Math.min(5.8, nz))
+        nx = Math.max(-14, Math.min(14, nx))
+        nz = Math.max(-14, Math.min(14, nz))
       }
       positionRef.current[0] = nx
       positionRef.current[2] = nz
@@ -578,20 +578,20 @@ function WalkController({
     const yaw = yawRef.current
     const [ax, , az] = positionRef.current
     const camBack = camBackRef.current
-    const camUp = 0.9 + camBack * 0.35
+    const camUp = 1.4 + camBack * 0.25  // eye-level + rise with zoom
     const desiredX = ax + Math.sin(yaw) * camBack
     const desiredZ = az + Math.cos(yaw) * camBack
     const k = 1 - Math.exp(-dt * 10)
     if (firstFrameRef.current) {
       camera.position.set(desiredX, camUp, desiredZ)
-      camLookRef.current = { x: ax, y: 0.5, z: az }
+      camLookRef.current = { x: ax, y: 0.8, z: az }
       firstFrameRef.current = false
     } else {
       camera.position.x += (desiredX - camera.position.x) * k
       camera.position.y += (camUp - camera.position.y) * k
       camera.position.z += (desiredZ - camera.position.z) * k
       camLookRef.current.x += (ax  - camLookRef.current.x) * k
-      camLookRef.current.y += (0.5 - camLookRef.current.y) * k
+      camLookRef.current.y += (0.8 - camLookRef.current.y) * k  // look at torso height
       camLookRef.current.z += (az  - camLookRef.current.z) * k
     }
     camera.lookAt(camLookRef.current.x, camLookRef.current.y, camLookRef.current.z)
@@ -677,7 +677,7 @@ function Scene({
             }
           }}
         >
-          <planeGeometry args={[12, 12]} />
+          <planeGeometry args={[30, 30]} />
           <meshBasicMaterial transparent opacity={0} />
         </mesh>
       )}
@@ -702,8 +702,8 @@ function Scene({
         <OrbitControls
           maxPolarAngle={Math.PI * 0.45}
           minPolarAngle={Math.PI * 0.05}
-          minDistance={1.5}
-          maxDistance={40}
+          minDistance={3}
+          maxDistance={80}
           enableDamping
           dampingFactor={0.05}
           target={[0, 0, 0]}
@@ -796,7 +796,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
   // Real refs the render loop mutates without re-rendering
   const positionRef = useRef([0, 0, 0])
   const yawRef = useRef(0)
-  const camBackRef = useRef(1.8)  // chase-camera distance; scroll wheel adjusts
+  const camBackRef = useRef(4.0)  // chase-camera distance; scroll wheel adjusts
   const joyRef = useRef({ forward: 0, strafe: 0 })
   // Shared animation state between WalkController (writer) and Avatar (reader)
   const walkStateRef = useRef({ moving: false, phase: 0, swingAmp: 0, pourStart: 0 })
@@ -824,7 +824,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     if (!el) return
     const onWheel = (e) => {
       e.preventDefault()
-      camBackRef.current = Math.max(1.0, Math.min(8.0, camBackRef.current + e.deltaY * 0.004))
+      camBackRef.current = Math.max(2.0, Math.min(20.0, camBackRef.current + e.deltaY * 0.008))
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
@@ -854,7 +854,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     <div ref={wrapperRef} style={{ width: '100%', height: '100%', background: '#f1f3f5', position: 'relative' }}>
       <Canvas
         shadows
-        camera={{ position: [6, 6, 6], fov: 45, near: 0.05, far: 100 }}
+        camera={{ position: [14, 14, 14], fov: 45, near: 0.05, far: 200 }}
         gl={{ antialias: true }}
       >
         <Scene
