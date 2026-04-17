@@ -162,9 +162,19 @@ export default function LeafletFloorplan({
     }
 
     const onMouseDown = (e) => {
-      // Ignore mousedown that originates on a marker (move/resize handles),
-      // otherwise dragging a handle would start drawing a new zone.
+      // Ignore mousedown on a marker (move/resize handles) — it would
+      // otherwise start drawing a new zone on top of the dragged handle.
       if (e.originalEvent?.target?.closest?.('.leaflet-marker-icon')) return
+      // Also skip if the click lands inside an existing room. The zone
+      // overlay rectangle is non-interactive so the click passes through
+      // to the map; without this guard, dragging a zone by its body
+      // would spawn a duplicate zone on top.
+      const { x, y } = fromLL(e.latlng)
+      const rooms = floorRef.current?.rooms ?? []
+      for (const r of rooms) {
+        if (r.hidden) continue
+        if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) return
+      }
       drawRef.current = { startLL: e.latlng, tempRect: null }
     }
 
