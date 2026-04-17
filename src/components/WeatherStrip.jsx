@@ -32,7 +32,7 @@ export default function WeatherStrip({ weather, location, onLocationClick }) {
         >
           <span style={{ opacity: 0.8, marginRight: 3 }}>{dayLabel(day, i).slice(0, 1)}</span>
           <span style={{ fontSize: '0.75rem', marginRight: 2 }}>{day.condition.emoji}</span>
-          <span>{day.maxTemp}°</span>
+          <span>{`${day.maxTemp}°`}</span>
         </span>
       ))}
       {location?.name && (
