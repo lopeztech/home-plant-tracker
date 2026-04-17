@@ -6,6 +6,7 @@ import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
 
 
+
 function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [newRoomName, setNewRoomName] = useState('')
@@ -174,118 +175,9 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
   )
 }
 
-function LayoutPreview({ houseHeight, frontyardHeight, backyardHeight, sideLeftWidth, sideRightWidth, hiddenYardAreas, onToggleYardArea, onChange }) {
-  const SCALE = 0.4
-  const CLAMP = {
-    house:      { min: 200, max: 800, step: 25 },
-    frontyard:  { min: 100, max: 500, step: 25 },
-    backyard:   { min: 100, max: 500, step: 25 },
-    sideLeft:   { min: 80,  max: 300, step: 10 },
-    sideRight:  { min: 80,  max: 300, step: 10 },
-  }
-
-  const dragRef = useRef(null)
-
-  const onMouseDown = useCallback((type, e) => {
-    e.preventDefault()
-    const vals = { house: houseHeight, frontyard: frontyardHeight, backyard: backyardHeight, sideLeft: sideLeftWidth, sideRight: sideRightWidth }
-    dragRef.current = { type, startY: e.clientY, startX: e.clientX, startVal: vals[type] }
-    const onMouseMove = (ev) => {
-      const d = dragRef.current
-      if (!d) return
-      const c = CLAMP[d.type]
-      const isHoriz = d.type === 'sideLeft' || d.type === 'sideRight'
-      const delta = (isHoriz ? ev.clientX - d.startX : ev.clientY - d.startY) / SCALE
-      const val = Math.round(Math.max(c.min, Math.min(c.max, d.startVal + delta)) / c.step) * c.step
-      onChange(d.type, val)
-    }
-    const onMouseUp = () => {
-      dragRef.current = null
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('mouseup', onMouseUp)
-    }
-    window.addEventListener('mousemove', onMouseMove)
-    window.addEventListener('mouseup', onMouseUp)
-  }, [houseHeight, frontyardHeight, backyardHeight, sideLeftWidth, sideRightWidth, onChange])
-
-  const hH = houseHeight * SCALE
-  const fH = frontyardHeight * SCALE
-  const bH = backyardHeight * SCALE
-  const slW = sideLeftWidth * SCALE
-  const srW = sideRightWidth * SCALE
-  const houseW = 200
-
-  const handleStyle = {
-    position: 'absolute', left: 0, right: 0, height: 8, cursor: 'ns-resize',
-    background: 'var(--bs-primary)', opacity: 0.5, borderRadius: 4, zIndex: 10,
-    transition: 'opacity 0.15s',
-  }
-  const handleHoverProps = {
-    onMouseEnter: (e) => { e.currentTarget.style.opacity = '1' },
-    onMouseLeave: (e) => { e.currentTarget.style.opacity = '0.5' },
-  }
-
-  const hidden = hiddenYardAreas || []
-  const isHidden = (id) => hidden.includes(id)
-
-  const areaBox = (id, label, sizeLabel, style, children) => {
-    const off = isHidden(id)
-    return (
-      <div
-        className="position-relative"
-        style={{ ...style, opacity: off ? 0.35 : 1, transition: 'opacity 0.2s', cursor: 'pointer' }}
-        onClick={() => onToggleYardArea(id)}
-        title={off ? `Show ${label}` : `Hide ${label}`}
-      >
-        <div className="d-flex align-items-center justify-content-center h-100">
-          <small className={`fw-500 fs-xs ${off ? 'text-decoration-line-through' : ''} text-muted`}>{label}{!off ? ` (${sizeLabel})` : ''}</small>
-        </div>
-        {!off && children}
-      </div>
-    )
-  }
-
-  return (
-    <div className="d-flex flex-column align-items-center gap-1" style={{ userSelect: 'none' }}>
-      {areaBox('backyard', 'Backyard', `${backyardHeight}px`, { width: houseW + slW + srW + 8, height: isHidden('backyard') ? 30 : bH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 },
-        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => { e.stopPropagation(); onMouseDown('backyard', e) }} {...handleHoverProps} />
-      )}
-
-      <div className="d-flex align-items-stretch gap-1">
-        {areaBox('side-left', 'Side L', `${sideLeftWidth}px`, { width: slW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 },
-          <div style={{ position: 'absolute', top: 0, bottom: 0, right: -4, width: 8, cursor: 'ew-resize', background: 'var(--bs-primary)', opacity: 0.5, borderRadius: 4, zIndex: 10, transition: 'opacity 0.15s' }}
-            onMouseDown={(e) => { e.stopPropagation(); onMouseDown('sideLeft', e) }}
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
-            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
-          />
-        )}
-
-        <div className="position-relative" style={{ width: houseW, height: hH, background: 'var(--bs-body-bg)', border: '2px solid rgba(0,0,0,0.15)', borderRadius: 6, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-          <div className="d-flex align-items-center justify-content-center h-100">
-            <small className="fw-600 fs-xs">House ({houseHeight}px)</small>
-          </div>
-          <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => onMouseDown('house', e)} {...handleHoverProps} />
-        </div>
-
-        {areaBox('side-right', 'Side R', `${sideRightWidth}px`, { width: srW, height: hH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 },
-          <div style={{ position: 'absolute', top: 0, bottom: 0, left: -4, width: 8, cursor: 'ew-resize', background: 'var(--bs-primary)', opacity: 0.5, borderRadius: 4, zIndex: 10, transition: 'opacity 0.15s' }}
-            onMouseDown={(e) => { e.stopPropagation(); onMouseDown('sideRight', e) }}
-            onMouseEnter={(e) => { e.currentTarget.style.opacity = '1' }}
-            onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.5' }}
-          />
-        )}
-      </div>
-
-      {areaBox('frontyard', 'Front Yard', `${frontyardHeight}px`, { width: houseW + slW + srW + 8, height: isHidden('frontyard') ? 30 : fH, background: '#e8f5e9', border: '2px dashed #4caf50', borderRadius: 6 },
-        <div style={{ ...handleStyle, bottom: -4 }} onMouseDown={(e) => { e.stopPropagation(); onMouseDown('frontyard', e) }} {...handleHoverProps} />
-      )}
-    </div>
-  )
-}
-
 export default function SettingsPage() {
   const { floors, handleSaveFloors, handleFloorplanUpload, isAnalysingFloorplan, tempUnit, isGuest, location, setLocation } = usePlantContext()
-  const { theme, changeTheme, houseHeight, frontyardHeight, backyardHeight, sideLeftWidth, sideRightWidth, hiddenYardAreas, toggleSetting } = useLayoutContext()
+  const { theme, changeTheme } = useLayoutContext()
   const fileInputRef = useRef(null)
   const [editableFloors, setEditableFloors] = useState(
     () => (floors || []).map((f) => ({ ...f, rooms: (f.rooms || []).map((r) => ({ ...r })) })),
@@ -498,32 +390,6 @@ export default function SettingsPage() {
 
           </div>
 
-          {/* Layout sizes — interactive preview */}
-          <div className="mb-4">
-            <div className="panel panel-icon">
-              <div className="panel-hdr"><span>Layout Sizes</span></div>
-              <div className="panel-container"><div className="panel-content">
-                <p className="text-muted fs-xs mb-3">Drag the edges of each area to resize. Changes apply instantly.</p>
-                <LayoutPreview
-                  houseHeight={houseHeight || 500}
-                  frontyardHeight={frontyardHeight || 200}
-                  backyardHeight={backyardHeight || 200}
-                  sideLeftWidth={sideLeftWidth || 140}
-                  sideRightWidth={sideRightWidth || 140}
-                  hiddenYardAreas={hiddenYardAreas}
-                  onChange={(type, val) => {
-                    const key = { house: 'houseHeight', frontyard: 'frontyardHeight', backyard: 'backyardHeight', sideLeft: 'sideLeftWidth', sideRight: 'sideRightWidth' }[type]
-                    if (key) toggleSetting(key, val)
-                  }}
-                  onToggleYardArea={(id) => {
-                    const current = hiddenYardAreas || []
-                    const next = current.includes(id) ? current.filter((a) => a !== id) : [...current, id]
-                    toggleSetting('hiddenYardAreas', next)
-                  }}
-                />
-              </div></div>
-            </div>
-          </div>
         </div>
 
         {/* Version */}

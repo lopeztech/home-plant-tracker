@@ -1,5 +1,13 @@
 /* ── Plant Tracker app-specific styles ────────────────────────────────── */
 
+/* Topbar is hidden on desktop (d-md-none), so collapse its reserved
+   grid row to avoid blank whitespace above the sidebar/content. */
+@media (min-width: 768px) {
+  .app-wrap {
+    grid-template-rows: 0 1fr;
+  }
+}
+
 /* ── Green sidebar override ──────────────────────────────────────────── */
 .set-nav-dark .app-sidebar {
   background: linear-gradient(180deg, #1b5e20 0%, #2e7d32 40%, #388e3c 100%) !important;
