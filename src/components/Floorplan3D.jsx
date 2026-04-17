@@ -15,7 +15,7 @@ function getPlantEmoji(plant) {
   return '🪴'
 }
 
-const SCALE = 0.2 // 100% → 20 world units (roughly 20m house footprint)
+const SCALE = 0.14 // 100% → 14 world units — keeps rooms snug to the avatar
 const WALL_HEIGHT = 2.5
 const WALL_THICKNESS = 0.08
 
@@ -1122,8 +1122,8 @@ function WalkController({
         nx = Math.max(bounds.minX, Math.min(bounds.maxX, nx))
         nz = Math.max(bounds.minZ, Math.min(bounds.maxZ, nz))
       } else {
-        nx = Math.max(-14, Math.min(14, nx))
-        nz = Math.max(-14, Math.min(14, nz))
+        nx = Math.max(-10, Math.min(10, nx))
+        nz = Math.max(-10, Math.min(10, nz))
       }
       positionRef.current[0] = nx
       positionRef.current[2] = nz
@@ -1273,8 +1273,8 @@ function Scene({
         <OrbitControls
           maxPolarAngle={Math.PI * 0.45}
           minPolarAngle={Math.PI * 0.05}
-          minDistance={3}
-          maxDistance={80}
+          minDistance={2}
+          maxDistance={50}
           enableDamping
           dampingFactor={0.05}
           target={[0, 0, 0]}
@@ -1499,7 +1499,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     <div ref={wrapperRef} style={{ width: '100%', height: '100%', background: '#f1f3f5', position: 'relative' }}>
       <Canvas
         shadows
-        camera={{ position: [14, 14, 14], fov: 45, near: 0.05, far: 200 }}
+        camera={{ position: [10, 10, 10], fov: 45, near: 0.05, far: 200 }}
         gl={{ antialias: true }}
       >
         <Scene

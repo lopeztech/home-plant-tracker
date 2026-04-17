@@ -6,8 +6,8 @@ import { getWateringStatus } from '../utils/watering.js'
 // The game world uses percent coordinates (same as plant.x/y and room bounds).
 // Camera maps percent → pixels with a tile size, centred on the gardener.
 
-const TILE_DEFAULT = 18          // px per percent unit (world → screen)
-const TILE_MIN = 10
+const TILE_DEFAULT = 12          // px per percent unit (world → screen) — starts zoomed out
+const TILE_MIN = 6
 const TILE_MAX = 36
 const PLAYER_RADIUS = 2.4        // percent — also used for wall collision
 const WALL_THICKNESS = 1.5       // percent
@@ -16,10 +16,10 @@ const WATER_RANGE = 7            // percent — distance you must be within to w
 const SPEED = 55                 // percent per second
 // Scale the whole floorplan toward its centroid so rooms pack closer together
 // and the gardener doesn't have to walk across half the lot to reach a plant.
-const CONDENSE_FACTOR = 0.6
+const CONDENSE_FACTOR = 0.4
 // Sprite scale — bumped so the gardener and plants read as ¼-ish of a
 // condensed room (Stardew-ish proportions) instead of pebbles on a mansion floor.
-const SPRITE_SCALE = 2.0
+const SPRITE_SCALE = 2.5
 
 const COLORS = {
   grass:        '#7fb685',
