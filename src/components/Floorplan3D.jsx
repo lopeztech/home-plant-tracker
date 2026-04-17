@@ -527,6 +527,72 @@ function Ground({ floorType }) {
 // sky condition scales intensity; night swaps in a cool low-angle 'moon' and
 // a warmer hemisphere light so interiors don't look pitch-black.
 
+// ── Walk-mode audio (Web Audio synth, no assets) ─────────────────────────────
+function createWalkAudio() {
+  const Ctx = window.AudioContext || window.webkitAudioContext
+  if (!Ctx) return null
+  const ctx = new Ctx()
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 0.6, ctx.sampleRate)
+  const d = buf.getChannelData(0)
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1
+
+  const playFootstep = () => {
+    if (document.visibilityState !== 'visible') return
+    const src = ctx.createBufferSource(); src.buffer = buf
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'lowpass'; filter.frequency.value = 550 + Math.random() * 200
+    const gain = ctx.createGain()
+    const now = ctx.currentTime
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.25, now + 0.015)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16)
+    src.connect(filter); filter.connect(gain); gain.connect(ctx.destination)
+    src.start(now); src.stop(now + 0.2)
+  }
+
+  const playSplash = () => {
+    if (document.visibilityState !== 'visible') return
+    const src = ctx.createBufferSource(); src.buffer = buf
+    const filter = ctx.createBiquadFilter()
+    filter.type = 'bandpass'; filter.Q.value = 1.5
+    const gain = ctx.createGain()
+    const now = ctx.currentTime
+    filter.frequency.setValueAtTime(2200, now)
+    filter.frequency.exponentialRampToValueAtTime(700, now + 0.4)
+    gain.gain.setValueAtTime(0, now)
+    gain.gain.linearRampToValueAtTime(0.3, now + 0.05)
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45)
+    src.connect(filter); filter.connect(gain); gain.connect(ctx.destination)
+    src.start(now); src.stop(now + 0.5)
+  }
+
+  return { ctx, playFootstep, playSplash }
+}
+
+// Watches walkStateRef.phase for half-cycle crossings (each step) and
+// walkStateRef.pourStart for new pour events, firing the synthesized sounds
+// passed in from the parent. Mounted only while sound is unmuted.
+function WalkSounds({ walkStateRef, audio }) {
+  const lastPhaseRef = useRef(0)
+  const lastPourRef = useRef(0)
+  useFrame(() => {
+    if (!audio) return
+    const p = walkStateRef.current.phase
+    const lp = lastPhaseRef.current
+    if (Math.floor(p / Math.PI) !== Math.floor(lp / Math.PI) && walkStateRef.current.moving) {
+      audio.playFootstep()
+    }
+    lastPhaseRef.current = p
+
+    const pour = walkStateRef.current.pourStart || 0
+    if (pour !== lastPourRef.current) {
+      lastPourRef.current = pour
+      if (pour) audio.playSplash()
+    }
+  })
+  return null
+}
+
 const WEATHER_INTENSITY = {
   sunny:  1.00,
   partly: 0.85,
@@ -1082,6 +1148,7 @@ function Scene({
   onPlantClick, onFloorplanClick,
   walkMode, camMode,
   positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef,
+  audio,
   onWalkNearest, onWalkWater,
   droplets,
 }) {
@@ -1150,6 +1217,7 @@ function Scene({
             onNearestChange={onWalkNearest}
             onWaterRequest={onWalkWater}
           />
+          {audio && <WalkSounds walkStateRef={walkStateRef} audio={audio} />}
         </>
       ) : (
         <OrbitControls
@@ -1264,6 +1332,21 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     try { localStorage.setItem('plantTracker_3dCamMode', camMode) } catch {}
   }, [camMode])
 
+  // Sound preference — default OFF so we never autoplay. Lazy-init the
+  // AudioContext when the user first unmutes (counts as a user gesture).
+  const [soundOn, setSoundOn] = useState(() => {
+    try { return localStorage.getItem('plantTracker_3dSoundOn') === '1' } catch { return false }
+  })
+  const audioRef = useRef(null)
+  useEffect(() => {
+    try { localStorage.setItem('plantTracker_3dSoundOn', soundOn ? '1' : '0') } catch {}
+    if (soundOn && !audioRef.current) audioRef.current = createWalkAudio()
+    // Resume after tab-switch suspend
+    if (soundOn && audioRef.current?.ctx?.state === 'suspended') {
+      audioRef.current.ctx.resume().catch(() => {})
+    }
+  }, [soundOn])
+
   // Reset avatar to the centre of the visible rooms when the floor changes
   useEffect(() => {
     const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
@@ -1368,6 +1451,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           camBackRef={camBackRef}
           joyRef={joyRef}
           walkStateRef={walkStateRef}
+          audio={soundOn ? audioRef.current : null}
           onWalkNearest={setNearest}
           onWalkWater={waterPlant}
           droplets={droplets}
@@ -1405,6 +1489,24 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           }}
         >
           {camMode === 'fp' ? '👁️ First-person' : '🎥 Third-person'}
+        </button>
+      )}
+
+      {/* Sound toggle — only while in walk mode; muted by default */}
+      {walkMode && (
+        <button
+          type="button"
+          data-walk-ui
+          onClick={() => setSoundOn((v) => !v)}
+          title={soundOn ? 'Mute footsteps & splash' : 'Unmute footsteps & splash'}
+          style={{
+            position: 'absolute', top: 86, right: 10, zIndex: 5,
+            padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)',
+            background: soundOn ? '#10b981' : '#fff', color: soundOn ? '#fff' : '#495057',
+            fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+          }}
+        >
+          {soundOn ? '🔊 Sound on' : '🔇 Sound off'}
         </button>
       )}
 
