@@ -193,7 +193,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [confirmDeletePhoto, setConfirmDeletePhoto] = useState(null)
   const [deletingPhoto, setDeletingPhoto] = useState(false)
   const [moistureReading, setMoistureReading] = useState(5)
-  const [moistureNote, setMoistureNote] = useState('')
   const [moistureLogging, setMoistureLogging] = useState(false)
   const [moisturePage, setMoisturePage] = useState(1)
   const [wateringPage, setWateringPage] = useState(1)
@@ -628,18 +627,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           {/* Moisture meter reading */}
           <div className="mb-3">
             <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Moisture Meter</h6>
-            {plant.lastMoistureReading && plant.lastMoistureDate && (() => {
-              const display = getMoistureDisplay(plant.lastMoistureReading)
-              const ago = Math.round((Date.now() - new Date(plant.lastMoistureDate).getTime()) / 3600000)
-              const agoLabel = ago < 1 ? 'just now' : ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`
-              return (
-                <div className="d-flex align-items-center gap-2 mb-2 fs-sm">
-                  <span className="rounded-circle d-inline-block" style={{ width: 10, height: 10, background: display.color }} />
-                  <span>Last: <strong>{plant.lastMoistureReading}/10</strong> ({display.label})</span>
-                  <span className="text-muted">— {agoLabel}</span>
-                </div>
-              )
-            })()}
             <div className="d-flex align-items-center gap-2 mb-2">
               <span className="fs-xs text-muted" style={{ width: 28 }}>Dry</span>
               <Form.Range
@@ -659,8 +646,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 onClick={async () => {
                   setMoistureLogging(true)
                   try {
-                    await onMoisture(plant.id, moistureReading, moistureNote)
-                    setMoistureNote('')
+                    await onMoisture(plant.id, moistureReading, '')
                   } catch (err) { console.error('Moisture log failed:', err) }
                   finally { setMoistureLogging(false) }
                 }}
@@ -668,17 +654,24 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 {moistureLogging ? <Spinner size="sm" /> : 'Log'}
               </Button>
             </div>
-            <Form.Control
-              size="sm" placeholder=""
-              value={moistureNote} onChange={(e) => setMoistureNote(e.target.value)}
-            />
             {plant.moistureLog?.length > 0 && (() => {
               const reversed = [...plant.moistureLog].reverse()
               const totalPages = Math.ceil(reversed.length / 5)
               const page = Math.min(moisturePage, totalPages)
               const paged = reversed.slice((page - 1) * 5, page * 5)
+              const latest = reversed[0]
+              const latestDisplay = getMoistureDisplay(latest.reading)
+              const ago = Math.round((Date.now() - new Date(latest.date).getTime()) / 3600000)
+              const agoLabel = ago < 1 ? 'just now' : ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`
               return (
                 <div className="mt-2">
+                  {page === 1 && (
+                    <div className="d-flex align-items-center gap-2 mb-2 fs-sm">
+                      <span className="rounded-circle d-inline-block" style={{ width: 10, height: 10, background: latestDisplay.color }} />
+                      <span>Last: <strong>{latest.reading}/10</strong> ({latestDisplay.label})</span>
+                      <span className="text-muted">— {agoLabel}</span>
+                    </div>
+                  )}
                   {paged.map((entry, i) => {
                     const d = getMoistureDisplay(entry.reading)
                     return (
