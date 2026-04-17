@@ -58,14 +58,14 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <div className="content-wrapper">
-      <div className="main-content">
-        {plantsError && (
-          <Alert variant="danger" className="mb-3" dismissible>
-            Failed to load plants: {plantsError}
-          </Alert>
-        )}
-        {plantsLoading ? (
+    <div className="dashboard-page">
+      {plantsError && (
+        <Alert variant="danger" className="mx-3 mt-3 mb-0" dismissible>
+          Failed to load plants: {plantsError}
+        </Alert>
+      )}
+      {plantsLoading ? (
+        <div className="p-4">
           <div className="panel panel-icon">
             <div className="panel-container"><div className="panel-content text-center py-5">
               <div className="spinner-border text-primary mb-3" role="status">
@@ -74,13 +74,16 @@ export default function DashboardPage() {
               <p className="text-muted mb-0">Loading your plants and floorplan...</p>
             </div></div>
           </div>
-        ) : hasFloors ? (
-          <FloorplanPanel
-            onPlantClick={handlePlantClick}
-            onFloorplanClick={handleFloorplanClick}
-            gnomeWaterRef={gnomeWaterRef}
-          />
-        ) : (
+        </div>
+      ) : hasFloors ? (
+        <FloorplanPanel
+          onPlantClick={handlePlantClick}
+          onFloorplanClick={handleFloorplanClick}
+          gnomeWaterRef={gnomeWaterRef}
+          fullWidth
+        />
+      ) : (
+        <div className="p-4">
           <div className="panel panel-icon">
             <div className="panel-container"><div className="panel-content text-center py-5">
               <svg className="sa-icon sa-icon-5x text-muted mb-3"><use href="/icons/sprite.svg#upload"></use></svg>
@@ -88,8 +91,8 @@ export default function DashboardPage() {
               <p className="text-muted mb-0">Go to <a href="/settings">Settings</a> to upload a floorplan or add floors manually.</p>
             </div></div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {showPlantModal && (
         <PlantModal

@@ -20,7 +20,7 @@ const SEASON_PARTICLES = {
   winter: { emojis: ['❄️', '✨', '❄️'], count: 10 },
 }
 
-export default function HouseWeatherFrame({ weather, location, onLocationClick, children, isOutdoor = false }) {
+export default function HouseWeatherFrame({ weather, location, onLocationClick, children, isOutdoor = false, fullWidth = false }) {
   const condition = weather?.current?.condition?.sky || 'sunny'
   const isNight = weather?.current && !weather.current.isDay
   const config = isNight ? { ...WEATHER_CONFIGS.night } : (WEATHER_CONFIGS[condition] || WEATHER_CONFIGS.sunny)
@@ -259,16 +259,16 @@ export default function HouseWeatherFrame({ weather, location, onLocationClick, 
       )}
 
       {/* House shape — solid for indoor floors, transparent for outdoor zones */}
-      <div className="position-relative" style={{ zIndex: 1, padding: '0 8px 15px' }}>
+      <div className="position-relative" style={{ zIndex: 1, padding: fullWidth ? '0 0 15px' : '0 8px 15px' }}>
         <div
-          className="mx-auto"
+          className={fullWidth ? '' : 'mx-auto'}
           style={{
             width: '100%',
-            maxWidth: 920,
+            maxWidth: fullWidth ? 'none' : 920,
             background: isOutdoor ? 'transparent' : 'var(--bs-body-bg, #fff)',
-            borderRadius: 8,
-            boxShadow: isOutdoor ? 'none' : '0 4px 20px rgba(0,0,0,0.15)',
-            border: isOutdoor ? 'none' : '1px solid rgba(0,0,0,0.06)',
+            borderRadius: fullWidth ? 0 : 8,
+            boxShadow: fullWidth || isOutdoor ? 'none' : '0 4px 20px rgba(0,0,0,0.15)',
+            border: fullWidth || isOutdoor ? 'none' : '1px solid rgba(0,0,0,0.06)',
             overflow: 'hidden',
             position: 'relative',
             zIndex: 2,

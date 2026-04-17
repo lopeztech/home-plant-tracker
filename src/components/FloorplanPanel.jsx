@@ -10,7 +10,7 @@ import { useLayoutContext } from '../context/LayoutContext.jsx'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 
-export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWaterRef }) {
+export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWaterRef, fullWidth = false }) {
   const {
     plants, floors, activeFloorId, setActiveFloorId,
     weather, location, handleFloorRoomsChange,
@@ -123,6 +123,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       location={location}
       onLocationClick={() => navigate('/settings')}
       isOutdoor={isOutdoorFloor}
+      fullWidth={fullWidth}
     >
       {/* Floor tabs + view toggle */}
       <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
@@ -167,7 +168,10 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       </div>
 
       {/* Map view */}
-      <div className="floorplan-wrapper" style={{ height: houseHeight || 500 }}>
+      <div
+        className="floorplan-wrapper"
+        style={{ height: fullWidth ? 'calc(100vh - 180px)' : (houseHeight || 500), minHeight: fullWidth ? 500 : undefined }}
+      >
         {isAnalysingFloorplan && (
           <div
             className="position-absolute d-flex flex-column align-items-center justify-content-center gap-2 w-100 h-100"
