@@ -29,6 +29,294 @@ function pctToWorld(x, y) {
   return [(x - 50) * SCALE, 0, (y - 50) * SCALE]
 }
 
+// Tiny deterministic RNG — same inputs produce the same layout each render.
+function seedRand(seed) {
+  let h = 2166136261
+  const s = String(seed || 'x')
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return () => {
+    h = Math.imul(h ^ (h >>> 13), 0x5bd1e995)
+    return ((h & 0x7fffffff) >>> 0) / 0x7fffffff
+  }
+}
+
+function categoriseRoom(name) {
+  const s = (name || '').toLowerCase()
+  if (/living|lounge|family|rumpus/.test(s))        return 'living'
+  if (/bedroom|^bed|master|nursery|guest/.test(s))   return 'bedroom'
+  if (/kitchen|galley/.test(s))                      return 'kitchen'
+  if (/bath|shower|ensuite|wc|toilet/.test(s))       return 'bathroom'
+  if (/dining/.test(s))                              return 'dining'
+  if (/office|study|library/.test(s))                return 'office'
+  if (/garden|yard|lawn|patio|deck|balcony|terrace|courtyard/.test(s)) return 'outdoor'
+  return null
+}
+
+// Place a single piece of furniture against a chosen wall of a room.
+// side: 0=north (-z), 1=south (+z), 2=west (-x), 3=east (+x)
+function wallAnchor(side, w, d, pieceDepth) {
+  const gap = 0.08
+  const inset = pieceDepth / 2 + gap + WALL_THICKNESS / 2
+  switch (side) {
+    case 0: return { x: 0,            z: -d / 2 + inset, ry: 0 }
+    case 1: return { x: 0,            z:  d / 2 - inset, ry: Math.PI }
+    case 2: return { x: -w / 2 + inset, z: 0,            ry:  Math.PI / 2 }
+    default:return { x:  w / 2 - inset, z: 0,            ry: -Math.PI / 2 }
+  }
+}
+
+function Sofa({ tint = '#6b7280' }) {
+  return (
+    <group>
+      {/* seat */}
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <boxGeometry args={[2.0, 0.5, 0.9]} />
+        <meshStandardMaterial color={tint} roughness={0.9} />
+      </mesh>
+      {/* backrest */}
+      <mesh position={[0, 0.6, -0.35]} castShadow>
+        <boxGeometry args={[2.0, 0.7, 0.2]} />
+        <meshStandardMaterial color={tint} roughness={0.9} />
+      </mesh>
+      {/* armrests */}
+      <mesh position={[-1.0, 0.5, 0]} castShadow>
+        <boxGeometry args={[0.15, 0.5, 0.9]} />
+        <meshStandardMaterial color={tint} roughness={0.9} />
+      </mesh>
+      <mesh position={[1.0, 0.5, 0]} castShadow>
+        <boxGeometry args={[0.15, 0.5, 0.9]} />
+        <meshStandardMaterial color={tint} roughness={0.9} />
+      </mesh>
+    </group>
+  )
+}
+
+function Bed() {
+  return (
+    <group>
+      {/* mattress */}
+      <mesh position={[0, 0.4, 0]} castShadow>
+        <boxGeometry args={[1.5, 0.3, 2.0]} />
+        <meshStandardMaterial color="#e8e6df" roughness={1} />
+      </mesh>
+      {/* duvet fold */}
+      <mesh position={[0, 0.56, 0.3]} castShadow>
+        <boxGeometry args={[1.45, 0.05, 1.3]} />
+        <meshStandardMaterial color="#6b84b5" roughness={1} />
+      </mesh>
+      {/* pillows */}
+      <mesh position={[-0.35, 0.58, -0.7]} castShadow>
+        <boxGeometry args={[0.55, 0.12, 0.35]} />
+        <meshStandardMaterial color="#ffffff" roughness={1} />
+      </mesh>
+      <mesh position={[0.35, 0.58, -0.7]} castShadow>
+        <boxGeometry args={[0.55, 0.12, 0.35]} />
+        <meshStandardMaterial color="#ffffff" roughness={1} />
+      </mesh>
+      {/* headboard */}
+      <mesh position={[0, 0.7, -1.05]} castShadow>
+        <boxGeometry args={[1.55, 1.0, 0.1]} />
+        <meshStandardMaterial color="#5c3317" roughness={0.7} />
+      </mesh>
+      {/* frame legs */}
+      {[[-0.7, -0.9], [0.7, -0.9], [-0.7, 0.9], [0.7, 0.9]].map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.13, z]}>
+          <boxGeometry args={[0.1, 0.25, 0.1]} />
+          <meshStandardMaterial color="#3a2a1b" />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function KitchenCounter({ length = 3 }) {
+  return (
+    <group>
+      <mesh position={[0, 0.45, 0]} castShadow>
+        <boxGeometry args={[length, 0.9, 0.6]} />
+        <meshStandardMaterial color="#d6d2c9" roughness={0.6} />
+      </mesh>
+      {/* top */}
+      <mesh position={[0, 0.91, 0]}>
+        <boxGeometry args={[length + 0.05, 0.04, 0.65]} />
+        <meshStandardMaterial color="#2b2b2b" roughness={0.2} metalness={0.3} />
+      </mesh>
+    </group>
+  )
+}
+
+function Tub() {
+  return (
+    <group>
+      <mesh position={[0, 0.3, 0]} castShadow>
+        <boxGeometry args={[1.7, 0.6, 0.75]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.3} />
+      </mesh>
+      {/* inner water hollow hint */}
+      <mesh position={[0, 0.55, 0]}>
+        <boxGeometry args={[1.5, 0.05, 0.6]} />
+        <meshStandardMaterial color="#a8d8ea" roughness={0.2} metalness={0.2} />
+      </mesh>
+    </group>
+  )
+}
+
+function DiningTable() {
+  return (
+    <group>
+      <mesh position={[0, 0.73, 0]} castShadow>
+        <boxGeometry args={[1.8, 0.06, 0.9]} />
+        <meshStandardMaterial color="#6b4423" roughness={0.7} />
+      </mesh>
+      {[[-0.85, -0.4], [0.85, -0.4], [-0.85, 0.4], [0.85, 0.4]].map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.36, z]}>
+          <boxGeometry args={[0.08, 0.72, 0.08]} />
+          <meshStandardMaterial color="#4a2e1c" />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function Desk() {
+  return (
+    <group>
+      <mesh position={[0, 0.73, 0]} castShadow>
+        <boxGeometry args={[1.5, 0.05, 0.7]} />
+        <meshStandardMaterial color="#8b6f4e" roughness={0.7} />
+      </mesh>
+      <mesh position={[-0.65, 0.36, 0]}>
+        <boxGeometry args={[0.08, 0.72, 0.68]} />
+        <meshStandardMaterial color="#5c3317" />
+      </mesh>
+      <mesh position={[0.65, 0.36, 0]}>
+        <boxGeometry args={[0.08, 0.72, 0.68]} />
+        <meshStandardMaterial color="#5c3317" />
+      </mesh>
+      {/* little monitor hint */}
+      <mesh position={[0.2, 0.95, -0.2]}>
+        <boxGeometry args={[0.45, 0.3, 0.05]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
+    </group>
+  )
+}
+
+function Bush({ scale = 1 }) {
+  return (
+    <mesh position={[0, 0.25 * scale, 0]} castShadow>
+      <sphereGeometry args={[0.4 * scale, 12, 10]} />
+      <meshStandardMaterial color="#4f9f4d" roughness={1} />
+    </mesh>
+  )
+}
+
+function RoomFurniture({ room, w, d }) {
+  const category = categoriseRoom(room.name)
+  if (!category) return null
+
+  const rand = seedRand(room.id || `${room.x}-${room.y}-${room.name || ''}`)
+
+  if (category === 'living') {
+    // Sofa against one of the long walls; coffee table ~1m away from it.
+    const side = w >= d ? (rand() < 0.5 ? 0 : 1) : (rand() < 0.5 ? 2 : 3)
+    const a = wallAnchor(side, w, d, 0.9)
+    const tint = ['#6b7280', '#8f8676', '#5a6677', '#78594b'][Math.floor(rand() * 4)]
+    // Coffee table offset away from the sofa back
+    const dx = side === 2 ? 1.3 : side === 3 ? -1.3 : 0
+    const dz = side === 0 ? 1.2 : side === 1 ? -1.2 : 0
+    return (
+      <>
+        <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+          <Sofa tint={tint} />
+        </group>
+        <group position={[a.x + dx, 0, a.z + dz]}>
+          <mesh position={[0, 0.25, 0]} castShadow>
+            <boxGeometry args={[1.2, 0.35, 0.6]} />
+            <meshStandardMaterial color="#6b4423" roughness={0.7} />
+          </mesh>
+        </group>
+      </>
+    )
+  }
+
+  if (category === 'bedroom') {
+    const longSide = w >= d
+    const side = longSide ? (rand() < 0.5 ? 2 : 3) : (rand() < 0.5 ? 0 : 1)
+    const a = wallAnchor(side, w, d, 2.3)
+    return (
+      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+        <Bed />
+      </group>
+    )
+  }
+
+  if (category === 'kitchen') {
+    const longSide = w >= d
+    const side = longSide ? (rand() < 0.5 ? 0 : 1) : (rand() < 0.5 ? 2 : 3)
+    const len = Math.min(longSide ? w : d, 4) - 1
+    const a = wallAnchor(side, w, d, 0.6)
+    return (
+      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+        <KitchenCounter length={len} />
+      </group>
+    )
+  }
+
+  if (category === 'bathroom') {
+    const longSide = w >= d
+    const side = longSide ? (rand() < 0.5 ? 0 : 1) : (rand() < 0.5 ? 2 : 3)
+    const a = wallAnchor(side, w, d, 0.8)
+    return (
+      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+        <Tub />
+      </group>
+    )
+  }
+
+  if (category === 'dining') {
+    return (
+      <group position={[0, 0, 0]} rotation={[0, w < d ? Math.PI / 2 : 0, 0]}>
+        <DiningTable />
+      </group>
+    )
+  }
+
+  if (category === 'office') {
+    const side = Math.floor(rand() * 4)
+    const a = wallAnchor(side, w, d, 0.7)
+    return (
+      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+        <Desk />
+      </group>
+    )
+  }
+
+  if (category === 'outdoor') {
+    // A few bushes scattered around, deterministic positions
+    const count = 3 + Math.floor(rand() * 3)
+    const bushes = Array.from({ length: count }, () => ({
+      x: (rand() - 0.5) * (w - 1.2),
+      z: (rand() - 0.5) * (d - 1.2),
+      scale: 0.7 + rand() * 0.5,
+    }))
+    return (
+      <>
+        {bushes.map((b, i) => (
+          <group key={i} position={[b.x, 0, b.z]}>
+            <Bush scale={b.scale} />
+          </group>
+        ))}
+      </>
+    )
+  }
+
+  return null
+}
+
 function Room({ room, floorType }) {
   const roomType = room.type || floorType || 'interior'
   const palette = ROOM_COLORS[roomType] || ROOM_COLORS.interior
@@ -66,6 +354,9 @@ function Room({ room, floorType }) {
         <boxGeometry args={[WALL_THICKNESS, WALL_HEIGHT, d]} />
         <meshStandardMaterial color={palette.wall} transparent opacity={0.6} />
       </mesh>
+
+      {/* Deterministic furniture for the room category */}
+      <RoomFurniture room={room} w={w} d={d} />
 
       {/* Room label */}
       <Billboard position={[0, 0.15, 0]}>
