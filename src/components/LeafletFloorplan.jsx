@@ -162,6 +162,9 @@ export default function LeafletFloorplan({
     }
 
     const onMouseDown = (e) => {
+      // Ignore mousedown that originates on a marker (move/resize handles),
+      // otherwise dragging a handle would start drawing a new zone.
+      if (e.originalEvent?.target?.closest?.('.leaflet-marker-icon')) return
       drawRef.current = { startLL: e.latlng, tempRect: null }
     }
 
