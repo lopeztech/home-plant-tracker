@@ -197,30 +197,114 @@ function Avatar({ positionRef, yawRef }) {
   })
   return (
     <group ref={groupRef}>
-      {/* Body */}
-      <mesh position={[0, 0.3, 0]} castShadow>
-        <cylinderGeometry args={[0.14, 0.18, 0.6, 16]} />
+      {/* Shoes */}
+      <mesh position={[-0.07, 0.03, -0.02]} castShadow>
+        <boxGeometry args={[0.09, 0.06, 0.14]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
+      <mesh position={[0.07, 0.03, -0.02]} castShadow>
+        <boxGeometry args={[0.09, 0.06, 0.14]} />
+        <meshStandardMaterial color="#1f2937" />
+      </mesh>
+
+      {/* Legs (pants) */}
+      <mesh position={[-0.07, 0.22, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
+        <meshStandardMaterial color="#334155" />
+      </mesh>
+      <mesh position={[0.07, 0.22, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
+        <meshStandardMaterial color="#334155" />
+      </mesh>
+
+      {/* Torso (shirt) */}
+      <mesh position={[0, 0.54, 0]} castShadow>
+        <cylinderGeometry args={[0.14, 0.16, 0.28, 16]} />
         <meshStandardMaterial color="#3b82f6" />
       </mesh>
+      {/* Neck */}
+      <mesh position={[0, 0.70, 0]} castShadow>
+        <cylinderGeometry args={[0.045, 0.055, 0.05, 10]} />
+        <meshStandardMaterial color="#fcd7b6" />
+      </mesh>
+
       {/* Head */}
-      <mesh position={[0, 0.72, 0]} castShadow>
-        <sphereGeometry args={[0.15, 16, 16]} />
+      <mesh position={[0, 0.82, 0]} castShadow>
+        <sphereGeometry args={[0.13, 20, 20]} />
         <meshStandardMaterial color="#fcd7b6" />
       </mesh>
-      {/* Facing indicator — small nose cone pointing forward (-z) */}
-      <mesh position={[0, 0.72, -0.16]} rotation={[-Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.035, 0.08, 8]} />
-        <meshStandardMaterial color="#fcd7b6" />
+      {/* Hair — a cap covering the top half of the head */}
+      <mesh position={[0, 0.86, 0.015]} castShadow>
+        <sphereGeometry args={[0.135, 20, 20, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+        <meshStandardMaterial color="#5c3317" />
       </mesh>
-      {/* Watering can in the avatar's hand */}
-      <group position={[0.22, 0.42, 0]}>
-        <mesh>
-          <boxGeometry args={[0.12, 0.1, 0.08]} />
-          <meshStandardMaterial color="#9ca3af" metalness={0.6} roughness={0.3} />
+      {/* Eyes — looking forward (-z) */}
+      <mesh position={[-0.045, 0.83, -0.11]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshBasicMaterial color="#1f2937" />
+      </mesh>
+      <mesh position={[0.045, 0.83, -0.11]}>
+        <sphereGeometry args={[0.015, 8, 8]} />
+        <meshBasicMaterial color="#1f2937" />
+      </mesh>
+      {/* Smile */}
+      <mesh position={[0, 0.79, -0.115]}>
+        <boxGeometry args={[0.04, 0.008, 0.005]} />
+        <meshBasicMaterial color="#7c2d12" />
+      </mesh>
+
+      {/* Left arm — hangs at the side */}
+      <group position={[-0.18, 0.58, 0]} rotation={[0, 0, 0.05]}>
+        {/* Upper arm */}
+        <mesh position={[0, -0.11, 0]} castShadow>
+          <cylinderGeometry args={[0.035, 0.035, 0.22, 10]} />
+          <meshStandardMaterial color="#3b82f6" />
         </mesh>
-        <mesh position={[0.09, 0.03, 0]} rotation={[0, 0, -0.4]}>
-          <cylinderGeometry args={[0.012, 0.018, 0.14, 8]} />
-          <meshStandardMaterial color="#9ca3af" metalness={0.6} roughness={0.3} />
+        {/* Hand */}
+        <mesh position={[0, -0.24, 0]} castShadow>
+          <sphereGeometry args={[0.04, 10, 10]} />
+          <meshStandardMaterial color="#fcd7b6" />
+        </mesh>
+      </group>
+
+      {/* Right arm — reaches out to hold the can */}
+      <group position={[0.17, 0.6, 0]} rotation={[0.1, 0, -1.1]}>
+        <mesh position={[0, -0.12, 0]} castShadow>
+          <cylinderGeometry args={[0.035, 0.035, 0.24, 10]} />
+          <meshStandardMaterial color="#3b82f6" />
+        </mesh>
+        <mesh position={[0, -0.26, 0]} castShadow>
+          <sphereGeometry args={[0.04, 10, 10]} />
+          <meshStandardMaterial color="#fcd7b6" />
+        </mesh>
+      </group>
+
+      {/* Watering can gripped by the right hand */}
+      <group position={[0.34, 0.48, -0.02]}>
+        {/* Body — tapered (top slightly wider than base) */}
+        <mesh castShadow>
+          <cylinderGeometry args={[0.075, 0.07, 0.13, 18]} />
+          <meshStandardMaterial color="#16a34a" metalness={0.25} roughness={0.5} />
+        </mesh>
+        {/* Rim */}
+        <mesh position={[0, 0.07, 0]}>
+          <torusGeometry args={[0.075, 0.008, 8, 20]} />
+          <meshStandardMaterial color="#14532d" metalness={0.3} roughness={0.5} />
+        </mesh>
+        {/* Angled spout */}
+        <mesh position={[0.115, 0.02, 0]} rotation={[0, 0, -0.55]} castShadow>
+          <cylinderGeometry args={[0.015, 0.03, 0.17, 12]} />
+          <meshStandardMaterial color="#16a34a" metalness={0.25} roughness={0.5} />
+        </mesh>
+        {/* Rose (sprinkler head at spout tip) */}
+        <mesh position={[0.195, 0.095, 0]} rotation={[0, 0, -0.55]}>
+          <cylinderGeometry args={[0.022, 0.022, 0.015, 14]} />
+          <meshStandardMaterial color="#14532d" />
+        </mesh>
+        {/* Arching handle over the top */}
+        <mesh position={[-0.03, 0.07, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[0.07, 0.01, 8, 18, Math.PI]} />
+          <meshStandardMaterial color="#14532d" />
         </mesh>
       </group>
     </group>
