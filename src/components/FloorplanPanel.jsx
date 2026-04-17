@@ -8,6 +8,7 @@ import { calculateReorganisedPositions } from '../utils/reorganise.js'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
+const FloorplanGame = lazy(() => import('./FloorplanGame.jsx'))
 
 export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWaterRef, fullWidth = false }) {
   const {
@@ -159,6 +160,10 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
               <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#box"></use></svg>
               3D
             </Button>
+            <Button variant={viewMode === 'game' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('game')} title="Game View — walk a pixel gardener around your house">
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#zap"></use></svg>
+              Game
+            </Button>
           </ButtonGroup>
         </div>
       </div>
@@ -202,6 +207,17 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
               weather={weather}
               onPlantClick={onPlantClick}
               onFloorplanClick={onFloorplanClick}
+            />
+          </Suspense>
+        )}
+        {activeFloor && viewMode === 'game' && (
+          <Suspense fallback={<div className="d-flex align-items-center justify-content-center h-100"><Spinner animation="border" variant="primary" /></div>}>
+            <FloorplanGame
+              floor={activeFloor}
+              floors={floors}
+              plants={plantsOnFloor}
+              weather={weather}
+              onPlantClick={onPlantClick}
             />
           </Suspense>
         )}
