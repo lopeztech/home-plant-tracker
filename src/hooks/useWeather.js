@@ -31,7 +31,7 @@ export function getCondition(code) {
 }
 
 const CACHE_KEY = 'plantTracker_weather'
-const CACHE_TTL = 30 * 60 * 1000 // 30 min
+const CACHE_TTL = 5 * 60 * 1000 // 5 min — keeps "now is raining" from lingering
 
 // Returns distance in metres between two lat/lon points (Haversine approximation)
 function distanceMetres(lat1, lon1, lat2, lon2) {
@@ -61,16 +61,34 @@ function writeCache(lat, lon, weather) {
   }
 }
 
+// Dry-sky codes (clear, partly cloudy, overcast, fog) get overridden
+// when current precipitation says it's actually raining right now.
+const DRY_SKY_CODES = new Set([0, 1, 2, 3, 45, 48])
+
 function parseWeather(data, unit = 'celsius') {
-  const cw = data.current_weather
+  // The modern /forecast `current=` block is preferred; fall back to
+  // `current_weather` for older caches.
+  const cw = data.current || data.current_weather || {}
   const d = data.daily
+  const temp = cw.temperature_2m ?? cw.temperature
+  const code = cw.weathercode
+  const rainNow = (cw.precipitation ?? cw.rain ?? 0) > 0
+
+  let condition = getCondition(code)
+  // If the model reports clear/overcast/fog but live precipitation says
+  // otherwise, trust the precipitation reading and show the rain pill.
+  if (rainNow && DRY_SKY_CODES.has(code)) {
+    condition = { label: 'Raining now', sky: 'rainy', emoji: '\uD83C\uDF27\uFE0F' }
+  }
+
   return {
     unit,
     current: {
-      temp: Math.round(cw.temperature),
-      code: cw.weathercode,
-      condition: getCondition(cw.weathercode),
+      temp: Math.round(temp),
+      code,
+      condition,
       isDay: cw.is_day === 1,
+      precipitation: cw.precipitation ?? 0,
     },
     days: d.time.map((date, i) => ({
       date,
@@ -108,7 +126,7 @@ export function useWeather(tempUnit = 'celsius') {
       const url = new URL('https://api.open-meteo.com/v1/forecast')
       url.searchParams.set('latitude', lat.toFixed(4))
       url.searchParams.set('longitude', lon.toFixed(4))
-      url.searchParams.set('current_weather', 'true')
+      url.searchParams.set('current', 'temperature_2m,precipitation,rain,weathercode,is_day')
       url.searchParams.set('daily', 'weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum')
       url.searchParams.set('forecast_days', '7')
       url.searchParams.set('timezone', 'auto')
