@@ -729,7 +729,10 @@ function resolveWallCollisions(x, z, walls, radius) {
   return [nx, nz]
 }
 
-function Avatar({ positionRef, yawRef, walkStateRef }) {
+function Avatar({ positionRef, yawRef, walkStateRef, camMode = 'tp' }) {
+  // In first-person, hide everything behind the camera so we don't clip the
+  // head / torso. Keep the right arm + can visible as a "hands-cam" element.
+  const fp = camMode === 'fp'
   const groupRef = useRef()
   const leftLegRef = useRef()
   const rightLegRef = useRef()
@@ -775,80 +778,84 @@ function Avatar({ positionRef, yawRef, walkStateRef }) {
 
   return (
     <group ref={groupRef}>
-      {/* Left leg + shoe (pivots at hip) */}
-      <group ref={leftLegRef} position={[-0.07, 0.38, 0]}>
-        <mesh position={[0, -0.16, 0]} castShadow>
-          <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
-          <meshStandardMaterial color="#334155" />
-        </mesh>
-        <mesh position={[0, -0.35, -0.02]} castShadow>
-          <boxGeometry args={[0.09, 0.06, 0.14]} />
-          <meshStandardMaterial color="#1f2937" />
-        </mesh>
-      </group>
-      {/* Right leg + shoe */}
-      <group ref={rightLegRef} position={[0.07, 0.38, 0]}>
-        <mesh position={[0, -0.16, 0]} castShadow>
-          <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
-          <meshStandardMaterial color="#334155" />
-        </mesh>
-        <mesh position={[0, -0.35, -0.02]} castShadow>
-          <boxGeometry args={[0.09, 0.06, 0.14]} />
-          <meshStandardMaterial color="#1f2937" />
-        </mesh>
-      </group>
+      {!fp && (
+        <>
+          {/* Left leg + shoe (pivots at hip) */}
+          <group ref={leftLegRef} position={[-0.07, 0.38, 0]}>
+            <mesh position={[0, -0.16, 0]} castShadow>
+              <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+            <mesh position={[0, -0.35, -0.02]} castShadow>
+              <boxGeometry args={[0.09, 0.06, 0.14]} />
+              <meshStandardMaterial color="#1f2937" />
+            </mesh>
+          </group>
+          {/* Right leg + shoe */}
+          <group ref={rightLegRef} position={[0.07, 0.38, 0]}>
+            <mesh position={[0, -0.16, 0]} castShadow>
+              <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
+              <meshStandardMaterial color="#334155" />
+            </mesh>
+            <mesh position={[0, -0.35, -0.02]} castShadow>
+              <boxGeometry args={[0.09, 0.06, 0.14]} />
+              <meshStandardMaterial color="#1f2937" />
+            </mesh>
+          </group>
 
-      {/* Torso (shirt) */}
-      <mesh position={[0, 0.54, 0]} castShadow>
-        <cylinderGeometry args={[0.14, 0.16, 0.28, 16]} />
-        <meshStandardMaterial color="#3b82f6" />
-      </mesh>
-      {/* Neck */}
-      <mesh position={[0, 0.70, 0]} castShadow>
-        <cylinderGeometry args={[0.045, 0.055, 0.05, 10]} />
-        <meshStandardMaterial color="#fcd7b6" />
-      </mesh>
+          {/* Torso (shirt) */}
+          <mesh position={[0, 0.54, 0]} castShadow>
+            <cylinderGeometry args={[0.14, 0.16, 0.28, 16]} />
+            <meshStandardMaterial color="#3b82f6" />
+          </mesh>
+          {/* Neck */}
+          <mesh position={[0, 0.70, 0]} castShadow>
+            <cylinderGeometry args={[0.045, 0.055, 0.05, 10]} />
+            <meshStandardMaterial color="#fcd7b6" />
+          </mesh>
 
-      {/* Head */}
-      <mesh position={[0, 0.82, 0]} castShadow>
-        <sphereGeometry args={[0.13, 20, 20]} />
-        <meshStandardMaterial color="#fcd7b6" />
-      </mesh>
-      {/* Hair — a cap covering the top half of the head */}
-      <mesh position={[0, 0.86, 0.015]} castShadow>
-        <sphereGeometry args={[0.135, 20, 20, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
-        <meshStandardMaterial color="#5c3317" />
-      </mesh>
-      {/* Eyes — looking forward (-z) */}
-      <mesh position={[-0.045, 0.83, -0.11]}>
-        <sphereGeometry args={[0.015, 8, 8]} />
-        <meshBasicMaterial color="#1f2937" />
-      </mesh>
-      <mesh position={[0.045, 0.83, -0.11]}>
-        <sphereGeometry args={[0.015, 8, 8]} />
-        <meshBasicMaterial color="#1f2937" />
-      </mesh>
-      {/* Smile */}
-      <mesh position={[0, 0.79, -0.115]}>
-        <boxGeometry args={[0.04, 0.008, 0.005]} />
-        <meshBasicMaterial color="#7c2d12" />
-      </mesh>
+          {/* Head */}
+          <mesh position={[0, 0.82, 0]} castShadow>
+            <sphereGeometry args={[0.13, 20, 20]} />
+            <meshStandardMaterial color="#fcd7b6" />
+          </mesh>
+          {/* Hair — a cap covering the top half of the head */}
+          <mesh position={[0, 0.86, 0.015]} castShadow>
+            <sphereGeometry args={[0.135, 20, 20, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+            <meshStandardMaterial color="#5c3317" />
+          </mesh>
+          {/* Eyes — looking forward (-z) */}
+          <mesh position={[-0.045, 0.83, -0.11]}>
+            <sphereGeometry args={[0.015, 8, 8]} />
+            <meshBasicMaterial color="#1f2937" />
+          </mesh>
+          <mesh position={[0.045, 0.83, -0.11]}>
+            <sphereGeometry args={[0.015, 8, 8]} />
+            <meshBasicMaterial color="#1f2937" />
+          </mesh>
+          {/* Smile */}
+          <mesh position={[0, 0.79, -0.115]}>
+            <boxGeometry args={[0.04, 0.008, 0.005]} />
+            <meshBasicMaterial color="#7c2d12" />
+          </mesh>
 
-      {/* Left arm — swings during walk (pivots at shoulder) */}
-      <group ref={leftArmRef} position={[-0.18, 0.58, 0]} rotation={[0, 0, 0.05]}>
-        {/* Upper arm */}
-        <mesh position={[0, -0.11, 0]} castShadow>
-          <cylinderGeometry args={[0.035, 0.035, 0.22, 10]} />
-          <meshStandardMaterial color="#3b82f6" />
-        </mesh>
-        {/* Hand */}
-        <mesh position={[0, -0.24, 0]} castShadow>
-          <sphereGeometry args={[0.04, 10, 10]} />
-          <meshStandardMaterial color="#fcd7b6" />
-        </mesh>
-      </group>
+          {/* Left arm — swings during walk (pivots at shoulder) */}
+          <group ref={leftArmRef} position={[-0.18, 0.58, 0]} rotation={[0, 0, 0.05]}>
+            {/* Upper arm */}
+            <mesh position={[0, -0.11, 0]} castShadow>
+              <cylinderGeometry args={[0.035, 0.035, 0.22, 10]} />
+              <meshStandardMaterial color="#3b82f6" />
+            </mesh>
+            {/* Hand */}
+            <mesh position={[0, -0.24, 0]} castShadow>
+              <sphereGeometry args={[0.04, 10, 10]} />
+              <meshStandardMaterial color="#fcd7b6" />
+            </mesh>
+          </group>
+        </>
+      )}
 
-      {/* Right arm — reaches out to hold the can */}
+      {/* Right arm — reaches out to hold the can (visible in both modes) */}
       <group position={[0.17, 0.6, 0]} rotation={[0.1, 0, -1.1]}>
         <mesh position={[0, -0.12, 0]} castShadow>
           <cylinderGeometry args={[0.035, 0.035, 0.24, 10]} />
@@ -941,8 +948,8 @@ function Drop({ d }) {
 }
 
 function WalkController({
-  positionRef, yawRef, camBackRef, joyRef, walkStateRef,
-  walls, bounds, plants, onNearestChange, onWaterRequest,
+  positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef,
+  camMode, walls, bounds, plants, onNearestChange, onWaterRequest,
 }) {
   const { camera } = useThree()
   const keysRef = useRef(new Set())
@@ -1008,28 +1015,43 @@ function WalkController({
     }
     walkStateRef.current.moving = hasInput
 
-    // Third-person chase camera — behind the avatar's facing direction,
-    // lerped so yaw changes and scroll-zoom glide rather than snap.
+    // Camera — behaviour forks by mode
     const yaw = yawRef.current
+    const pitch = pitchRef.current
     const [ax, , az] = positionRef.current
-    const camBack = camBackRef.current
-    const camUp = 1.4 + camBack * 0.25  // eye-level + rise with zoom
-    const desiredX = ax + Math.sin(yaw) * camBack
-    const desiredZ = az + Math.cos(yaw) * camBack
     const k = 1 - Math.exp(-dt * 10)
-    if (firstFrameRef.current) {
-      camera.position.set(desiredX, camUp, desiredZ)
-      camLookRef.current = { x: ax, y: 0.8, z: az }
+
+    if (camMode === 'fp') {
+      // First-person: camera is at head height, looks along yaw+pitch
+      const eyeY = 1.62
+      camera.position.set(ax, eyeY, az)
+      const cp = Math.cos(pitch)
+      const lookX = ax - Math.sin(yaw) * cp
+      const lookY = eyeY + Math.sin(pitch)
+      const lookZ = az - Math.cos(yaw) * cp
+      camera.lookAt(lookX, lookY, lookZ)
       firstFrameRef.current = false
     } else {
-      camera.position.x += (desiredX - camera.position.x) * k
-      camera.position.y += (camUp - camera.position.y) * k
-      camera.position.z += (desiredZ - camera.position.z) * k
-      camLookRef.current.x += (ax  - camLookRef.current.x) * k
-      camLookRef.current.y += (0.8 - camLookRef.current.y) * k  // look at torso height
-      camLookRef.current.z += (az  - camLookRef.current.z) * k
+      // Third-person chase camera — behind the avatar's facing direction,
+      // lerped so yaw changes and scroll-zoom glide rather than snap.
+      const camBack = camBackRef.current
+      const camUp = 1.4 + camBack * 0.25  // eye-level + rise with zoom
+      const desiredX = ax + Math.sin(yaw) * camBack
+      const desiredZ = az + Math.cos(yaw) * camBack
+      if (firstFrameRef.current) {
+        camera.position.set(desiredX, camUp, desiredZ)
+        camLookRef.current = { x: ax, y: 0.8, z: az }
+        firstFrameRef.current = false
+      } else {
+        camera.position.x += (desiredX - camera.position.x) * k
+        camera.position.y += (camUp - camera.position.y) * k
+        camera.position.z += (desiredZ - camera.position.z) * k
+        camLookRef.current.x += (ax  - camLookRef.current.x) * k
+        camLookRef.current.y += (0.8 - camLookRef.current.y) * k  // look at torso height
+        camLookRef.current.z += (az  - camLookRef.current.z) * k
+      }
+      camera.lookAt(camLookRef.current.x, camLookRef.current.y, camLookRef.current.z)
     }
-    camera.lookAt(camLookRef.current.x, camLookRef.current.y, camLookRef.current.z)
 
     // Nearest plant
     let nearest = null
@@ -1058,7 +1080,8 @@ function WalkController({
 function Scene({
   floor, plants, weather, floors,
   onPlantClick, onFloorplanClick,
-  walkMode, positionRef, yawRef, camBackRef, joyRef, walkStateRef,
+  walkMode, camMode,
+  positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef,
   onWalkNearest, onWalkWater,
   droplets,
 }) {
@@ -1112,13 +1135,15 @@ function Scene({
 
       {walkMode ? (
         <>
-          <Avatar positionRef={positionRef} yawRef={yawRef} walkStateRef={walkStateRef} />
+          <Avatar positionRef={positionRef} yawRef={yawRef} walkStateRef={walkStateRef} camMode={camMode} />
           <WalkController
             positionRef={positionRef}
             yawRef={yawRef}
+            pitchRef={pitchRef}
             camBackRef={camBackRef}
             joyRef={joyRef}
             walkStateRef={walkStateRef}
+            camMode={camMode}
             walls={walls}
             bounds={bounds}
             plants={plants}
@@ -1183,6 +1208,7 @@ function Joystick({ joyRef }) {
   return (
     <div
       ref={wrapRef}
+      data-walk-ui
       onTouchStart={(e) => { e.preventDefault(); const t = e.touches[0]; handleStart(t.clientX, t.clientY) }}
       onTouchMove={(e) => { e.preventDefault(); const t = e.touches[0]; handleMove(t.clientX, t.clientY) }}
       onTouchEnd={() => reset()}
@@ -1224,10 +1250,19 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
   // Real refs the render loop mutates without re-rendering
   const positionRef = useRef([0, 0, 0])
   const yawRef = useRef(0)
+  const pitchRef = useRef(0)   // first-person look pitch (-π/3 .. π/3)
   const camBackRef = useRef(4.0)  // chase-camera distance; scroll wheel adjusts
   const joyRef = useRef({ forward: 0, strafe: 0 })
   // Shared animation state between WalkController (writer) and Avatar (reader)
   const walkStateRef = useRef({ moving: false, phase: 0, swingAmp: 0, pourStart: 0 })
+
+  // First/third-person preference, persisted across sessions
+  const [camMode, setCamMode] = useState(() => {
+    try { return localStorage.getItem('plantTracker_3dCamMode') === 'fp' ? 'fp' : 'tp' } catch { return 'tp' }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('plantTracker_3dCamMode', camMode) } catch {}
+  }, [camMode])
 
   // Reset avatar to the centre of the visible rooms when the floor changes
   useEffect(() => {
@@ -1256,6 +1291,39 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
+  }, [walkMode])
+
+  // Pointer-drag look: horizontal drag adjusts yaw, vertical drag pitch (clamped).
+  // Ignored if the press starts on an interactive overlay (joystick/water button).
+  useEffect(() => {
+    if (!walkMode) return
+    const el = wrapperRef.current
+    if (!el) return
+    let dragging = false
+    let lastX = 0, lastY = 0
+    const onDown = (e) => {
+      if (e.target && e.target.closest('[data-walk-ui]')) return
+      dragging = true
+      lastX = e.clientX
+      lastY = e.clientY
+    }
+    const onMove = (e) => {
+      if (!dragging) return
+      const dx = e.clientX - lastX
+      const dy = e.clientY - lastY
+      lastX = e.clientX; lastY = e.clientY
+      yawRef.current -= dx * 0.005
+      pitchRef.current = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, pitchRef.current - dy * 0.004))
+    }
+    const onUp = () => { dragging = false }
+    el.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    return () => {
+      el.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
   }, [walkMode])
 
   const waterPlant = (plant) => {
@@ -1293,8 +1361,10 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           onPlantClick={onPlantClick}
           onFloorplanClick={onFloorplanClick}
           walkMode={walkMode}
+          camMode={camMode}
           positionRef={positionRef}
           yawRef={yawRef}
+          pitchRef={pitchRef}
           camBackRef={camBackRef}
           joyRef={joyRef}
           walkStateRef={walkStateRef}
@@ -1307,6 +1377,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       {/* Mode toggle */}
       <button
         type="button"
+        data-walk-ui
         onClick={() => { setWalkMode((v) => !v); setNearest(null) }}
         title={walkMode ? 'Exit walk mode' : 'Walk around your house'}
         style={{
@@ -1318,6 +1389,24 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       >
         {walkMode ? '🚶 Walk mode — exit' : '🚶 Walk mode'}
       </button>
+
+      {/* First/third-person toggle — only while in walk mode */}
+      {walkMode && (
+        <button
+          type="button"
+          data-walk-ui
+          onClick={() => setCamMode((m) => (m === 'fp' ? 'tp' : 'fp'))}
+          title={camMode === 'fp' ? 'Switch to third-person' : 'Switch to first-person'}
+          style={{
+            position: 'absolute', top: 48, right: 10, zIndex: 5,
+            padding: '6px 10px', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)',
+            background: '#fff', color: '#495057',
+            fontSize: 12, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.08)',
+          }}
+        >
+          {camMode === 'fp' ? '👁️ First-person' : '🎥 Third-person'}
+        </button>
+      )}
 
       {/* HUD */}
       {walkMode && (
@@ -1333,7 +1422,8 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
               }}
             >
               <div><strong>WASD</strong> / arrows — move &amp; turn</div>
-              <div><strong>Scroll</strong> — zoom camera</div>
+              <div><strong>Drag</strong> — look around</div>
+              <div><strong>Scroll</strong> — zoom camera (third-person)</div>
               <div><strong>E</strong> — water the plant you're next to</div>
             </div>
           )}
@@ -1363,6 +1453,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
               <Joystick joyRef={joyRef} />
               <button
                 type="button"
+                data-walk-ui
                 onClick={() => waterPlant(nearest)}
                 disabled={!nearest}
                 style={{
