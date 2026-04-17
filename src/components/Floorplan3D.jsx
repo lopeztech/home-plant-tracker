@@ -668,7 +668,8 @@ function DynamicLighting({ weather }) {
 const WATER_RANGE = 1.6           // must be within this world distance to water
 const WALK_SPEED = 4.5             // world units per second
 const TURN_SPEED = 2.2             // radians per second
-const AVATAR_RADIUS = 0.3          // for wall/room collision
+const AVATAR_SCALE = 2.0           // applied to the whole avatar group
+const AVATAR_RADIUS = 0.4          // for wall/room collision (matches scaled shoulders)
 
 const DOOR_MIN = 1.2   // shared-edge overlaps this long become passable doorways
 
@@ -843,7 +844,7 @@ function Avatar({ positionRef, yawRef, walkStateRef, camMode = 'tp' }) {
   })
 
   return (
-    <group ref={groupRef}>
+    <group ref={groupRef} scale={AVATAR_SCALE}>
       {!fp && (
         <>
           {/* Left leg + shoe (pivots at hip) */}
@@ -970,12 +971,12 @@ function WaterDroplets({ worldPos, onDone }) {
   const groupRef = useRef()
   const startRef = useRef(null)
   const droplets = useMemo(() =>
-    Array.from({ length: 8 }, () => ({
-      ox: (Math.random() - 0.5) * 0.12,
-      oz: (Math.random() - 0.5) * 0.12,
-      delay: Math.random() * 0.2,
-      dur: 0.6 + Math.random() * 0.3,
-      r: 0.018 + Math.random() * 0.01,
+    Array.from({ length: 10 }, () => ({
+      ox: (Math.random() - 0.5) * 0.24,
+      oz: (Math.random() - 0.5) * 0.24,
+      delay: Math.random() * 0.25,
+      dur: 0.7 + Math.random() * 0.3,
+      r: 0.035 + Math.random() * 0.02,
     })),
   [])
   useFrame((state) => {
@@ -1001,7 +1002,8 @@ function Drop({ d }) {
     const t = Math.max(0, state.clock.elapsedTime - startRef.current - d.delay)
     const u = Math.min(1, t / d.dur)
     // Start at ~0.7, fall to ground then bounce into invisibility
-    const y = 0.7 - u * 0.7
+    // Fall from above the plant down to soil level
+    const y = 1.4 - u * 1.1
     ref.current.position.set(d.ox, Math.max(0.02, y), d.oz)
     ref.current.scale.setScalar(u < 1 ? 1 : 0)
   })
@@ -1088,8 +1090,9 @@ function WalkController({
     const k = 1 - Math.exp(-dt * 10)
 
     if (camMode === 'fp') {
-      // First-person: camera is at head height, looks along yaw+pitch
-      const eyeY = 1.62
+      // First-person: camera is at head height, looks along yaw+pitch.
+      // Head sits at ~0.82 in the avatar model, scaled by AVATAR_SCALE.
+      const eyeY = 1.65
       camera.position.set(ax, eyeY, az)
       const cp = Math.cos(pitch)
       const lookX = ax - Math.sin(yaw) * cp
@@ -1101,19 +1104,19 @@ function WalkController({
       // Third-person chase camera — behind the avatar's facing direction,
       // lerped so yaw changes and scroll-zoom glide rather than snap.
       const camBack = camBackRef.current
-      const camUp = 1.4 + camBack * 0.25  // eye-level + rise with zoom
+      const camUp = 2.0 + camBack * 0.25  // slightly above the avatar's head
       const desiredX = ax + Math.sin(yaw) * camBack
       const desiredZ = az + Math.cos(yaw) * camBack
       if (firstFrameRef.current) {
         camera.position.set(desiredX, camUp, desiredZ)
-        camLookRef.current = { x: ax, y: 0.8, z: az }
+        camLookRef.current = { x: ax, y: 1.3, z: az }
         firstFrameRef.current = false
       } else {
         camera.position.x += (desiredX - camera.position.x) * k
         camera.position.y += (camUp - camera.position.y) * k
         camera.position.z += (desiredZ - camera.position.z) * k
         camLookRef.current.x += (ax  - camLookRef.current.x) * k
-        camLookRef.current.y += (0.8 - camLookRef.current.y) * k  // look at torso height
+        camLookRef.current.y += (1.3 - camLookRef.current.y) * k  // look at chest height
         camLookRef.current.z += (az  - camLookRef.current.z) * k
       }
       camera.lookAt(camLookRef.current.x, camLookRef.current.y, camLookRef.current.z)
