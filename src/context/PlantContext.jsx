@@ -33,42 +33,37 @@ export function PlantProvider({ children }) {
     [plants, weather, floors],
   )
 
-  // Auto-mark outdoor plants as watered when it's raining
+  // Auto-mark every outdoor plant as watered once per rainy day.
+  // Dedupes off the wateringLog — if the latest entry is method:'rain' dated
+  // today, we've already done it for that plant in this rain event.
   useEffect(() => {
-    if (!weather?.current?.condition?.sky) return
-    const sky = weather.current.condition.sky
-    const isRaining = sky === 'rainy' || sky === 'stormy'
-    if (!isRaining) return
+    const sky = weather?.current?.condition?.sky
+    if (sky !== 'rainy' && sky !== 'stormy') return
 
     const today = new Date().toISOString().slice(0, 10)
-    const outdoorPlantsDueForRainWater = plants.filter((p) => {
+    const toWater = plants.filter((p) => {
       if (!isOutdoor(p, floors)) return false
-      // Check if already watered today
       const lastEntry = p.wateringLog?.[p.wateringLog.length - 1]
       if (lastEntry?.date?.slice(0, 10) === today && lastEntry?.method === 'rain') return false
-      // Only auto-water if due within 1 day
-      const status = getWateringStatus(p, weather, floors)
-      return status.daysUntil <= 1 && !status.skippedRain
+      return true
     })
 
-    if (outdoorPlantsDueForRainWater.length === 0) return
+    if (toWater.length === 0) return
 
     const now = new Date().toISOString()
     const entry = { date: now, note: 'Auto-watered by rain', amount: null, method: 'rain' }
+    const waterIds = new Set(toWater.map((p) => p.id))
     setPlants((prev) =>
       prev.map((p) =>
-        outdoorPlantsDueForRainWater.some((op) => op.id === p.id)
+        waterIds.has(p.id)
           ? { ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] }
-          : p
+          : p,
       ),
     )
-    // Persist to backend (non-blocking)
     if (!isGuest) {
-      outdoorPlantsDueForRainWater.forEach((p) => {
-        plantsApi.water(p.id).catch(() => {})
-      })
+      toWater.forEach((p) => { plantsApi.water(p.id).catch(() => {}) })
     }
-  }, [weather?.current?.condition?.sky, plants.length, floors])
+  }, [weather?.current?.condition?.sky, plants.length, floors, isGuest])
 
   useEffect(() => {
     if (!isAuthenticated) return
