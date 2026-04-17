@@ -3,13 +3,11 @@ import { Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import PlantListPanel from '../components/PlantListPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
-import FloorNav from '../components/FloorNav.jsx'
 
 export default function PlantsPage() {
   const {
     floors,
     activeFloorId,
-    setActiveFloorId,
     weather,
     plants,
     plantsError,
@@ -80,17 +78,10 @@ export default function PlantsPage() {
             </div></div>
           </div>
         ) : (
-          <>
-            {floors.length > 1 && (
-              <div className="mb-3">
-                <FloorNav floors={floors} activeFloorId={activeFloorId} onChange={setActiveFloorId} />
-              </div>
-            )}
-            <PlantListPanel
-              onPlantClick={handlePlantClick}
-              onAddPlant={handleAddPlant}
-            />
-          </>
+          <PlantListPanel
+            onPlantClick={handlePlantClick}
+            onAddPlant={handleAddPlant}
+          />
         )}
       </div>
 
