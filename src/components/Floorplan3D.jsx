@@ -230,6 +230,80 @@ function Ground({ floorType }) {
   )
 }
 
+// ── Dynamic lighting ─────────────────────────────────────────────────────────
+// Derives sun position, colour, and intensities from the weather context
+// passed down from usePlantContext. Sun arcs on a sine of the local hour; the
+// sky condition scales intensity; night swaps in a cool low-angle 'moon' and
+// a warmer hemisphere light so interiors don't look pitch-black.
+
+const WEATHER_INTENSITY = {
+  sunny:  1.00,
+  partly: 0.85,
+  cloudy: 0.55,
+  foggy:  0.45,
+  rainy:  0.40,
+  stormy: 0.30,
+  snowy:  0.75,
+}
+
+function DynamicLighting({ weather }) {
+  const sky = weather?.current?.condition?.sky || 'sunny'
+  const isDay = weather?.current?.isDay !== false
+  const now = new Date()
+  const hour = now.getHours() + now.getMinutes() / 60
+
+  // Elevation: sine that peaks at noon, negative after sunset
+  const elev = Math.sin(((hour - 6) / 12) * Math.PI)
+  // Azimuth: east in the morning (negative X), west in the afternoon
+  const azim = ((hour - 12) / 12) * Math.PI
+
+  const wFactor = WEATHER_INTENSITY[sky] ?? 0.9
+  const effectiveElev = Math.max(0, elev)
+
+  // Warm golden at low elevations, neutral midday, cool at night
+  let sunColor = '#ffffff'
+  if (!isDay || elev <= 0) sunColor = '#8592b0'       // moonlight-ish
+  else if (effectiveElev < 0.25) sunColor = '#ffb56b' // golden hour
+  else if (effectiveElev < 0.5)  sunColor = '#ffe3b8' // warm morning/late afternoon
+
+  // Overcast/rain desaturates ambient toward cool grey
+  const overcast = sky === 'cloudy' || sky === 'rainy' || sky === 'foggy' || sky === 'stormy'
+  const ambientColor = overcast ? '#b8c4d4' : '#ffffff'
+  const ambientIntensity = isDay
+    ? (0.3 + effectiveElev * 0.3) * wFactor
+    : 0.15
+
+  const directionalIntensity = isDay
+    ? Math.max(0.15, 0.9 * effectiveElev * wFactor)
+    : 0.12
+
+  // Sun vector — push it out so shadows make sense, keep a minimum height
+  const r = 12
+  const sunX = Math.sin(azim) * r
+  const sunY = Math.max(3, effectiveElev * 10 + (isDay ? 2 : -4))
+  const sunZ = Math.cos(azim) * r
+
+  return (
+    <>
+      <ambientLight color={ambientColor} intensity={ambientIntensity} />
+      <directionalLight
+        position={[sunX, sunY, sunZ]}
+        color={sunColor}
+        intensity={directionalIntensity}
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      {/* Night hemisphere warmth so interiors aren't pitch-black */}
+      {!isDay && (
+        <hemisphereLight
+          args={['#334257', '#3f2a1a', 0.45]}
+        />
+      )}
+    </>
+  )
+}
+
 // ── Walk mode ────────────────────────────────────────────────────────────────
 // Avatar state lives in refs so the render loop can mutate without triggering
 // React renders. Only proximity HUD state is lifted into React.
@@ -703,14 +777,7 @@ function Scene({
 
   return (
     <>
-      <ambientLight intensity={0.6} />
-      <directionalLight
-        position={[5, 8, 5]}
-        intensity={0.8}
-        castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
-      />
+      <DynamicLighting weather={weather} />
 
       <Ground floorType={floor?.type} />
 
