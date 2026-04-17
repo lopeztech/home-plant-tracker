@@ -1,6 +1,5 @@
 import { useMemo, useState, useCallback, lazy, Suspense, useRef } from 'react'
 import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
-import { useNavigate } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
@@ -13,11 +12,10 @@ const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWaterRef, fullWidth = false }) {
   const {
     plants, floors, activeFloorId, setActiveFloorId,
-    weather, location, handleFloorRoomsChange,
+    weather, handleFloorRoomsChange,
     isAnalysingFloorplan, isGuest, updatePlantsLocally,
   } = usePlantContext()
 
-  const navigate = useNavigate()
   const { houseHeight } = useLayoutContext()
   const [viewMode, setViewMode] = useState('2d')
   const [saving, setSaving] = useState(false)
@@ -120,8 +118,6 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   return (
     <HouseWeatherFrame
       weather={weather}
-      location={location}
-      onLocationClick={() => navigate('/settings')}
       isOutdoor={isOutdoorFloor}
       fullWidth={fullWidth}
     >

@@ -1,11 +1,16 @@
+import { useNavigate } from 'react-router'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useLayoutContext } from '../../context/LayoutContext.jsx'
+import { usePlantContext } from '../../context/PlantContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
+import WeatherStrip from '../../components/WeatherStrip.jsx'
 import { menuItems } from './menuData.js'
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const { navMinified, toggleSetting } = useLayoutContext()
+  const { weather, location } = usePlantContext()
+  const navigate = useNavigate()
 
   const toggleSidenav = () => {
     toggleSetting('navMinified', !navMinified)
@@ -13,8 +18,11 @@ export default function Sidebar() {
 
   return (
     <aside className="app-sidebar d-flex flex-column">
-      {/* Collapse toggle + Profile area */}
-      <div className="d-none d-md-flex align-items-center justify-content-end px-3 pt-2">
+      {/* Weather strip above everything */}
+      <WeatherStrip weather={weather} location={location} onLocationClick={() => navigate('/settings')} />
+
+      {/* Collapse toggle */}
+      <div className="d-none d-md-flex align-items-center justify-content-end px-3 pt-1">
         <button type="button" className="btn btn-sm p-1 text-white-50" onClick={toggleSidenav} title="Collapse sidebar">
           <svg className="sa-icon" style={{ width: 16, height: 16 }}>
             <use href="/icons/sprite.svg#chevrons-left"></use>
