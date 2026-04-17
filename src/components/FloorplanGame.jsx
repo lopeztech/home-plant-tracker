@@ -9,14 +9,17 @@ import { getWateringStatus } from '../utils/watering.js'
 const TILE_DEFAULT = 18          // px per percent unit (world → screen)
 const TILE_MIN = 10
 const TILE_MAX = 36
-const PLAYER_RADIUS = 1.5        // percent — also used for wall collision
+const PLAYER_RADIUS = 2.4        // percent — also used for wall collision
 const WALL_THICKNESS = 1.5       // percent
 const DOOR_MIN = 5               // percent — min shared edge that counts as a doorway
-const WATER_RANGE = 6            // percent — distance you must be within to water
+const WATER_RANGE = 7            // percent — distance you must be within to water
 const SPEED = 55                 // percent per second
 // Scale the whole floorplan toward its centroid so rooms pack closer together
 // and the gardener doesn't have to walk across half the lot to reach a plant.
 const CONDENSE_FACTOR = 0.6
+// Sprite scale — bumped so the gardener and plants read as ¼-ish of a
+// condensed room (Stardew-ish proportions) instead of pebbles on a mansion floor.
+const SPRITE_SCALE = 2.0
 
 const COLORS = {
   grass:        '#7fb685',
@@ -205,6 +208,7 @@ function resolveCollision(x, y, walls, radius) {
 function drawGardener(ctx, x, y, facing, phase, pouring) {
   ctx.save()
   ctx.translate(x, y)
+  ctx.scale(SPRITE_SCALE, SPRITE_SCALE)
   const step = Math.sin(phase) * 2   // foot offset in pixels
   const bob = Math.abs(Math.sin(phase)) * 1
 
@@ -293,6 +297,13 @@ function drawGardener(ctx, x, y, facing, phase, pouring) {
 }
 
 function drawPlant(ctx, x, y, plant, color, time) {
+  // Capture a stable per-plant sway offset before overwriting local coords
+  const swayPhase = (plant.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.scale(SPRITE_SCALE, SPRITE_SCALE)
+  // From here on, the drawing code uses local coords around 0,0.
+  x = 0; y = 0
   // Status ring on the ground
   ctx.fillStyle = color
   ctx.globalAlpha = 0.55
@@ -323,7 +334,7 @@ function drawPlant(ctx, x, y, plant, color, time) {
   const species = (plant.species || '').toLowerCase()
   const isCactus = /cactus|succulent|aloe/.test(species)
   const hasFlower = /flower|rose|orchid|lily|daisy|tulip|lavender/.test(species)
-  const sway = Math.sin(time * 0.003 + x) * 1.2
+  const sway = Math.sin(time * 0.003 + swayPhase) * 1.2
 
   if (isCactus) {
     ctx.fillStyle = COLORS.leafDark
@@ -356,6 +367,7 @@ function drawPlant(ctx, x, y, plant, color, time) {
     ctx.fillStyle = '#fbbf24'
     ctx.fillRect(x + sway - 0.5, y - 14 - 0.5, 1, 1)
   }
+  ctx.restore()
 }
 
 function drawGrassTile(ctx, sx, sy, size, cam) {
