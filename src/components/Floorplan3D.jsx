@@ -164,10 +164,28 @@ function Ground({ floorType }) {
 // Avatar state lives in refs so the render loop can mutate without triggering
 // React renders. Only proximity HUD state is lifted into React.
 
-const WATER_RANGE = 0.7           // must be within this world distance to water
+const WATER_RANGE = 0.9           // must be within this world distance to water
 const WALK_SPEED = 2.5             // world units per second
-const TURN_SPEED = 2.2             // radians per second (arrow keys)
-const BOUND = 5.8                  // ground is 12x12 centred — keep the avatar inside
+const TURN_SPEED = 2.2             // radians per second
+const AVATAR_RADIUS = 0.18         // for wall/room collision
+
+// Compute an axis-aligned bounding box that encloses every visible room so
+// the avatar is clamped to the house footprint. Returns null for outdoor-only
+// or empty floors (falls back to ground bounds).
+function getRoomsBounds(rooms) {
+  if (!rooms?.length) return null
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity
+  for (const r of rooms) {
+    if (r.hidden) continue
+    minX = Math.min(minX, (r.x - 50) * SCALE)
+    maxX = Math.max(maxX, (r.x + r.width - 50) * SCALE)
+    minZ = Math.min(minZ, (r.y - 50) * SCALE)
+    maxZ = Math.max(maxZ, (r.y + r.height - 50) * SCALE)
+  }
+  if (minX === Infinity) return null
+  const pad = AVATAR_RADIUS + 0.05
+  return { minX: minX + pad, maxX: maxX - pad, minZ: minZ + pad, maxZ: maxZ - pad }
+}
 
 function Avatar({ positionRef, yawRef }) {
   const groupRef = useRef()
@@ -181,24 +199,86 @@ function Avatar({ positionRef, yawRef }) {
     <group ref={groupRef}>
       {/* Body */}
       <mesh position={[0, 0.3, 0]} castShadow>
-        <cylinderGeometry args={[0.12, 0.16, 0.6, 16]} />
+        <cylinderGeometry args={[0.14, 0.18, 0.6, 16]} />
         <meshStandardMaterial color="#3b82f6" />
       </mesh>
       {/* Head */}
-      <mesh position={[0, 0.7, 0]} castShadow>
-        <sphereGeometry args={[0.13, 16, 16]} />
+      <mesh position={[0, 0.72, 0]} castShadow>
+        <sphereGeometry args={[0.15, 16, 16]} />
         <meshStandardMaterial color="#fcd7b6" />
       </mesh>
       {/* Facing indicator — small nose cone pointing forward (-z) */}
-      <mesh position={[0, 0.7, -0.14]} rotation={[-Math.PI / 2, 0, 0]}>
-        <coneGeometry args={[0.03, 0.07, 8]} />
+      <mesh position={[0, 0.72, -0.16]} rotation={[-Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.035, 0.08, 8]} />
         <meshStandardMaterial color="#fcd7b6" />
       </mesh>
+      {/* Watering can in the avatar's hand */}
+      <group position={[0.22, 0.42, 0]}>
+        <mesh>
+          <boxGeometry args={[0.12, 0.1, 0.08]} />
+          <meshStandardMaterial color="#9ca3af" metalness={0.6} roughness={0.3} />
+        </mesh>
+        <mesh position={[0.09, 0.03, 0]} rotation={[0, 0, -0.4]}>
+          <cylinderGeometry args={[0.012, 0.018, 0.14, 8]} />
+          <meshStandardMaterial color="#9ca3af" metalness={0.6} roughness={0.3} />
+        </mesh>
+      </group>
     </group>
   )
 }
 
-function WalkController({ positionRef, yawRef, plants, onNearestChange, onWaterRequest }) {
+// Emits a short burst of droplets over a target plant.
+function WaterDroplets({ worldPos, onDone }) {
+  const groupRef = useRef()
+  const startRef = useRef(null)
+  const droplets = useMemo(() =>
+    Array.from({ length: 8 }, () => ({
+      ox: (Math.random() - 0.5) * 0.12,
+      oz: (Math.random() - 0.5) * 0.12,
+      delay: Math.random() * 0.2,
+      dur: 0.6 + Math.random() * 0.3,
+      r: 0.018 + Math.random() * 0.01,
+    })),
+  [])
+  useFrame((state) => {
+    if (startRef.current == null) startRef.current = state.clock.elapsedTime
+    const t = state.clock.elapsedTime - startRef.current
+    if (t > 1.1) onDone?.()
+  })
+  return (
+    <group ref={groupRef} position={[worldPos[0], 0, worldPos[2]]}>
+      {droplets.map((d, i) => (
+        <Drop key={i} d={d} />
+      ))}
+    </group>
+  )
+}
+
+function Drop({ d }) {
+  const ref = useRef()
+  const startRef = useRef(null)
+  useFrame((state) => {
+    if (!ref.current) return
+    if (startRef.current == null) startRef.current = state.clock.elapsedTime
+    const t = Math.max(0, state.clock.elapsedTime - startRef.current - d.delay)
+    const u = Math.min(1, t / d.dur)
+    // Start at ~0.7, fall to ground then bounce into invisibility
+    const y = 0.7 - u * 0.7
+    ref.current.position.set(d.ox, Math.max(0.02, y), d.oz)
+    ref.current.scale.setScalar(u < 1 ? 1 : 0)
+  })
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[d.r, 6, 6]} />
+      <meshBasicMaterial color="#60a5fa" transparent opacity={0.9} />
+    </mesh>
+  )
+}
+
+function WalkController({
+  positionRef, yawRef, camBackRef, joyRef,
+  bounds, plants, onNearestChange, onWaterRequest,
+}) {
   const { camera } = useThree()
   const keysRef = useRef(new Set())
   const waterPendingRef = useRef(false)
@@ -219,28 +299,38 @@ function WalkController({ positionRef, yawRef, plants, onNearestChange, onWaterR
     }
   }, [])
 
-  useFrame((_, dt) => {
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.05)  // clamp long frames so the avatar doesn't teleport
     const keys = keysRef.current
 
-    // Rotate (arrow keys or Q/E-equivalent letters; keep E for water)
+    // Rotate via keys or joystick strafe (on touch, strafe doubles as turn)
     if (keys.has('arrowleft') || keys.has('q')) yawRef.current += TURN_SPEED * dt
     if (keys.has('arrowright'))                   yawRef.current -= TURN_SPEED * dt
 
-    // Move
-    const forward = (keys.has('w') || keys.has('arrowup')   ? 1 : 0)
-                  - (keys.has('s') || keys.has('arrowdown') ? 1 : 0)
-    const strafe  = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0)
+    // Combined input: keyboard + joystick
+    const keyForward = (keys.has('w') || keys.has('arrowup')   ? 1 : 0)
+                     - (keys.has('s') || keys.has('arrowdown') ? 1 : 0)
+    const keyStrafe  = (keys.has('d') ? 1 : 0) - (keys.has('a') ? 1 : 0)
+    const forward = keyForward + (joyRef.current?.forward || 0)
+    const strafe  = keyStrafe  + (joyRef.current?.strafe  || 0)
 
     if (forward !== 0 || strafe !== 0) {
       const yaw = yawRef.current
-      // Forward is -z in the avatar's local frame (cone points -z)
       const fx = -Math.sin(yaw), fz = -Math.cos(yaw)
       const sx =  Math.cos(yaw), sz = -Math.sin(yaw)
-      let nx = positionRef.current[0] + (fx * forward + sx * strafe) * WALK_SPEED * dt
-      let nz = positionRef.current[2] + (fz * forward + sz * strafe) * WALK_SPEED * dt
-      // Clamp to ground bounds — full wall collision is a TODO
-      nx = Math.max(-BOUND, Math.min(BOUND, nx))
-      nz = Math.max(-BOUND, Math.min(BOUND, nz))
+      const magnitude = Math.min(1, Math.sqrt(forward * forward + strafe * strafe))
+      const nf = forward / (magnitude || 1), ns = strafe / (magnitude || 1)
+      const step = magnitude * WALK_SPEED * dt
+      let nx = positionRef.current[0] + (fx * nf + sx * ns) * step
+      let nz = positionRef.current[2] + (fz * nf + sz * ns) * step
+      // Clamp to house footprint (bounds) or ground (fallback)
+      if (bounds) {
+        nx = Math.max(bounds.minX, Math.min(bounds.maxX, nx))
+        nz = Math.max(bounds.minZ, Math.min(bounds.maxZ, nz))
+      } else {
+        nx = Math.max(-5.8, Math.min(5.8, nx))
+        nz = Math.max(-5.8, Math.min(5.8, nz))
+      }
       positionRef.current[0] = nx
       positionRef.current[2] = nz
     }
@@ -248,8 +338,9 @@ function WalkController({ positionRef, yawRef, plants, onNearestChange, onWaterR
     // Third-person chase camera — behind the avatar's facing direction
     const yaw = yawRef.current
     const [ax, , az] = positionRef.current
-    const camBack = 1.6
-    const camUp = 1.2
+    const camBack = camBackRef.current
+    // Scale camera height with zoom so far-out view isn't staring into the ground
+    const camUp = 0.9 + camBack * 0.35
     camera.position.set(
       ax + Math.sin(yaw) * camBack,
       camUp,
@@ -257,7 +348,7 @@ function WalkController({ positionRef, yawRef, plants, onNearestChange, onWaterR
     )
     camera.lookAt(ax, 0.5, az)
 
-    // Find nearest plant
+    // Nearest plant
     let nearest = null
     let nearestDist = Infinity
     for (const plant of plants) {
@@ -269,7 +360,6 @@ function WalkController({ positionRef, yawRef, plants, onNearestChange, onWaterR
     const inRange = nearest && nearestDist <= WATER_RANGE
     onNearestChange(inRange ? nearest : null)
 
-    // Consume water keypress if in range
     if (waterPendingRef.current) {
       waterPendingRef.current = false
       if (inRange) onWaterRequest(nearest)
@@ -279,9 +369,15 @@ function WalkController({ positionRef, yawRef, plants, onNearestChange, onWaterR
   return null
 }
 
-function Scene({ floor, plants, weather, floors, onPlantClick, onFloorplanClick, walkMode, walkRefs, onWalkNearest, onWalkWater }) {
+function Scene({
+  floor, plants, weather, floors,
+  onPlantClick, onFloorplanClick,
+  walkMode, positionRef, yawRef, camBackRef, joyRef,
+  onWalkNearest, onWalkWater,
+  droplets,
+}) {
   const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
-  const { camera } = useThree()
+  const bounds = useMemo(() => getRoomsBounds(rooms), [rooms])
 
   return (
     <>
@@ -310,6 +406,11 @@ function Scene({ floor, plants, weather, floors, onPlantClick, onFloorplanClick,
         />
       ))}
 
+      {/* Watering droplet bursts */}
+      {droplets.map((d) => (
+        <WaterDroplets key={d.id} worldPos={d.worldPos} onDone={d.onDone} />
+      ))}
+
       {/* Click ground to add plant — only in tour mode */}
       {!walkMode && (
         <mesh
@@ -331,10 +432,13 @@ function Scene({ floor, plants, weather, floors, onPlantClick, onFloorplanClick,
 
       {walkMode ? (
         <>
-          <Avatar positionRef={walkRefs.position} yawRef={walkRefs.yaw} />
+          <Avatar positionRef={positionRef} yawRef={yawRef} />
           <WalkController
-            positionRef={walkRefs.position}
-            yawRef={walkRefs.yaw}
+            positionRef={positionRef}
+            yawRef={yawRef}
+            camBackRef={camBackRef}
+            joyRef={joyRef}
+            bounds={bounds}
             plants={plants}
             onNearestChange={onWalkNearest}
             onWaterRequest={onWalkWater}
@@ -343,9 +447,9 @@ function Scene({ floor, plants, weather, floors, onPlantClick, onFloorplanClick,
       ) : (
         <OrbitControls
           maxPolarAngle={Math.PI * 0.45}
-          minPolarAngle={Math.PI * 0.1}
-          minDistance={2}
-          maxDistance={12}
+          minPolarAngle={Math.PI * 0.05}
+          minDistance={1.5}
+          maxDistance={40}
           enableDamping
           dampingFactor={0.05}
           target={[0, 0, 0]}
@@ -355,27 +459,145 @@ function Scene({ floor, plants, weather, floors, onPlantClick, onFloorplanClick,
   )
 }
 
+// ── Touch joystick (mobile) ──────────────────────────────────────────────────
+function Joystick({ joyRef }) {
+  const wrapRef = useRef(null)
+  const knobRef = useRef(null)
+  const activeRef = useRef(false)
+  const centerRef = useRef({ x: 0, y: 0 })
+  const RADIUS = 38
+
+  const setKnob = (dx, dy) => {
+    if (!knobRef.current) return
+    knobRef.current.style.transform = `translate(${dx}px, ${dy}px)`
+  }
+
+  const reset = () => {
+    activeRef.current = false
+    if (joyRef.current) { joyRef.current.forward = 0; joyRef.current.strafe = 0 }
+    setKnob(0, 0)
+  }
+
+  const handleStart = (clientX, clientY) => {
+    if (!wrapRef.current) return
+    const r = wrapRef.current.getBoundingClientRect()
+    centerRef.current = { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+    activeRef.current = true
+    handleMove(clientX, clientY)
+  }
+
+  const handleMove = (clientX, clientY) => {
+    if (!activeRef.current || !joyRef.current) return
+    let dx = clientX - centerRef.current.x
+    let dy = clientY - centerRef.current.y
+    const mag = Math.sqrt(dx * dx + dy * dy)
+    if (mag > RADIUS) { dx = dx * RADIUS / mag; dy = dy * RADIUS / mag }
+    setKnob(dx, dy)
+    // forward is -y (up on screen), strafe is +x (right)
+    joyRef.current.forward = -dy / RADIUS
+    joyRef.current.strafe  =  dx / RADIUS
+  }
+
+  return (
+    <div
+      ref={wrapRef}
+      onTouchStart={(e) => { e.preventDefault(); const t = e.touches[0]; handleStart(t.clientX, t.clientY) }}
+      onTouchMove={(e) => { e.preventDefault(); const t = e.touches[0]; handleMove(t.clientX, t.clientY) }}
+      onTouchEnd={() => reset()}
+      onTouchCancel={() => reset()}
+      onMouseDown={(e) => { e.preventDefault(); handleStart(e.clientX, e.clientY) }}
+      onMouseMove={(e) => { if (activeRef.current) handleMove(e.clientX, e.clientY) }}
+      onMouseUp={() => reset()}
+      onMouseLeave={() => reset()}
+      style={{
+        position: 'absolute', bottom: 20, left: 20, zIndex: 6,
+        width: 100, height: 100, borderRadius: '50%',
+        background: 'rgba(0,0,0,0.35)', border: '2px solid rgba(255,255,255,0.5)',
+        touchAction: 'none', userSelect: 'none',
+      }}
+    >
+      <div
+        ref={knobRef}
+        style={{
+          position: 'absolute', top: '50%', left: '50%',
+          width: 40, height: 40, marginTop: -20, marginLeft: -20,
+          borderRadius: '50%', background: 'rgba(255,255,255,0.85)',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+          transition: activeRef.current ? 'none' : 'transform 0.1s',
+          pointerEvents: 'none',
+        }}
+      />
+    </div>
+  )
+}
+
 export default function Floorplan3D({ floor, floors, plants, weather, onPlantClick, onFloorplanClick }) {
   const { handleWaterPlant } = usePlantContext()
   const [walkMode, setWalkMode] = useState(false)
   const [nearest, setNearest] = useState(null)
   const [justWatered, setJustWatered] = useState(null)
+  const [droplets, setDroplets] = useState([])
+  const wrapperRef = useRef(null)
 
-  // Mutable refs the render loop writes to without causing React renders
-  const walkRefs = useMemo(() => ({ position: [0, 0, 0], yaw: 0 }), [])
+  // Real refs the render loop mutates without re-rendering
+  const positionRef = useRef([0, 0, 0])
+  const yawRef = useRef(0)
+  const camBackRef = useRef(1.8)  // chase-camera distance; scroll wheel adjusts
+  const joyRef = useRef({ forward: 0, strafe: 0 })
 
-  const waterNearest = (plant) => {
+  // Reset avatar to the centre of the visible rooms when the floor changes
+  useEffect(() => {
+    const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
+    if (!rooms.length) {
+      positionRef.current[0] = 0
+      positionRef.current[2] = 0
+    } else {
+      const bounds = getRoomsBounds(rooms)
+      if (bounds) {
+        positionRef.current[0] = (bounds.minX + bounds.maxX) / 2
+        positionRef.current[2] = (bounds.minZ + bounds.maxZ) / 2
+      }
+    }
+    yawRef.current = 0
+  }, [floor?.id])
+
+  // Scroll-wheel zoom in walk mode
+  useEffect(() => {
+    if (!walkMode) return
+    const el = wrapperRef.current
+    if (!el) return
+    const onWheel = (e) => {
+      e.preventDefault()
+      camBackRef.current = Math.max(1.0, Math.min(8.0, camBackRef.current + e.deltaY * 0.004))
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [walkMode])
+
+  const waterPlant = (plant) => {
     if (!plant) return
     handleWaterPlant(plant.id)
     setJustWatered(plant.id)
+    // Spawn a droplet burst at the plant
+    const [px, , pz] = pctToWorld(plant.x, plant.y)
+    const id = Math.random().toString(36).slice(2)
+    setDroplets((prev) => [...prev, {
+      id,
+      worldPos: [px, 0, pz],
+      onDone: () => setDroplets((cur) => cur.filter((d) => d.id !== id)),
+    }])
     setTimeout(() => setJustWatered((id) => (id === plant.id ? null : id)), 1500)
   }
 
+  // Detect touch device to show joystick + tap-water button
+  const isTouch = typeof window !== 'undefined'
+    && ('ontouchstart' in window || navigator.maxTouchPoints > 0)
+
   return (
-    <div style={{ width: '100%', height: '100%', background: '#f1f3f5', position: 'relative' }}>
+    <div ref={wrapperRef} style={{ width: '100%', height: '100%', background: '#f1f3f5', position: 'relative' }}>
       <Canvas
         shadows
-        camera={{ position: [6, 6, 6], fov: 45 }}
+        camera={{ position: [6, 6, 6], fov: 45, near: 0.05, far: 100 }}
         gl={{ antialias: true }}
       >
         <Scene
@@ -386,9 +608,13 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           onPlantClick={onPlantClick}
           onFloorplanClick={onFloorplanClick}
           walkMode={walkMode}
-          walkRefs={walkRefs}
+          positionRef={positionRef}
+          yawRef={yawRef}
+          camBackRef={camBackRef}
+          joyRef={joyRef}
           onWalkNearest={setNearest}
-          onWalkWater={waterNearest}
+          onWalkWater={waterPlant}
+          droplets={droplets}
         />
       </Canvas>
 
@@ -410,34 +636,63 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       {/* HUD */}
       {walkMode && (
         <>
+          {!isTouch && (
+            <div
+              style={{
+                position: 'absolute', top: 10, left: 10, zIndex: 5,
+                padding: '8px 12px', borderRadius: 8,
+                background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 12, lineHeight: 1.4,
+                fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
+                maxWidth: 260,
+              }}
+            >
+              <div><strong>WASD</strong> / arrows — move &amp; turn</div>
+              <div><strong>Scroll</strong> — zoom camera</div>
+              <div><strong>E</strong> — water the plant you're next to</div>
+            </div>
+          )}
+
           <div
             style={{
-              position: 'absolute', top: 10, left: 10, zIndex: 5,
-              padding: '8px 12px', borderRadius: 8,
-              background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 12, lineHeight: 1.4,
-              fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
-              maxWidth: 260,
-            }}
-          >
-            <div><strong>WASD</strong> / arrows — move &amp; turn</div>
-            <div><strong>E</strong> — water the plant you're next to</div>
-          </div>
-          <div
-            style={{
-              position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+              position: 'absolute', bottom: isTouch ? 140 : 20, left: '50%', transform: 'translateX(-50%)',
               zIndex: 5, padding: '10px 16px', borderRadius: 999,
               background: justWatered ? 'rgba(34,197,94,0.95)' : (nearest ? 'rgba(16,185,129,0.95)' : 'rgba(0,0,0,0.5)'),
               color: '#fff', fontSize: 13, fontWeight: 600,
               fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
               transition: 'background 0.15s',
+              whiteSpace: 'nowrap',
             }}
           >
             {justWatered
               ? '💧 Watered!'
               : nearest
-                ? <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to water <strong>{nearest.name}</strong></>
+                ? (isTouch
+                    ? <>Tap 💧 to water <strong>{nearest.name}</strong></>
+                    : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to water <strong>{nearest.name}</strong></>)
                 : 'Walk up to a plant to water it'}
           </div>
+
+          {isTouch && (
+            <>
+              <Joystick joyRef={joyRef} />
+              <button
+                type="button"
+                onClick={() => waterPlant(nearest)}
+                disabled={!nearest}
+                style={{
+                  position: 'absolute', bottom: 28, right: 20, zIndex: 6,
+                  width: 78, height: 78, borderRadius: '50%',
+                  border: 'none', fontSize: 32,
+                  background: nearest ? '#10b981' : 'rgba(0,0,0,0.35)',
+                  color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  opacity: nearest ? 1 : 0.5,
+                  touchAction: 'manipulation',
+                }}
+              >
+                💧
+              </button>
+            </>
+          )}
         </>
       )}
     </div>
