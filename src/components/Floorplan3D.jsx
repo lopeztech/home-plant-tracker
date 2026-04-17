@@ -187,35 +187,74 @@ function getRoomsBounds(rooms) {
   return { minX: minX + pad, maxX: maxX - pad, minZ: minZ + pad, maxZ: maxZ - pad }
 }
 
-function Avatar({ positionRef, yawRef }) {
+function Avatar({ positionRef, yawRef, walkStateRef }) {
   const groupRef = useRef()
-  useFrame(() => {
+  const leftLegRef = useRef()
+  const rightLegRef = useRef()
+  const leftArmRef = useRef()
+  const canRef = useRef()
+
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.05)
     if (!groupRef.current) return
     const p = positionRef.current
     groupRef.current.position.set(p[0], 0, p[2])
     groupRef.current.rotation.y = yawRef.current
+
+    const s = walkStateRef.current
+    // Walk cycle: advance phase while moving, decay toward 0 when idle so
+    // legs come to rest instead of freezing mid-stride.
+    if (s.moving) {
+      s.phase += dt * 9
+      s.swingAmp = Math.min(1, s.swingAmp + dt * 4)
+    } else {
+      s.swingAmp = Math.max(0, s.swingAmp - dt * 4)
+    }
+    const swing = Math.sin(s.phase) * 0.45 * s.swingAmp
+    if (leftLegRef.current)  leftLegRef.current.rotation.x  =  swing
+    if (rightLegRef.current) rightLegRef.current.rotation.x = -swing
+    if (leftArmRef.current)  leftArmRef.current.rotation.x  = -swing * 0.8
+
+    // Pour animation — tilt the can around Z so the spout dips forward.
+    // Ramp up fast (~150 ms), hold briefly, ease back over ~500 ms.
+    if (canRef.current) {
+      const now = performance.now()
+      const elapsed = now - (s.pourStart || 0)
+      const RAMP = 150, HOLD = 250, EASE = 450, TOTAL = RAMP + HOLD + EASE
+      let tilt = 0
+      if (elapsed >= 0 && elapsed < TOTAL) {
+        if (elapsed < RAMP) tilt = elapsed / RAMP
+        else if (elapsed < RAMP + HOLD) tilt = 1
+        else tilt = 1 - (elapsed - RAMP - HOLD) / EASE
+      }
+      canRef.current.rotation.z = 0.75 * tilt
+    }
   })
+
   return (
     <group ref={groupRef}>
-      {/* Shoes */}
-      <mesh position={[-0.07, 0.03, -0.02]} castShadow>
-        <boxGeometry args={[0.09, 0.06, 0.14]} />
-        <meshStandardMaterial color="#1f2937" />
-      </mesh>
-      <mesh position={[0.07, 0.03, -0.02]} castShadow>
-        <boxGeometry args={[0.09, 0.06, 0.14]} />
-        <meshStandardMaterial color="#1f2937" />
-      </mesh>
-
-      {/* Legs (pants) */}
-      <mesh position={[-0.07, 0.22, 0]} castShadow>
-        <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
-        <meshStandardMaterial color="#334155" />
-      </mesh>
-      <mesh position={[0.07, 0.22, 0]} castShadow>
-        <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
-        <meshStandardMaterial color="#334155" />
-      </mesh>
+      {/* Left leg + shoe (pivots at hip) */}
+      <group ref={leftLegRef} position={[-0.07, 0.38, 0]}>
+        <mesh position={[0, -0.16, 0]} castShadow>
+          <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
+          <meshStandardMaterial color="#334155" />
+        </mesh>
+        <mesh position={[0, -0.35, -0.02]} castShadow>
+          <boxGeometry args={[0.09, 0.06, 0.14]} />
+          <meshStandardMaterial color="#1f2937" />
+        </mesh>
+      </group>
+      {/* Right leg + shoe */}
+      <group ref={rightLegRef} position={[0.07, 0.38, 0]}>
+        <mesh position={[0, -0.16, 0]} castShadow>
+          <cylinderGeometry args={[0.05, 0.05, 0.32, 12]} />
+          <meshStandardMaterial color="#334155" />
+        </mesh>
+        <mesh position={[0, -0.35, -0.02]} castShadow>
+          <boxGeometry args={[0.09, 0.06, 0.14]} />
+          <meshStandardMaterial color="#1f2937" />
+        </mesh>
+      </group>
 
       {/* Torso (shirt) */}
       <mesh position={[0, 0.54, 0]} castShadow>
@@ -253,8 +292,8 @@ function Avatar({ positionRef, yawRef }) {
         <meshBasicMaterial color="#7c2d12" />
       </mesh>
 
-      {/* Left arm — hangs at the side */}
-      <group position={[-0.18, 0.58, 0]} rotation={[0, 0, 0.05]}>
+      {/* Left arm — swings during walk (pivots at shoulder) */}
+      <group ref={leftArmRef} position={[-0.18, 0.58, 0]} rotation={[0, 0, 0.05]}>
         {/* Upper arm */}
         <mesh position={[0, -0.11, 0]} castShadow>
           <cylinderGeometry args={[0.035, 0.035, 0.22, 10]} />
@@ -280,7 +319,7 @@ function Avatar({ positionRef, yawRef }) {
       </group>
 
       {/* Watering can gripped by the right hand */}
-      <group position={[0.34, 0.48, -0.02]}>
+      <group ref={canRef} position={[0.34, 0.48, -0.02]}>
         {/* Body — tapered (top slightly wider than base) */}
         <mesh castShadow>
           <cylinderGeometry args={[0.075, 0.07, 0.13, 18]} />
@@ -360,14 +399,17 @@ function Drop({ d }) {
 }
 
 function WalkController({
-  positionRef, yawRef, camBackRef, joyRef,
+  positionRef, yawRef, camBackRef, joyRef, walkStateRef,
   bounds, plants, onNearestChange, onWaterRequest,
 }) {
   const { camera } = useThree()
   const keysRef = useRef(new Set())
   const waterPendingRef = useRef(false)
+  const camLookRef = useRef({ x: 0, y: 0.5, z: 0 })
+  const firstFrameRef = useRef(true)
 
   useEffect(() => {
+    firstFrameRef.current = true
     const down = (e) => {
       const k = e.key.toLowerCase()
       keysRef.current.add(k)
@@ -398,7 +440,8 @@ function WalkController({
     const forward = keyForward + (joyRef.current?.forward || 0)
     const strafe  = keyStrafe  + (joyRef.current?.strafe  || 0)
 
-    if (forward !== 0 || strafe !== 0) {
+    const hasInput = forward !== 0 || strafe !== 0
+    if (hasInput) {
       const yaw = yawRef.current
       const fx = -Math.sin(yaw), fz = -Math.cos(yaw)
       const sx =  Math.cos(yaw), sz = -Math.sin(yaw)
@@ -418,19 +461,30 @@ function WalkController({
       positionRef.current[0] = nx
       positionRef.current[2] = nz
     }
+    walkStateRef.current.moving = hasInput
 
-    // Third-person chase camera — behind the avatar's facing direction
+    // Third-person chase camera — behind the avatar's facing direction,
+    // lerped so yaw changes and scroll-zoom glide rather than snap.
     const yaw = yawRef.current
     const [ax, , az] = positionRef.current
     const camBack = camBackRef.current
-    // Scale camera height with zoom so far-out view isn't staring into the ground
     const camUp = 0.9 + camBack * 0.35
-    camera.position.set(
-      ax + Math.sin(yaw) * camBack,
-      camUp,
-      az + Math.cos(yaw) * camBack,
-    )
-    camera.lookAt(ax, 0.5, az)
+    const desiredX = ax + Math.sin(yaw) * camBack
+    const desiredZ = az + Math.cos(yaw) * camBack
+    const k = 1 - Math.exp(-dt * 10)
+    if (firstFrameRef.current) {
+      camera.position.set(desiredX, camUp, desiredZ)
+      camLookRef.current = { x: ax, y: 0.5, z: az }
+      firstFrameRef.current = false
+    } else {
+      camera.position.x += (desiredX - camera.position.x) * k
+      camera.position.y += (camUp - camera.position.y) * k
+      camera.position.z += (desiredZ - camera.position.z) * k
+      camLookRef.current.x += (ax  - camLookRef.current.x) * k
+      camLookRef.current.y += (0.5 - camLookRef.current.y) * k
+      camLookRef.current.z += (az  - camLookRef.current.z) * k
+    }
+    camera.lookAt(camLookRef.current.x, camLookRef.current.y, camLookRef.current.z)
 
     // Nearest plant
     let nearest = null
@@ -446,7 +500,10 @@ function WalkController({
 
     if (waterPendingRef.current) {
       waterPendingRef.current = false
-      if (inRange) onWaterRequest(nearest)
+      if (inRange) {
+        walkStateRef.current.pourStart = performance.now()
+        onWaterRequest(nearest)
+      }
     }
   })
 
@@ -456,7 +513,7 @@ function WalkController({
 function Scene({
   floor, plants, weather, floors,
   onPlantClick, onFloorplanClick,
-  walkMode, positionRef, yawRef, camBackRef, joyRef,
+  walkMode, positionRef, yawRef, camBackRef, joyRef, walkStateRef,
   onWalkNearest, onWalkWater,
   droplets,
 }) {
@@ -516,12 +573,13 @@ function Scene({
 
       {walkMode ? (
         <>
-          <Avatar positionRef={positionRef} yawRef={yawRef} />
+          <Avatar positionRef={positionRef} yawRef={yawRef} walkStateRef={walkStateRef} />
           <WalkController
             positionRef={positionRef}
             yawRef={yawRef}
             camBackRef={camBackRef}
             joyRef={joyRef}
+            walkStateRef={walkStateRef}
             bounds={bounds}
             plants={plants}
             onNearestChange={onWalkNearest}
@@ -628,6 +686,8 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
   const yawRef = useRef(0)
   const camBackRef = useRef(1.8)  // chase-camera distance; scroll wheel adjusts
   const joyRef = useRef({ forward: 0, strafe: 0 })
+  // Shared animation state between WalkController (writer) and Avatar (reader)
+  const walkStateRef = useRef({ moving: false, phase: 0, swingAmp: 0, pourStart: 0 })
 
   // Reset avatar to the centre of the visible rooms when the floor changes
   useEffect(() => {
@@ -662,6 +722,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     if (!plant) return
     handleWaterPlant(plant.id)
     setJustWatered(plant.id)
+    walkStateRef.current.pourStart = performance.now()
     // Spawn a droplet burst at the plant
     const [px, , pz] = pctToWorld(plant.x, plant.y)
     const id = Math.random().toString(36).slice(2)
@@ -696,6 +757,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           yawRef={yawRef}
           camBackRef={camBackRef}
           joyRef={joyRef}
+          walkStateRef={walkStateRef}
           onWalkNearest={setNearest}
           onWalkWater={waterPlant}
           droplets={droplets}
