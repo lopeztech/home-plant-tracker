@@ -83,69 +83,139 @@ function Room({ room, floorType }) {
   )
 }
 
+// Leaf colour by species keyword — defaults to bright leaf green.
+function getLeafColor(plant) {
+  const s = (plant.species || '').toLowerCase()
+  if (/cactus|succulent|aloe/.test(s))                return '#86b56c'
+  if (/tree|palm|fig|olive|eucalyptus/.test(s))       return '#2e7d32'
+  if (/herb|basil|mint|rosemary/.test(s))             return '#5aa852'
+  if (/vine|ivy|pothos|philodendron|monstera/.test(s)) return '#3f8a3f'
+  if (/grass|hedge|shrub/.test(s))                    return '#4f9f4d'
+  return '#48a148'
+}
+
 function PlantMarker({ plant, weather, floors, onClick }) {
   const { color, label } = getWateringStatus(plant, weather, floors)
   const [x, , z] = pctToWorld(plant.x, plant.y)
-  const initial = (plant.name || '?')[0].toUpperCase()
-  const meshRef = useRef()
+  const hitRef = useRef()
+  const leafColor = getLeafColor(plant)
+  const species = (plant.species || '').toLowerCase()
+  const hasFlower = /flower|rose|orchid|lily|daisy|tulip|lavender|bird of paradise/.test(species)
+  const isCactus = /cactus|succulent|aloe/.test(species)
+
+  // 5 leaves around the pot, alternating size for variation
+  const leaves = useMemo(() =>
+    Array.from({ length: 5 }, (_, i) => ({
+      angle: (i / 5) * Math.PI * 2 + Math.random() * 0.2,
+      tilt: 0.55 + (i % 2) * 0.2,
+      length: 0.38 + (i % 2) * 0.08,
+      radius: 0.06,
+    })),
+  [plant.id])
 
   return (
-    <group position={[x, 0.6, z]}>
-      <Billboard>
-        {/* Colored circle */}
-        <mesh
-          ref={meshRef}
-          onClick={(e) => { e.stopPropagation(); onClick(plant) }}
-          onPointerOver={() => { if (meshRef.current) meshRef.current.scale.set(1.2, 1.2, 1.2); document.body.style.cursor = 'pointer' }}
-          onPointerOut={() => { if (meshRef.current) meshRef.current.scale.set(1, 1, 1); document.body.style.cursor = 'default' }}
-        >
-          <circleGeometry args={[0.36, 32]} />
-          <meshBasicMaterial color={color} />
-        </mesh>
-
-        {/* Plant emoji icon */}
-        <mesh position={[0, 0, 0.001]}>
-          <circleGeometry args={[0.28, 32]} />
-          <meshBasicMaterial color="#ffffff" />
-        </mesh>
-        <Text
-          position={[0, 0, 0.002]}
-          fontSize={0.32}
-          anchorX="center"
-          anchorY="middle"
-        >
-          {getPlantEmoji(plant)}
-        </Text>
-
-        {/* Plant name label below */}
-        <Text
-          position={[0, -0.56, 0]}
-          fontSize={0.16}
-          color="#495057"
-          anchorX="center"
-          anchorY="middle"
-          maxWidth={2}
-        >
-          {plant.name}
-        </Text>
-
-        {/* Status label */}
-        <Text
-          position={[0, -0.76, 0]}
-          fontSize={0.12}
-          color={color}
-          anchorX="center"
-          anchorY="middle"
-        >
-          {label}
-        </Text>
-      </Billboard>
-
-      {/* Ground dot */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.58, 0]}>
-        <circleGeometry args={[0.12, 16]} />
-        <meshBasicMaterial color={color} transparent opacity={0.5} />
+    <group position={[x, 0, z]}>
+      {/* Urgency ring on the floor — visible from any angle */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]}>
+        <ringGeometry args={[0.3, 0.4, 32]} />
+        <meshBasicMaterial color={color} transparent opacity={0.75} />
       </mesh>
+
+      {/* Invisible hit volume (larger than the pot) so clicks are easy */}
+      <mesh
+        ref={hitRef}
+        position={[0, 0.3, 0]}
+        onClick={(e) => { e.stopPropagation(); onClick(plant) }}
+        onPointerOver={() => { document.body.style.cursor = 'pointer' }}
+        onPointerOut={() => { document.body.style.cursor = 'default' }}
+        visible={false}
+      >
+        <cylinderGeometry args={[0.45, 0.45, 1, 12]} />
+        <meshBasicMaterial transparent opacity={0} />
+      </mesh>
+
+      {/* Terracotta pot */}
+      <mesh position={[0, 0.12, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.22, 0.17, 0.26, 18]} />
+        <meshStandardMaterial color="#b86747" roughness={0.85} />
+      </mesh>
+      {/* Pot rim */}
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <torusGeometry args={[0.22, 0.022, 10, 24]} />
+        <meshStandardMaterial color="#8c4a33" roughness={0.8} />
+      </mesh>
+      {/* Soil/cap */}
+      <mesh position={[0, 0.25, 0]}>
+        <cylinderGeometry args={[0.2, 0.2, 0.02, 18]} />
+        <meshStandardMaterial color="#3a2a1b" roughness={1} />
+      </mesh>
+
+      {isCactus ? (
+        // Cactus: a tall barrel with ridges
+        <>
+          <mesh position={[0, 0.62, 0]} castShadow>
+            <cylinderGeometry args={[0.1, 0.12, 0.5, 12]} />
+            <meshStandardMaterial color={leafColor} roughness={0.9} />
+          </mesh>
+          <mesh position={[0, 0.92, 0]} castShadow>
+            <sphereGeometry args={[0.1, 12, 12]} />
+            <meshStandardMaterial color={leafColor} roughness={0.9} />
+          </mesh>
+        </>
+      ) : (
+        // Leafy plant: cones around a stem
+        <>
+          <mesh position={[0, 0.4, 0]} castShadow>
+            <cylinderGeometry args={[0.02, 0.025, 0.14, 6]} />
+            <meshStandardMaterial color="#6b4423" />
+          </mesh>
+          {leaves.map((leaf, i) => (
+            <group key={i} rotation={[0, leaf.angle, 0]}>
+              <mesh
+                position={[0.14, 0.45 + leaf.length / 2, 0]}
+                rotation={[0, 0, -leaf.tilt]}
+                castShadow
+              >
+                <coneGeometry args={[leaf.radius, leaf.length, 6]} />
+                <meshStandardMaterial color={leafColor} roughness={0.7} side={2} />
+              </mesh>
+            </group>
+          ))}
+        </>
+      )}
+
+      {/* Flower bud for flowering species */}
+      {hasFlower && (
+        <mesh position={[0, 0.78, 0]} castShadow>
+          <sphereGeometry args={[0.08, 12, 12]} />
+          <meshStandardMaterial color="#ec4899" roughness={0.6} />
+        </mesh>
+      )}
+
+      {/* Billboard name + status — floats above the plant */}
+      <group position={[0, 1.3, 0]}>
+        <Billboard>
+          <Text
+            position={[0, 0.14, 0]}
+            fontSize={0.16}
+            color="#1f2937"
+            anchorX="center"
+            anchorY="middle"
+            maxWidth={2}
+          >
+            {plant.name}
+          </Text>
+          <Text
+            position={[0, 0, 0]}
+            fontSize={0.12}
+            color={color}
+            anchorX="center"
+            anchorY="middle"
+          >
+            {label}
+          </Text>
+        </Billboard>
+      </group>
     </group>
   )
 }
