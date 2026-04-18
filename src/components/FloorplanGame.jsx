@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { usePlantContext } from '../context/PlantContext.jsx'
-import { getWateringStatus, getSeason } from '../utils/watering.js'
+import { getWateringStatus, getSeason, isOutdoor as isOutdoorPlant } from '../utils/watering.js'
 
 // ── World constants ──────────────────────────────────────────────────────────
 // The game world uses percent coordinates (same as plant.x/y and room bounds).
@@ -397,7 +397,7 @@ function spawnBird(canvasW, canvasH) {
   }
 }
 
-function updateWildlife(list, dt, plants, canvasW, canvasH, isOutdoor, birdNextRef, timeMs) {
+function updateWildlife(list, dt, plants, outdoorPlants, canvasW, canvasH, isOutdoorFloor, birdNextRef, timeMs) {
   // Top up populations
   const butterflies = list.filter((w) => w.type === 'butterfly')
   const bees = list.filter((w) => w.type === 'bee')
@@ -407,19 +407,27 @@ function updateWildlife(list, dt, plants, canvasW, canvasH, isOutdoor, birdNextR
     const b = spawnButterfly(plants); if (!b) break
     list.push(b); butterflies.push(b)
   }
-  if (isOutdoor) {
+  // Bees only spawn around outdoor plants. If there are none, despawn any
+  // bees left on screen (e.g. after switching to a fully indoor floor).
+  if (outdoorPlants.length > 0) {
     while (bees.length < 2) {
-      const b = spawnBee(plants); if (!b) break
+      const b = spawnBee(outdoorPlants); if (!b) break
       list.push(b); bees.push(b)
     }
+  } else {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].type === 'bee') list.splice(i, 1)
+    }
+  }
+  // Birds stay tied to outdoor floors
+  if (isOutdoorFloor) {
     if (timeMs > birdNextRef.current && birds.length === 0) {
       list.push(spawnBird(canvasW, canvasH))
       birdNextRef.current = timeMs + 25000 + Math.random() * 20000
     }
   } else {
-    // Despawn bees/birds when floor is indoor
     for (let i = list.length - 1; i >= 0; i--) {
-      if (list[i].type === 'bee' || list[i].type === 'bird') list.splice(i, 1)
+      if (list[i].type === 'bird') list.splice(i, 1)
     }
   }
 
@@ -439,8 +447,9 @@ function updateWildlife(list, dt, plants, canvasW, canvasH, isOutdoor, birdNextR
       c.y += (dy / d) * c.speed * dt + Math.cos(tSec * 2.5 + c.phase) * 2 * dt
       c.phase += dt * 3
     } else if (c.type === 'bee') {
+      // Bees only hover around outdoor plants
       if (!c.target || tSec > c.retargetAt) {
-        c.target = plants[Math.floor(Math.random() * plants.length)]
+        c.target = outdoorPlants[Math.floor(Math.random() * outdoorPlants.length)]
         c.retargetAt = tSec + 3 + Math.random() * 4
       }
       if (!c.target) { list.splice(i, 1); continue }
@@ -1339,23 +1348,31 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         drawPoof(ctx, sx, sy, age)
       }
 
-      // Seasonal/weather overlay — re-seed whenever the combination changes
+      // Floor-level outdoor flags (seasonal particles + birds are tied to
+      // outdoor; bees are tied to outdoor plants specifically)
+      const isOutdoorFloor = floor?.type === 'outdoor'
+                          || (gameRooms || []).some((r) => r.type === 'outdoor')
+      const outdoorPlants = gamePlants.filter((p) => isOutdoorPlant(p, floors))
+
+      // Seasonal/weather overlay — only on floors with outdoor exposure.
+      // Key includes outdoor flag so flipping floors re-seeds (or clears).
       const sky = weather?.current?.condition?.sky
       const season = getSeason(weather?.location?.lat)
-      const seasonKey = `${sky || '?'}/${season || '?'}`
+      const seasonKey = `${sky || '?'}/${season || '?'}/${isOutdoorFloor ? 'o' : 'i'}`
       if (seasonKeyRef.current !== seasonKey) {
         seasonKeyRef.current = seasonKey
-        seasonParticlesRef.current = seedSeasonalParticles(sky, season, w, h)
+        seasonParticlesRef.current = isOutdoorFloor
+          ? seedSeasonalParticles(sky, season, w, h)
+          : []
       }
       if (document.visibilityState === 'visible' && seasonParticlesRef.current.length) {
         updateSeasonalParticles(seasonParticlesRef.current, dt, w, h)
       }
 
-      // Wildlife — update + draw (skip during rain/storm or when tab hidden)
+      // Wildlife — skip during rain/storm or when tab hidden
       const allowWildlife = sky !== 'rainy' && sky !== 'stormy' && document.visibilityState === 'visible'
       if (allowWildlife && gamePlants.length) {
-        const isOutdoor = floor?.type === 'outdoor' || (gameRooms || []).some((r) => r.type === 'outdoor')
-        updateWildlife(wildlifeRef.current, dt, gamePlants, w, h, isOutdoor, birdNextRef, now)
+        updateWildlife(wildlifeRef.current, dt, gamePlants, outdoorPlants, w, h, isOutdoorFloor, birdNextRef, now)
         drawWildlife(ctx, wildlifeRef.current, worldToScreen, now)
       } else if (wildlifeRef.current.length) {
         wildlifeRef.current = []
