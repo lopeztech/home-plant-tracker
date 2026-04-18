@@ -386,9 +386,10 @@ function getLeafColor(plant) {
 }
 
 function PlantMarker({ plant, weather, floors, onClick }) {
-  const { color, label } = getWateringStatus(plant, weather, floors)
+  const { color, label, daysUntil } = getWateringStatus(plant, weather, floors)
   const [x, , z] = pctToWorld(plant.x, plant.y)
   const hitRef = useRef()
+  const foliageRef = useRef()
   const leafColor = getLeafColor(plant)
   const species = (plant.species || '').toLowerCase()
   const hasFlower = /flower|rose|orchid|lily|daisy|tulip|lavender|bird of paradise/.test(species)
@@ -403,6 +404,42 @@ function PlantMarker({ plant, weather, floors, onClick }) {
       radius: 0.06,
     })),
   [plant.id])
+
+  // Animation state — ref-only so the render loop doesn't trigger React renders.
+  // `droop`: current foliage lean (0 = upright, 0.35 = wilting).
+  // `pourStart`: timestamp of the most recent water-triggered perk animation.
+  // `lastWatered`: sentinel so we can detect the plant being watered externally.
+  const animRef = useRef({ droop: 0, pourStart: 0, lastWatered: plant.lastWatered })
+
+  // Detect a fresh water event (the PlantContext updates lastWatered on water).
+  useEffect(() => {
+    if (plant.lastWatered && plant.lastWatered !== animRef.current.lastWatered) {
+      animRef.current.pourStart = performance.now()
+      animRef.current.lastWatered = plant.lastWatered
+    }
+  }, [plant.lastWatered])
+
+  const overdue = daysUntil < 0
+  useFrame((_, rawDt) => {
+    if (!foliageRef.current) return
+    const dt = Math.min(rawDt, 0.1)
+    const s = animRef.current
+    const now = performance.now()
+    const perkElapsed = now - (s.pourStart || -Infinity)
+    const perking = perkElapsed >= 0 && perkElapsed < 800
+    // Target droop: if actively perking, force to 0 so the leaves spring up.
+    const target = perking ? 0 : (overdue ? 0.35 : 0)
+    // Exponential lerp toward target
+    s.droop += (target - s.droop) * (1 - Math.exp(-dt * 4))
+    foliageRef.current.rotation.x = s.droop
+    // Scale pulse during the first ~400 ms of a perk
+    let scale = 1
+    if (perking && perkElapsed < 400) {
+      const u = perkElapsed / 400
+      scale = 1 + Math.sin(u * Math.PI) * 0.08
+    }
+    foliageRef.current.scale.setScalar(scale)
+  })
 
   return (
     <group position={[x, 0, z]}>
@@ -441,47 +478,49 @@ function PlantMarker({ plant, weather, floors, onClick }) {
         <meshStandardMaterial color="#3a2a1b" roughness={1} />
       </mesh>
 
-      {isCactus ? (
-        // Cactus: a tall barrel with ridges
-        <>
-          <mesh position={[0, 0.62, 0]} castShadow>
-            <cylinderGeometry args={[0.1, 0.12, 0.5, 12]} />
-            <meshStandardMaterial color={leafColor} roughness={0.9} />
+      {/* Foliage pivots at the pot base so the droop animation leans the
+          whole plant forward without detaching it from the pot. */}
+      <group ref={foliageRef}>
+        {isCactus ? (
+          // Cactus: a tall barrel with ridges
+          <>
+            <mesh position={[0, 0.62, 0]} castShadow>
+              <cylinderGeometry args={[0.1, 0.12, 0.5, 12]} />
+              <meshStandardMaterial color={leafColor} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, 0.92, 0]} castShadow>
+              <sphereGeometry args={[0.1, 12, 12]} />
+              <meshStandardMaterial color={leafColor} roughness={0.9} />
+            </mesh>
+          </>
+        ) : (
+          // Leafy plant: cones around a stem
+          <>
+            <mesh position={[0, 0.4, 0]} castShadow>
+              <cylinderGeometry args={[0.02, 0.025, 0.14, 6]} />
+              <meshStandardMaterial color="#6b4423" />
+            </mesh>
+            {leaves.map((leaf, i) => (
+              <group key={i} rotation={[0, leaf.angle, 0]}>
+                <mesh
+                  position={[0.14, 0.45 + leaf.length / 2, 0]}
+                  rotation={[0, 0, -leaf.tilt]}
+                  castShadow
+                >
+                  <coneGeometry args={[leaf.radius, leaf.length, 6]} />
+                  <meshStandardMaterial color={leafColor} roughness={0.7} side={2} />
+                </mesh>
+              </group>
+            ))}
+          </>
+        )}
+        {hasFlower && (
+          <mesh position={[0, 0.78, 0]} castShadow>
+            <sphereGeometry args={[0.08, 12, 12]} />
+            <meshStandardMaterial color="#ec4899" roughness={0.6} />
           </mesh>
-          <mesh position={[0, 0.92, 0]} castShadow>
-            <sphereGeometry args={[0.1, 12, 12]} />
-            <meshStandardMaterial color={leafColor} roughness={0.9} />
-          </mesh>
-        </>
-      ) : (
-        // Leafy plant: cones around a stem
-        <>
-          <mesh position={[0, 0.4, 0]} castShadow>
-            <cylinderGeometry args={[0.02, 0.025, 0.14, 6]} />
-            <meshStandardMaterial color="#6b4423" />
-          </mesh>
-          {leaves.map((leaf, i) => (
-            <group key={i} rotation={[0, leaf.angle, 0]}>
-              <mesh
-                position={[0.14, 0.45 + leaf.length / 2, 0]}
-                rotation={[0, 0, -leaf.tilt]}
-                castShadow
-              >
-                <coneGeometry args={[leaf.radius, leaf.length, 6]} />
-                <meshStandardMaterial color={leafColor} roughness={0.7} side={2} />
-              </mesh>
-            </group>
-          ))}
-        </>
-      )}
-
-      {/* Flower bud for flowering species */}
-      {hasFlower && (
-        <mesh position={[0, 0.78, 0]} castShadow>
-          <sphereGeometry args={[0.08, 12, 12]} />
-          <meshStandardMaterial color="#ec4899" roughness={0.6} />
-        </mesh>
-      )}
+        )}
+      </group>
 
       {/* Billboard name + status — floats above the plant */}
       <group position={[0, 1.3, 0]}>
