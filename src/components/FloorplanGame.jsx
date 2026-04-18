@@ -514,17 +514,64 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const toolRef = useRef('water')
   useEffect(() => { toolRef.current = tool }, [tool])
 
+  // Lightweight progression — localStorage only, no Firestore.
+  const [stats, setStats] = useState(() => {
+    try {
+      const raw = localStorage.getItem('plantTracker_gameStats')
+      if (raw) return { xp: 0, coins: 0, streakDays: 0, lastPlayDate: null, ...JSON.parse(raw) }
+    } catch {}
+    return { xp: 0, coins: 0, streakDays: 0, lastPlayDate: null }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('plantTracker_gameStats', JSON.stringify(stats)) } catch {}
+  }, [stats])
+
+  // Floating '+X XP' pops that rise above watered plants
+  const [xpPops, setXpPops] = useState([])
+  const xpPopsRef = useRef([])
+  useEffect(() => { xpPopsRef.current = xpPops }, [xpPops])
+
   // Perform the selected tool's action on the targeted plant. Water hits the
-  // real backend; prune/fertilise are currently client-only visual pulses.
+  // real backend and awards XP + coins; prune/fertilise are client-only.
   const performAction = useCallback((plant) => {
     if (!plant) return
     const t = toolRef.current
-    if (t === 'water') handleWaterPlant(plant.id)
+
+    if (t === 'water') {
+      // Read pre-water urgency so we can reward clearing an overdue plant.
+      const pre = getWateringStatus(plant, weather, floors)
+      const wasOverdue = pre.daysUntil < 0
+
+      handleWaterPlant(plant.id)
+
+      const today = new Date().toISOString().slice(0, 10)
+      const ydate = new Date(); ydate.setDate(ydate.getDate() - 1)
+      const yesterday = ydate.toISOString().slice(0, 10)
+      const amount = 10
+      setStats((s) => {
+        let streakDays = s.streakDays
+        let lastPlayDate = s.lastPlayDate
+        if (lastPlayDate !== today) {
+          streakDays = lastPlayDate === yesterday ? streakDays + 1 : 1
+          lastPlayDate = today
+        }
+        return {
+          xp: s.xp + amount,
+          coins: s.coins + 2 + (wasOverdue ? 20 : 0),
+          streakDays,
+          lastPlayDate,
+        }
+      })
+      const popId = `xp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+      setXpPops((p) => [...p, { id: popId, plantId: plant.id, amount, at: performance.now(), bonus: wasOverdue }])
+      setTimeout(() => setXpPops((p) => p.filter((x) => x.id !== popId)), 1500)
+    }
+
     stateRef.current.pouringUntil = performance.now() + 700
     const key = plant.id + ':' + performance.now()
     setActionFlash({ tool: t, plantId: plant.id, key })
     setTimeout(() => setActionFlash((cur) => (cur?.key === key ? null : cur)), 1400)
-  }, [handleWaterPlant])
+  }, [handleWaterPlant, weather, floors])
 
   // Reset position when floor changes
   useEffect(() => {
@@ -797,6 +844,34 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         }
       }
 
+      // Floating "+10 XP" pops — drawn over everything so they read on any floor
+      if (xpPopsRef.current.length) {
+        ctx.font = '700 14px system-ui, sans-serif'
+        ctx.textAlign = 'center'
+        for (const pop of xpPopsRef.current) {
+          const p = gamePlants.find((pp) => pp.id === pop.plantId)
+          if (!p) continue
+          const age = (performance.now() - pop.at) / 1500
+          if (age < 0 || age > 1) continue
+          const [sx, sy] = worldToScreen(p.x, p.y)
+          const ty = sy - 34 - age * 36
+          ctx.globalAlpha = Math.max(0, 1 - age)
+          // Shadow for readability
+          ctx.fillStyle = 'rgba(0,0,0,0.6)'
+          ctx.fillText(`+${pop.amount} XP`, sx + 1, ty + 1)
+          ctx.fillStyle = pop.bonus ? '#fbbf24' : '#34d399'
+          ctx.fillText(`+${pop.amount} XP`, sx, ty)
+          if (pop.bonus) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'
+            ctx.fillText('+20 🪙', sx + 1, ty + 17)
+            ctx.fillStyle = '#fbbf24'
+            ctx.fillText('+20 🪙', sx, ty + 16)
+          }
+        }
+        ctx.globalAlpha = 1
+        ctx.textAlign = 'start'
+      }
+
       rafId = requestAnimationFrame(step)
     }
     rafId = requestAnimationFrame(step)
@@ -814,6 +889,24 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         ref={canvasRef}
         style={{ display: 'block', width: '100%', height: '100%', imageRendering: 'pixelated' }}
       />
+
+      {/* Top-left stats — coins · XP · streak (localStorage only) */}
+      <div
+        style={{
+          position: 'absolute', top: 10, left: 10, zIndex: 3,
+          display: 'flex', gap: 10, alignItems: 'center',
+          padding: '6px 12px', borderRadius: 999,
+          background: 'rgba(0,0,0,0.55)', color: '#fff',
+          fontFamily: 'system-ui, sans-serif', fontSize: 13, fontWeight: 600,
+          pointerEvents: 'none',
+        }}
+      >
+        <span title="Coins">🪙 {stats.coins}</span>
+        <span style={{ opacity: 0.4 }}>·</span>
+        <span title="Experience">⭐ {stats.xp}</span>
+        <span style={{ opacity: 0.4 }}>·</span>
+        <span title={`${stats.streakDays}-day streak`}>🔥 {stats.streakDays}</span>
+      </div>
 
       {/* Top-right legend */}
       <div
