@@ -203,6 +203,50 @@ function resolveCollision(x, y, walls, radius) {
   return [nx, ny]
 }
 
+// ── Weeds (mini-game) ────────────────────────────────────────────────────────
+
+const WEED_MAX = 6
+const WEED_PULL_RANGE = 4     // percent — comparable to water range
+const WEED_SPAWN_MIN_MS = 10000
+const WEED_SPAWN_MAX_MS = 22000
+
+function drawWeed(ctx, sx, sy, time, seed) {
+  const wobble = Math.sin(time / 500 + seed) * 0.08
+  ctx.save()
+  ctx.translate(sx, sy + 10)
+  ctx.rotate(wobble)
+  ctx.strokeStyle = '#2e5a2a'
+  ctx.lineWidth = 2.5
+  ctx.beginPath()
+  ctx.moveTo(-5, -4); ctx.lineTo(5, 4)
+  ctx.moveTo(-5, 4);  ctx.lineTo(5, -4)
+  ctx.stroke()
+  ctx.fillStyle = '#4a7a3b'
+  ctx.beginPath(); ctx.arc(-5, -4, 1.8, 0, Math.PI * 2); ctx.fill()
+  ctx.beginPath(); ctx.arc( 5,  4, 1.8, 0, Math.PI * 2); ctx.fill()
+  ctx.beginPath(); ctx.arc(-5,  4, 1.8, 0, Math.PI * 2); ctx.fill()
+  ctx.beginPath(); ctx.arc( 5, -4, 1.8, 0, Math.PI * 2); ctx.fill()
+  // Dark shadow base
+  ctx.fillStyle = 'rgba(0,0,0,0.25)'
+  ctx.beginPath(); ctx.ellipse(0, 5, 6, 2, 0, 0, Math.PI * 2); ctx.fill()
+  ctx.restore()
+}
+
+function drawPoof(ctx, sx, sy, age) {
+  ctx.save()
+  ctx.translate(sx, sy)
+  ctx.globalAlpha = Math.max(0, 1 - age)
+  ctx.fillStyle = '#d4b896'
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2
+    const r = 3 + age * 14
+    ctx.beginPath()
+    ctx.arc(Math.cos(a) * r, Math.sin(a) * r - age * 4, 2 - age * 1.5, 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
+}
+
 // ── Seasonal / weather particle overlay (screen space) ──────────────────────
 
 function seedSeasonalParticles(sky, season, w, h) {
@@ -890,6 +934,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   })
 
   const [nearest, setNearest] = useState(null)
+  const [weedNearby, setWeedNearby] = useState(false)
   const [actionFlash, setActionFlash] = useState(null)   // { tool, plantId } | null
   const [tool, setTool] = useState('water')
   const toolRef = useRef('water')
@@ -929,6 +974,11 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   // Seasonal + weather overlay particles (screen space)
   const seasonKeyRef = useRef(null)
   const seasonParticlesRef = useRef([])
+
+  // Weeds — spawn over time near plants; pull for +5 coins
+  const weedsRef = useRef([])
+  const poofsRef = useRef([])   // { x, y, startAt } (world coords)
+  const nextWeedAtRef = useRef(0)   // performance.now() target for next spawn
 
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
@@ -1132,9 +1182,40 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       const inRange = nearestPlant && nearestDist <= WATER_RANGE
       setNearest((cur) => (cur === (inRange ? nearestPlant : null) ? cur : (inRange ? nearestPlant : null)))
 
+      // Weed spawn — probability ramps up with time since last spawn. Cap at WEED_MAX.
+      if (gamePlants.length && now > nextWeedAtRef.current && weedsRef.current.length < WEED_MAX) {
+        const p = gamePlants[Math.floor(Math.random() * gamePlants.length)]
+        if (p) {
+          weedsRef.current.push({
+            id: 'w-' + Math.random().toString(36).slice(2, 8),
+            x: p.x + (Math.random() - 0.5) * 6,
+            y: p.y + (Math.random() - 0.5) * 6,
+            seed: Math.random() * 6,
+          })
+        }
+        nextWeedAtRef.current = now + WEED_SPAWN_MIN_MS + Math.random() * (WEED_SPAWN_MAX_MS - WEED_SPAWN_MIN_MS)
+      }
+
+      // Nearest weed — always checked so action can prefer it over a plant
+      let nearestWeed = null
+      let nearestWeedD = Infinity
+      for (const wd of weedsRef.current) {
+        const d = Math.sqrt((wd.x - s.x) ** 2 + (wd.y - s.y) ** 2)
+        if (d < nearestWeedD) { nearestWeedD = d; nearestWeed = wd }
+      }
+      const weedInRange = nearestWeed && nearestWeedD <= WEED_PULL_RANGE
+      setWeedNearby((cur) => (cur === !!weedInRange ? cur : !!weedInRange))
+
       if (s.waterPending) {
         s.waterPending = false
-        if (inRange) performAction(nearestPlant)
+        if (weedInRange) {
+          // Pull the weed — remove it, spawn a poof, reward coins
+          weedsRef.current = weedsRef.current.filter((wd) => wd.id !== nearestWeed.id)
+          poofsRef.current.push({ x: nearestWeed.x, y: nearestWeed.y, startAt: now })
+          setStats((st) => ({ ...st, coins: st.coins + 5 }))
+        } else if (inRange) {
+          performAction(nearestPlant)
+        }
       }
 
       // ── Draw ──
@@ -1222,10 +1303,13 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       ctx.textAlign = 'start'
       ctx.textBaseline = 'alphabetic'
 
-      // Depth-sorted sprites: gardener + plants, back-to-front
+      // Depth-sorted sprites: gardener + plants + weeds, back-to-front
       const sprites = []
       for (const p of gamePlants) {
         sprites.push({ kind: 'plant', wy: p.y, data: p })
+      }
+      for (const wd of weedsRef.current) {
+        sprites.push({ kind: 'weed', wy: wd.y, data: wd })
       }
       sprites.push({ kind: 'player', wy: s.y })
       sprites.sort((a, b) => a.wy - b.wy)
@@ -1237,10 +1321,22 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
           const [px, py] = worldToScreen(p.x, p.y)
           const { color } = getWateringStatus(p, weather, floors)
           drawPlant(ctx, px, py, p, color, now)
+        } else if (sp.kind === 'weed') {
+          const wd = sp.data
+          const [wx, wy] = worldToScreen(wd.x, wd.y)
+          drawWeed(ctx, wx, wy, now, wd.seed)
         } else {
           const [px, py] = worldToScreen(s.x, s.y)
           drawGardener(ctx, px, py, s.facing, s.phase, pouring, toolRef.current)
         }
+      }
+
+      // Poofs — dust when a weed is pulled, over the sprites
+      poofsRef.current = poofsRef.current.filter((p) => now - p.startAt < 600)
+      for (const pf of poofsRef.current) {
+        const age = (now - pf.startAt) / 600
+        const [sx, sy] = worldToScreen(pf.x, pf.y + 0.4)
+        drawPoof(ctx, sx, sy, age)
       }
 
       // Seasonal/weather overlay — re-seed whenever the combination changes
@@ -1403,7 +1499,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         style={{
           position: 'absolute', bottom: isTouch ? 140 : 20, left: '50%', transform: 'translateX(-50%)',
           zIndex: 3, padding: '10px 16px', borderRadius: 999,
-          background: actionFlash ? 'rgba(34,197,94,0.95)' : (nearest ? 'rgba(16,185,129,0.95)' : 'rgba(0,0,0,0.5)'),
+          background: actionFlash ? 'rgba(34,197,94,0.95)' : (weedNearby ? 'rgba(132,89,35,0.95)' : (nearest ? 'rgba(16,185,129,0.95)' : 'rgba(0,0,0,0.5)')),
           color: '#fff', fontSize: 13, fontWeight: 600,
           fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
           transition: 'background 0.15s',
@@ -1412,11 +1508,15 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       >
         {actionFlash
           ? <>{TOOLS[actionFlash.tool].emoji} {TOOLS[actionFlash.tool].verb}d!</>
-          : nearest
+          : weedNearby
             ? (isTouch
-                ? <>Tap {TOOLS[tool].emoji} to {TOOLS[tool].label} <strong>{nearest.name}</strong></>
-                : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to {TOOLS[tool].label} <strong>{nearest.name}</strong></>)
-            : `Walk up to a plant to ${TOOLS[tool].label} it`}
+                ? <>Tap 🌿 to <strong>pull weed</strong> (+5 🪙)</>
+                : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to pull <strong>weed</strong> (+5 🪙)</>)
+            : nearest
+              ? (isTouch
+                  ? <>Tap {TOOLS[tool].emoji} to {TOOLS[tool].label} <strong>{nearest.name}</strong></>
+                  : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to {TOOLS[tool].label} <strong>{nearest.name}</strong></>)
+              : `Walk up to a plant to ${TOOLS[tool].label} it`}
       </div>
 
       {/* Tool belt — three slots, click or press 1/2/3 to switch */}
