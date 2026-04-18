@@ -1088,26 +1088,38 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     setTimeout(() => setActionFlash((cur) => (cur?.key === key ? null : cur)), 1400)
   }, [handleWaterPlant, weather, floors])
 
-  // Reset position when floor changes
-  useEffect(() => {
-    const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
-    if (rooms.length) {
-      let minX = 100, maxX = 0, minY = 100, maxY = 0
-      for (const r of rooms) {
-        minX = Math.min(minX, r.x)
-        maxX = Math.max(maxX, r.x + r.width)
-        minY = Math.min(minY, r.y)
-        maxY = Math.max(maxY, r.y + r.height)
-      }
-      stateRef.current.x = (minX + maxX) / 2
-      stateRef.current.y = (minY + maxY) / 2
-    } else {
-      stateRef.current.x = 50
-      stateRef.current.y = 50
+  // Spawn at the condensed centre of the LARGEST visible room — always inside
+  // walls, unlike the bounding-box centroid which can land in an inter-room
+  // gap for irregular layouts and leave the gardener trapped outside.
+  const computeSpawn = useCallback(() => {
+    const visible = (floor?.rooms || []).filter((r) => !r.hidden)
+    if (!visible.length) return { x: 50, y: 50 }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const r of visible) {
+      minX = Math.min(minX, r.x)
+      maxX = Math.max(maxX, r.x + r.width)
+      minY = Math.min(minY, r.y)
+      maxY = Math.max(maxY, r.y + r.height)
     }
+    const cx = (minX + maxX) / 2
+    const cy = (minY + maxY) / 2
+    const largest = visible.reduce((a, b) => (a.width * a.height) >= (b.width * b.height) ? a : b)
+    const roomCx = largest.x + largest.width / 2
+    const roomCy = largest.y + largest.height / 2
+    return {
+      x: (roomCx - cx) * CONDENSE_FACTOR + cx,
+      y: (roomCy - cy) * CONDENSE_FACTOR + cy,
+    }
+  }, [floor])
+
+  // Reset position on floor change
+  useEffect(() => {
+    const spawn = computeSpawn()
+    stateRef.current.x = spawn.x
+    stateRef.current.y = spawn.y
     stateRef.current.facing = 'down'
     stateRef.current.phase = 0
-  }, [floor?.id])
+  }, [floor?.id, computeSpawn])
 
   // Scroll-wheel zoom
   useEffect(() => {
@@ -1125,13 +1137,23 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     tileRef.current = Math.max(TILE_MIN, Math.min(TILE_MAX, tileRef.current + delta))
   }, [])
 
-  // Keyboard input
+  // Keyboard input. Escape-hatch R-key respawn uses a ref so it always sees
+  // the latest spawn computation without re-binding listeners per floor.
+  const computeSpawnRef = useRef(computeSpawn)
+  useEffect(() => { computeSpawnRef.current = computeSpawn }, [computeSpawn])
+
   useEffect(() => {
     const down = (e) => {
       const k = e.key.toLowerCase()
       stateRef.current.keys.add(k)
       if (k === 'e' || k === ' ') { stateRef.current.waterPending = true; e.preventDefault() }
       if (k === 'f') { stateRef.current.pickupPending = true; e.preventDefault() }
+      if (k === 'r') {
+        // Escape hatch — if you end up outside all walls, press R to respawn.
+        const spawn = computeSpawnRef.current()
+        stateRef.current.x = spawn.x
+        stateRef.current.y = spawn.y
+      }
       if (k === '1') setTool('water')
       if (k === '2') setTool('prune')
       if (k === '3') setTool('fertilise')
@@ -1552,6 +1574,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         <div><strong>Space</strong> or <strong>E</strong> — use selected tool</div>
         <div><strong>1 / 2 / 3</strong> — pick water / prune / fertilise</div>
         <div><strong>F</strong> — pick up / drop a plant</div>
+        <div><strong>R</strong> — respawn if stuck</div>
         <div><strong>Scroll</strong> or +/− — zoom</div>
       </div>
 
