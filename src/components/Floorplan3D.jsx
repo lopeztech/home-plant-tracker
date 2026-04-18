@@ -550,6 +550,150 @@ function PlantMarker({ plant, weather, floors, onClick }) {
   )
 }
 
+// ── Outdoor decor (trees, fences, path) ──────────────────────────────────────
+
+function Tree({ seed = 0 }) {
+  const crown = 0.9 + (seed % 3) * 0.1
+  return (
+    <group>
+      {/* Trunk */}
+      <mesh position={[0, 0.5, 0]} castShadow>
+        <cylinderGeometry args={[0.08, 0.1, 1.0, 8]} />
+        <meshStandardMaterial color="#5c3317" roughness={0.95} />
+      </mesh>
+      {/* Crown — two stacked cones for a fuller silhouette */}
+      <mesh position={[0, 1.2, 0]} castShadow>
+        <coneGeometry args={[0.45 * crown, 0.7, 10]} />
+        <meshStandardMaterial color="#2e7d32" roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 1.6, 0]} castShadow>
+        <coneGeometry args={[0.35 * crown, 0.55, 10]} />
+        <meshStandardMaterial color="#357a38" roughness={0.8} />
+      </mesh>
+    </group>
+  )
+}
+
+function FencePost({ x, z }) {
+  return (
+    <mesh position={[x, 0.45, z]} castShadow>
+      <boxGeometry args={[0.06, 0.9, 0.06]} />
+      <meshStandardMaterial color="#8b6f4e" roughness={0.9} />
+    </mesh>
+  )
+}
+
+function FenceRail({ axis, v, a, b, y }) {
+  const len = b - a
+  const mid = (a + b) / 2
+  if (axis === 'x') {
+    return (
+      <mesh position={[mid, y, v]} castShadow>
+        <boxGeometry args={[len, 0.04, 0.03]} />
+        <meshStandardMaterial color="#8b6f4e" roughness={0.9} />
+      </mesh>
+    )
+  }
+  return (
+    <mesh position={[v, y, mid]} castShadow>
+      <boxGeometry args={[0.03, 0.04, len]} />
+      <meshStandardMaterial color="#8b6f4e" roughness={0.9} />
+    </mesh>
+  )
+}
+
+// Pastel dirt path running across an outdoor room — purely a ground overlay.
+function DirtPath({ room }) {
+  const cx = (room.x + room.width / 2 - 50) * SCALE
+  const cz = (room.y + room.height / 2 - 50) * SCALE
+  const long = Math.max(room.width, room.height) * SCALE * 0.6
+  const horizontal = room.width >= room.height
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0.02, cz]}>
+      {horizontal ? <planeGeometry args={[long, 0.45]} /> : <planeGeometry args={[0.45, long]} />}
+      <meshStandardMaterial color="#c9a978" roughness={1} />
+    </mesh>
+  )
+}
+
+// Fences run along each wall segment at the floor; posts at both ends + every
+// ~1.5 m in between; two horizontal rails.
+function RoomExteriorDecor({ room, walls }) {
+  const rand = seedRand(room.id || `${room.x}-${room.y}-${room.name || 'out'}`)
+  const w = room.width * SCALE
+  const d = room.height * SCALE
+  const cx = (room.x + room.width / 2 - 50) * SCALE
+  const cz = (room.y + room.height / 2 - 50) * SCALE
+
+  // Trees near the four corners, jittered inward
+  const treeCount = 2 + Math.floor(rand() * 3)
+  const corners = [
+    [-w / 2 + 0.5, -d / 2 + 0.5],
+    [ w / 2 - 0.5, -d / 2 + 0.5],
+    [-w / 2 + 0.5,  d / 2 - 0.5],
+    [ w / 2 - 0.5,  d / 2 - 0.5],
+  ]
+  const trees = Array.from({ length: treeCount }).map(() => {
+    const c = corners[Math.floor(rand() * 4)]
+    return {
+      x: cx + c[0] + (rand() - 0.5) * 0.3,
+      z: cz + c[1] + (rand() - 0.5) * 0.3,
+      seed: Math.floor(rand() * 1000),
+    }
+  })
+
+  // Only draw fence segments for walls that belong to THIS outdoor room.
+  // A wall belongs if its endpoints lie on the room's rectangle edge.
+  const myWalls = (walls || []).filter((wall) => {
+    const r = {
+      x1: (room.x - 50) * SCALE, x2: (room.x + room.width - 50) * SCALE,
+      z1: (room.y - 50) * SCALE, z2: (room.y + room.height - 50) * SCALE,
+    }
+    const eps = WALL_THICKNESS * 2
+    if (wall.axis === 'x') {
+      if (Math.abs(wall.v - r.z1) > eps && Math.abs(wall.v - r.z2) > eps) return false
+      return wall.a >= r.x1 - eps && wall.b <= r.x2 + eps
+    }
+    if (Math.abs(wall.v - r.x1) > eps && Math.abs(wall.v - r.x2) > eps) return false
+    return wall.a >= r.z1 - eps && wall.b <= r.z2 + eps
+  })
+
+  const postSpacing = 1.5
+  const fenceSegments = []
+  const fencePosts = []
+  for (const wall of myWalls) {
+    const len = wall.b - wall.a
+    if (len < 0.1) continue
+    // Two horizontal rails
+    fenceSegments.push({ ...wall, y: 0.35, key: `${wall.axis}${wall.v}${wall.a}` + '-lo' })
+    fenceSegments.push({ ...wall, y: 0.75, key: `${wall.axis}${wall.v}${wall.a}` + '-hi' })
+    // Posts
+    const n = Math.max(2, Math.ceil(len / postSpacing))
+    for (let i = 0; i <= n; i++) {
+      const t = wall.a + (len * i) / n
+      if (wall.axis === 'x') fencePosts.push({ x: t, z: wall.v, key: `${wall.axis}${wall.v}${t}` })
+      else fencePosts.push({ x: wall.v, z: t, key: `${wall.axis}${wall.v}${t}` })
+    }
+  }
+
+  return (
+    <>
+      {trees.map((t, i) => (
+        <group key={`tree-${i}`} position={[t.x, 0, t.z]}>
+          <Tree seed={t.seed} />
+        </group>
+      ))}
+      {fencePosts.map((p) => (
+        <FencePost key={`post-${p.key}`} x={p.x} z={p.z} />
+      ))}
+      {fenceSegments.map((s) => (
+        <FenceRail key={`rail-${s.key}`} axis={s.axis} v={s.v} a={s.a} b={s.b} y={s.y} />
+      ))}
+      <DirtPath room={room} />
+    </>
+  )
+}
+
 // ── Doors + windows ──────────────────────────────────────────────────────────
 
 const DOOR_FRAME_HEIGHT = 2.0
@@ -1366,6 +1510,13 @@ function Scene({
       {rooms.map((room, i) => (
         <Room key={room.id || i} room={room} floorType={floor?.type} />
       ))}
+
+      {/* Outdoor decor — trees + fences + dirt path per outdoor room */}
+      {rooms
+        .filter((r) => (r.type || floor?.type) === 'outdoor')
+        .map((r) => (
+          <RoomExteriorDecor key={`decor-${r.id || r.x}-${r.y}`} room={r} walls={walls} />
+        ))}
 
       {/* Door frames at every inferred doorway */}
       {doors.map((d, i) => (
