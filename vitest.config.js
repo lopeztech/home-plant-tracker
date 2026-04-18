@@ -13,7 +13,13 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.{js,jsx}'],
-      exclude: ['src/__tests__/**', 'src/**/*.test.*', 'src/**/*.spec.*', 'src/data/guestFloorSvgs.js'],
+      exclude: [
+        'src/__tests__/**', 'src/**/*.test.*', 'src/**/*.spec.*',
+        'src/data/guestFloorSvgs.js',
+        // Canvas/WebGL-heavy view renderers that can't be meaningfully
+        // exercised under jsdom without an HTMLCanvasElement polyfill.
+        'src/components/FloorplanGame.jsx',
+      ],
       thresholds: {
         lines: 35,
         functions: 30,
