@@ -203,6 +203,159 @@ function resolveCollision(x, y, walls, radius) {
   return [nx, ny]
 }
 
+// ── Wildlife (butterflies, bees, birds) ──────────────────────────────────────
+
+const FLOWER_RE = /flower|rose|orchid|lily|daisy|tulip|lavender/
+
+function pickFlowerTarget(plants) {
+  if (!plants?.length) return null
+  const flowers = plants.filter((p) => FLOWER_RE.test((p.species || '').toLowerCase()))
+  const pool = flowers.length ? flowers : plants
+  return pool[Math.floor(Math.random() * pool.length)]
+}
+
+function spawnButterfly(plants) {
+  const target = pickFlowerTarget(plants)
+  if (!target) return null
+  return {
+    type: 'butterfly',
+    x: target.x + (Math.random() - 0.5) * 12,
+    y: target.y + (Math.random() - 0.5) * 12,
+    color: ['#ffffff', '#fbbf24', '#93c5fd', '#f9a8d4'][Math.floor(Math.random() * 4)],
+    target,
+    phase: Math.random() * Math.PI * 2,
+    speed: 5 + Math.random() * 5,    // percent/sec
+    retargetAt: 0,
+  }
+}
+
+function spawnBee(plants) {
+  const target = plants[Math.floor(Math.random() * plants.length)]
+  if (!target) return null
+  return {
+    type: 'bee',
+    x: target.x,
+    y: target.y,
+    target,
+    phase: Math.random() * Math.PI * 2,
+    orbitR: 3 + Math.random() * 2,
+    retargetAt: 0,
+  }
+}
+
+function spawnBird(canvasW, canvasH) {
+  const leftToRight = Math.random() < 0.5
+  return {
+    type: 'bird',
+    screenSpace: true,
+    screenX: leftToRight ? -40 : canvasW + 40,
+    screenY: 30 + Math.random() * Math.min(140, canvasH * 0.3),
+    speed: (leftToRight ? 1 : -1) * (90 + Math.random() * 60),
+    phase: Math.random() * Math.PI * 2,
+  }
+}
+
+function updateWildlife(list, dt, plants, canvasW, canvasH, isOutdoor, birdNextRef, timeMs) {
+  // Top up populations
+  const butterflies = list.filter((w) => w.type === 'butterfly')
+  const bees = list.filter((w) => w.type === 'bee')
+  const birds = list.filter((w) => w.type === 'bird')
+
+  while (butterflies.length < 3) {
+    const b = spawnButterfly(plants); if (!b) break
+    list.push(b); butterflies.push(b)
+  }
+  if (isOutdoor) {
+    while (bees.length < 2) {
+      const b = spawnBee(plants); if (!b) break
+      list.push(b); bees.push(b)
+    }
+    if (timeMs > birdNextRef.current && birds.length === 0) {
+      list.push(spawnBird(canvasW, canvasH))
+      birdNextRef.current = timeMs + 25000 + Math.random() * 20000
+    }
+  } else {
+    // Despawn bees/birds when floor is indoor
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].type === 'bee' || list[i].type === 'bird') list.splice(i, 1)
+    }
+  }
+
+  const tSec = timeMs / 1000
+  for (let i = list.length - 1; i >= 0; i--) {
+    const c = list[i]
+    if (c.type === 'butterfly') {
+      if (!c.target || tSec > c.retargetAt) {
+        c.target = pickFlowerTarget(plants)
+        c.retargetAt = tSec + 4 + Math.random() * 3
+      }
+      if (!c.target) { list.splice(i, 1); continue }
+      const dx = c.target.x - c.x
+      const dy = c.target.y - c.y
+      const d = Math.sqrt(dx * dx + dy * dy) || 1
+      c.x += (dx / d) * c.speed * dt + Math.sin(tSec * 3 + c.phase) * 2 * dt
+      c.y += (dy / d) * c.speed * dt + Math.cos(tSec * 2.5 + c.phase) * 2 * dt
+      c.phase += dt * 3
+    } else if (c.type === 'bee') {
+      if (!c.target || tSec > c.retargetAt) {
+        c.target = plants[Math.floor(Math.random() * plants.length)]
+        c.retargetAt = tSec + 3 + Math.random() * 4
+      }
+      if (!c.target) { list.splice(i, 1); continue }
+      c.phase += dt * 3.5
+      c.x = c.target.x + Math.cos(c.phase) * c.orbitR + Math.sin(tSec * 9) * 0.6
+      c.y = c.target.y + Math.sin(c.phase * 1.2) * (c.orbitR * 0.6) + Math.cos(tSec * 11) * 0.6
+    } else if (c.type === 'bird') {
+      c.screenX += c.speed * dt
+      c.phase += dt * 6
+      if (c.screenX < -80 || c.screenX > canvasW + 80) list.splice(i, 1)
+    }
+  }
+}
+
+function drawWildlife(ctx, list, worldToScreen, timeMs) {
+  const t = timeMs / 1000
+  for (const c of list) {
+    if (c.type === 'bird') {
+      const flap = Math.sin(c.phase)
+      ctx.save()
+      ctx.translate(c.screenX, c.screenY)
+      if (c.speed < 0) ctx.scale(-1, 1)
+      ctx.strokeStyle = '#1f2937'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(-8, 3 + flap * 3)
+      ctx.lineTo(0, -2 + flap * -1)
+      ctx.lineTo(8, 3 + flap * 3)
+      ctx.stroke()
+      ctx.restore()
+      continue
+    }
+    const [sx, sy] = worldToScreen(c.x, c.y)
+    ctx.save()
+    ctx.translate(sx, sy)
+    if (c.type === 'butterfly') {
+      const flap = Math.sin(t * 14 + c.phase)
+      const wingW = 3 + Math.abs(flap) * 3
+      ctx.fillStyle = c.color
+      ctx.beginPath(); ctx.ellipse(-3, 0, wingW, 5, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.beginPath(); ctx.ellipse( 3, 0, wingW, 5, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#1f2937'
+      ctx.fillRect(-0.5, -3, 1, 6)
+    } else if (c.type === 'bee') {
+      ctx.fillStyle = '#fbbf24'
+      ctx.beginPath(); ctx.ellipse(0, 0, 4, 3, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.fillStyle = '#1f2937'
+      ctx.fillRect(-2, -3, 1, 6)
+      ctx.fillRect( 1, -3, 1, 6)
+      const wingFlap = 2 + Math.abs(Math.sin(t * 24)) * 2
+      ctx.fillStyle = 'rgba(255,255,255,0.55)'
+      ctx.beginPath(); ctx.ellipse(0, -2, wingFlap, 1.4, 0, 0, Math.PI * 2); ctx.fill()
+    }
+    ctx.restore()
+  }
+}
+
 // ── Minimap + waypoint ───────────────────────────────────────────────────────
 
 const MINIMAP_SIZE = 120
@@ -671,6 +824,10 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const showMapRef = useRef(showMap)
   useEffect(() => { showMapRef.current = showMap }, [showMap])
 
+  // Wildlife — butterflies/bees follow plants; birds fly across outdoor views
+  const wildlifeRef = useRef([])
+  const birdNextRef = useRef(0)
+
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
   const performAction = useCallback((plant) => {
@@ -982,6 +1139,17 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
           const [px, py] = worldToScreen(s.x, s.y)
           drawGardener(ctx, px, py, s.facing, s.phase, pouring, toolRef.current)
         }
+      }
+
+      // Wildlife — update + draw (skip during rain/storm or when tab hidden)
+      const sky = weather?.current?.condition?.sky
+      const allowWildlife = sky !== 'rainy' && sky !== 'stormy' && document.visibilityState === 'visible'
+      if (allowWildlife && gamePlants.length) {
+        const isOutdoor = floor?.type === 'outdoor' || (gameRooms || []).some((r) => r.type === 'outdoor')
+        updateWildlife(wildlifeRef.current, dt, gamePlants, w, h, isOutdoor, birdNextRef, now)
+        drawWildlife(ctx, wildlifeRef.current, worldToScreen, now)
+      } else if (wildlifeRef.current.length) {
+        wildlifeRef.current = []
       }
 
       // Waypoint + minimap overlay — only when enabled
