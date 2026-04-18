@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { Canvas, useThree, useFrame } from '@react-three/fiber'
 import { OrbitControls, Text, Billboard } from '@react-three/drei'
-import { getWateringStatus } from '../utils/watering.js'
+import * as THREE from 'three'
+import { getWateringStatus, getSeason } from '../utils/watering.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
 
 function getPlantEmoji(plant) {
@@ -1488,6 +1489,135 @@ function WalkController({
   return null
 }
 
+// ── Weather / seasonal particles in-scene ────────────────────────────────────
+
+const PARTICLE_RADIUS = 18     // world-unit half-width of the particle zone
+const PARTICLE_CEILING = 7     // where drops spawn before falling
+
+// Shared instanced-particle system. `geom` + `mat` define the look; `count` the
+// density; `behaviour` per-frame updates position + rotation of each instance.
+function ParticleCloud({ count, geom, mat, behaviour, spawner }) {
+  const meshRef = useRef()
+  const dummy = useMemo(() => new THREE.Object3D(), [])
+  const data = useMemo(
+    () => Array.from({ length: count }, () => spawner()),
+    [count, spawner],
+  )
+
+  useFrame((_, rawDt) => {
+    if (!meshRef.current) return
+    const dt = Math.min(rawDt, 0.1)
+    for (let i = 0; i < data.length; i++) {
+      behaviour(data[i], dt)
+      dummy.position.set(data[i].x, data[i].y, data[i].z)
+      dummy.rotation.set(data[i].rx || 0, data[i].ry || 0, data[i].rz || 0)
+      dummy.scale.setScalar(data[i].s || 1)
+      dummy.updateMatrix()
+      meshRef.current.setMatrixAt(i, dummy.matrix)
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true
+  })
+
+  return (
+    <instancedMesh ref={meshRef} args={[geom, mat, count]} />
+  )
+}
+
+function RainCloud() {
+  const geom = useMemo(() => new THREE.CylinderGeometry(0.012, 0.012, 0.22, 4), [])
+  const mat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#93c5fd', transparent: true, opacity: 0.75 }), [])
+  const spawner = useCallback(() => ({
+    x: (Math.random() - 0.5) * PARTICLE_RADIUS * 2,
+    y: Math.random() * PARTICLE_CEILING,
+    z: (Math.random() - 0.5) * PARTICLE_RADIUS * 2,
+    speed: 9 + Math.random() * 5,
+  }), [])
+  const behaviour = useCallback((d, dt) => {
+    d.y -= d.speed * dt
+    d.x += 0.5 * dt   // slight wind
+    if (d.y < -0.1) {
+      d.y = PARTICLE_CEILING + Math.random() * 1.5
+      d.x = (Math.random() - 0.5) * PARTICLE_RADIUS * 2
+      d.z = (Math.random() - 0.5) * PARTICLE_RADIUS * 2
+    }
+  }, [])
+  return <ParticleCloud count={140} geom={geom} mat={mat} spawner={spawner} behaviour={behaviour} />
+}
+
+function SnowCloud() {
+  const geom = useMemo(() => new THREE.SphereGeometry(0.04, 6, 6), [])
+  const mat = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.9 }), [])
+  const spawner = useCallback(() => ({
+    x: (Math.random() - 0.5) * PARTICLE_RADIUS * 2,
+    y: Math.random() * PARTICLE_CEILING,
+    z: (Math.random() - 0.5) * PARTICLE_RADIUS * 2,
+    speed: 0.8 + Math.random() * 1.2,
+    driftPhase: Math.random() * Math.PI * 2,
+    s: 0.6 + Math.random() * 1.2,
+  }), [])
+  const behaviour = useCallback((d, dt) => {
+    d.y -= d.speed * dt
+    d.driftPhase += dt
+    d.x += Math.sin(d.driftPhase) * 0.3 * dt
+    d.z += Math.cos(d.driftPhase * 1.1) * 0.2 * dt
+    if (d.y < -0.1) {
+      d.y = PARTICLE_CEILING + Math.random() * 2
+      d.x = (Math.random() - 0.5) * PARTICLE_RADIUS * 2
+      d.z = (Math.random() - 0.5) * PARTICLE_RADIUS * 2
+    }
+  }, [])
+  return <ParticleCloud count={120} geom={geom} mat={mat} spawner={spawner} behaviour={behaviour} />
+}
+
+function SeasonalCloud({ season }) {
+  const color = season === 'spring' ? '#f9a8d4'
+               : season === 'autumn' ? '#f59e0b'
+               : season === 'summer' ? '#fde68a'
+               : '#ffffff'
+  const count = season === 'autumn' ? 60 : season === 'spring' ? 50 : 30
+  const geom = useMemo(() => new THREE.PlaneGeometry(0.16, 0.09), [])
+  const mat = useMemo(
+    () => new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, roughness: 1 }),
+    [color],
+  )
+  const spawner = useCallback(() => ({
+    x: (Math.random() - 0.5) * PARTICLE_RADIUS * 2,
+    y: Math.random() * PARTICLE_CEILING,
+    z: (Math.random() - 0.5) * PARTICLE_RADIUS * 2,
+    speed: 0.5 + Math.random() * 1.0,
+    drift: (Math.random() - 0.5) * 1.5,
+    rx: Math.random() * Math.PI,
+    ry: Math.random() * Math.PI * 2,
+    rz: Math.random() * Math.PI,
+    spin: (Math.random() - 0.5) * 2,
+    s: 0.7 + Math.random() * 0.6,
+  }), [])
+  const behaviour = useCallback((d, dt) => {
+    d.y -= d.speed * dt
+    d.x += d.drift * dt
+    d.rx += d.spin * dt
+    d.ry += d.spin * dt * 0.7
+    if (d.y < -0.1) {
+      d.y = PARTICLE_CEILING + Math.random() * 2
+      d.x = (Math.random() - 0.5) * PARTICLE_RADIUS * 2
+      d.z = (Math.random() - 0.5) * PARTICLE_RADIUS * 2
+    }
+  }, [])
+  return <ParticleCloud count={count} geom={geom} mat={mat} spawner={spawner} behaviour={behaviour} />
+}
+
+// Picks which particle cloud — if any — to render based on weather and season.
+function WeatherParticles3D({ weather }) {
+  const sky = weather?.current?.condition?.sky
+  const season = getSeason(weather?.location?.lat)
+  if (sky === 'rainy' || sky === 'stormy')        return <RainCloud />
+  if (sky === 'snowy' || season === 'winter')     return <SnowCloud />
+  if (season === 'spring' || season === 'autumn' || season === 'summer') {
+    return <SeasonalCloud season={season} />
+  }
+  return null
+}
+
 function Scene({
   floor, plants, weather, floors,
   onPlantClick, onFloorplanClick,
@@ -1504,6 +1634,7 @@ function Scene({
   return (
     <>
       <DynamicLighting weather={weather} timeRef={timeRef} />
+      <WeatherParticles3D weather={weather} />
 
       <Ground floorType={floor?.type} />
 
