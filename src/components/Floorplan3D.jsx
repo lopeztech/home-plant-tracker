@@ -550,6 +550,89 @@ function PlantMarker({ plant, weather, floors, onClick }) {
   )
 }
 
+// ── Doors + windows ──────────────────────────────────────────────────────────
+
+const DOOR_FRAME_HEIGHT = 2.0
+const DOOR_FRAME_T = 0.1
+const WINDOW_HEIGHT = 0.8
+const WINDOW_WIDTH = 0.9
+const WINDOW_MIN_WALL = 2.5   // don't window tiny sub-segments
+const WINDOW_Y = 1.35
+
+function DoorFrame({ door }) {
+  const h = DOOR_FRAME_HEIGHT
+  const t = DOOR_FRAME_T
+  const mid = (door.a + door.b) / 2
+  const len = door.b - door.a
+  const mat = <meshStandardMaterial color="#5c3317" roughness={0.8} />
+  if (door.axis === 'x') {
+    const z = door.v
+    return (
+      <>
+        <mesh position={[door.a, h / 2, z]} castShadow>
+          <boxGeometry args={[t, h, t]} />{mat}
+        </mesh>
+        <mesh position={[door.b, h / 2, z]} castShadow>
+          <boxGeometry args={[t, h, t]} />{mat}
+        </mesh>
+        <mesh position={[mid, h, z]} castShadow>
+          <boxGeometry args={[len, t, t]} />{mat}
+        </mesh>
+      </>
+    )
+  }
+  const x = door.v
+  return (
+    <>
+      <mesh position={[x, h / 2, door.a]} castShadow>
+        <boxGeometry args={[t, h, t]} />{mat}
+      </mesh>
+      <mesh position={[x, h / 2, door.b]} castShadow>
+        <boxGeometry args={[t, h, t]} />{mat}
+      </mesh>
+      <mesh position={[x, h, mid]} castShadow>
+        <boxGeometry args={[t, t, len]} />{mat}
+      </mesh>
+    </>
+  )
+}
+
+// A translucent glass pane embedded in a wall segment. Only drawn on walls
+// longer than WINDOW_MIN_WALL so tiny offcuts between rooms stay solid.
+function Window({ wall }) {
+  const len = wall.b - wall.a
+  if (len < WINDOW_MIN_WALL) return null
+  const mid = (wall.a + wall.b) / 2
+  const paneT = WALL_THICKNESS + 0.02
+  if (wall.axis === 'x') {
+    return (
+      <group position={[mid, WINDOW_Y, wall.v]}>
+        <mesh>
+          <boxGeometry args={[WINDOW_WIDTH, WINDOW_HEIGHT, paneT]} />
+          <meshStandardMaterial color="#a8d8ea" transparent opacity={0.55} roughness={0.25} metalness={0.3} />
+        </mesh>
+        {/* Vertical mullion */}
+        <mesh>
+          <boxGeometry args={[0.05, WINDOW_HEIGHT, paneT + 0.01]} />
+          <meshStandardMaterial color="#5c3317" />
+        </mesh>
+      </group>
+    )
+  }
+  return (
+    <group position={[wall.v, WINDOW_Y, mid]}>
+      <mesh>
+        <boxGeometry args={[paneT, WINDOW_HEIGHT, WINDOW_WIDTH]} />
+        <meshStandardMaterial color="#a8d8ea" transparent opacity={0.55} roughness={0.25} metalness={0.3} />
+      </mesh>
+      <mesh>
+        <boxGeometry args={[paneT + 0.01, WINDOW_HEIGHT, 0.05]} />
+        <meshStandardMaterial color="#5c3317" />
+      </mesh>
+    </group>
+  )
+}
+
 function Ground({ floorType }) {
   const color = floorType === 'outdoor' ? '#e8f5e9' : '#f1f3f5'
   return (
@@ -759,9 +842,11 @@ function getRoomsBounds(rooms) {
 // any of its 4 walls gets a forced doorway punched into the middle of its
 // longest wall so the avatar can always get in.
 //
-// Returns an array of { axis, v, a, b }:
-//   axis: 'x' — wall runs along X between a..b at constant z = v
-//   axis: 'z' — wall runs along Z between a..b at constant x = v
+// Returns { walls, doors } — both arrays of { axis, v, a, b }:
+//   axis: 'x' — runs along X between a..b at constant z = v
+//   axis: 'z' — runs along Z between a..b at constant x = v
+// `walls` are the solid sub-segments (the collision set). `doors` are the
+// complementary gaps so the renderer can frame them as door openings.
 function computeWallSegments(rooms) {
   const eps = WALL_THICKNESS * 1.5
   const scaled = (rooms || [])
@@ -818,6 +903,7 @@ function computeWallSegments(rooms) {
   }
 
   const blockers = []
+  const openings = []
   for (let i = 0; i < raw.length; i++) {
     const s = raw[i]
     const doors = []
@@ -852,19 +938,22 @@ function computeWallSegments(rooms) {
     for (const [a, b] of merged) {
       if (a > cursor) blockers.push({ axis: s.axis, v: s.v, a: cursor, b: a })
       cursor = Math.max(cursor, b)
+      openings.push({ axis: s.axis, v: s.v, a, b })
     }
     if (cursor < s.b) blockers.push({ axis: s.axis, v: s.v, a: cursor, b: s.b })
   }
 
-  // Dedupe identical sub-segments produced by adjacent rooms
-  const seen = new Set()
-  const out = []
-  for (const w of blockers) {
-    const k = `${w.axis}:${w.v.toFixed(3)}:${w.a.toFixed(3)}:${w.b.toFixed(3)}`
-    if (seen.has(k)) continue
-    seen.add(k); out.push(w)
+  const dedupe = (arr) => {
+    const seen = new Set()
+    const out = []
+    for (const w of arr) {
+      const k = `${w.axis}:${w.v.toFixed(3)}:${w.a.toFixed(3)}:${w.b.toFixed(3)}`
+      if (seen.has(k)) continue
+      seen.add(k); out.push(w)
+    }
+    return out
   }
-  return out
+  return { walls: dedupe(blockers), doors: dedupe(openings) }
 }
 
 // Circle-vs-AABB slide: push the avatar out of every wall it overlaps. Axis
@@ -1266,7 +1355,7 @@ function Scene({
 }) {
   const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
   const bounds = useMemo(() => getRoomsBounds(rooms), [rooms])
-  const walls = useMemo(() => computeWallSegments(rooms), [rooms])
+  const { walls, doors } = useMemo(() => computeWallSegments(rooms), [rooms])
 
   return (
     <>
@@ -1276,6 +1365,16 @@ function Scene({
 
       {rooms.map((room, i) => (
         <Room key={room.id || i} room={room} floorType={floor?.type} />
+      ))}
+
+      {/* Door frames at every inferred doorway */}
+      {doors.map((d, i) => (
+        <DoorFrame key={`door-${i}`} door={d} />
+      ))}
+
+      {/* Windows on longer wall segments */}
+      {walls.map((w, i) => (
+        <Window key={`win-${i}`} wall={w} />
       ))}
 
       {plants.map((plant) => (
