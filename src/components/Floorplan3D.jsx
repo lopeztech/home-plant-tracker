@@ -7,23 +7,33 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import { useImageAspect } from '../hooks/useImageAspect.js'
 
-// Scale room + plant Y coords around the centre (50) so the internal square
-// world reflects the image's true proportions. X is untouched. Callers at the
-// save boundary reverse this to get back to the stored 0–100 percent space.
-function applyAspectToFloor(floor, aspect) {
-  if (!floor || aspect === 1) return floor
+// Scale room + plant coords around the centre (50). `aspect` reshapes the Y
+// axis so the square world reflects the image's true proportions (X untouched
+// when aspect ≈ 1). `factor` dilates the whole layout both ways, used in guest
+// mode so the hand-authored 100×100 grid doesn't feel cramped next to the
+// fixed-size avatar. Callers at the save boundary reverse both transforms.
+const GUEST_SCALE_FACTOR = 1.5
+
+function applyAspectToFloor(floor, aspect, factor = 1) {
+  if (!floor || (aspect === 1 && factor === 1)) return floor
   return {
     ...floor,
     rooms: (floor.rooms || []).map((r) => ({
       ...r,
-      y: (r.y - 50) / aspect + 50,
-      height: r.height / aspect,
+      x: (r.x - 50) * factor + 50,
+      y: (r.y - 50) * factor / aspect + 50,
+      width: r.width * factor,
+      height: r.height * factor / aspect,
     })),
   }
 }
-function applyAspectToPlants(plants, aspect) {
-  if (aspect === 1) return plants
-  return (plants || []).map((p) => ({ ...p, y: (p.y - 50) / aspect + 50 }))
+function applyAspectToPlants(plants, aspect, factor = 1) {
+  if (aspect === 1 && factor === 1) return plants
+  return (plants || []).map((p) => ({
+    ...p,
+    x: (p.x - 50) * factor + 50,
+    y: (p.y - 50) * factor / aspect + 50,
+  }))
 }
 
 function getPlantEmoji(plant) {
@@ -1699,7 +1709,7 @@ function WeatherParticles3D({ weather }) {
 
 function Scene({
   floor, plants, weather, floors,
-  aspect,
+  aspect, scaleFactor,
   onPlantClick, onFloorplanClick,
   walkMode, camMode,
   positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef, timeRef,
@@ -1770,9 +1780,10 @@ function Scene({
           position={[0, 0.001, 0]}
           visible={false}
           onClick={(e) => {
-            const x = e.point.x / SCALE + 50
+            const scaledX = e.point.x / SCALE + 50
             const scaledY = e.point.z / SCALE + 50
-            const y = (scaledY - 50) * aspect + 50
+            const x = (scaledX - 50) / scaleFactor + 50
+            const y = (scaledY - 50) * aspect / scaleFactor + 50
             if (x >= 2 && x <= 98 && y >= 2 && y <= 98) {
               onFloorplanClick(Math.round(x), Math.round(y))
             }
@@ -1899,10 +1910,18 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
   // When a real floorplan image is present, its aspect ratio is baked into
   // the room/plant percentages. Apply it to every coordinate we render so the
   // square world reflects the image's true proportions; reverse it at every
-  // save boundary.
+  // save boundary. Guest mode additionally dilates the layout so its compact
+  // 100×100 grid doesn't feel cramped next to the fixed-size avatar.
   const aspect = useImageAspect(floor?.imageUrl)
-  const aspectFloor = useMemo(() => applyAspectToFloor(floor, aspect), [floor, aspect])
-  const aspectPlants = useMemo(() => applyAspectToPlants(plants, aspect), [plants, aspect])
+  const scaleFactor = isGuest ? GUEST_SCALE_FACTOR : 1
+  const aspectFloor = useMemo(
+    () => applyAspectToFloor(floor, aspect, scaleFactor),
+    [floor, aspect, scaleFactor],
+  )
+  const aspectPlants = useMemo(
+    () => applyAspectToPlants(plants, aspect, scaleFactor),
+    [plants, aspect, scaleFactor],
+  )
   // Walk mode is the default 3D experience. Remember the user's choice so
   // they can turn it off once and have tour mode stick across sessions.
   const [walkMode, setWalkMode] = useState(() => {
@@ -1941,9 +1960,10 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     const id = carriedIdRef.current
     if (!id) return
     const [ax, , az] = positionRef.current
+    const scaledX = ax / SCALE + 50
     const scaledY = az / SCALE + 50
-    const newX = Math.max(0, Math.min(100, ax / SCALE + 50))
-    const newY = Math.max(0, Math.min(100, (scaledY - 50) * aspect + 50))
+    const newX = Math.max(0, Math.min(100, (scaledX - 50) / scaleFactor + 50))
+    const newY = Math.max(0, Math.min(100, (scaledY - 50) * aspect / scaleFactor + 50))
     // Find containing room for the new room assignment
     let newRoom = null
     for (const r of (floor?.rooms || [])) {
@@ -1960,7 +1980,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
     }
     setCarriedPlantId(null)
-  }, [floor, aspect, updatePlantsLocally, isGuest])
+  }, [floor, aspect, scaleFactor, updatePlantsLocally, isGuest])
   // In-world hour (0..24), starts at real wall-clock time and drifts forward
   // while the canvas is rendering so lighting evolves through the day.
   const timeRef = useRef((() => {
@@ -2015,7 +2035,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       }
     }
     yawRef.current = 0
-  }, [floor?.id, aspect])
+  }, [floor?.id, aspect, scaleFactor])
 
   // Scroll-wheel zoom in walk mode
   useEffect(() => {
@@ -2097,6 +2117,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           weather={weather}
           floors={floors}
           aspect={aspect}
+          scaleFactor={scaleFactor}
           onPlantClick={onPlantClick}
           onFloorplanClick={onFloorplanClick}
           walkMode={walkMode}

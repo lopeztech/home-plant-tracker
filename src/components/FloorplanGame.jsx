@@ -4,23 +4,33 @@ import { plantsApi } from '../api/plants.js'
 import { getWateringStatus, getSeason, isOutdoor as isOutdoorPlant } from '../utils/watering.js'
 import { useImageAspect } from '../hooks/useImageAspect.js'
 
-// Scale room + plant Y percentages around the centre (50) so the game's square
-// world reflects the floorplan image's true proportions. X is left untouched.
-// Reversed at the save boundary below.
-function applyAspectToFloor(floor, aspect) {
-  if (!floor || aspect === 1) return floor
+// Scale room + plant percentages around the centre (50). `aspect` reshapes
+// the Y axis so the square world reflects the image's true proportions.
+// `factor` dilates the whole layout both ways, used in guest mode so the
+// hand-authored 100×100 grid doesn't feel cramped next to the fixed-size
+// gardener. Reversed at the save boundary below.
+const GUEST_SCALE_FACTOR = 1.5
+
+function applyAspectToFloor(floor, aspect, factor = 1) {
+  if (!floor || (aspect === 1 && factor === 1)) return floor
   return {
     ...floor,
     rooms: (floor.rooms || []).map((r) => ({
       ...r,
-      y: (r.y - 50) / aspect + 50,
-      height: r.height / aspect,
+      x: (r.x - 50) * factor + 50,
+      y: (r.y - 50) * factor / aspect + 50,
+      width: r.width * factor,
+      height: r.height * factor / aspect,
     })),
   }
 }
-function applyAspectToPlants(plants, aspect) {
-  if (aspect === 1) return plants
-  return (plants || []).map((p) => ({ ...p, y: (p.y - 50) / aspect + 50 }))
+function applyAspectToPlants(plants, aspect, factor = 1) {
+  if (aspect === 1 && factor === 1) return plants
+  return (plants || []).map((p) => ({
+    ...p,
+    x: (p.x - 50) * factor + 50,
+    y: (p.y - 50) * factor / aspect + 50,
+  }))
 }
 
 // ── World constants ──────────────────────────────────────────────────────────
@@ -970,11 +980,19 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const { handleWaterPlant, updatePlantsLocally, isGuest } = usePlantContext()
 
   // Aspect-scale Y percentages first so the square-world assumption downstream
-  // matches the image's real proportions. Guest mode has no imageUrl → aspect 1
-  // → no change.
+  // matches the image's real proportions. Guest mode additionally dilates the
+  // whole layout so the compact 100×100 grid doesn't feel cramped next to the
+  // fixed-size gardener.
   const aspect = useImageAspect(floor?.imageUrl)
-  const aspectFloor = useMemo(() => applyAspectToFloor(floor, aspect), [floor, aspect])
-  const aspectPlants = useMemo(() => applyAspectToPlants(plants, aspect), [plants, aspect])
+  const scaleFactor = isGuest ? GUEST_SCALE_FACTOR : 1
+  const aspectFloor = useMemo(
+    () => applyAspectToFloor(floor, aspect, scaleFactor),
+    [floor, aspect, scaleFactor],
+  )
+  const aspectPlants = useMemo(
+    () => applyAspectToPlants(plants, aspect, scaleFactor),
+    [plants, aspect, scaleFactor],
+  )
 
   // Apply the condense transform once per floor/plants change and reuse the
   // shrunk world everywhere downstream (walls, rendering, collision).
@@ -1055,12 +1073,12 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     const id = carriedIdRef.current
     if (!id) return
     const s = stateRef.current
-    // uncondensePoint gives us aspect-scaled percent; then reverse the aspect
-    // transform so the saved coords live in the same 0–100 original space as
-    // the rest of the app.
+    // uncondensePoint gives us aspect-and-factor-scaled percent; then reverse
+    // both transforms so the saved coords live in the same 0–100 original
+    // space as the rest of the app.
     const { x: rawX, y: rawY } = uncondensePoint(s.x, s.y, gameRooms, CONDENSE_FACTOR)
-    const newX = Math.max(0, Math.min(100, rawX))
-    const newY = Math.max(0, Math.min(100, (rawY - 50) * aspect + 50))
+    const newX = Math.max(0, Math.min(100, (rawX - 50) / scaleFactor + 50))
+    const newY = Math.max(0, Math.min(100, (rawY - 50) * aspect / scaleFactor + 50))
     let newRoom = null
     for (const r of (floor?.rooms || [])) {
       if (r.hidden) continue
@@ -1076,7 +1094,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
     }
     setCarriedPlantId(null)
-  }, [floor, aspect, gameRooms, updatePlantsLocally, isGuest])
+  }, [floor, aspect, scaleFactor, gameRooms, updatePlantsLocally, isGuest])
 
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
