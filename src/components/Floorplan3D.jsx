@@ -603,60 +603,83 @@ const WEATHER_INTENSITY = {
   snowy:  0.75,
 }
 
-function DynamicLighting({ weather }) {
-  const sky = weather?.current?.condition?.sky || 'sunny'
-  const isDay = weather?.current?.isDay !== false
-  const now = new Date()
-  const hour = now.getHours() + now.getMinutes() / 60
+// Time compression factor: how many in-world seconds elapse per real second.
+// 30 means a full 24h cycle takes ~48 real minutes; you see visible lighting
+// drift within ~2 minutes of play.
+const TIME_SCALE = 30
 
-  // Elevation: sine that peaks at noon, negative after sunset
+// Derive everything the lights care about from a single hour value so we
+// can share the math between the frame-rate updater and any UI that wants
+// to know what "time" it is in the game world.
+function deriveLightingState(hour, sky) {
   const elev = Math.sin(((hour - 6) / 12) * Math.PI)
-  // Azimuth: east in the morning (negative X), west in the afternoon
   const azim = ((hour - 12) / 12) * Math.PI
-
   const wFactor = WEATHER_INTENSITY[sky] ?? 0.9
   const effectiveElev = Math.max(0, elev)
+  const isNight = elev <= 0
+  return { elev, azim, wFactor, effectiveElev, isNight }
+}
 
-  // Warm golden at low elevations, neutral midday, cool at night
-  let sunColor = '#ffffff'
-  if (!isDay || elev <= 0) sunColor = '#8592b0'       // moonlight-ish
-  else if (effectiveElev < 0.25) sunColor = '#ffb56b' // golden hour
-  else if (effectiveElev < 0.5)  sunColor = '#ffe3b8' // warm morning/late afternoon
+function DynamicLighting({ weather, timeRef }) {
+  const dirRef = useRef()
+  const ambRef = useRef()
+  const hemiRef = useRef()
 
-  // Overcast/rain desaturates ambient toward cool grey
-  const overcast = sky === 'cloudy' || sky === 'rainy' || sky === 'foggy' || sky === 'stormy'
-  const ambientColor = overcast ? '#b8c4d4' : '#ffffff'
-  const ambientIntensity = isDay
-    ? (0.3 + effectiveElev * 0.3) * wFactor
-    : 0.15
+  // Advance in-world time + push values straight onto the three.js light
+  // objects so the scene evolves every frame without React re-renders.
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.25)
+    timeRef.current = (timeRef.current + (dt * TIME_SCALE) / 3600 + 24) % 24
+    const hour = timeRef.current
+    const sky = weather?.current?.condition?.sky || 'sunny'
+    const { azim, wFactor, effectiveElev, isNight } = deriveLightingState(hour, sky)
 
-  const directionalIntensity = isDay
-    ? Math.max(0.15, 0.9 * effectiveElev * wFactor)
-    : 0.12
+    // Sun color by elevation
+    let sunHex = '#ffffff'
+    if (isNight) sunHex = '#8592b0'
+    else if (effectiveElev < 0.25) sunHex = '#ffb56b'
+    else if (effectiveElev < 0.5)  sunHex = '#ffe3b8'
 
-  // Sun vector — push it out so shadows make sense, keep a minimum height
-  const r = 12
-  const sunX = Math.sin(azim) * r
-  const sunY = Math.max(3, effectiveElev * 10 + (isDay ? 2 : -4))
-  const sunZ = Math.cos(azim) * r
+    const overcast = sky === 'cloudy' || sky === 'rainy' || sky === 'foggy' || sky === 'stormy'
+    const ambHex = overcast ? '#b8c4d4' : '#ffffff'
+    const ambientIntensity = !isNight
+      ? (0.3 + effectiveElev * 0.3) * wFactor
+      : 0.15
+    const directionalIntensity = !isNight
+      ? Math.max(0.15, 0.9 * effectiveElev * wFactor)
+      : 0.12
+
+    const r = 12
+    const sunX = Math.sin(azim) * r
+    const sunY = Math.max(3, effectiveElev * 10 + (isNight ? -4 : 2))
+    const sunZ = Math.cos(azim) * r
+
+    if (dirRef.current) {
+      dirRef.current.position.set(sunX, sunY, sunZ)
+      dirRef.current.color.set(sunHex)
+      dirRef.current.intensity = directionalIntensity
+    }
+    if (ambRef.current) {
+      ambRef.current.color.set(ambHex)
+      ambRef.current.intensity = ambientIntensity
+    }
+    if (hemiRef.current) {
+      hemiRef.current.intensity = isNight ? 0.45 : 0
+    }
+  })
 
   return (
     <>
-      <ambientLight color={ambientColor} intensity={ambientIntensity} />
+      <ambientLight ref={ambRef} intensity={0.5} />
       <directionalLight
-        position={[sunX, sunY, sunZ]}
-        color={sunColor}
-        intensity={directionalIntensity}
+        ref={dirRef}
+        position={[5, 8, 5]}
+        intensity={0.8}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
       />
-      {/* Night hemisphere warmth so interiors aren't pitch-black */}
-      {!isDay && (
-        <hemisphereLight
-          args={['#334257', '#3f2a1a', 0.45]}
-        />
-      )}
+      <hemisphereLight ref={hemiRef} args={['#334257', '#3f2a1a', 0]} />
     </>
   )
 }
@@ -1197,7 +1220,7 @@ function Scene({
   floor, plants, weather, floors,
   onPlantClick, onFloorplanClick,
   walkMode, camMode,
-  positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef,
+  positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef, timeRef,
   audio,
   onWalkNearest, onWalkWater,
   droplets,
@@ -1208,7 +1231,7 @@ function Scene({
 
   return (
     <>
-      <DynamicLighting weather={weather} />
+      <DynamicLighting weather={weather} timeRef={timeRef} />
 
       <Ground floorType={floor?.type} />
 
@@ -1380,6 +1403,12 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
   const joyRef = useRef({ forward: 0, strafe: 0 })
   // Shared animation state between WalkController (writer) and Avatar (reader)
   const walkStateRef = useRef({ moving: false, phase: 0, swingAmp: 0, pourStart: 0 })
+  // In-world hour (0..24), starts at real wall-clock time and drifts forward
+  // while the canvas is rendering so lighting evolves through the day.
+  const timeRef = useRef((() => {
+    const d = new Date()
+    return d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600
+  })())
 
   // First/third-person preference, persisted across sessions
   const [camMode, setCamMode] = useState(() => {
@@ -1517,6 +1546,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           camBackRef={camBackRef}
           joyRef={joyRef}
           walkStateRef={walkStateRef}
+          timeRef={timeRef}
           audio={soundOn ? audioRef.current : null}
           onWalkNearest={setNearest}
           onWalkWater={waterPlant}
