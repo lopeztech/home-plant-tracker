@@ -205,7 +205,15 @@ function resolveCollision(x, y, walls, radius) {
 
 // ── Sprite drawing ───────────────────────────────────────────────────────────
 
-function drawGardener(ctx, x, y, facing, phase, pouring) {
+const TOOLS = {
+  water:     { emoji: '💧', label: 'water',     verb: 'Water',     main: '#16a34a', dark: '#14532d', accent: '#60a5fa' },
+  prune:     { emoji: '✂️', label: 'prune',     verb: 'Prune',     main: '#dc2626', dark: '#7f1d1d', accent: '#f87171' },
+  fertilise: { emoji: '🌱', label: 'fertilise', verb: 'Fertilise', main: '#8b5a2b', dark: '#45260f', accent: '#fbbf24' },
+}
+const TOOL_ORDER = ['water', 'prune', 'fertilise']
+
+function drawGardener(ctx, x, y, facing, phase, pouring, tool = 'water') {
+  const tc = TOOLS[tool] || TOOLS.water
   ctx.save()
   ctx.translate(x, y)
   ctx.scale(SPRITE_SCALE, SPRITE_SCALE)
@@ -244,28 +252,57 @@ function drawGardener(ctx, x, y, facing, phase, pouring) {
   const armOutY = pouring ? -4 - bob : 0 - bob
   ctx.fillRect(armOutX - 3, armOutY, 3, pouring ? 6 : 9)
 
-  // Watering can in right hand
+  // Tool in right hand — shape depends on selected tool
   ctx.save()
   ctx.translate(armOutX + 2, armOutY + (pouring ? 2 : 3))
   if (pouring) ctx.rotate(-0.6)
-  ctx.fillStyle = COLORS.canGreen
-  ctx.fillRect(0, 0, 10, 9)
-  ctx.fillStyle = COLORS.canDark
-  ctx.fillRect(9, 0, 5, 3)       // spout base
-  ctx.fillRect(13, -1, 3, 3)     // spout tip
-  ctx.fillRect(0, -1, 10, 1)     // rim
-  // Handle arc
-  ctx.strokeStyle = COLORS.canDark
-  ctx.lineWidth = 1.5
-  ctx.beginPath()
-  ctx.arc(5, 0, 5, Math.PI, 0)
-  ctx.stroke()
-  // Pouring water droplets
+  if (tool === 'prune') {
+    // Pruning shears: two crossed blades
+    ctx.fillStyle = tc.main
+    ctx.fillRect(0, 2, 3, 3)       // handle ring 1
+    ctx.fillRect(0, -3, 3, 3)      // handle ring 2
+    ctx.fillStyle = '#e5e7eb'
+    ctx.fillRect(3, -1, 9, 1)
+    ctx.fillRect(3,  1, 9, 1)
+    ctx.fillStyle = tc.dark
+    ctx.fillRect(12, -1, 2, 3)     // pivot
+  } else if (tool === 'fertilise') {
+    // Feed bag: rounded sack with tie at top
+    ctx.fillStyle = tc.main
+    ctx.fillRect(0, 0, 10, 9)
+    ctx.fillStyle = tc.dark
+    ctx.fillRect(0, -1, 10, 2)
+    ctx.fillStyle = tc.accent
+    ctx.fillRect(3, 3, 4, 4)       // pellet window
+  } else {
+    // Watering can (default)
+    ctx.fillStyle = tc.main
+    ctx.fillRect(0, 0, 10, 9)
+    ctx.fillStyle = tc.dark
+    ctx.fillRect(9, 0, 5, 3)       // spout base
+    ctx.fillRect(13, -1, 3, 3)     // spout tip
+    ctx.fillRect(0, -1, 10, 1)     // rim
+    ctx.strokeStyle = tc.dark
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.arc(5, 0, 5, Math.PI, 0)
+    ctx.stroke()
+  }
+  // Pouring particles — water droplets / leaf tips / pellets
   if (pouring) {
-    ctx.fillStyle = '#60a5fa'
-    ctx.fillRect(16, 3, 1, 2)
-    ctx.fillRect(17, 6, 1, 2)
-    ctx.fillRect(18, 9, 1, 3)
+    ctx.fillStyle = tc.accent
+    if (tool === 'prune') {
+      ctx.fillRect(14, -3, 1, 1)
+      ctx.fillRect(15, -1, 1, 1)
+    } else if (tool === 'fertilise') {
+      ctx.fillRect(11, 3, 1, 1)
+      ctx.fillRect(12, 5, 1, 1)
+      ctx.fillRect(10, 7, 1, 1)
+    } else {
+      ctx.fillRect(16, 3, 1, 2)
+      ctx.fillRect(17, 6, 1, 2)
+      ctx.fillRect(18, 9, 1, 3)
+    }
   }
   ctx.restore()
 
@@ -472,14 +509,21 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   })
 
   const [nearest, setNearest] = useState(null)
-  const [justWatered, setJustWatered] = useState(null)
+  const [actionFlash, setActionFlash] = useState(null)   // { tool, plantId } | null
+  const [tool, setTool] = useState('water')
+  const toolRef = useRef('water')
+  useEffect(() => { toolRef.current = tool }, [tool])
 
-  const waterPlant = useCallback((plant) => {
+  // Perform the selected tool's action on the targeted plant. Water hits the
+  // real backend; prune/fertilise are currently client-only visual pulses.
+  const performAction = useCallback((plant) => {
     if (!plant) return
-    handleWaterPlant(plant.id)
-    setJustWatered(plant.id)
+    const t = toolRef.current
+    if (t === 'water') handleWaterPlant(plant.id)
     stateRef.current.pouringUntil = performance.now() + 700
-    setTimeout(() => setJustWatered((id) => (id === plant.id ? null : id)), 1400)
+    const key = plant.id + ':' + performance.now()
+    setActionFlash({ tool: t, plantId: plant.id, key })
+    setTimeout(() => setActionFlash((cur) => (cur?.key === key ? null : cur)), 1400)
   }, [handleWaterPlant])
 
   // Reset position when floor changes
@@ -525,6 +569,9 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       const k = e.key.toLowerCase()
       stateRef.current.keys.add(k)
       if (k === 'e' || k === ' ') { stateRef.current.waterPending = true; e.preventDefault() }
+      if (k === '1') setTool('water')
+      if (k === '2') setTool('prune')
+      if (k === '3') setTool('fertilise')
     }
     const up = (e) => stateRef.current.keys.delete(e.key.toLowerCase())
     window.addEventListener('keydown', down)
@@ -641,7 +688,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
 
       if (s.waterPending) {
         s.waterPending = false
-        if (inRange) waterPlant(nearestPlant)
+        if (inRange) performAction(nearestPlant)
       }
 
       // ── Draw ──
@@ -746,7 +793,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
           drawPlant(ctx, px, py, p, color, now)
         } else {
           const [px, py] = worldToScreen(s.x, s.y)
-          drawGardener(ctx, px, py, s.facing, s.phase, pouring)
+          drawGardener(ctx, px, py, s.facing, s.phase, pouring, toolRef.current)
         }
       }
 
@@ -759,7 +806,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       cancelAnimationFrame(rafId)
       ro.disconnect()
     }
-  }, [walls, gameRooms, gamePlants, weather, floors, floor, waterPlant])
+  }, [walls, gameRooms, gamePlants, weather, floors, floor, performAction])
 
   return (
     <div ref={wrapperRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: COLORS.grassDark }}>
@@ -779,7 +826,8 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         }}
       >
         <div><strong>WASD / arrows</strong> — move</div>
-        <div><strong>Space</strong> or <strong>E</strong> — water nearest plant</div>
+        <div><strong>Space</strong> or <strong>E</strong> — use selected tool</div>
+        <div><strong>1 / 2 / 3</strong> — pick water / prune / fertilise</div>
         <div><strong>Scroll</strong> or +/− — zoom</div>
       </div>
 
@@ -817,20 +865,57 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         style={{
           position: 'absolute', bottom: isTouch ? 140 : 20, left: '50%', transform: 'translateX(-50%)',
           zIndex: 3, padding: '10px 16px', borderRadius: 999,
-          background: justWatered ? 'rgba(34,197,94,0.95)' : (nearest ? 'rgba(16,185,129,0.95)' : 'rgba(0,0,0,0.5)'),
+          background: actionFlash ? 'rgba(34,197,94,0.95)' : (nearest ? 'rgba(16,185,129,0.95)' : 'rgba(0,0,0,0.5)'),
           color: '#fff', fontSize: 13, fontWeight: 600,
           fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
           transition: 'background 0.15s',
           whiteSpace: 'nowrap',
         }}
       >
-        {justWatered
-          ? '💧 Watered!'
+        {actionFlash
+          ? <>{TOOLS[actionFlash.tool].emoji} {TOOLS[actionFlash.tool].verb}d!</>
           : nearest
             ? (isTouch
-                ? <>Tap 💧 to water <strong>{nearest.name}</strong></>
-                : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to water <strong>{nearest.name}</strong></>)
-            : 'Walk up to a plant to water it'}
+                ? <>Tap {TOOLS[tool].emoji} to {TOOLS[tool].label} <strong>{nearest.name}</strong></>
+                : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to {TOOLS[tool].label} <strong>{nearest.name}</strong></>)
+            : `Walk up to a plant to ${TOOLS[tool].label} it`}
+      </div>
+
+      {/* Tool belt — three slots, click or press 1/2/3 to switch */}
+      <div
+        style={{
+          position: 'absolute', bottom: 20, left: isTouch ? 140 : 20, zIndex: 4,
+          display: 'flex', gap: 4, padding: 4, borderRadius: 8,
+          background: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.2)',
+        }}
+      >
+        {TOOL_ORDER.map((key, i) => {
+          const active = tool === key
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTool(key)}
+              title={`${TOOLS[key].verb} (${i + 1})`}
+              style={{
+                position: 'relative',
+                width: 44, height: 44, borderRadius: 6,
+                border: active ? '2px solid #fbbf24' : '1px solid rgba(255,255,255,0.2)',
+                background: active ? 'rgba(251,191,36,0.2)' : 'rgba(255,255,255,0.08)',
+                color: '#fff', fontSize: 22, cursor: 'pointer',
+                touchAction: 'manipulation',
+              }}
+            >
+              {TOOLS[key].emoji}
+              <span
+                style={{
+                  position: 'absolute', bottom: 1, right: 3,
+                  fontSize: 9, fontWeight: 700, color: 'rgba(255,255,255,0.7)',
+                }}
+              >{i + 1}</span>
+            </button>
+          )
+        })}
       </div>
 
       {/* Mobile controls */}
@@ -862,7 +947,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
           </div>
           <button
             type="button"
-            onClick={() => nearest && waterPlant(nearest)}
+            onClick={() => nearest && performAction(nearest)}
             disabled={!nearest}
             style={{
               position: 'absolute', bottom: 28, right: 20, zIndex: 4,
@@ -874,7 +959,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
               touchAction: 'manipulation',
             }}
           >
-            💧
+            {TOOLS[tool].emoji}
           </button>
         </>
       )}
