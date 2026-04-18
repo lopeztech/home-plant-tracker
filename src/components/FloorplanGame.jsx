@@ -10,9 +10,12 @@ import { getWateringStatus, getSeason, isOutdoor as isOutdoorPlant } from '../ut
 const TILE_DEFAULT = 12          // px per percent unit (world → screen) — starts zoomed out
 const TILE_MIN = 6
 const TILE_MAX = 36
-const PLAYER_RADIUS = 2.4        // percent — also used for wall collision
-const WALL_THICKNESS = 1.5       // percent
-const DOOR_MIN = 5               // percent — min shared edge that counts as a doorway
+// Collision circle — deliberately smaller than the visible sprite so the
+// gardener can fit through condensed doorways (with DOOR_MIN = 6, a 6%
+// gap minus 2×PLAYER_RADIUS = 3% of wiggle room instead of near-zero).
+const PLAYER_RADIUS = 1.5        // percent — also used for wall collision
+const WALL_THICKNESS = 1.2       // percent (slimmed so doorposts aren't as catchy)
+const DOOR_MIN = 6               // percent — min shared edge that counts as a doorway
 const WATER_RANGE = 7            // percent — distance you must be within to water
 const SPEED = 55                 // percent per second
 // Scale the whole floorplan toward its centroid so rooms pack closer together
