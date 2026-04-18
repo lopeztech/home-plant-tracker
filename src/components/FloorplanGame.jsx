@@ -1,5 +1,6 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { usePlantContext } from '../context/PlantContext.jsx'
+import { plantsApi } from '../api/plants.js'
 import { getWateringStatus, getSeason, isOutdoor as isOutdoorPlant } from '../utils/watering.js'
 
 // ── World constants ──────────────────────────────────────────────────────────
@@ -45,6 +46,27 @@ const COLORS = {
   leafBright:   '#4caf50',
   leafDark:     '#2e7d32',
   flowerPink:   '#ec4899',
+}
+
+// Invert the condense transform — turn a condensed-space point back into
+// original percent coordinates. Uses the bounding-box centroid, which is
+// centroid-preserving across the transform (passing gameRooms works too).
+function uncondensePoint(x, y, rooms, factor) {
+  const visible = (rooms || []).filter((r) => !r.hidden)
+  if (!visible.length || factor === 1) return { x, y }
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const r of visible) {
+    minX = Math.min(minX, r.x)
+    maxX = Math.max(maxX, r.x + r.width)
+    minY = Math.min(minY, r.y)
+    maxY = Math.max(maxY, r.y + r.height)
+  }
+  const cx = (minX + maxX) / 2
+  const cy = (minY + maxY) / 2
+  return {
+    x: (x - cx) / factor + cx,
+    y: (y - cy) / factor + cy,
+  }
 }
 
 // Shrink every room (and every plant inside) toward the overall layout
@@ -922,7 +944,7 @@ function drawGrassTile(ctx, sx, sy, size, cam) {
 export default function FloorplanGame({ floor, floors, plants, weather, onPlantClick }) {
   const canvasRef = useRef(null)
   const wrapperRef = useRef(null)
-  const { handleWaterPlant } = usePlantContext()
+  const { handleWaterPlant, updatePlantsLocally, isGuest } = usePlantContext()
 
   // Apply the condense transform once per floor/plants change and reuse the
   // shrunk world everywhere downstream (walls, rendering, collision).
@@ -988,6 +1010,41 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const weedsRef = useRef([])
   const poofsRef = useRef([])   // { x, y, startAt } (world coords)
   const nextWeedAtRef = useRef(0)   // performance.now() target for next spawn
+
+  // Plant pickup — React state (for HUD) + ref (for frame-loop reads)
+  const [carriedPlantId, setCarriedPlantId] = useState(null)
+  const carriedIdRef = useRef(null)
+  useEffect(() => { carriedIdRef.current = carriedPlantId }, [carriedPlantId])
+
+  const pickupPlant = useCallback((plant) => {
+    if (!plant) return
+    setCarriedPlantId(plant.id)
+  }, [])
+
+  const dropPlant = useCallback(() => {
+    const id = carriedIdRef.current
+    if (!id) return
+    const s = stateRef.current
+    // Translate the gardener's condensed-world position back to original percent
+    const { x: rawX, y: rawY } = uncondensePoint(s.x, s.y, gameRooms, CONDENSE_FACTOR)
+    const newX = Math.max(0, Math.min(100, rawX))
+    const newY = Math.max(0, Math.min(100, rawY))
+    let newRoom = null
+    for (const r of (floor?.rooms || [])) {
+      if (r.hidden) continue
+      if (newX >= r.x && newX <= r.x + r.width && newY >= r.y && newY <= r.y + r.height) {
+        newRoom = r.name
+        break
+      }
+    }
+    const updates = { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
+    if (newRoom) updates.room = newRoom
+    updatePlantsLocally({ [id]: updates })
+    if (!isGuest) {
+      plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
+    }
+    setCarriedPlantId(null)
+  }, [floor, gameRooms, updatePlantsLocally, isGuest])
 
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
@@ -1074,6 +1131,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       const k = e.key.toLowerCase()
       stateRef.current.keys.add(k)
       if (k === 'e' || k === ' ') { stateRef.current.waterPending = true; e.preventDefault() }
+      if (k === 'f') { stateRef.current.pickupPending = true; e.preventDefault() }
       if (k === '1') setTool('water')
       if (k === '2') setTool('prune')
       if (k === '3') setTool('fertilise')
@@ -1217,13 +1275,24 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
 
       if (s.waterPending) {
         s.waterPending = false
-        if (weedInRange) {
+        if (carriedIdRef.current) {
+          // Can't use a tool while hands are full; ignore.
+        } else if (weedInRange) {
           // Pull the weed — remove it, spawn a poof, reward coins
           weedsRef.current = weedsRef.current.filter((wd) => wd.id !== nearestWeed.id)
           poofsRef.current.push({ x: nearestWeed.x, y: nearestWeed.y, startAt: now })
           setStats((st) => ({ ...st, coins: st.coins + 5 }))
         } else if (inRange) {
           performAction(nearestPlant)
+        }
+      }
+
+      if (s.pickupPending) {
+        s.pickupPending = false
+        if (carriedIdRef.current) {
+          dropPlant()
+        } else if (inRange) {
+          pickupPlant(nearestPlant)
         }
       }
 
@@ -1312,9 +1381,12 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       ctx.textAlign = 'start'
       ctx.textBaseline = 'alphabetic'
 
-      // Depth-sorted sprites: gardener + plants + weeds, back-to-front
+      // Depth-sorted sprites: gardener + plants + weeds, back-to-front.
+      // Carried plant is skipped here and re-drawn attached to the gardener.
+      const carriedId = carriedIdRef.current
       const sprites = []
       for (const p of gamePlants) {
+        if (p.id === carriedId) continue
         sprites.push({ kind: 'plant', wy: p.y, data: p })
       }
       for (const wd of weedsRef.current) {
@@ -1346,6 +1418,17 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         const age = (now - pf.startAt) / 600
         const [sx, sy] = worldToScreen(pf.x, pf.y + 0.4)
         drawPoof(ctx, sx, sy, age)
+      }
+
+      // Carried plant — draw just above the gardener's head with a small bob
+      if (carriedId) {
+        const carried = gamePlants.find((p) => p.id === carriedId)
+        if (carried) {
+          const [gx, gy] = worldToScreen(s.x, s.y)
+          const bob = Math.sin(now / 300) * 2
+          const { color } = getWateringStatus(carried, weather, floors)
+          drawPlant(ctx, gx, gy - 68 + bob, carried, color, now)
+        }
       }
 
       // Floor-level outdoor flags (seasonal particles + birds are tied to
@@ -1428,7 +1511,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       cancelAnimationFrame(rafId)
       ro.disconnect()
     }
-  }, [walls, gameRooms, gamePlants, weather, floors, floor, performAction])
+  }, [walls, gameRooms, gamePlants, weather, floors, floor, performAction, pickupPlant, dropPlant])
 
   return (
     <div ref={wrapperRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: COLORS.grassDark }}>
@@ -1468,6 +1551,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         <div><strong>WASD / arrows</strong> — move</div>
         <div><strong>Space</strong> or <strong>E</strong> — use selected tool</div>
         <div><strong>1 / 2 / 3</strong> — pick water / prune / fertilise</div>
+        <div><strong>F</strong> — pick up / drop a plant</div>
         <div><strong>Scroll</strong> or +/− — zoom</div>
       </div>
 
@@ -1512,29 +1596,47 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       </div>
 
       {/* Bottom-centre prompt */}
-      <div
-        style={{
-          position: 'absolute', bottom: isTouch ? 140 : 20, left: '50%', transform: 'translateX(-50%)',
-          zIndex: 3, padding: '10px 16px', borderRadius: 999,
-          background: actionFlash ? 'rgba(34,197,94,0.95)' : (weedNearby ? 'rgba(132,89,35,0.95)' : (nearest ? 'rgba(16,185,129,0.95)' : 'rgba(0,0,0,0.5)')),
-          color: '#fff', fontSize: 13, fontWeight: 600,
-          fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
-          transition: 'background 0.15s',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {actionFlash
-          ? <>{TOOLS[actionFlash.tool].emoji} {TOOLS[actionFlash.tool].verb}d!</>
-          : weedNearby
-            ? (isTouch
-                ? <>Tap 🌿 to <strong>pull weed</strong> (+5 🪙)</>
-                : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to pull <strong>weed</strong> (+5 🪙)</>)
-            : nearest
-              ? (isTouch
-                  ? <>Tap {TOOLS[tool].emoji} to {TOOLS[tool].label} <strong>{nearest.name}</strong></>
-                  : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to {TOOLS[tool].label} <strong>{nearest.name}</strong></>)
-              : `Walk up to a plant to ${TOOLS[tool].label} it`}
-      </div>
+      {(() => {
+        const carried = carriedPlantId ? (plants || []).find((p) => p.id === carriedPlantId) : null
+        const bg = actionFlash
+          ? 'rgba(34,197,94,0.95)'
+          : carried
+            ? 'rgba(120,53,15,0.95)'
+            : weedNearby
+              ? 'rgba(132,89,35,0.95)'
+              : nearest
+                ? 'rgba(16,185,129,0.95)'
+                : 'rgba(0,0,0,0.5)'
+        return (
+          <div
+            style={{
+              position: 'absolute', bottom: isTouch ? 140 : 20, left: '50%', transform: 'translateX(-50%)',
+              zIndex: 3, padding: '10px 16px', borderRadius: 999,
+              background: bg,
+              color: '#fff', fontSize: 13, fontWeight: 600,
+              fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
+              transition: 'background 0.15s',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {actionFlash
+              ? <>{TOOLS[actionFlash.tool].emoji} {TOOLS[actionFlash.tool].verb}d!</>
+              : carried
+                ? (isTouch
+                    ? <>Tap 📥 to drop <strong>{carried.name}</strong> here</>
+                    : <>Carrying <strong>{carried.name}</strong> — press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>F</kbd> to drop here</>)
+                : weedNearby
+                  ? (isTouch
+                      ? <>Tap 🌿 to <strong>pull weed</strong> (+5 🪙)</>
+                      : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to pull <strong>weed</strong> (+5 🪙)</>)
+                  : nearest
+                    ? (isTouch
+                        ? <>Tap {TOOLS[tool].emoji} to {TOOLS[tool].label} · 🫳 to pick up <strong>{nearest.name}</strong></>
+                        : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> {TOOLS[tool].label} · <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>F</kbd> carry <strong>{nearest.name}</strong></>)
+                    : `Walk up to a plant to ${TOOLS[tool].label} it`}
+          </div>
+        )
+      })()}
 
       {/* Tool belt — three slots, click or press 1/2/3 to switch */}
       <div
@@ -1602,19 +1704,40 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
           </div>
           <button
             type="button"
-            onClick={() => nearest && performAction(nearest)}
-            disabled={!nearest}
+            onClick={() => nearest && !carriedPlantId && performAction(nearest)}
+            disabled={!nearest || !!carriedPlantId}
             style={{
               position: 'absolute', bottom: 28, right: 20, zIndex: 4,
               width: 78, height: 78, borderRadius: '50%',
               border: 'none', fontSize: 32,
-              background: nearest ? '#10b981' : 'rgba(0,0,0,0.35)',
+              background: nearest && !carriedPlantId ? '#10b981' : 'rgba(0,0,0,0.35)',
               color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-              opacity: nearest ? 1 : 0.5,
+              opacity: nearest && !carriedPlantId ? 1 : 0.5,
               touchAction: 'manipulation',
             }}
           >
             {TOOLS[tool].emoji}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (carriedPlantId) dropPlant()
+              else if (nearest) pickupPlant(nearest)
+            }}
+            disabled={!carriedPlantId && !nearest}
+            style={{
+              position: 'absolute', bottom: 28, right: 108, zIndex: 4,
+              width: 78, height: 78, borderRadius: '50%',
+              border: 'none', fontSize: 30,
+              background: carriedPlantId
+                ? '#f59e0b'
+                : nearest ? '#8b5cf6' : 'rgba(0,0,0,0.35)',
+              color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+              opacity: carriedPlantId || nearest ? 1 : 0.5,
+              touchAction: 'manipulation',
+            }}
+          >
+            {carriedPlantId ? '📥' : '🫳'}
           </button>
         </>
       )}
