@@ -296,9 +296,42 @@ function drawGardener(ctx, x, y, facing, phase, pouring) {
   ctx.restore()
 }
 
+// Growth stage derived from watering history. New plants start as sprouts;
+// with more watering-log entries they mature; well-cared-for flowering
+// species eventually bloom.
+function getGrowthStage(plant) {
+  const count = (plant.wateringLog || []).length
+  const species = (plant.species || '').toLowerCase()
+  const flowering = /flower|rose|orchid|lily|daisy|tulip|lavender/.test(species)
+  if (count < 4)  return 'sprout'
+  if (count < 11) return 'young'
+  if (count < 31) return 'mature'
+  return flowering ? 'blooming' : 'mature'
+}
+
+// Plant is 'withered' when it's been overdue for more than 2× its frequency.
+function isWithered(plant) {
+  if (!plant.lastWatered || !plant.frequencyDays) return false
+  const daysSince = (Date.now() - new Date(plant.lastWatered).getTime()) / 86400000
+  return daysSince > plant.frequencyDays * 2
+}
+
 function drawPlant(ctx, x, y, plant, color, time) {
   // Capture a stable per-plant sway offset before overwriting local coords
   const swayPhase = (plant.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)
+  const stage = getGrowthStage(plant)
+  const withered = isWithered(plant)
+
+  // Size multiplier for the plant's foliage by stage — pot stays similar so
+  // early-stage plants look like they've just been potted.
+  const foliageScale = stage === 'sprout' ? 0.35
+                     : stage === 'young'  ? 0.7
+                     : 1.0
+  const potShrink = stage === 'sprout' ? 0.75 : 1.0
+  // Withered plants lean, desaturate, and shrink slightly.
+  const witherTilt = withered ? (swayPhase % 2 ? 0.18 : -0.18) : 0
+  const witherAlpha = withered ? 0.72 : 1.0
+
   ctx.save()
   ctx.translate(x, y)
   ctx.scale(SPRITE_SCALE, SPRITE_SCALE)
@@ -315,58 +348,88 @@ function drawPlant(ctx, x, y, plant, color, time) {
   // Shadow under pot
   ctx.fillStyle = 'rgba(0,0,0,0.25)'
   ctx.beginPath()
-  ctx.ellipse(x, y + 8, 9, 3, 0, 0, Math.PI * 2)
+  ctx.ellipse(x, y + 8, 9 * potShrink, 3, 0, 0, Math.PI * 2)
   ctx.fill()
 
-  // Pot (tapered trapezoid)
+  // Pot (tapered trapezoid). Sprouts get a smaller starter pot.
+  const pw = 8 * potShrink, pb = 6 * potShrink
   ctx.fillStyle = COLORS.pot
   ctx.beginPath()
-  ctx.moveTo(x - 8, y)
-  ctx.lineTo(x + 8, y)
-  ctx.lineTo(x + 6, y + 7)
-  ctx.lineTo(x - 6, y + 7)
+  ctx.moveTo(x - pw, y)
+  ctx.lineTo(x + pw, y)
+  ctx.lineTo(x + pb, y + 7)
+  ctx.lineTo(x - pb, y + 7)
   ctx.closePath()
   ctx.fill()
   ctx.fillStyle = COLORS.potDark
-  ctx.fillRect(x - 8, y - 2, 16, 2)
+  ctx.fillRect(x - pw, y - 2, pw * 2, 2)
 
-  // Leaves — a cluster of overlapping circles with slight sway
+  // Foliage + flowers — branch by stage. Withered overrides tilt/alpha.
   const species = (plant.species || '').toLowerCase()
   const isCactus = /cactus|succulent|aloe/.test(species)
-  const hasFlower = /flower|rose|orchid|lily|daisy|tulip|lavender/.test(species)
   const sway = Math.sin(time * 0.003 + swayPhase) * 1.2
+  const totalTilt = sway * 0.04 + witherTilt
 
-  if (isCactus) {
-    ctx.fillStyle = COLORS.leafDark
-    ctx.fillRect(x - 4, y - 14, 8, 14)
-    ctx.fillStyle = COLORS.leafBright
-    ctx.fillRect(x - 3, y - 14, 2, 14)
-    // spikes
+  ctx.save()
+  ctx.translate(0, y)
+  if (totalTilt) ctx.rotate(totalTilt)
+  ctx.globalAlpha = witherAlpha
+  const leafDark = withered ? '#6b7d5a' : COLORS.leafDark
+  const leafBright = withered ? '#8ba376' : COLORS.leafBright
+
+  if (stage === 'sprout') {
+    // Tiny single sprig — a stem + two tear-shaped leaves.
+    ctx.strokeStyle = leafDark
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.quadraticCurveTo(sway, -4, 0, -6)
+    ctx.stroke()
+    ctx.fillStyle = leafBright
+    ctx.beginPath(); ctx.ellipse(-2 + sway, -4, 2, 3, -0.5, 0, Math.PI * 2); ctx.fill()
+    ctx.beginPath(); ctx.ellipse( 2 + sway, -5, 2, 3,  0.5, 0, Math.PI * 2); ctx.fill()
+  } else if (isCactus) {
+    const h = 14 * foliageScale
+    ctx.fillStyle = leafDark
+    ctx.fillRect(-4 * foliageScale, -h, 8 * foliageScale, h)
+    ctx.fillStyle = leafBright
+    ctx.fillRect(-3 * foliageScale, -h, 2 * foliageScale, h)
     ctx.fillStyle = '#f3e5ab'
     for (let i = 0; i < 3; i++) {
-      ctx.fillRect(x - 5 + sway, y - 10 + i * 4, 1, 1)
-      ctx.fillRect(x + 4 + sway, y - 12 + i * 4, 1, 1)
+      ctx.fillRect(-5 * foliageScale + sway, -10 * foliageScale + i * 4, 1, 1)
+      ctx.fillRect( 4 * foliageScale + sway, -12 * foliageScale + i * 4, 1, 1)
     }
   } else {
-    ctx.fillStyle = COLORS.leafDark
+    const s = foliageScale
+    ctx.fillStyle = leafDark
     ctx.beginPath()
-    ctx.ellipse(x - 4 + sway, y - 6, 6, 8, -0.3, 0, Math.PI * 2)
+    ctx.ellipse(-4 * s + sway, -6 * s, 6 * s, 8 * s, -0.3, 0, Math.PI * 2)
     ctx.fill()
     ctx.beginPath()
-    ctx.ellipse(x + 4 + sway, y - 7, 6, 8, 0.3, 0, Math.PI * 2)
+    ctx.ellipse( 4 * s + sway, -7 * s, 6 * s, 8 * s,  0.3, 0, Math.PI * 2)
     ctx.fill()
-    ctx.fillStyle = COLORS.leafBright
+    ctx.fillStyle = leafBright
     ctx.beginPath()
-    ctx.ellipse(x + sway, y - 11, 5, 7, 0, 0, Math.PI * 2)
+    ctx.ellipse(0 + sway, -11 * s, 5 * s, 7 * s, 0, 0, Math.PI * 2)
     ctx.fill()
   }
 
-  if (hasFlower) {
+  // Flowers — single bud for mature flowering species, triple for blooming
+  const hasFlower = /flower|rose|orchid|lily|daisy|tulip|lavender/.test(species)
+  if (hasFlower && !withered && stage !== 'sprout') {
+    const buds = stage === 'blooming'
+      ? [{ x: -5 + sway, y: -13 * foliageScale },
+         { x:  5 + sway, y: -13 * foliageScale },
+         { x:  0 + sway, y: -16 * foliageScale }]
+      : [{ x: 0 + sway, y: -14 * foliageScale }]
     ctx.fillStyle = COLORS.flowerPink
-    ctx.beginPath(); ctx.arc(x + sway, y - 14, 2.5, 0, Math.PI * 2); ctx.fill()
+    for (const b of buds) {
+      ctx.beginPath(); ctx.arc(b.x, b.y, 2.5, 0, Math.PI * 2); ctx.fill()
+    }
     ctx.fillStyle = '#fbbf24'
-    ctx.fillRect(x + sway - 0.5, y - 14 - 0.5, 1, 1)
+    for (const b of buds) ctx.fillRect(b.x - 0.5, b.y - 0.5, 1, 1)
   }
+  ctx.restore()
   ctx.restore()
 }
 
