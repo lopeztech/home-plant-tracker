@@ -203,6 +203,136 @@ function resolveCollision(x, y, walls, radius) {
   return [nx, ny]
 }
 
+// ── Minimap + waypoint ───────────────────────────────────────────────────────
+
+const MINIMAP_SIZE = 120
+
+// Draws a small overview in the top-left corner. Scales the condensed
+// layout to fit in a fixed-size square, overlays plant dots by urgency
+// colour, and a white triangle for the player's facing.
+function drawMinimap(ctx, gameRooms, gamePlants, weather, floors, player, topOffset) {
+  const visible = (gameRooms || []).filter((r) => !r.hidden)
+  if (!visible.length) return
+  const mx = 10, my = topOffset, ms = MINIMAP_SIZE
+
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const r of visible) {
+    minX = Math.min(minX, r.x)
+    maxX = Math.max(maxX, r.x + r.width)
+    minY = Math.min(minY, r.y)
+    maxY = Math.max(maxY, r.y + r.height)
+  }
+  minX = Math.min(minX, player.x); maxX = Math.max(maxX, player.x)
+  minY = Math.min(minY, player.y); maxY = Math.max(maxY, player.y)
+  const w2 = Math.max(1, maxX - minX)
+  const h2 = Math.max(1, maxY - minY)
+  const pad = 6
+  const sc = Math.min((ms - pad * 2) / w2, (ms - pad * 2) / h2)
+  const offX = mx + (ms - w2 * sc) / 2
+  const offY = my + (ms - h2 * sc) / 2
+  const toMap = (wx, wy) => [offX + (wx - minX) * sc, offY + (wy - minY) * sc]
+
+  ctx.save()
+  // Background
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'
+  ctx.fillRect(mx - 2, my - 2, ms + 4, ms + 4)
+  ctx.fillStyle = 'rgba(127,182,133,0.5)'
+  ctx.fillRect(mx, my, ms, ms)
+
+  // Rooms
+  ctx.strokeStyle = 'rgba(122,90,61,0.85)'
+  ctx.lineWidth = 1
+  for (const r of visible) {
+    const [x1, y1] = toMap(r.x, r.y)
+    const [x2, y2] = toMap(r.x + r.width, r.y + r.height)
+    ctx.fillStyle = 'rgba(230,213,185,0.85)'
+    ctx.fillRect(x1, y1, x2 - x1, y2 - y1)
+    ctx.strokeRect(x1, y1, x2 - x1, y2 - y1)
+  }
+
+  // Plant dots — urgency colour
+  for (const p of gamePlants || []) {
+    const [px, py] = toMap(p.x, p.y)
+    const { color } = getWateringStatus(p, weather, floors)
+    ctx.fillStyle = color
+    ctx.beginPath(); ctx.arc(px, py, 2.2, 0, Math.PI * 2); ctx.fill()
+  }
+
+  // Player triangle, rotated to facing
+  const [ax, ay] = toMap(player.x, player.y)
+  const rot = { up: 0, right: Math.PI / 2, down: Math.PI, left: -Math.PI / 2 }[player.facing] || 0
+  ctx.translate(ax, ay)
+  ctx.rotate(rot)
+  ctx.fillStyle = '#ffffff'
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)'
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(0, -5); ctx.lineTo(4, 4); ctx.lineTo(-4, 4)
+  ctx.closePath()
+  ctx.fill(); ctx.stroke()
+  ctx.setTransform(1, 0, 0, 1, 0, 0)
+
+  // Border
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+  ctx.lineWidth = 1
+  ctx.strokeRect(mx + 0.5, my + 0.5, ms - 1, ms - 1)
+  ctx.restore()
+}
+
+// Find the single most-overdue plant (most negative daysUntil) so we can
+// point a waypoint at it. Returns null if nothing is overdue.
+function findMostOverdue(plants, weather, floors) {
+  let worst = null
+  let worstDays = 0
+  for (const p of plants) {
+    const { daysUntil } = getWateringStatus(p, weather, floors)
+    if (daysUntil < worstDays) { worstDays = daysUntil; worst = p }
+  }
+  return worst
+}
+
+// Either draws a yellow chevron above the target (if visible) or clamps it
+// to the viewport edge pointing toward it.
+function drawWaypoint(ctx, canvasW, canvasH, target, player, tile) {
+  if (!target) return
+  const cam = { x: player.x * tile - canvasW / 2, y: player.y * tile - canvasH / 2 }
+  const sx = target.x * tile - cam.x
+  const sy = target.y * tile - cam.y
+  const MARGIN = 30
+
+  const inView = sx > MARGIN && sx < canvasW - MARGIN && sy > MARGIN && sy < canvasH - MARGIN
+  ctx.save()
+  if (inView) {
+    ctx.translate(sx, sy - 48)
+    // Pulse
+    const pulse = 1 + Math.sin(performance.now() / 200) * 0.1
+    ctx.scale(pulse, pulse)
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.beginPath(); ctx.moveTo(0, 12); ctx.lineTo(-10, -6); ctx.lineTo(10, -6); ctx.closePath(); ctx.fill()
+    ctx.fillStyle = '#fbbf24'
+    ctx.beginPath(); ctx.moveTo(0, 10); ctx.lineTo(-8, -4); ctx.lineTo(8, -4); ctx.closePath(); ctx.fill()
+  } else {
+    // Off-screen — clamp to edge + rotate to face target
+    const cx = canvasW / 2, cy = canvasH / 2
+    const dx = sx - cx, dy = sy - cy
+    const angle = Math.atan2(dy, dx)
+    const ex = cx + Math.cos(angle) * Math.min(cx - MARGIN, Math.max(-(cx - MARGIN), dx))
+    const ey = cy + Math.sin(angle) * Math.min(cy - MARGIN, Math.max(-(cy - MARGIN), dy))
+    // Clamp to rect edge
+    const tScale = Math.min((cx - MARGIN) / Math.max(0.001, Math.abs(dx)),
+                            (cy - MARGIN) / Math.max(0.001, Math.abs(dy)))
+    const edgeX = cx + dx * tScale
+    const edgeY = cy + dy * tScale
+    ctx.translate(edgeX, edgeY)
+    ctx.rotate(angle + Math.PI / 2)
+    ctx.fillStyle = 'rgba(0,0,0,0.55)'
+    ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-11, 9); ctx.lineTo(11, 9); ctx.closePath(); ctx.fill()
+    ctx.fillStyle = '#fbbf24'
+    ctx.beginPath(); ctx.moveTo(0, -12); ctx.lineTo(-9, 7); ctx.lineTo(9, 7); ctx.closePath(); ctx.fill()
+  }
+  ctx.restore()
+}
+
 // ── Sprite drawing ───────────────────────────────────────────────────────────
 
 const TOOLS = {
@@ -531,6 +661,16 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const xpPopsRef = useRef([])
   useEffect(() => { xpPopsRef.current = xpPops }, [xpPops])
 
+  // Minimap + waypoint — on by default, persisted
+  const [showMap, setShowMap] = useState(() => {
+    try { return localStorage.getItem('plantTracker_gameMap') !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('plantTracker_gameMap', showMap ? '1' : '0') } catch {}
+  }, [showMap])
+  const showMapRef = useRef(showMap)
+  useEffect(() => { showMapRef.current = showMap }, [showMap])
+
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
   const performAction = useCallback((plant) => {
@@ -844,6 +984,14 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         }
       }
 
+      // Waypoint + minimap overlay — only when enabled
+      if (showMapRef.current) {
+        const overdue = findMostOverdue(gamePlants, weather, floors)
+        drawWaypoint(ctx, w, h, overdue, s, tile)
+        // Position minimap below the stats pill (~48 px top offset)
+        drawMinimap(ctx, gameRooms, gamePlants, weather, floors, s, 48)
+      }
+
       // Floating "+10 XP" pops — drawn over everything so they read on any floor
       if (xpPopsRef.current.length) {
         ctx.font = '700 14px system-ui, sans-serif'
@@ -951,6 +1099,17 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
             cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
           }}
         >−</button>
+        <button
+          type="button"
+          onClick={() => setShowMap((v) => !v)}
+          title={showMap ? 'Hide minimap' : 'Show minimap'}
+          style={{
+            width: 34, height: 34, borderRadius: 6,
+            border: showMap ? '2px solid #fbbf24' : '1px solid rgba(0,0,0,0.15)',
+            background: '#fff', color: '#2a1f14', fontSize: 16, lineHeight: 1,
+            cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+          }}
+        >📍</button>
       </div>
 
       {/* Bottom-centre prompt */}
