@@ -5,6 +5,26 @@ import * as THREE from 'three'
 import { getWateringStatus, getSeason } from '../utils/watering.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
+import { useImageAspect } from '../hooks/useImageAspect.js'
+
+// Scale room + plant Y coords around the centre (50) so the internal square
+// world reflects the image's true proportions. X is untouched. Callers at the
+// save boundary reverse this to get back to the stored 0–100 percent space.
+function applyAspectToFloor(floor, aspect) {
+  if (!floor || aspect === 1) return floor
+  return {
+    ...floor,
+    rooms: (floor.rooms || []).map((r) => ({
+      ...r,
+      y: (r.y - 50) / aspect + 50,
+      height: r.height / aspect,
+    })),
+  }
+}
+function applyAspectToPlants(plants, aspect) {
+  if (aspect === 1) return plants
+  return (plants || []).map((p) => ({ ...p, y: (p.y - 50) / aspect + 50 }))
+}
 
 function getPlantEmoji(plant) {
   const species = (plant.species || '').toLowerCase()
@@ -1679,6 +1699,7 @@ function WeatherParticles3D({ weather }) {
 
 function Scene({
   floor, plants, weather, floors,
+  aspect,
   onPlantClick, onFloorplanClick,
   walkMode, camMode,
   positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef, timeRef,
@@ -1750,7 +1771,8 @@ function Scene({
           visible={false}
           onClick={(e) => {
             const x = e.point.x / SCALE + 50
-            const y = e.point.z / SCALE + 50
+            const scaledY = e.point.z / SCALE + 50
+            const y = (scaledY - 50) * aspect + 50
             if (x >= 2 && x <= 98 && y >= 2 && y <= 98) {
               onFloorplanClick(Math.round(x), Math.round(y))
             }
@@ -1873,6 +1895,14 @@ function Joystick({ joyRef }) {
 
 export default function Floorplan3D({ floor, floors, plants, weather, onPlantClick, onFloorplanClick }) {
   const { handleWaterPlant, updatePlantsLocally, isGuest } = usePlantContext()
+
+  // When a real floorplan image is present, its aspect ratio is baked into
+  // the room/plant percentages. Apply it to every coordinate we render so the
+  // square world reflects the image's true proportions; reverse it at every
+  // save boundary.
+  const aspect = useImageAspect(floor?.imageUrl)
+  const aspectFloor = useMemo(() => applyAspectToFloor(floor, aspect), [floor, aspect])
+  const aspectPlants = useMemo(() => applyAspectToPlants(plants, aspect), [plants, aspect])
   // Walk mode is the default 3D experience. Remember the user's choice so
   // they can turn it off once and have tour mode stick across sessions.
   const [walkMode, setWalkMode] = useState(() => {
@@ -1911,8 +1941,9 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     const id = carriedIdRef.current
     if (!id) return
     const [ax, , az] = positionRef.current
+    const scaledY = az / SCALE + 50
     const newX = Math.max(0, Math.min(100, ax / SCALE + 50))
-    const newY = Math.max(0, Math.min(100, az / SCALE + 50))
+    const newY = Math.max(0, Math.min(100, (scaledY - 50) * aspect + 50))
     // Find containing room for the new room assignment
     let newRoom = null
     for (const r of (floor?.rooms || [])) {
@@ -1929,7 +1960,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
     }
     setCarriedPlantId(null)
-  }, [floor, updatePlantsLocally, isGuest])
+  }, [floor, aspect, updatePlantsLocally, isGuest])
   // In-world hour (0..24), starts at real wall-clock time and drifts forward
   // while the canvas is rendering so lighting evolves through the day.
   const timeRef = useRef((() => {
@@ -1969,9 +2000,10 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     setSoundOn((v) => !v)
   }, [soundOn])
 
-  // Reset avatar to the centre of the visible rooms when the floor changes
+  // Reset avatar to the centre of the visible rooms when the floor changes,
+  // or when the image aspect ratio arrives (scaled bounds differ from square).
   useEffect(() => {
-    const rooms = (floor?.rooms || []).filter((r) => !r.hidden)
+    const rooms = (aspectFloor?.rooms || []).filter((r) => !r.hidden)
     if (!rooms.length) {
       positionRef.current[0] = 0
       positionRef.current[2] = 0
@@ -1983,7 +2015,7 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       }
     }
     yawRef.current = 0
-  }, [floor?.id])
+  }, [floor?.id, aspect])
 
   // Scroll-wheel zoom in walk mode
   useEffect(() => {
@@ -2036,7 +2068,8 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     handleWaterPlant(plant.id)
     setJustWatered(plant.id)
     walkStateRef.current.pourStart = performance.now()
-    // Spawn a droplet burst at the plant
+    // Spawn a droplet burst at the plant — plant.y here is aspect-scaled (the
+    // droplet lives in the internal world coord space).
     const [px, , pz] = pctToWorld(plant.x, plant.y)
     const id = Math.random().toString(36).slice(2)
     setDroplets((prev) => [...prev, {
@@ -2059,10 +2092,11 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
         gl={{ antialias: true }}
       >
         <Scene
-          floor={floor}
-          plants={plants}
+          floor={aspectFloor}
+          plants={aspectPlants}
           weather={weather}
           floors={floors}
+          aspect={aspect}
           onPlantClick={onPlantClick}
           onFloorplanClick={onFloorplanClick}
           walkMode={walkMode}

@@ -2,6 +2,26 @@ import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import { getWateringStatus, getSeason, isOutdoor as isOutdoorPlant } from '../utils/watering.js'
+import { useImageAspect } from '../hooks/useImageAspect.js'
+
+// Scale room + plant Y percentages around the centre (50) so the game's square
+// world reflects the floorplan image's true proportions. X is left untouched.
+// Reversed at the save boundary below.
+function applyAspectToFloor(floor, aspect) {
+  if (!floor || aspect === 1) return floor
+  return {
+    ...floor,
+    rooms: (floor.rooms || []).map((r) => ({
+      ...r,
+      y: (r.y - 50) / aspect + 50,
+      height: r.height / aspect,
+    })),
+  }
+}
+function applyAspectToPlants(plants, aspect) {
+  if (aspect === 1) return plants
+  return (plants || []).map((p) => ({ ...p, y: (p.y - 50) / aspect + 50 }))
+}
 
 // ── World constants ──────────────────────────────────────────────────────────
 // The game world uses percent coordinates (same as plant.x/y and room bounds).
@@ -949,11 +969,18 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const wrapperRef = useRef(null)
   const { handleWaterPlant, updatePlantsLocally, isGuest } = usePlantContext()
 
+  // Aspect-scale Y percentages first so the square-world assumption downstream
+  // matches the image's real proportions. Guest mode has no imageUrl → aspect 1
+  // → no change.
+  const aspect = useImageAspect(floor?.imageUrl)
+  const aspectFloor = useMemo(() => applyAspectToFloor(floor, aspect), [floor, aspect])
+  const aspectPlants = useMemo(() => applyAspectToPlants(plants, aspect), [plants, aspect])
+
   // Apply the condense transform once per floor/plants change and reuse the
   // shrunk world everywhere downstream (walls, rendering, collision).
   const { rooms: gameRooms, plants: gamePlants } = useMemo(
-    () => condenseLayout(floor?.rooms || [], plants || [], CONDENSE_FACTOR),
-    [floor, plants],
+    () => condenseLayout(aspectFloor?.rooms || [], aspectPlants || [], CONDENSE_FACTOR),
+    [aspectFloor, aspectPlants],
   )
   const walls = useMemo(() => computeGameWalls(gameRooms), [gameRooms])
 
@@ -1028,10 +1055,12 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     const id = carriedIdRef.current
     if (!id) return
     const s = stateRef.current
-    // Translate the gardener's condensed-world position back to original percent
+    // uncondensePoint gives us aspect-scaled percent; then reverse the aspect
+    // transform so the saved coords live in the same 0–100 original space as
+    // the rest of the app.
     const { x: rawX, y: rawY } = uncondensePoint(s.x, s.y, gameRooms, CONDENSE_FACTOR)
     const newX = Math.max(0, Math.min(100, rawX))
-    const newY = Math.max(0, Math.min(100, rawY))
+    const newY = Math.max(0, Math.min(100, (rawY - 50) * aspect + 50))
     let newRoom = null
     for (const r of (floor?.rooms || [])) {
       if (r.hidden) continue
@@ -1047,7 +1076,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
     }
     setCarriedPlantId(null)
-  }, [floor, gameRooms, updatePlantsLocally, isGuest])
+  }, [floor, aspect, gameRooms, updatePlantsLocally, isGuest])
 
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
@@ -1095,7 +1124,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   // walls, unlike the bounding-box centroid which can land in an inter-room
   // gap for irregular layouts and leave the gardener trapped outside.
   const computeSpawn = useCallback(() => {
-    const visible = (floor?.rooms || []).filter((r) => !r.hidden)
+    const visible = (aspectFloor?.rooms || []).filter((r) => !r.hidden)
     if (!visible.length) return { x: 50, y: 50 }
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
     for (const r of visible) {
@@ -1113,7 +1142,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       x: (roomCx - cx) * CONDENSE_FACTOR + cx,
       y: (roomCy - cy) * CONDENSE_FACTOR + cy,
     }
-  }, [floor])
+  }, [aspectFloor])
 
   // Reset position on floor change
   useEffect(() => {
