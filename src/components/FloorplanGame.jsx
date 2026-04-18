@@ -1,6 +1,6 @@
 import { useEffect, useRef, useMemo, useState, useCallback } from 'react'
 import { usePlantContext } from '../context/PlantContext.jsx'
-import { getWateringStatus } from '../utils/watering.js'
+import { getWateringStatus, getSeason } from '../utils/watering.js'
 
 // ── World constants ──────────────────────────────────────────────────────────
 // The game world uses percent coordinates (same as plant.x/y and room bounds).
@@ -201,6 +201,104 @@ function resolveCollision(x, y, walls, radius) {
     }
   }
   return [nx, ny]
+}
+
+// ── Seasonal / weather particle overlay (screen space) ──────────────────────
+
+function seedSeasonalParticles(sky, season, w, h) {
+  const out = []
+  // Rain/storm always takes priority over season
+  if (sky === 'rainy' || sky === 'stormy') {
+    const n = sky === 'stormy' ? 160 : 110
+    for (let i = 0; i < n; i++) {
+      out.push({ type: 'rain', x: Math.random() * w, y: Math.random() * h,
+                 speed: 520 + Math.random() * 300, wind: 40 + Math.random() * 20 })
+    }
+    return out
+  }
+  if (season === 'spring') {
+    for (let i = 0; i < 22; i++) {
+      out.push({ type: 'petal', x: Math.random() * w, y: -Math.random() * h,
+                 speed: 28 + Math.random() * 30, drift: (Math.random() - 0.5) * 50,
+                 rot: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 3 })
+    }
+  } else if (season === 'summer') {
+    for (let i = 0; i < 14; i++) {
+      out.push({ type: 'pollen', x: Math.random() * w, y: Math.random() * h,
+                 phase: Math.random() * Math.PI * 2,
+                 radius: 20 + Math.random() * 40 })
+    }
+  } else if (season === 'autumn') {
+    for (let i = 0; i < 26; i++) {
+      out.push({ type: 'leaf', x: Math.random() * w, y: -Math.random() * h,
+                 speed: 35 + Math.random() * 45, drift: (Math.random() - 0.5) * 70,
+                 rot: Math.random() * Math.PI * 2, rotSpeed: (Math.random() - 0.5) * 4,
+                 color: ['#c2410c', '#f59e0b', '#eab308', '#b45309'][Math.floor(Math.random() * 4)] })
+    }
+  } else if (season === 'winter') {
+    for (let i = 0; i < 50; i++) {
+      out.push({ type: 'snow', x: Math.random() * w, y: -Math.random() * h,
+                 speed: 18 + Math.random() * 30, drift: (Math.random() - 0.5) * 30,
+                 size: 1 + Math.random() * 2.5 })
+    }
+  }
+  return out
+}
+
+function updateSeasonalParticles(list, dt, w, h) {
+  for (const p of list) {
+    if (p.type === 'rain') {
+      p.y += p.speed * dt
+      p.x += p.wind * dt
+      if (p.y > h + 15 || p.x > w + 20) { p.y = -10; p.x = Math.random() * (w + 40) - 20 }
+    } else if (p.type === 'petal' || p.type === 'leaf') {
+      p.y += p.speed * dt
+      p.x += Math.sin(p.y * 0.02) * p.drift * dt
+      p.rot += p.rotSpeed * dt
+      if (p.y > h + 20) { p.y = -20; p.x = Math.random() * w }
+    } else if (p.type === 'snow') {
+      p.y += p.speed * dt
+      p.x += Math.sin(p.y * 0.01 + p.size) * p.drift * dt
+      if (p.y > h + 10) { p.y = -10; p.x = Math.random() * w }
+    } else if (p.type === 'pollen') {
+      p.phase += dt * 0.8
+      p.x += Math.cos(p.phase) * 0.3
+      p.y += Math.sin(p.phase * 1.3) * 0.2
+      if (p.x < -10) p.x = w + 10
+      if (p.x > w + 10) p.x = -10
+      if (p.y < -10) p.y = h + 10
+      if (p.y > h + 10) p.y = -10
+    }
+  }
+}
+
+function drawSeasonalParticles(ctx, list) {
+  for (const p of list) {
+    if (p.type === 'rain') {
+      ctx.strokeStyle = 'rgba(150,200,255,0.55)'
+      ctx.lineWidth = 1
+      ctx.beginPath()
+      ctx.moveTo(p.x, p.y)
+      ctx.lineTo(p.x - 3, p.y + 12)
+      ctx.stroke()
+    } else if (p.type === 'petal') {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot)
+      ctx.fillStyle = '#f9a8d4'
+      ctx.beginPath(); ctx.ellipse(0, 0, 3, 5, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.restore()
+    } else if (p.type === 'leaf') {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot)
+      ctx.fillStyle = p.color
+      ctx.beginPath(); ctx.ellipse(0, 0, 4, 6, 0, 0, Math.PI * 2); ctx.fill()
+      ctx.restore()
+    } else if (p.type === 'pollen') {
+      ctx.fillStyle = 'rgba(251,191,36,0.45)'
+      ctx.beginPath(); ctx.arc(p.x, p.y, 1.8, 0, Math.PI * 2); ctx.fill()
+    } else if (p.type === 'snow') {
+      ctx.fillStyle = 'rgba(255,255,255,0.92)'
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill()
+    }
+  }
 }
 
 // ── Wildlife (butterflies, bees, birds) ──────────────────────────────────────
@@ -828,6 +926,10 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   const wildlifeRef = useRef([])
   const birdNextRef = useRef(0)
 
+  // Seasonal + weather overlay particles (screen space)
+  const seasonKeyRef = useRef(null)
+  const seasonParticlesRef = useRef([])
+
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
   const performAction = useCallback((plant) => {
@@ -1141,8 +1243,19 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         }
       }
 
-      // Wildlife — update + draw (skip during rain/storm or when tab hidden)
+      // Seasonal/weather overlay — re-seed whenever the combination changes
       const sky = weather?.current?.condition?.sky
+      const season = getSeason(weather?.location?.lat)
+      const seasonKey = `${sky || '?'}/${season || '?'}`
+      if (seasonKeyRef.current !== seasonKey) {
+        seasonKeyRef.current = seasonKey
+        seasonParticlesRef.current = seedSeasonalParticles(sky, season, w, h)
+      }
+      if (document.visibilityState === 'visible' && seasonParticlesRef.current.length) {
+        updateSeasonalParticles(seasonParticlesRef.current, dt, w, h)
+      }
+
+      // Wildlife — update + draw (skip during rain/storm or when tab hidden)
       const allowWildlife = sky !== 'rainy' && sky !== 'stormy' && document.visibilityState === 'visible'
       if (allowWildlife && gamePlants.length) {
         const isOutdoor = floor?.type === 'outdoor' || (gameRooms || []).some((r) => r.type === 'outdoor')
@@ -1150,6 +1263,11 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         drawWildlife(ctx, wildlifeRef.current, worldToScreen, now)
       } else if (wildlifeRef.current.length) {
         wildlifeRef.current = []
+      }
+
+      // Seasonal/weather particles draw on top of the scene
+      if (seasonParticlesRef.current.length) {
+        drawSeasonalParticles(ctx, seasonParticlesRef.current)
       }
 
       // Waypoint + minimap overlay — only when enabled
