@@ -4,6 +4,7 @@ import { OrbitControls, Text, Billboard } from '@react-three/drei'
 import * as THREE from 'three'
 import { getWateringStatus, getSeason } from '../utils/watering.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
+import { plantsApi } from '../api/plants.js'
 
 function getPlantEmoji(plant) {
   const species = (plant.species || '').toLowerCase()
@@ -1360,11 +1361,14 @@ function Drop({ d }) {
 
 function WalkController({
   positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef,
-  camMode, walls, bounds, plants, onNearestChange, onWaterRequest,
+  camMode, walls, bounds, plants,
+  carriedPlantId, onPickup, onDrop,
+  onNearestChange, onWaterRequest,
 }) {
   const { camera } = useThree()
   const keysRef = useRef(new Set())
   const waterPendingRef = useRef(false)
+  const pickupPendingRef = useRef(false)
   const camLookRef = useRef({ x: 0, y: 0.5, z: 0 })
   const firstFrameRef = useRef(true)
 
@@ -1374,6 +1378,7 @@ function WalkController({
       const k = e.key.toLowerCase()
       keysRef.current.add(k)
       if (k === 'e') waterPendingRef.current = true
+      if (k === 'f') pickupPendingRef.current = true
     }
     const up = (e) => keysRef.current.delete(e.key.toLowerCase())
     window.addEventListener('keydown', down)
@@ -1484,9 +1489,63 @@ function WalkController({
         onWaterRequest(nearest)
       }
     }
+
+    if (pickupPendingRef.current) {
+      pickupPendingRef.current = false
+      if (carriedPlantId) onDrop?.()
+      else if (inRange) onPickup?.(nearest)
+    }
   })
 
   return null
+}
+
+// ── Carried plant (hovers in front of the avatar while picked up) ────────────
+
+function CarriedPlant({ plant, positionRef, yawRef }) {
+  const groupRef = useRef()
+  useFrame((_, rawDt) => {
+    if (!groupRef.current) return
+    const dt = Math.min(rawDt, 0.05)
+    const [ax, , az] = positionRef.current
+    const yaw = yawRef.current
+    // Hold in front of the avatar at chest height; gentle bob.
+    const forwardX = -Math.sin(yaw) * 0.55
+    const forwardZ = -Math.cos(yaw) * 0.55
+    const bob = Math.sin(performance.now() / 320) * 0.03
+    groupRef.current.position.set(ax + forwardX, 1.4 + bob, az + forwardZ)
+    groupRef.current.rotation.y = yaw
+    // Slight continuous tilt so it reads as held
+    groupRef.current.rotation.x = Math.sin(performance.now() / 400) * 0.04
+  })
+  const leafColor = getLeafColor(plant)
+  const species = (plant.species || '').toLowerCase()
+  const isCactus = /cactus|succulent|aloe/.test(species)
+  return (
+    <group ref={groupRef}>
+      {/* Pot */}
+      <mesh castShadow>
+        <cylinderGeometry args={[0.2, 0.15, 0.24, 16]} />
+        <meshStandardMaterial color="#b86747" roughness={0.85} />
+      </mesh>
+      <mesh position={[0, 0.12, 0]}>
+        <cylinderGeometry args={[0.2, 0.2, 0.02, 16]} />
+        <meshStandardMaterial color="#3a2a1b" />
+      </mesh>
+      {/* Simplified foliage */}
+      {isCactus ? (
+        <mesh position={[0, 0.35, 0]} castShadow>
+          <cylinderGeometry args={[0.1, 0.12, 0.4, 10]} />
+          <meshStandardMaterial color={leafColor} roughness={0.9} />
+        </mesh>
+      ) : (
+        <mesh position={[0, 0.32, 0]} castShadow>
+          <sphereGeometry args={[0.22, 10, 10]} />
+          <meshStandardMaterial color={leafColor} roughness={0.8} />
+        </mesh>
+      )}
+    </group>
+  )
 }
 
 // ── Weather / seasonal particles in-scene ────────────────────────────────────
@@ -1623,6 +1682,7 @@ function Scene({
   onPlantClick, onFloorplanClick,
   walkMode, camMode,
   positionRef, yawRef, pitchRef, camBackRef, joyRef, walkStateRef, timeRef,
+  carriedPlantId, onPickup, onDrop,
   audio,
   onWalkNearest, onWalkWater,
   droplets,
@@ -1659,7 +1719,7 @@ function Scene({
         <Window key={`win-${i}`} wall={w} />
       ))}
 
-      {plants.map((plant) => (
+      {plants.filter((p) => p.id !== carriedPlantId).map((plant) => (
         <PlantMarker
           key={plant.id}
           plant={plant}
@@ -1668,6 +1728,14 @@ function Scene({
           onClick={onPlantClick}
         />
       ))}
+
+      {/* Plant attached to the avatar while carried */}
+      {walkMode && carriedPlantId && (() => {
+        const carried = plants.find((p) => p.id === carriedPlantId)
+        return carried ? (
+          <CarriedPlant plant={carried} positionRef={positionRef} yawRef={yawRef} />
+        ) : null
+      })()}
 
       {/* Watering droplet bursts */}
       {droplets.map((d) => (
@@ -1707,6 +1775,9 @@ function Scene({
             walls={walls}
             bounds={bounds}
             plants={plants}
+            carriedPlantId={carriedPlantId}
+            onPickup={onPickup}
+            onDrop={onDrop}
             onNearestChange={onWalkNearest}
             onWaterRequest={onWalkWater}
           />
@@ -1801,7 +1872,7 @@ function Joystick({ joyRef }) {
 }
 
 export default function Floorplan3D({ floor, floors, plants, weather, onPlantClick, onFloorplanClick }) {
-  const { handleWaterPlant } = usePlantContext()
+  const { handleWaterPlant, updatePlantsLocally, isGuest } = usePlantContext()
   // Walk mode is the default 3D experience. Remember the user's choice so
   // they can turn it off once and have tour mode stick across sessions.
   const [walkMode, setWalkMode] = useState(() => {
@@ -1823,6 +1894,42 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
   const joyRef = useRef({ forward: 0, strafe: 0 })
   // Shared animation state between WalkController (writer) and Avatar (reader)
   const walkStateRef = useRef({ moving: false, phase: 0, swingAmp: 0, pourStart: 0 })
+
+  // Plant pickup — state for rendering (which plant is hidden / carried),
+  // plus a ref so the frame loop can short-circuit without waiting for a
+  // re-render between presses.
+  const [carriedPlantId, setCarriedPlantId] = useState(null)
+  const carriedIdRef = useRef(null)
+  useEffect(() => { carriedIdRef.current = carriedPlantId }, [carriedPlantId])
+
+  const pickupPlant = useCallback((plant) => {
+    if (!plant) return
+    setCarriedPlantId(plant.id)
+  }, [])
+
+  const dropPlant = useCallback(() => {
+    const id = carriedIdRef.current
+    if (!id) return
+    const [ax, , az] = positionRef.current
+    const newX = Math.max(0, Math.min(100, ax / SCALE + 50))
+    const newY = Math.max(0, Math.min(100, az / SCALE + 50))
+    // Find containing room for the new room assignment
+    let newRoom = null
+    for (const r of (floor?.rooms || [])) {
+      if (r.hidden) continue
+      if (newX >= r.x && newX <= r.x + r.width && newY >= r.y && newY <= r.y + r.height) {
+        newRoom = r.name
+        break
+      }
+    }
+    const updates = { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
+    if (newRoom) updates.room = newRoom
+    updatePlantsLocally({ [id]: updates })
+    if (!isGuest) {
+      plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
+    }
+    setCarriedPlantId(null)
+  }, [floor, updatePlantsLocally, isGuest])
   // In-world hour (0..24), starts at real wall-clock time and drifts forward
   // while the canvas is rendering so lighting evolves through the day.
   const timeRef = useRef((() => {
@@ -1967,6 +2074,9 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
           joyRef={joyRef}
           walkStateRef={walkStateRef}
           timeRef={timeRef}
+          carriedPlantId={carriedPlantId}
+          onPickup={pickupPlant}
+          onDrop={dropPlant}
           audio={soundOn ? audioRef.current : null}
           onWalkNearest={setNearest}
           onWalkWater={waterPlant}
@@ -2043,28 +2153,43 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
               <div><strong>Drag</strong> — look around</div>
               <div><strong>Scroll</strong> — zoom camera (third-person)</div>
               <div><strong>E</strong> — water the plant you're next to</div>
+              <div><strong>F</strong> — pick up / drop a plant</div>
             </div>
           )}
 
-          <div
-            style={{
-              position: 'absolute', bottom: isTouch ? 140 : 20, left: '50%', transform: 'translateX(-50%)',
-              zIndex: 5, padding: '10px 16px', borderRadius: 999,
-              background: justWatered ? 'rgba(34,197,94,0.95)' : (nearest ? 'rgba(16,185,129,0.95)' : 'rgba(0,0,0,0.5)'),
-              color: '#fff', fontSize: 13, fontWeight: 600,
-              fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
-              transition: 'background 0.15s',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {justWatered
-              ? '💧 Watered!'
-              : nearest
-                ? (isTouch
-                    ? <>Tap 💧 to water <strong>{nearest.name}</strong></>
-                    : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to water <strong>{nearest.name}</strong></>)
-                : 'Walk up to a plant to water it'}
-          </div>
+          {(() => {
+            const carried = carriedPlantId ? plants.find((p) => p.id === carriedPlantId) : null
+            const bg = justWatered
+              ? 'rgba(34,197,94,0.95)'
+              : carried
+                ? 'rgba(120,53,15,0.95)'
+                : nearest
+                  ? 'rgba(16,185,129,0.95)'
+                  : 'rgba(0,0,0,0.5)'
+            return (
+              <div
+                style={{
+                  position: 'absolute', bottom: isTouch ? 140 : 20, left: '50%', transform: 'translateX(-50%)',
+                  zIndex: 5, padding: '10px 16px', borderRadius: 999,
+                  background: bg,
+                  color: '#fff', fontSize: 13, fontWeight: 600,
+                  fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
+                  transition: 'background 0.15s',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {justWatered
+                  ? '💧 Watered!'
+                  : carried
+                    ? <>Carrying <strong>{carried.name}</strong> — press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>F</kbd> to drop here</>
+                    : nearest
+                      ? (isTouch
+                          ? <>Tap 💧 to water, 🫳 to pick up <strong>{nearest.name}</strong></>
+                          : <>Press <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>E</kbd> to water · <kbd style={{ background: 'rgba(255,255,255,0.2)', padding: '1px 6px', borderRadius: 4 }}>F</kbd> to carry <strong>{nearest.name}</strong></>)
+                      : 'Walk up to a plant to water it'}
+              </div>
+            )
+          })()}
 
           {isTouch && (
             <>
@@ -2073,18 +2198,40 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
                 type="button"
                 data-walk-ui
                 onClick={() => waterPlant(nearest)}
-                disabled={!nearest}
+                disabled={!nearest || !!carriedPlantId}
                 style={{
                   position: 'absolute', bottom: 28, right: 20, zIndex: 6,
                   width: 78, height: 78, borderRadius: '50%',
                   border: 'none', fontSize: 32,
-                  background: nearest ? '#10b981' : 'rgba(0,0,0,0.35)',
+                  background: nearest && !carriedPlantId ? '#10b981' : 'rgba(0,0,0,0.35)',
                   color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-                  opacity: nearest ? 1 : 0.5,
+                  opacity: nearest && !carriedPlantId ? 1 : 0.5,
                   touchAction: 'manipulation',
                 }}
               >
                 💧
+              </button>
+              <button
+                type="button"
+                data-walk-ui
+                onClick={() => {
+                  if (carriedPlantId) dropPlant()
+                  else if (nearest) pickupPlant(nearest)
+                }}
+                disabled={!carriedPlantId && !nearest}
+                style={{
+                  position: 'absolute', bottom: 28, right: 108, zIndex: 6,
+                  width: 78, height: 78, borderRadius: '50%',
+                  border: 'none', fontSize: 30,
+                  background: carriedPlantId
+                    ? '#f59e0b'
+                    : nearest ? '#8b5cf6' : 'rgba(0,0,0,0.35)',
+                  color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+                  opacity: carriedPlantId || nearest ? 1 : 0.5,
+                  touchAction: 'manipulation',
+                }}
+              >
+                {carriedPlantId ? '📥' : '🫳'}
               </button>
             </>
           )}
