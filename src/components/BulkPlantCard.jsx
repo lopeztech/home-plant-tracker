@@ -124,10 +124,6 @@ export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove
         {(status === 'ready' || status === 'error') && (
           <>
             <Form.Group className="mb-2">
-              <Form.Control size="sm" placeholder="Plant Name *" value={form.name || ''}
-                onChange={(e) => update('name', e.target.value)} />
-            </Form.Group>
-            <Form.Group className="mb-2">
               <Form.Control size="sm" placeholder="Species" value={form.species || ''}
                 onChange={(e) => update('species', e.target.value)} />
               {onReanalyse && !showHint && (

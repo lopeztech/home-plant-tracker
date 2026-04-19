@@ -96,13 +96,13 @@ describe('PlantModal', () => {
 
   it('does not show the form until a mode is selected', () => {
     renderModal()
-    expect(screen.queryByPlaceholderText(/living room fern/i)).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText(/nephrolepis/i)).not.toBeInTheDocument()
   })
 
   it('shows the form after choosing Enter manually', () => {
     renderModal()
     selectMode('manual')
-    expect(screen.getByPlaceholderText(/living room fern/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/nephrolepis/i)).toBeInTheDocument()
   })
 
   it('shows the ImageAnalyser after choosing Analyse with AI', () => {
@@ -116,20 +116,15 @@ describe('PlantModal', () => {
     expect(screen.getByText('Fern')).toBeInTheDocument()
   })
 
-  it('pre-fills the name field when editing a plant', () => {
-    renderModal({ plant: existingPlant })
-    expect(screen.getByPlaceholderText(/living room fern/i)).toHaveValue('Fern')
-  })
-
   it('pre-fills the species field when editing a plant', () => {
     renderModal({ plant: existingPlant })
     expect(screen.getByPlaceholderText(/nephrolepis/i)).toHaveValue('Nephrolepis')
   })
 
-  it('starts with an empty name field for a new plant', () => {
+  it('starts with an empty species field for a new plant', () => {
     renderModal()
     selectMode('manual')
-    expect(screen.getByPlaceholderText(/living room fern/i)).toHaveValue('')
+    expect(screen.getByPlaceholderText(/nephrolepis/i)).toHaveValue('')
   })
 
   it('renders floor options from the floors prop', () => {
@@ -165,12 +160,12 @@ describe('PlantModal', () => {
 
   // ── User interactions ─────────────────────────────────────────────────────
 
-  it('updates the name field as the user types', () => {
+  it('updates the species field as the user types', () => {
     renderModal()
     selectMode('manual')
-    const nameInput = screen.getByPlaceholderText(/living room fern/i)
-    fireEvent.change(nameInput, { target: { value: 'My Monstera' } })
-    expect(nameInput).toHaveValue('My Monstera')
+    const speciesInput = screen.getByPlaceholderText(/nephrolepis/i)
+    fireEvent.change(speciesInput, { target: { value: 'Monstera deliciosa' } })
+    expect(speciesInput).toHaveValue('Monstera deliciosa')
   })
 
   it('shows health and maturity on the Care tab', () => {
@@ -185,32 +180,36 @@ describe('PlantModal', () => {
     expect(screen.queryByRole('button', { name: /add plant/i })).not.toBeInTheDocument()
   })
 
-  it('disables the Save button when name is empty', () => {
+  it('disables the Save button when species is empty', () => {
     renderModal()
     selectMode('manual')
     expect(screen.getByRole('button', { name: /add plant/i })).toBeDisabled()
   })
 
-  it('enables the Save button once a name is entered', () => {
+  it('enables the Save button once a species is entered', () => {
     renderModal()
     selectMode('manual')
-    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
-      target: { value: 'Fern' },
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Nephrolepis exaltata' },
     })
     expect(screen.getByRole('button', { name: /add plant/i })).not.toBeDisabled()
   })
 
-  it('calls onSave with the form data when Save is clicked', async () => {
+  it('calls onSave with a name derived from species + room when Save is clicked', async () => {
     const onSave = vi.fn()
     renderModal({ onSave })
     selectMode('manual')
-    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
-      target: { value: 'My Fern' },
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Nephrolepis exaltata' },
     })
     fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ name: 'My Fern' })
+      expect.objectContaining({
+        species: 'Nephrolepis exaltata',
+        // Default first room from the floors fixture is "Living Room"
+        name: expect.stringMatching(/^Nephrolepis exaltata - /),
+      })
     )
   })
 

@@ -4,6 +4,7 @@ import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
+import { derivePlantName } from '../utils/plantName.js'
 
 // Derive rooms from configured floors
 function getRoomsFromFloors(floors) {
@@ -170,7 +171,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [activeTab, setActiveTab] = useState('edit')
 
   const [form, setForm] = useState({
-    name: '', species: '', room: getRoomAtPosition(floors, activeFloorId, position) || getRoomsFromFloors(floors)[0] || '', floor: activeFloorId ?? 'ground',
+    species: '', room: getRoomAtPosition(floors, activeFloorId, position) || getRoomsFromFloors(floors)[0] || '', floor: activeFloorId ?? 'ground',
     lastWatered: today(), frequencyDays: 7, notes: '',
     imageFile: null, imageUrl: null, health: null, healthReason: null,
     maturity: null, recommendations: [],
@@ -182,7 +183,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [nameTouched, setNameTouched] = useState(false)
   const [careData, setCareData] = useState(() => plant?.careRecommendations || null)
   const [careLoading, setCareLoading] = useState(false)
   const [careError, setCareError] = useState(null)
@@ -200,7 +200,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   useEffect(() => {
     if (plant) {
       setForm({
-        name: plant.name || '', species: plant.species || '', room: plant.room || 'Living Room',
+        species: plant.species || '', room: plant.room || 'Living Room',
         floor: plant.floor ?? activeFloorId ?? 'ground',
         lastWatered: plant.lastWatered ? plant.lastWatered.split('T')[0] : today(),
         frequencyDays: plant.frequencyDays ?? 7, notes: plant.notes || '',
@@ -224,41 +224,34 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const update = useCallback((key, value) => setForm((prev) => ({ ...prev, [key]: value })), [])
 
   const handleAnalysisComplete = useCallback((result) => {
-    setForm((prev) => {
-      const species = result.species || prev.species
-      // Auto-generate name: short species name + room
-      const shortSpecies = species ? species.split('(')[0].split(',')[0].trim() : ''
-      const autoName = (!prev.name || prev.name === '') && shortSpecies
-        ? `${shortSpecies} - ${prev.room}`
-        : prev.name
-      return {
-        ...prev,
-        ...(result.species ? { species: result.species } : {}),
-        ...(result.frequencyDays ? { frequencyDays: Math.min(30, Math.max(1, Number(result.frequencyDays))) } : {}),
-        name: autoName,
-        health: result.health, healthReason: result.healthReason,
-        maturity: result.maturity, recommendations: result.recommendations || [],
-        ...(result.waterAmount ? { waterAmount: result.waterAmount } : {}),
-        ...(result.waterMethod ? { waterMethod: result.waterMethod } : {}),
-        ...(result.potSize ? { potSize: result.potSize } : {}),
-        ...(result.soilType ? { soilType: result.soilType } : {}),
-      }
-    })
+    setForm((prev) => ({
+      ...prev,
+      ...(result.species ? { species: result.species } : {}),
+      ...(result.frequencyDays ? { frequencyDays: Math.min(30, Math.max(1, Number(result.frequencyDays))) } : {}),
+      health: result.health, healthReason: result.healthReason,
+      maturity: result.maturity, recommendations: result.recommendations || [],
+      ...(result.waterAmount ? { waterAmount: result.waterAmount } : {}),
+      ...(result.waterMethod ? { waterMethod: result.waterMethod } : {}),
+      ...(result.potSize ? { potSize: result.potSize } : {}),
+      ...(result.soilType ? { soilType: result.soilType } : {}),
+    }))
   }, [])
 
   const handleImageChange = useCallback((file) => setForm((prev) => ({ ...prev, imageFile: file, imageUrl: null })), [])
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
-    if (!form.name.trim()) return
+    if (!form.species.trim()) return
     setIsSaving(true)
     let imageUrl = form.imageUrl
     if (form.imageFile) {
       try { imageUrl = await imagesApi.upload(form.imageFile, 'plants') }
       catch { setIsSaving(false); return }
     }
+    const species = form.species.trim()
     await onSave({
-      name: form.name.trim(), species: form.species.trim(), room: form.room, floor: form.floor,
+      name: derivePlantName({ species, room: form.room }),
+      species, room: form.room, floor: form.floor,
       lastWatered: new Date(form.lastWatered).toISOString(), frequencyDays: Number(form.frequencyDays),
       notes: form.notes.trim(), imageUrl, health: form.health, healthReason: form.healthReason,
       maturity: form.maturity, recommendations: form.recommendations,
@@ -295,7 +288,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     setCareLoading(true); setCareError(null)
     try {
       const outdoor = plant ? isOutdoor(plant, floors) : false
-      const data = await recommendApi.get(form.name, form.species, { plantedIn: form.plantedIn, isOutdoor: outdoor })
+      const derivedName = derivePlantName({ species: form.species, room: form.room })
+      const data = await recommendApi.get(derivedName, form.species, { plantedIn: form.plantedIn, isOutdoor: outdoor })
       setCareData(data)
     }
     catch (err) { setCareError(err.message) }
@@ -307,7 +301,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     try {
       const outdoor = plant ? isOutdoor(plant, floors) : false
       const data = await recommendApi.getWatering({
-        name: form.name, species: form.species,
+        name: derivePlantName({ species: form.species, room: form.room }), species: form.species,
         plantedIn: form.plantedIn, isOutdoor: outdoor,
         potSize: form.plantedIn === 'pot' ? form.potSize : null,
         potMaterial: form.plantedIn === 'pot' ? form.potMaterial : null,
@@ -328,7 +322,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       <Modal.Header closeButton className="border-bottom">
         <Modal.Title className="d-flex align-items-center gap-2 fs-6">
           <svg className="sa-icon text-primary"><use href="/icons/sprite.svg#feather"></use></svg>
-          {isEditing ? plant.name : 'Add Plant'}
+          {isEditing ? (plant.name || derivePlantName(plant)) : 'Add Plant'}
           {wateringStatus && (
             <Badge bg={wateringStatus.daysUntil < 0 ? 'danger' : wateringStatus.daysUntil === 0 ? 'warning' : wateringStatus.daysUntil <= 2 ? 'info' : 'success'}>
               {wateringStatus.label}
@@ -359,7 +353,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </div>
               <div>
                 <h6 className="mb-0 fw-500">Enter manually</h6>
-                <small className="text-muted">Fill in the plant name and care details yourself</small>
+                <small className="text-muted">Fill in the species and care details yourself</small>
               </div>
             </div>
           </button>
@@ -387,16 +381,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             </>
           )}
           <Form.Group className="mb-3">
-            <Form.Label>Plant Name *</Form.Label>
-            <Form.Control type="text" placeholder="e.g. Living Room Fern" value={form.name}
-              onChange={(e) => update('name', e.target.value)} onBlur={() => setNameTouched(true)}
-              isInvalid={nameTouched && !form.name.trim()} required />
-            <Form.Control.Feedback type="invalid">Plant name is required</Form.Control.Feedback>
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>Species</Form.Label>
+            <Form.Label>Species *</Form.Label>
             <Form.Control type="text" placeholder="e.g. Nephrolepis exaltata" value={form.species}
-              onChange={(e) => update('species', e.target.value)} />
+              onChange={(e) => update('species', e.target.value)} required />
+            <Form.Text className="text-muted">
+              Display name will be {form.species ? <strong>{derivePlantName({ species: form.species, room: form.room })}</strong> : 'derived from species + room'}
+            </Form.Text>
           </Form.Group>
           <Row className="mb-3">
             <Col md={6}>
@@ -927,7 +917,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         )}
         <Button variant="light" onClick={onClose}>Cancel</Button>
         {mode !== null && (!isEditing || activeTab === 'edit') && (
-          <Button variant="primary" onClick={handleSubmit} disabled={!form.name.trim() || isSaving}>
+          <Button variant="primary" onClick={handleSubmit} disabled={!form.species.trim() || isSaving}>
             {isSaving ? <Spinner size="sm" className="me-2" /> : <svg className="sa-icon me-1"><use href="/icons/sprite.svg#save"></use></svg>}
             {isSaving ? 'Saving...' : isEditing ? 'Save Changes' : 'Add Plant'}
           </Button>

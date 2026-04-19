@@ -3,6 +3,7 @@ import { Button, Row, Col, Badge, ProgressBar, Form } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { analyseApi, imagesApi } from '../api/plants.js'
 import BulkPlantCard from '../components/BulkPlantCard.jsx'
+import { derivePlantName } from '../utils/plantName.js'
 
 const CONCURRENCY = 3
 
@@ -73,7 +74,7 @@ export default function BulkUploadPage() {
       stageIndex: 0,
       error: null,
       form: {
-        name: '', species: '', room: defaultRoom, floor: defaultFloor,
+        species: '', room: defaultRoom, floor: defaultFloor,
         frequencyDays: 7, health: '', maturity: '', plantedIn: 'pot',
         waterAmount: '', waterMethod: '', potSize: '', soilType: '',
         lastWatered: new Date().toISOString().split('T')[0],
@@ -95,19 +96,15 @@ export default function BulkUploadPage() {
           ? await analyseApi.analyseWithHint(entry.file, hint)
           : await analyseApi.analyse(entry.file)
         const species = result.species || ''
-        const shortSpecies = species ? species.split('(')[0].split(',')[0].trim() : ''
 
         setEntries((prev) => prev.map((e) => {
           if (e.id !== entry.id) return e
-          const roomLabel = e.form.room || defaultRoom
-          const autoName = shortSpecies ? `${shortSpecies} - ${roomLabel}` : ''
           return {
           ...e,
           status: 'ready',
           analysisRecommendations: result.recommendations || [],
           form: {
             ...e.form,
-            name: autoName,
             species,
             ...(result.frequencyDays ? { frequencyDays: Math.min(30, Math.max(1, Number(result.frequencyDays))) } : {}),
             health: result.health || '',
@@ -168,6 +165,7 @@ export default function BulkUploadPage() {
         const imageUrl = await imagesApi.upload(entry.file, 'plants')
         const plantData = {
           ...entry.form,
+          name: derivePlantName(entry.form),
           imageUrl,
           recommendations: entry.analysisRecommendations || [],
         }

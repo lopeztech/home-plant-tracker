@@ -59,9 +59,8 @@ describe('BulkPlantCard', () => {
     )
   }
 
-  it('renders plant name and species fields when ready', () => {
+  it('renders the species field when ready', () => {
     renderCard()
-    expect(screen.getByDisplayValue('Monstera - Kitchen')).toBeInTheDocument()
     expect(screen.getByDisplayValue('Monstera deliciosa')).toBeInTheDocument()
   })
 
@@ -78,13 +77,13 @@ describe('BulkPlantCard', () => {
     expect(screen.getByText('Every 7d')).toBeInTheDocument()
   })
 
-  it('calls onChange when name is edited', () => {
+  it('calls onChange when species is edited', () => {
     renderCard()
-    const nameInput = screen.getByDisplayValue('Monstera - Kitchen')
-    fireEvent.change(nameInput, { target: { value: 'My Monstera' } })
+    const speciesInput = screen.getByDisplayValue('Monstera deliciosa')
+    fireEvent.change(speciesInput, { target: { value: 'Monstera adansonii' } })
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({
-        form: expect.objectContaining({ name: 'My Monstera' }),
+        form: expect.objectContaining({ species: 'Monstera adansonii' }),
       }),
     )
   })
