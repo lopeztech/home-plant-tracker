@@ -37,8 +37,8 @@ function applyAspectToPlants(plants, aspect, factor = 1) {
 // The game world uses percent coordinates (same as plant.x/y and room bounds).
 // Camera maps percent → pixels with a tile size, centred on the gardener.
 
-const TILE_DEFAULT = 12          // px per percent unit (world → screen) — starts zoomed out
-const TILE_MIN = 6
+const TILE_DEFAULT = 12          // px per percent unit (world → screen)
+const TILE_MIN = 3               // allow zooming far enough out for big floorplans
 const TILE_MAX = 36
 // Collision circle — deliberately smaller than the visible sprite so the
 // gardener can fit through condensed doorways (with DOOR_MIN = 6, a 6%
@@ -1002,6 +1002,26 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
   )
   const walls = useMemo(() => computeGameWalls(gameRooms), [gameRooms])
 
+  // Bounding box of the actual world the gardener should be allowed to roam,
+  // padded a little so you can step out onto the lawn around the rooms. The
+  // hardcoded -20/120 we used before assumed an un-dilated 100×100 layout and
+  // trapped the gardener once guest-mode dilation pushed rooms past 120.
+  const worldBounds = useMemo(() => {
+    const visible = (gameRooms || []).filter((r) => !r.hidden)
+    if (!visible.length) return { minX: -20, maxX: 120, minY: -20, maxY: 120 }
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+    for (const r of visible) {
+      minX = Math.min(minX, r.x)
+      maxX = Math.max(maxX, r.x + r.width)
+      minY = Math.min(minY, r.y)
+      maxY = Math.max(maxY, r.y + r.height)
+    }
+    const pad = 15
+    return { minX: minX - pad, maxX: maxX + pad, minY: minY - pad, maxY: maxY + pad }
+  }, [gameRooms])
+  const worldBoundsRef = useRef(worldBounds)
+  useEffect(() => { worldBoundsRef.current = worldBounds }, [worldBounds])
+
   // Zoom — TILE is mutable via scroll wheel / +/- buttons. Using a ref so
   // the canvas loop reads the latest value each frame without re-renders.
   const tileRef = useRef(TILE_DEFAULT)
@@ -1162,6 +1182,25 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     }
   }, [aspectFloor])
 
+  // Reset position on floor change, and pick a starting zoom that fits the
+  // whole floor in view — the user can scroll-wheel/zoom buttons from there.
+  // Deferred to the next frame so the canvas has its post-mount dimensions.
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const w = canvas.clientWidth
+      const h = canvas.clientHeight
+      const worldW = worldBounds.maxX - worldBounds.minX
+      const worldH = worldBounds.maxY - worldBounds.minY
+      if (w > 0 && h > 0 && worldW > 0 && worldH > 0) {
+        const fit = Math.min(w / worldW, h / worldH) * 0.95
+        tileRef.current = Math.max(TILE_MIN, Math.min(TILE_MAX, fit))
+      }
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [floor?.id, worldBounds])
+
   // Reset position on floor change
   useEffect(() => {
     const spawn = computeSpawn()
@@ -1296,9 +1335,11 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         dy = dy / (mag || 1) * clamped
         let nx = s.x + dx * SPEED * dt
         let ny = s.y + dy * SPEED * dt
-        // Clamp to world bounds with a small margin so you can't leave entirely
-        nx = Math.max(-20, Math.min(120, nx))
-        ny = Math.max(-20, Math.min(120, ny))
+        // Clamp to the room bounding box (plus padding) so the gardener can
+        // wander the lawn but not the void.
+        const wb = worldBoundsRef.current
+        nx = Math.max(wb.minX, Math.min(wb.maxX, nx))
+        ny = Math.max(wb.minY, Math.min(wb.maxY, ny))
         ;[nx, ny] = resolveCollision(nx, ny, walls, PLAYER_RADIUS)
         s.x = nx; s.y = ny
         // Facing: dominant axis
