@@ -597,6 +597,9 @@ describe('PlantModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /get watering recommendation/i }))
     await waitFor(() => expect(recommendApi.getWatering).toHaveBeenCalled())
     expect(await screen.findByText('Water moderately.')).toBeInTheDocument()
-    expect(screen.getByText('250ml')).toBeInTheDocument()
+    // "250ml" now renders in two places: the Water Amount field (synced from
+    // the rec) and the recommendation card's Amount row. Either is fine — just
+    // assert at least one is visible.
+    expect(screen.getAllByText('250ml').length).toBeGreaterThan(0)
   })
 })
