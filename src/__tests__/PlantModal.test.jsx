@@ -339,7 +339,7 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Recommendations'))
     fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
-    await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Fern', 'Nephrolepis', expect.anything()))
+    await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Nephrolepis - Kitchen', 'Nephrolepis', expect.anything()))
     expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
     expect(screen.getByText('Water weekly.')).toBeInTheDocument()
   })
@@ -397,30 +397,30 @@ describe('PlantModal', () => {
 
   // ── Form validation ───────────────────────────────────────────────────────
 
-  it('disables Save when name contains only whitespace', () => {
+  it('disables Save when species contains only whitespace', () => {
     renderModal()
     selectMode('manual')
-    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
       target: { value: '   ' },
     })
     expect(screen.getByRole('button', { name: /add plant/i })).toBeDisabled()
   })
 
-  it('enables Save after the user types a non-empty name', () => {
+  it('enables Save after the user types a non-empty species', () => {
     renderModal()
     selectMode('manual')
-    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
       target: { value: 'Cactus' },
     })
     expect(screen.getByRole('button', { name: /add plant/i })).not.toBeDisabled()
   })
 
-  it('disables Save again if name is cleared after being set', () => {
+  it('disables Save again if species is cleared after being set', () => {
     renderModal()
     selectMode('manual')
-    const nameInput = screen.getByPlaceholderText(/living room fern/i)
-    fireEvent.change(nameInput, { target: { value: 'Cactus' } })
-    fireEvent.change(nameInput, { target: { value: '' } })
+    const speciesInput = screen.getByPlaceholderText(/nephrolepis/i)
+    fireEvent.change(speciesInput, { target: { value: 'Cactus' } })
+    fireEvent.change(speciesInput, { target: { value: '' } })
     expect(screen.getByRole('button', { name: /add plant/i })).toBeDisabled()
   })
 
@@ -428,7 +428,7 @@ describe('PlantModal', () => {
     const onSave = vi.fn()
     renderModal({ onSave, position: { x: 33, y: 77 } })
     selectMode('manual')
-    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
       target: { value: 'Orchid' },
     })
     fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
@@ -468,7 +468,7 @@ describe('PlantModal', () => {
     const onSave = vi.fn()
     renderModal({ onSave })
     selectMode('manual')
-    fireEvent.change(screen.getByPlaceholderText(/living room fern/i), {
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
       target: { value: 'Cactus' },
     })
     const sunSelect = screen.getByRole('option', { name: 'Full Sun' }).closest('select')
