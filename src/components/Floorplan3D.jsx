@@ -247,6 +247,207 @@ function Bush({ scale = 1 }) {
   )
 }
 
+// ── Extra furniture ──────────────────────────────────────────────────────────
+
+function TVAndStand() {
+  return (
+    <group>
+      {/* stand */}
+      <mesh position={[0, 0.2, 0]} castShadow>
+        <boxGeometry args={[1.3, 0.4, 0.4]} />
+        <meshStandardMaterial color="#3b2415" roughness={0.7} />
+      </mesh>
+      {/* screen frame */}
+      <mesh position={[0, 0.85, 0.06]} castShadow>
+        <boxGeometry args={[1.2, 0.7, 0.05]} />
+        <meshStandardMaterial color="#111827" />
+      </mesh>
+      {/* screen face */}
+      <mesh position={[0, 0.85, 0.09]}>
+        <planeGeometry args={[1.1, 0.6]} />
+        <meshBasicMaterial color="#1e3a5f" />
+      </mesh>
+    </group>
+  )
+}
+
+function Nightstand() {
+  return (
+    <group>
+      <mesh position={[0, 0.25, 0]} castShadow>
+        <boxGeometry args={[0.45, 0.5, 0.4]} />
+        <meshStandardMaterial color="#6b4423" roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 0.51, 0]}>
+        <boxGeometry args={[0.48, 0.03, 0.43]} />
+        <meshStandardMaterial color="#4a2e1c" roughness={0.6} />
+      </mesh>
+      {/* lamp */}
+      <mesh position={[0, 0.6, 0]}>
+        <cylinderGeometry args={[0.02, 0.02, 0.18, 8]} />
+        <meshStandardMaterial color="#9ca3af" metalness={0.4} />
+      </mesh>
+      <mesh position={[0, 0.75, 0]}>
+        <coneGeometry args={[0.12, 0.14, 14]} />
+        <meshStandardMaterial color="#fef3c7" emissive="#fde68a" emissiveIntensity={0.3} />
+      </mesh>
+    </group>
+  )
+}
+
+function Rug({ w = 2.4, d = 1.6, color = '#b45f5f' }) {
+  return (
+    <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <planeGeometry args={[w, d]} />
+      <meshStandardMaterial color={color} roughness={1} />
+    </mesh>
+  )
+}
+
+function Chair({ color = '#5c3317' }) {
+  return (
+    <group>
+      {/* seat */}
+      <mesh position={[0, 0.42, 0]} castShadow>
+        <boxGeometry args={[0.42, 0.06, 0.42]} />
+        <meshStandardMaterial color={color} roughness={0.7} />
+      </mesh>
+      {/* legs */}
+      {[[-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16], [0.16, 0.16]].map(([x, z], i) => (
+        <mesh key={i} position={[x, 0.21, z]}>
+          <boxGeometry args={[0.05, 0.42, 0.05]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+      ))}
+      {/* back */}
+      <mesh position={[0, 0.72, -0.19]} castShadow>
+        <boxGeometry args={[0.42, 0.55, 0.05]} />
+        <meshStandardMaterial color={color} roughness={0.7} />
+      </mesh>
+    </group>
+  )
+}
+
+function Fridge() {
+  return (
+    <group>
+      <mesh position={[0, 0.9, 0]} castShadow>
+        <boxGeometry args={[0.7, 1.8, 0.7]} />
+        <meshStandardMaterial color="#e5e7eb" metalness={0.4} roughness={0.3} />
+      </mesh>
+      {/* door split */}
+      <mesh position={[0, 1.4, 0.36]}>
+        <boxGeometry args={[0.66, 0.02, 0.02]} />
+        <meshStandardMaterial color="#9ca3af" />
+      </mesh>
+      {/* handles */}
+      <mesh position={[0.22, 1.65, 0.36]}>
+        <boxGeometry args={[0.04, 0.25, 0.03]} />
+        <meshStandardMaterial color="#6b7280" metalness={0.5} />
+      </mesh>
+      <mesh position={[0.22, 0.8, 0.36]}>
+        <boxGeometry args={[0.04, 0.25, 0.03]} />
+        <meshStandardMaterial color="#6b7280" metalness={0.5} />
+      </mesh>
+    </group>
+  )
+}
+
+function Toilet() {
+  return (
+    <group>
+      {/* tank */}
+      <mesh position={[0, 0.75, -0.2]} castShadow>
+        <boxGeometry args={[0.45, 0.55, 0.2]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.3} />
+      </mesh>
+      {/* bowl */}
+      <mesh position={[0, 0.3, 0.05]} castShadow>
+        <boxGeometry args={[0.42, 0.4, 0.5]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.3} />
+      </mesh>
+      {/* seat */}
+      <mesh position={[0, 0.51, 0.05]}>
+        <boxGeometry args={[0.44, 0.03, 0.52]} />
+        <meshStandardMaterial color="#e5e7eb" roughness={0.4} />
+      </mesh>
+    </group>
+  )
+}
+
+function Sink() {
+  return (
+    <group>
+      {/* vanity */}
+      <mesh position={[0, 0.4, 0]} castShadow>
+        <boxGeometry args={[0.7, 0.8, 0.45]} />
+        <meshStandardMaterial color="#d6d2c9" roughness={0.6} />
+      </mesh>
+      {/* basin */}
+      <mesh position={[0, 0.82, 0]}>
+        <boxGeometry args={[0.66, 0.06, 0.42]} />
+        <meshStandardMaterial color="#ffffff" roughness={0.2} metalness={0.1} />
+      </mesh>
+      {/* faucet */}
+      <mesh position={[0, 0.92, -0.12]}>
+        <cylinderGeometry args={[0.012, 0.012, 0.15, 8]} />
+        <meshStandardMaterial color="#9ca3af" metalness={0.7} roughness={0.2} />
+      </mesh>
+      {/* mirror above */}
+      <mesh position={[0, 1.45, -0.21]}>
+        <boxGeometry args={[0.55, 0.5, 0.03]} />
+        <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.1} />
+      </mesh>
+    </group>
+  )
+}
+
+function Bookshelf() {
+  return (
+    <group>
+      {/* outer frame */}
+      <mesh position={[0, 0.85, 0]} castShadow>
+        <boxGeometry args={[0.9, 1.7, 0.3]} />
+        <meshStandardMaterial color="#6b4423" roughness={0.7} />
+      </mesh>
+      {/* shelves as coloured bands to hint at books */}
+      {[0.35, 0.75, 1.15, 1.5].map((y, i) => (
+        <mesh key={i} position={[0, y, 0.02]}>
+          <boxGeometry args={[0.82, 0.25, 0.26]} />
+          <meshStandardMaterial color={['#b45309', '#1e40af', '#065f46', '#7c2d12'][i]} roughness={0.8} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function OfficeChair() {
+  return (
+    <group>
+      {/* seat */}
+      <mesh position={[0, 0.45, 0]} castShadow>
+        <cylinderGeometry args={[0.22, 0.22, 0.08, 18]} />
+        <meshStandardMaterial color="#1f2937" roughness={0.7} />
+      </mesh>
+      {/* central post */}
+      <mesh position={[0, 0.25, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, 0.35, 8]} />
+        <meshStandardMaterial color="#4b5563" metalness={0.4} />
+      </mesh>
+      {/* star base */}
+      <mesh position={[0, 0.06, 0]}>
+        <cylinderGeometry args={[0.28, 0.28, 0.04, 5]} />
+        <meshStandardMaterial color="#4b5563" metalness={0.4} />
+      </mesh>
+      {/* backrest */}
+      <mesh position={[0, 0.8, -0.18]} castShadow>
+        <boxGeometry args={[0.42, 0.55, 0.06]} />
+        <meshStandardMaterial color="#1f2937" roughness={0.7} />
+      </mesh>
+    </group>
+  )
+}
+
 function RoomFurniture({ room, w, d }) {
   const category = categoriseRoom(room.name)
   if (!category) return null
@@ -254,23 +455,31 @@ function RoomFurniture({ room, w, d }) {
   const rand = seedRand(room.id || `${room.x}-${room.y}-${room.name || ''}`)
 
   if (category === 'living') {
-    // Sofa against one of the long walls; coffee table ~1m away from it.
+    // Sofa against one of the long walls; coffee table + TV opposite it.
     const side = w >= d ? (rand() < 0.5 ? 0 : 1) : (rand() < 0.5 ? 2 : 3)
     const a = wallAnchor(side, w, d, 0.9)
     const tint = ['#6b7280', '#8f8676', '#5a6677', '#78594b'][Math.floor(rand() * 4)]
-    // Coffee table offset away from the sofa back
-    const dx = side === 2 ? 1.3 : side === 3 ? -1.3 : 0
-    const dz = side === 0 ? 1.2 : side === 1 ? -1.2 : 0
+    // Sofa's forward direction (the way it faces); used to offset rug and TV.
+    const fx = side === 2 ? 1 : side === 3 ? -1 : 0
+    const fz = side === 0 ? 1 : side === 1 ? -1 : 0
+    const oppositeSide = { 0: 1, 1: 0, 2: 3, 3: 2 }[side]
+    const tv = wallAnchor(oppositeSide, w, d, 0.4)
     return (
       <>
+        <group position={[a.x + fx * 1.4, 0, a.z + fz * 0.9]}>
+          <Rug w={2.4} d={1.6} color="#9c5a3c" />
+        </group>
         <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
           <Sofa tint={tint} />
         </group>
-        <group position={[a.x + dx, 0, a.z + dz]}>
+        <group position={[a.x + fx * 1.3, 0, a.z + fz * 1.2]}>
           <mesh position={[0, 0.25, 0]} castShadow>
             <boxGeometry args={[1.2, 0.35, 0.6]} />
             <meshStandardMaterial color="#6b4423" roughness={0.7} />
           </mesh>
+        </group>
+        <group position={[tv.x, 0, tv.z]} rotation={[0, tv.ry, 0]}>
+          <TVAndStand />
         </group>
       </>
     )
@@ -280,10 +489,24 @@ function RoomFurniture({ room, w, d }) {
     const longSide = w >= d
     const side = longSide ? (rand() < 0.5 ? 2 : 3) : (rand() < 0.5 ? 0 : 1)
     const a = wallAnchor(side, w, d, 2.3)
+    // Offset nightstand alongside the bed (perpendicular to bed orientation).
+    const nx = side === 0 || side === 1 ? 1.05 : 0
+    const nz = side === 2 || side === 3 ? 1.05 : 0
+    // Rug in front of the bed.
+    const rx = side === 2 ? 1.2 : side === 3 ? -1.2 : 0
+    const rz = side === 0 ? 1.2 : side === 1 ? -1.2 : 0
     return (
-      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
-        <Bed />
-      </group>
+      <>
+        <group position={[a.x + rx, 0, a.z + rz]}>
+          <Rug w={1.8} d={1.4} color="#4b6cb7" />
+        </group>
+        <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+          <Bed />
+        </group>
+        <group position={[a.x + nx, 0, a.z + nz]} rotation={[0, a.ry, 0]}>
+          <Nightstand />
+        </group>
+      </>
     )
   }
 
@@ -292,10 +515,19 @@ function RoomFurniture({ room, w, d }) {
     const side = longSide ? (rand() < 0.5 ? 0 : 1) : (rand() < 0.5 ? 2 : 3)
     const len = Math.min(longSide ? w : d, 4) - 1
     const a = wallAnchor(side, w, d, 0.6)
+    // Fridge sits at one end of the counter along the wall.
+    const along = Math.min(len / 2 + 0.4, (longSide ? w : d) / 2 - 0.5)
+    const fx = side === 2 || side === 3 ? 0 : along * (rand() < 0.5 ? -1 : 1)
+    const fz = side === 0 || side === 1 ? 0 : along * (rand() < 0.5 ? -1 : 1)
     return (
-      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
-        <KitchenCounter length={len} />
-      </group>
+      <>
+        <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+          <KitchenCounter length={len} />
+        </group>
+        <group position={[a.x + fx, 0, a.z + fz]} rotation={[0, a.ry, 0]}>
+          <Fridge />
+        </group>
+      </>
     )
   }
 
@@ -303,17 +535,47 @@ function RoomFurniture({ room, w, d }) {
     const longSide = w >= d
     const side = longSide ? (rand() < 0.5 ? 0 : 1) : (rand() < 0.5 ? 2 : 3)
     const a = wallAnchor(side, w, d, 0.8)
+    // Toilet + sink crowd the opposite wall.
+    const opposite = { 0: 1, 1: 0, 2: 3, 3: 2 }[side]
+    const t = wallAnchor(opposite, w, d, 0.5)
+    const s = wallAnchor(opposite, w, d, 0.45)
+    const spread = Math.min((longSide ? w : d) / 2 - 0.5, 0.8)
+    const tOffX = opposite === 2 || opposite === 3 ? 0 : -spread
+    const tOffZ = opposite === 0 || opposite === 1 ? 0 : -spread
+    const sOffX = opposite === 2 || opposite === 3 ? 0 : spread
+    const sOffZ = opposite === 0 || opposite === 1 ? 0 : spread
     return (
-      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
-        <Tub />
-      </group>
+      <>
+        <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+          <Tub />
+        </group>
+        <group position={[t.x + tOffX, 0, t.z + tOffZ]} rotation={[0, t.ry, 0]}>
+          <Toilet />
+        </group>
+        <group position={[s.x + sOffX, 0, s.z + sOffZ]} rotation={[0, s.ry, 0]}>
+          <Sink />
+        </group>
+      </>
     )
   }
 
   if (category === 'dining') {
+    const rotY = w < d ? Math.PI / 2 : 0
+    // Four chairs — two on each long side of the table. Table geom is 1.8×0.9
+    // along X, so chairs sit at ±0.45 along the table's local X and ±0.7 in Z.
     return (
-      <group position={[0, 0, 0]} rotation={[0, w < d ? Math.PI / 2 : 0, 0]}>
+      <group position={[0, 0, 0]} rotation={[0, rotY, 0]}>
         <DiningTable />
+        {[
+          { x: -0.45, z: -0.7, ry: 0 },
+          { x:  0.45, z: -0.7, ry: 0 },
+          { x: -0.45, z:  0.7, ry: Math.PI },
+          { x:  0.45, z:  0.7, ry: Math.PI },
+        ].map((c, i) => (
+          <group key={i} position={[c.x, 0, c.z]} rotation={[0, c.ry, 0]}>
+            <Chair color="#6b4423" />
+          </group>
+        ))}
       </group>
     )
   }
@@ -321,10 +583,24 @@ function RoomFurniture({ room, w, d }) {
   if (category === 'office') {
     const side = Math.floor(rand() * 4)
     const a = wallAnchor(side, w, d, 0.7)
+    // Office chair in front of the desk (opposite the wall).
+    const cx = side === 2 ? 1 : side === 3 ? -1 : 0
+    const cz = side === 0 ? 1 : side === 1 ? -1 : 0
+    // Bookshelf against a perpendicular wall so it doesn't overlap the desk.
+    const shelfSide = (side + 2) % 4
+    const bs = wallAnchor(shelfSide, w, d, 0.3)
     return (
-      <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
-        <Desk />
-      </group>
+      <>
+        <group position={[a.x, 0, a.z]} rotation={[0, a.ry, 0]}>
+          <Desk />
+        </group>
+        <group position={[a.x + cx * 0.8, 0, a.z + cz * 0.8]} rotation={[0, a.ry + Math.PI, 0]}>
+          <OfficeChair />
+        </group>
+        <group position={[bs.x, 0, bs.z]} rotation={[0, bs.ry, 0]}>
+          <Bookshelf />
+        </group>
+      </>
     )
   }
 
@@ -1171,6 +1447,66 @@ function resolveWallCollisions(x, z, walls, radius) {
   return [nx, nz]
 }
 
+// Procedurally draw a home-plant-tracker logo (leaf inside a white disc) onto
+// a canvas and hand it back as a texture. Memoised at the module level so the
+// canvas is built once per page load and shared by any avatar instance.
+let _shirtLogoTexture = null
+function getShirtLogoTexture() {
+  if (_shirtLogoTexture) return _shirtLogoTexture
+  const c = typeof document !== 'undefined' ? document.createElement('canvas') : null
+  if (!c) return null
+  c.width = 256
+  c.height = 256
+  const ctx = c.getContext('2d')
+  ctx.clearRect(0, 0, 256, 256)
+
+  // White disc
+  ctx.fillStyle = '#ffffff'
+  ctx.beginPath(); ctx.arc(128, 128, 112, 0, Math.PI * 2); ctx.fill()
+  ctx.strokeStyle = '#14532d'; ctx.lineWidth = 8
+  ctx.stroke()
+
+  // Leaf body
+  ctx.fillStyle = '#16a34a'
+  ctx.beginPath()
+  ctx.moveTo(128, 48)
+  ctx.bezierCurveTo(62, 92, 62, 178, 128, 212)
+  ctx.bezierCurveTo(194, 178, 194, 92, 128, 48)
+  ctx.closePath()
+  ctx.fill()
+
+  // Darker leaf edge
+  ctx.strokeStyle = '#14532d'; ctx.lineWidth = 6; ctx.stroke()
+
+  // Central vein + side veins
+  ctx.strokeStyle = '#14532d'; ctx.lineWidth = 5; ctx.lineCap = 'round'
+  ctx.beginPath()
+  ctx.moveTo(128, 58); ctx.lineTo(128, 200)
+  ctx.moveTo(128, 100); ctx.lineTo(92, 118)
+  ctx.moveTo(128, 100); ctx.lineTo(164, 118)
+  ctx.moveTo(128, 140); ctx.lineTo(92, 158)
+  ctx.moveTo(128, 140); ctx.lineTo(164, 158)
+  ctx.stroke()
+
+  const tex = new THREE.CanvasTexture(c)
+  tex.anisotropy = 4
+  _shirtLogoTexture = tex
+  return tex
+}
+
+function ShirtLogo() {
+  const tex = useMemo(() => getShirtLogoTexture(), [])
+  if (!tex) return null
+  return (
+    // Placed just in front of the torso cylinder (radius ~0.15) so it sits on
+    // the shirt without z-fighting; rotated to face the avatar's forward (-z).
+    <mesh position={[0, 0.57, -0.162]} rotation={[0, Math.PI, 0]}>
+      <planeGeometry args={[0.14, 0.14]} />
+      <meshBasicMaterial map={tex} transparent />
+    </mesh>
+  )
+}
+
 function Avatar({ positionRef, yawRef, walkStateRef, camMode = 'tp' }) {
   // In first-person, hide everything behind the camera so we don't clip the
   // head / torso. Keep the right arm + can visible as a "hands-cam" element.
@@ -1247,8 +1583,24 @@ function Avatar({ positionRef, yawRef, walkStateRef, camMode = 'tp' }) {
 
           {/* Torso (shirt) */}
           <mesh position={[0, 0.54, 0]} castShadow>
-            <cylinderGeometry args={[0.14, 0.16, 0.28, 16]} />
-            <meshStandardMaterial color="#3b82f6" />
+            <cylinderGeometry args={[0.14, 0.16, 0.28, 20]} />
+            <meshStandardMaterial color="#3b82f6" roughness={0.8} />
+          </mesh>
+          {/* Shirt collar (darker band at the neckline) */}
+          <mesh position={[0, 0.685, 0]} rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[0.06, 0.012, 8, 20]} />
+            <meshStandardMaterial color="#1e3a8a" roughness={0.8} />
+          </mesh>
+          {/* Brand logo patch on the chest */}
+          <ShirtLogo />
+          {/* Shoulder rounds smooth the cylinder → arm transition */}
+          <mesh position={[-0.16, 0.66, 0]} castShadow>
+            <sphereGeometry args={[0.06, 14, 12]} />
+            <meshStandardMaterial color="#3b82f6" roughness={0.8} />
+          </mesh>
+          <mesh position={[0.16, 0.66, 0]} castShadow>
+            <sphereGeometry args={[0.06, 14, 12]} />
+            <meshStandardMaterial color="#3b82f6" roughness={0.8} />
           </mesh>
           {/* Neck */}
           <mesh position={[0, 0.70, 0]} castShadow>
@@ -1258,40 +1610,76 @@ function Avatar({ positionRef, yawRef, walkStateRef, camMode = 'tp' }) {
 
           {/* Head */}
           <mesh position={[0, 0.82, 0]} castShadow>
-            <sphereGeometry args={[0.13, 20, 20]} />
-            <meshStandardMaterial color="#fcd7b6" />
+            <sphereGeometry args={[0.13, 24, 24]} />
+            <meshStandardMaterial color="#fcd7b6" roughness={0.85} />
+          </mesh>
+          {/* Ears */}
+          <mesh position={[-0.128, 0.82, 0]} castShadow>
+            <sphereGeometry args={[0.026, 10, 10]} />
+            <meshStandardMaterial color="#f5b896" roughness={0.85} />
+          </mesh>
+          <mesh position={[0.128, 0.82, 0]} castShadow>
+            <sphereGeometry args={[0.026, 10, 10]} />
+            <meshStandardMaterial color="#f5b896" roughness={0.85} />
           </mesh>
           {/* Hair — a cap covering the top half of the head */}
           <mesh position={[0, 0.86, 0.015]} castShadow>
-            <sphereGeometry args={[0.135, 20, 20, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
-            <meshStandardMaterial color="#5c3317" />
+            <sphereGeometry args={[0.135, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.6]} />
+            <meshStandardMaterial color="#5c3317" roughness={0.95} />
           </mesh>
-          {/* Eyes — looking forward (-z) */}
-          <mesh position={[-0.045, 0.83, -0.11]}>
-            <sphereGeometry args={[0.015, 8, 8]} />
+          {/* Eyebrows — small dark slabs above each eye, tilted inward */}
+          <mesh position={[-0.05, 0.858, -0.108]} rotation={[0, 0, 0.12]}>
+            <boxGeometry args={[0.028, 0.008, 0.006]} />
+            <meshBasicMaterial color="#3d230c" />
+          </mesh>
+          <mesh position={[0.05, 0.858, -0.108]} rotation={[0, 0, -0.12]}>
+            <boxGeometry args={[0.028, 0.008, 0.006]} />
+            <meshBasicMaterial color="#3d230c" />
+          </mesh>
+          {/* Eyes — white sclera + dark iris so the gaze reads from a distance */}
+          <mesh position={[-0.048, 0.83, -0.11]}>
+            <sphereGeometry args={[0.018, 10, 10]} />
+            <meshBasicMaterial color="#ffffff" />
+          </mesh>
+          <mesh position={[0.048, 0.83, -0.11]}>
+            <sphereGeometry args={[0.018, 10, 10]} />
+            <meshBasicMaterial color="#ffffff" />
+          </mesh>
+          <mesh position={[-0.048, 0.83, -0.123]}>
+            <sphereGeometry args={[0.01, 8, 8]} />
             <meshBasicMaterial color="#1f2937" />
           </mesh>
-          <mesh position={[0.045, 0.83, -0.11]}>
-            <sphereGeometry args={[0.015, 8, 8]} />
+          <mesh position={[0.048, 0.83, -0.123]}>
+            <sphereGeometry args={[0.01, 8, 8]} />
             <meshBasicMaterial color="#1f2937" />
+          </mesh>
+          {/* Nose — a small wedge projecting from the face */}
+          <mesh position={[0, 0.81, -0.125]} rotation={[0, 0, 0]}>
+            <boxGeometry args={[0.015, 0.03, 0.02]} />
+            <meshStandardMaterial color="#f5b896" roughness={0.85} />
           </mesh>
           {/* Smile */}
-          <mesh position={[0, 0.79, -0.115]}>
+          <mesh position={[0, 0.785, -0.118]}>
             <boxGeometry args={[0.04, 0.008, 0.005]} />
             <meshBasicMaterial color="#7c2d12" />
           </mesh>
 
           {/* Left arm — swings during walk (pivots at shoulder) */}
-          <group ref={leftArmRef} position={[-0.18, 0.58, 0]} rotation={[0, 0, 0.05]}>
+          <group ref={leftArmRef} position={[-0.18, 0.6, 0]} rotation={[0, 0, 0.05]}>
             {/* Upper arm */}
             <mesh position={[0, -0.11, 0]} castShadow>
-              <cylinderGeometry args={[0.035, 0.035, 0.22, 10]} />
-              <meshStandardMaterial color="#3b82f6" />
+              <cylinderGeometry args={[0.035, 0.035, 0.22, 12]} />
+              <meshStandardMaterial color="#3b82f6" roughness={0.8} />
+            </mesh>
+            {/* Elbow */}
+            <mesh position={[0, -0.22, 0]}>
+              <sphereGeometry args={[0.037, 10, 10]} />
+              <meshStandardMaterial color="#3b82f6" roughness={0.8} />
             </mesh>
             {/* Hand */}
-            <mesh position={[0, -0.24, 0]} castShadow>
-              <sphereGeometry args={[0.04, 10, 10]} />
-              <meshStandardMaterial color="#fcd7b6" />
+            <mesh position={[0, -0.27, 0]} castShadow>
+              <sphereGeometry args={[0.042, 12, 12]} />
+              <meshStandardMaterial color="#fcd7b6" roughness={0.85} />
             </mesh>
           </group>
         </>
@@ -1300,12 +1688,16 @@ function Avatar({ positionRef, yawRef, walkStateRef, camMode = 'tp' }) {
       {/* Right arm — reaches out to hold the can (visible in both modes) */}
       <group position={[0.17, 0.6, 0]} rotation={[0.1, 0, -1.1]}>
         <mesh position={[0, -0.12, 0]} castShadow>
-          <cylinderGeometry args={[0.035, 0.035, 0.24, 10]} />
-          <meshStandardMaterial color="#3b82f6" />
+          <cylinderGeometry args={[0.035, 0.035, 0.24, 12]} />
+          <meshStandardMaterial color="#3b82f6" roughness={0.8} />
         </mesh>
-        <mesh position={[0, -0.26, 0]} castShadow>
-          <sphereGeometry args={[0.04, 10, 10]} />
-          <meshStandardMaterial color="#fcd7b6" />
+        <mesh position={[0, -0.24, 0]}>
+          <sphereGeometry args={[0.037, 10, 10]} />
+          <meshStandardMaterial color="#3b82f6" roughness={0.8} />
+        </mesh>
+        <mesh position={[0, -0.29, 0]} castShadow>
+          <sphereGeometry args={[0.042, 12, 12]} />
+          <meshStandardMaterial color="#fcd7b6" roughness={0.85} />
         </mesh>
       </group>
 
