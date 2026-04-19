@@ -560,6 +560,89 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Form.Group>
             </>
           )}
+
+          {/* Photo capture + gallery — only available once the plant exists,
+              because the upload endpoints target plant.id. */}
+          {isEditing && (
+            <>
+              <hr />
+              <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Take a Photo</h6>
+              <div className="d-flex gap-2 mb-3">
+                <GrowthUpload plantId={plant.id} onComplete={(result) => {
+                  if (result?.maturity) update('maturity', result.maturity)
+                  if (result?.health) update('health', result.health)
+                }} />
+                <DiagnosticUpload plantId={plant.id} onComplete={(result) => {
+                  if (result?.analysis?.severity === 'severe') update('health', 'Poor')
+                  else if (result?.analysis?.severity === 'moderate') update('health', 'Fair')
+                }} />
+              </div>
+
+              {(() => {
+                let photos = [...(plant.photoLog || [])]
+                  .filter((p) => !deletedPhotoUrls.includes(p.url?.split('?')[0]))
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+
+                if (photos.length === 0 && plant.imageUrl) {
+                  photos = [{ url: plant.imageUrl, date: plant.createdAt || plant.updatedAt, type: 'growth', analysis: null }]
+                }
+
+                if (photos.length === 0) return null
+
+                return (
+                  <>
+                    <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Photo History ({photos.length})</h6>
+                    <Row className="g-2 mb-3">
+                      {photos.map((photo, i) => (
+                        <Col xs={6} md={4} key={photo.url || i}>
+                          <div className="border rounded overflow-hidden position-relative" style={{ minHeight: 120 }}>
+                            <img src={photo.url} alt={`Photo ${i + 1}`} className="w-100"
+                              style={{ height: 120, objectFit: 'cover', display: 'block' }}
+                              onError={(e) => { e.target.style.display = 'none' }} />
+                            <Button variant="dark" size="sm"
+                              className="position-absolute top-0 end-0 m-1 rounded-circle p-0"
+                              style={{ width: 22, height: 22, opacity: 0.8 }}
+                              disabled={deletingPhoto}
+                              onClick={() => setConfirmDeletePhoto(photo.url)}
+                              title="Delete photo">
+                              <svg className="sa-icon" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#trash-2"></use></svg>
+                            </Button>
+                            <div className="position-absolute bottom-0 start-0 end-0 px-2 py-1" style={{ background: 'rgba(0,0,0,0.6)' }}>
+                              <div className="d-flex align-items-center justify-content-between">
+                                <small className="text-white" style={{ fontSize: '0.6rem' }}>
+                                  {new Date(photo.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}
+                                </small>
+                                <Badge bg={photo.type === 'diagnostic' ? 'warning' : 'success'} style={{ fontSize: '0.5rem' }}>
+                                  {photo.type === 'diagnostic' ? 'Diagnostic' : 'Growth'}
+                                </Badge>
+                              </div>
+                            </div>
+                          </div>
+                          {photo.type === 'diagnostic' && photo.analysis && (
+                            <div className="border border-top-0 rounded-bottom px-2 py-1 bg-body-tertiary">
+                              <small className="fw-500 d-block">{photo.analysis.issue}</small>
+                            </div>
+                          )}
+                        </Col>
+                      ))}
+                    </Row>
+
+                    {confirmDeletePhoto && (
+                      <div className="alert alert-warning py-2 d-flex align-items-center justify-content-between">
+                        <small>Delete this photo? This cannot be undone.</small>
+                        <div className="d-flex gap-1">
+                          <Button variant="light" size="sm" onClick={() => setConfirmDeletePhoto(null)} disabled={deletingPhoto}>Cancel</Button>
+                          <Button variant="danger" size="sm" onClick={() => handleDeletePhoto(confirmDeletePhoto)} disabled={deletingPhoto}>
+                            {deletingPhoto ? <Spinner size="sm" /> : 'Delete'}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
+            </>
+          )}
         </Modal.Body>
       )}
 
@@ -840,88 +923,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <small className="text-muted fs-xs">Updated automatically from photo analysis</small>
             </Col>
           </Row>
-
-          <hr />
-
-          {/* Take a photo — Record Growth or Diagnose */}
-          <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Take a Photo</h6>
-          <div className="d-flex gap-2 mb-3">
-            <GrowthUpload plantId={plant.id} onComplete={(result) => {
-              if (result?.maturity) update('maturity', result.maturity)
-              if (result?.health) update('health', result.health)
-            }} />
-            <DiagnosticUpload plantId={plant.id} onComplete={(result) => {
-              if (result?.analysis?.severity === 'severe') update('health', 'Poor')
-              else if (result?.analysis?.severity === 'moderate') update('health', 'Fair')
-            }} />
-          </div>
-
-          {/* Photo timeline */}
-          {(() => {
-            let photos = [...(plant.photoLog || [])]
-              .filter((p) => !deletedPhotoUrls.includes(p.url?.split('?')[0]))
-              .sort((a, b) => new Date(b.date) - new Date(a.date))
-
-            // Fallback: if no photoLog but imageUrl exists, show it
-            if (photos.length === 0 && plant.imageUrl) {
-              photos = [{ url: plant.imageUrl, date: plant.createdAt || plant.updatedAt, type: 'growth', analysis: null }]
-            }
-
-            if (photos.length === 0) return null
-
-            return (
-              <>
-                <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Photo History ({photos.length})</h6>
-                <Row className="g-2 mb-3">
-                  {photos.map((photo, i) => (
-                    <Col xs={6} md={4} key={photo.url || i}>
-                      <div className="border rounded overflow-hidden position-relative" style={{ minHeight: 120 }}>
-                        <img src={photo.url} alt={`Photo ${i + 1}`} className="w-100"
-                          style={{ height: 120, objectFit: 'cover', display: 'block' }}
-                          onError={(e) => { e.target.style.display = 'none' }} />
-                        <Button variant="dark" size="sm"
-                          className="position-absolute top-0 end-0 m-1 rounded-circle p-0"
-                          style={{ width: 22, height: 22, opacity: 0.8 }}
-                          disabled={deletingPhoto}
-                          onClick={() => setConfirmDeletePhoto(photo.url)}
-                          title="Delete photo">
-                          <svg className="sa-icon" style={{ width: 10, height: 10 }}><use href="/icons/sprite.svg#trash-2"></use></svg>
-                        </Button>
-                        <div className="position-absolute bottom-0 start-0 end-0 px-2 py-1" style={{ background: 'rgba(0,0,0,0.6)' }}>
-                          <div className="d-flex align-items-center justify-content-between">
-                            <small className="text-white" style={{ fontSize: '0.6rem' }}>
-                              {new Date(photo.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}
-                            </small>
-                            <Badge bg={photo.type === 'diagnostic' ? 'warning' : 'success'} style={{ fontSize: '0.5rem' }}>
-                              {photo.type === 'diagnostic' ? 'Diagnostic' : 'Growth'}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                      {photo.type === 'diagnostic' && photo.analysis && (
-                        <div className="border border-top-0 rounded-bottom px-2 py-1 bg-body-tertiary">
-                          <small className="fw-500 d-block">{photo.analysis.issue}</small>
-                        </div>
-                      )}
-                    </Col>
-                  ))}
-                </Row>
-
-                {/* Photo delete confirmation */}
-                {confirmDeletePhoto && (
-                  <div className="alert alert-warning py-2 d-flex align-items-center justify-content-between">
-                    <small>Delete this photo? This cannot be undone.</small>
-                    <div className="d-flex gap-1">
-                      <Button variant="light" size="sm" onClick={() => setConfirmDeletePhoto(null)} disabled={deletingPhoto}>Cancel</Button>
-                      <Button variant="danger" size="sm" onClick={() => handleDeletePhoto(confirmDeletePhoto)} disabled={deletingPhoto}>
-                        {deletingPhoto ? <Spinner size="sm" /> : 'Delete'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )
-          })()}
 
           <hr />
 
