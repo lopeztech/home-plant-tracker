@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } 
 import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col, Pagination } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
-import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import { derivePlantName } from '../utils/plantName.js'
 import { PlantContext } from '../context/PlantContext.jsx'
@@ -289,6 +289,22 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   }, [plant, activeFloorId])
 
   const update = useCallback((key, value) => setForm((prev) => ({ ...prev, [key]: value })), [])
+
+  // Frequency, watering method, and water amount are no longer user-editable —
+  // they mirror whatever the latest AI watering recommendation produced, so
+  // sync the form whenever a new wateringRec lands (from a fresh fetch or
+  // from the last history entry on load).
+  useEffect(() => {
+    if (!wateringRec) return
+    setForm((prev) => ({
+      ...prev,
+      ...(wateringRec.recommendedFrequencyDays
+        ? { frequencyDays: Math.min(30, Math.max(1, Number(wateringRec.recommendedFrequencyDays))) }
+        : {}),
+      ...(wateringRec.method ? { waterMethod: wateringRec.method } : {}),
+      ...(wateringRec.amount ? { waterAmount: wateringRec.amount } : {}),
+    }))
+  }, [wateringRec])
 
   const handleAnalysisComplete = useCallback((result) => {
     setForm((prev) => ({
@@ -587,45 +603,42 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </div>
             )
           })()}
+          {/* Frequency, Watering Method, Water Amount are driven entirely by
+              the AI watering recommendation below — shown read-only so they
+              always match the latest advice. */}
           <Row className="mb-3">
             <Col>
               <Form.Group>
-                <Form.Label>Frequency: {form.frequencyDays}d</Form.Label>
-                <Form.Range min={1} max={30} value={form.frequencyDays} onChange={(e) => update('frequencyDays', e.target.value)} className="mt-2" />
+                <Form.Label className="d-flex justify-content-between">
+                  <span>Frequency: {form.frequencyDays}d</span>
+                  <small className="text-muted fw-normal">From AI recommendation</small>
+                </Form.Label>
+                <Form.Range min={1} max={30} value={form.frequencyDays} disabled className="mt-2" />
                 <div className="d-flex justify-content-between fs-xs text-muted"><span>1d</span><span>30d</span></div>
               </Form.Group>
             </Col>
           </Row>
-          {/* Adaptive frequency suggestion */}
-          {(() => {
-            const suggestion = plant ? getSuggestedFrequency(plant) : null
-            if (!suggestion || suggestion.suggestedDays === Number(form.frequencyDays)) return null
-            return (
-              <div className="mb-3 p-2 rounded border border-info bg-body-tertiary fs-sm">
-                <div className="d-flex align-items-center gap-2">
-                  <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#trending-up"></use></svg>
-                  <span>{suggestion.reason}</span>
-                </div>
-                <Button variant="outline-info" size="sm" className="mt-2" onClick={() => update('frequencyDays', suggestion.suggestedDays)}>
-                  Update to {suggestion.suggestedDays}d
-                </Button>
-              </div>
-            )
-          })()}
           <Row className="mb-3">
             <Col md={6}>
               <Form.Group>
                 <Form.Label>Watering Method</Form.Label>
-                <Form.Select value={form.waterMethod || ''} onChange={(e) => update('waterMethod', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {WATER_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </Form.Select>
+                <Form.Control
+                  type="text"
+                  value={WATER_METHODS.find((m) => m.value === form.waterMethod)?.label || form.waterMethod || ''}
+                  placeholder="— Fetch a recommendation below —"
+                  readOnly
+                />
               </Form.Group>
             </Col>
             <Col md={6}>
               <Form.Group>
                 <Form.Label>Water Amount</Form.Label>
-                <Form.Control type="text" placeholder="e.g. 250ml, 1L, 2 cups" value={form.waterAmount || ''} onChange={(e) => update('waterAmount', e.target.value || null)} />
+                <Form.Control
+                  type="text"
+                  placeholder="— Fetch a recommendation below —"
+                  value={form.waterAmount || ''}
+                  readOnly
+                />
               </Form.Group>
             </Col>
           </Row>
@@ -680,17 +693,6 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   <div className="mt-2 pt-2 border-top">
                     <strong className="text-uppercase fs-xs">Signs to Watch</strong>
                     <p className="text-muted mb-0 fs-xs">{wateringRec.signs}</p>
-                  </div>
-                )}
-                {wateringRec.recommendedFrequencyDays && wateringRec.recommendedFrequencyDays !== Number(form.frequencyDays) && (
-                  <div className="mt-2 pt-2 border-top d-flex align-items-center justify-content-between">
-                    <span className="fs-xs">
-                      AI recommends watering every <strong>{wateringRec.recommendedFrequencyDays}d</strong>
-                      {form.frequencyDays ? <span className="text-muted"> (currently {form.frequencyDays}d)</span> : null}
-                    </span>
-                    <Button variant="outline-primary" size="sm" className="ms-2" onClick={() => update('frequencyDays', wateringRec.recommendedFrequencyDays)}>
-                      Apply
-                    </Button>
                   </div>
                 )}
               </div>
