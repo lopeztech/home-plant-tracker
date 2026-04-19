@@ -395,16 +395,38 @@ const RECOMMEND_SCHEMA = {
   required: ['summary', 'watering', 'light', 'humidity', 'soil', 'temperature', 'fertilising', 'commonIssues', 'tips'],
 };
 
-const RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor } = {}) => {
+// Join "Sydney, Australia" or fall back to either half when one is missing.
+function formatLocation(location) {
+  if (!location) return '';
+  const parts = [location.name, location.country].filter(Boolean);
+  return parts.join(', ');
+}
+
+// Render a unit symbol regardless of whether the caller sent "C"/"F" or the
+// full "°C"/"°F" symbol.
+function tempSymbol(unit) {
+  if (!unit) return '°C';
+  const s = String(unit).toUpperCase();
+  if (s.includes('F')) return '°F';
+  return '°C';
+}
+
+const RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, location, tempUnit } = {}) => {
   const context = [];
   if (plantedIn) context.push(`planted in: ${plantedIn === 'ground' ? 'the ground' : plantedIn === 'garden-bed' ? 'a garden bed' : 'a pot'}`);
-  if (isOutdoor !== undefined) context.push(`location: ${isOutdoor ? 'outdoors' : 'indoors'}`);
+  if (isOutdoor !== undefined) context.push(`growing: ${isOutdoor ? 'outdoors' : 'indoors'}`);
+  const loc = formatLocation(location);
+  if (loc) context.push(`location: ${loc}`);
+  const unit = tempSymbol(tempUnit);
+  context.push(`preferred temperature unit: ${unit}`);
   const extra = context.length ? `\nContext: ${context.join(', ')}.` : '';
   return `You are a plant care expert. Provide detailed care guidance for: ${name}${species ? ` (${species})` : ''}.${extra}
 Rules:
 - commonIssues and tips must each have 2–4 items
 - Be concise and practical
-- Tailor advice to the plant's specific planting situation (pot vs ground vs garden bed, indoor vs outdoor)`;
+- Tailor advice to the plant's specific planting situation (pot vs ground vs garden bed, indoor vs outdoor)
+- Tailor advice to the user's local climate based on the provided location. DO NOT reference USDA hardiness zones — they are US-specific and irrelevant outside the United States. Describe climate in plain terms (e.g. "subtropical", "Mediterranean", "temperate"), reference the southern-hemisphere seasons when the location is in the southern hemisphere, and assume the user is not in the US unless the country field says so.
+- Express ALL temperatures in your response in ${unit} (e.g. ${unit === '°F' ? '"65–75°F"' : '"18–24°C"'}). Never mix units.`;
 };
 
 const WATERING_RECOMMEND_SCHEMA = {
@@ -421,10 +443,12 @@ const WATERING_RECOMMEND_SCHEMA = {
   required: ['amount', 'frequency', 'recommendedFrequencyDays', 'method', 'seasonalTips', 'signs', 'summary'],
 };
 
-const WATERING_RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature } = {}) => {
+const WATERING_RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature, location, tempUnit } = {}) => {
   const details = [];
   if (plantedIn) details.push(`planted in: ${plantedIn === 'ground' ? 'the ground' : plantedIn === 'garden-bed' ? 'a garden bed' : 'a pot'}`);
-  if (isOutdoor !== undefined) details.push(`location: ${isOutdoor ? 'outdoors' : 'indoors'}`);
+  if (isOutdoor !== undefined) details.push(`growing: ${isOutdoor ? 'outdoors' : 'indoors'}`);
+  const loc = formatLocation(location);
+  if (loc) details.push(`location: ${loc}`);
   if (potSize) details.push(`pot size: ${potSize}`);
   if (potMaterial) details.push(`pot material: ${potMaterial}`);
   if (soilType) details.push(`soil: ${soilType}`);
@@ -432,7 +456,12 @@ const WATERING_RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, potSiz
   if (health) details.push(`current health: ${health}`);
   if (maturity) details.push(`maturity: ${maturity}`);
   if (season) details.push(`current season: ${season}`);
-  if (temperature) details.push(`current temperature: ${temperature}°C`);
+  const unit = tempSymbol(tempUnit);
+  // The frontend passes the value already in the user's preferred unit
+  // (weather is fetched with the selected unit), so we just label it.
+  if (temperature !== undefined && temperature !== null && temperature !== '') {
+    details.push(`current temperature: ${temperature}${unit}`);
+  }
   const ctx = details.length ? `\nPlant details: ${details.join(', ')}.` : '';
   return `You are a plant watering expert. Provide specific watering guidance for: ${name}${species ? ` (${species})` : ''}.${ctx}
 Rules:
@@ -440,10 +469,11 @@ Rules:
 - frequency: specific schedule (e.g. "every 5-7 days in summer")
 - recommendedFrequencyDays: a single integer (1-30) for the ideal watering interval in days for the CURRENT season and conditions. Consider the species' water needs, container type (terracotta dries faster than plastic), soil drainage, sun exposure, indoor vs outdoor, temperature, and plant maturity
 - method: best watering method for this setup
-- seasonalTips: how to adjust watering across seasons
+- seasonalTips: how to adjust watering across seasons — use the provided location to choose the correct hemisphere's seasons
 - signs: how to tell if over/under-watered
 - summary: one sentence overall recommendation
-- Tailor all advice to the specific planting situation`;
+- Tailor all advice to the specific planting situation and local climate. DO NOT reference USDA hardiness zones — they are US-specific. Assume the user is not in the US unless the location's country says so.
+- Express ALL temperatures in your response in ${unit}.`;
 };
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -710,13 +740,13 @@ app.post('/analyse-with-hint', async (req, res) => {
 
 app.post('/recommend', async (req, res) => {
   try {
-    const { name, species, plantedIn, isOutdoor } = req.body;
+    const { name, species, plantedIn, isOutdoor, location, tempUnit } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     const result = await geminiWithRetry({
       contents: [{
         role: 'user',
-        parts: [{ text: RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor }) }],
+        parts: [{ text: RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, location, tempUnit }) }],
       }],
       generationConfig: {
         // 1024 tokens is not enough for the 9-field schema; truncated output
@@ -738,13 +768,13 @@ app.post('/recommend', async (req, res) => {
 
 app.post('/recommend-watering', async (req, res) => {
   try {
-    const { name, species, plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature } = req.body;
+    const { name, species, plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature, location, tempUnit } = req.body;
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     const result = await geminiWithRetry({
       contents: [{
         role: 'user',
-        parts: [{ text: WATERING_RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature }) }],
+        parts: [{ text: WATERING_RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature, location, tempUnit }) }],
       }],
       generationConfig: {
         maxOutputTokens: 2048,

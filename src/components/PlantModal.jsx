@@ -351,12 +351,20 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
   const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
 
+  // Pulled from context when available; falls back to props-only so tests
+  // without a PlantProvider still work.
+  const ctxLocation = plantCtx?.location || null
+  const ctxTempUnit = plantCtx?.tempUnit?.unit || null
+
   const handleGetRecommendations = useCallback(async () => {
     setCareLoading(true); setCareError(null)
     try {
       const outdoor = plant ? isOutdoor(plant, floors) : false
       const derivedName = derivePlantName({ species: form.species, room: form.room })
-      const data = await recommendApi.get(derivedName, form.species, { plantedIn: form.plantedIn, isOutdoor: outdoor })
+      const data = await recommendApi.get(derivedName, form.species, {
+        plantedIn: form.plantedIn, isOutdoor: outdoor,
+        location: ctxLocation, tempUnit: ctxTempUnit,
+      })
       setCareData(data)
       const next = [...careHistory, { date: new Date().toISOString(), data }].slice(-RECOMMENDATION_HISTORY_LIMIT)
       setCareHistory(next)
@@ -364,7 +372,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     }
     catch (err) { setCareError(friendlyErrorMessage(err)) }
     finally { setCareLoading(false) }
-  }, [form, plant, floors, careHistory, persistHistory])
+  }, [form, plant, floors, careHistory, persistHistory, ctxLocation, ctxTempUnit])
 
   const handleGetWateringRec = useCallback(async () => {
     setWateringRecLoading(true); setWateringRecError(null)
@@ -380,6 +388,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         maturity: form.maturity,
         season: wateringStatus?.season || null,
         temperature: weather?.current?.temp || null,
+        location: ctxLocation, tempUnit: ctxTempUnit,
       })
       setWateringRec(data)
       const next = [...wateringHistory, { date: new Date().toISOString(), data }].slice(-RECOMMENDATION_HISTORY_LIMIT)
@@ -388,7 +397,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     }
     catch (err) { setWateringRecError(friendlyErrorMessage(err)) }
     finally { setWateringRecLoading(false) }
-  }, [form, plant, floors, wateringStatus, wateringHistory, persistHistory])
+  }, [form, plant, floors, wateringStatus, wateringHistory, persistHistory, ctxLocation, ctxTempUnit, weather])
 
   return (
     <Modal show onHide={onClose} size="lg" centered scrollable>

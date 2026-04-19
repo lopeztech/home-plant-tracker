@@ -340,6 +340,38 @@ describe('POST /recommend', () => {
     expect(res.body.error).not.toMatch(/object key/i);
   });
 
+  it('threads location and temp unit into the prompt and bans USDA zones', async () => {
+    let capturedPrompt = null;
+    geminiGenerateFn = async (req) => {
+      capturedPrompt = req.contents[0].parts[0].text;
+      return { response: { text: () => JSON.stringify(carePayload) } };
+    };
+    const res = await request(app).post('/recommend').send({
+      name: 'Anthurium', species: 'Anthurium andraeanum',
+      location: { name: 'Sydney', country: 'Australia' },
+      tempUnit: 'C',
+    });
+    expect(res.status).toBe(200);
+    expect(capturedPrompt).toMatch(/Sydney, Australia/);
+    expect(capturedPrompt).toMatch(/°C/);
+    expect(capturedPrompt).toMatch(/USDA/);
+    expect(capturedPrompt).toMatch(/DO NOT reference USDA/);
+  });
+
+  it('honours Fahrenheit when the user prefers it', async () => {
+    let capturedPrompt = null;
+    geminiGenerateFn = async (req) => {
+      capturedPrompt = req.contents[0].parts[0].text;
+      return { response: { text: () => JSON.stringify(carePayload) } };
+    };
+    const res = await request(app).post('/recommend').send({
+      name: 'Rose', species: 'Rosa', tempUnit: 'F',
+    });
+    expect(res.status).toBe(200);
+    expect(capturedPrompt).toMatch(/°F/);
+    expect(capturedPrompt).not.toMatch(/in °C/);
+  });
+
   it('returns a friendly error when Gemini truncates the response at MAX_TOKENS', async () => {
     geminiGenerateFn = async () => ({
       response: {
@@ -382,6 +414,23 @@ describe('POST /recommend-watering', () => {
     const res = await request(app).post('/recommend-watering').send({ name: 'Cactus' });
     expect(res.status).toBe(200);
     expect(res.body.amount).toBeTruthy();
+  });
+
+  it('threads location and Fahrenheit unit into the watering prompt', async () => {
+    let capturedPrompt = null;
+    geminiGenerateFn = async (req) => {
+      capturedPrompt = req.contents[0].parts[0].text;
+      return { response: { text: () => JSON.stringify(wateringPayload) } };
+    };
+    const res = await request(app).post('/recommend-watering').send({
+      name: 'Anthurium', species: 'Anthurium',
+      location: { name: 'Sydney', country: 'Australia' },
+      tempUnit: 'F', temperature: 77,
+    });
+    expect(res.status).toBe(200);
+    expect(capturedPrompt).toMatch(/Sydney, Australia/);
+    expect(capturedPrompt).toMatch(/current temperature: 77°F/);
+    expect(capturedPrompt).toMatch(/USDA/);
   });
 
   it('returns recommendedFrequencyDays', async () => {

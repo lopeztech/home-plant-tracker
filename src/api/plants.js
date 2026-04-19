@@ -104,9 +104,9 @@ export const analyseApi = {
 }
 
 export const recommendApi = {
-  get: (name, species, { plantedIn, isOutdoor } = {}) => request('/recommend', {
+  get: (name, species, { plantedIn, isOutdoor, location, tempUnit } = {}) => request('/recommend', {
     method: 'POST',
-    body: JSON.stringify({ name, species, plantedIn, isOutdoor }),
+    body: JSON.stringify({ name, species, plantedIn, isOutdoor, location, tempUnit }),
   }),
   getWatering: (params) => request('/recommend-watering', {
     method: 'POST',
