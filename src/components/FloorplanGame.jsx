@@ -142,6 +142,9 @@ function condenseLayout(rooms, plants, factor) {
 // Returns solid wall segments after subtracting doorways (shared edges
 // between rooms AND a forced entry in rooms that have none).
 
+// Returns { walls, doors }: walls are solid blockers; doors are gaps in the
+// walls that the gardener can pass through. The door list lets the renderer
+// draw a visible door panel that swings open when the gardener approaches.
 function computeGameWalls(rooms) {
   const eps = WALL_THICKNESS * 1.5
   const visible = (rooms || []).filter((r) => !r.hidden)
@@ -186,6 +189,7 @@ function computeGameWalls(rooms) {
   }
 
   const blockers = []
+  const doorsAll = []
   for (const s of raw) {
     const doors = []
     for (const o of raw) {
@@ -213,6 +217,7 @@ function computeGameWalls(rooms) {
     let cursor = s.a
     for (const [a, b] of merged) {
       if (a > cursor) blockers.push({ axis: s.axis, v: s.v, a: cursor, b: a })
+      doorsAll.push({ axis: s.axis, v: s.v, a, b })
       cursor = Math.max(cursor, b)
     }
     if (cursor < s.b) blockers.push({ axis: s.axis, v: s.v, a: cursor, b: s.b })
@@ -225,7 +230,65 @@ function computeGameWalls(rooms) {
     if (seen.has(k)) continue
     seen.add(k); out.push(w)
   }
-  return out
+  const doorSeen = new Set()
+  const doorsOut = []
+  for (const d of doorsAll) {
+    const k = `${d.axis}:${d.v.toFixed(2)}:${d.a.toFixed(2)}:${d.b.toFixed(2)}`
+    if (doorSeen.has(k)) continue
+    doorSeen.add(k); doorsOut.push(d)
+  }
+  return { walls: out, doors: doorsOut }
+}
+
+// Draw a visible door panel at a doorway gap that swings open when the
+// gardener approaches. The gap stays fully passable — the swing is purely
+// cosmetic — so the player can walk through whether the door is open or not.
+function drawDoor(ctx, door, player, worldToScreen, tile) {
+  const cx = door.axis === 'x' ? (door.a + door.b) / 2 : door.v
+  const cy = door.axis === 'x' ? door.v : (door.a + door.b) / 2
+  const dx = player.x - cx, dy = player.y - cy
+  const dist = Math.sqrt(dx * dx + dy * dy)
+  // Fully open within 5 units, fully closed beyond 9 units, smooth between
+  const openness = Math.max(0, Math.min(1, (9 - dist) / 4))
+  const angle = openness * (Math.PI / 2)
+  const len = door.b - door.a
+  const lenPx = len * tile
+  const t = Math.max(3, (WALL_THICKNESS + 0.4) * tile)
+
+  // Hinge at 'a' end of the door
+  const [hx, hy] = worldToScreen(
+    door.axis === 'x' ? door.a : door.v,
+    door.axis === 'x' ? door.v : door.a,
+  )
+
+  ctx.save()
+  ctx.translate(hx, hy)
+  if (door.axis === 'x') {
+    // Horizontal wall — door swings north (open) or lies along wall (closed)
+    ctx.rotate(-angle)
+    ctx.fillStyle = '#7a5a3d'
+    ctx.fillRect(0, -t / 2, lenPx, t)
+    ctx.fillStyle = '#5c4322'
+    ctx.fillRect(0, -t / 2, lenPx, 1)
+    ctx.fillRect(0, t / 2 - 1, lenPx, 1)
+    ctx.fillStyle = '#fbbf24'
+    ctx.beginPath()
+    ctx.arc(lenPx - Math.max(3, t * 0.5), 0, Math.max(1.5, t * 0.22), 0, Math.PI * 2)
+    ctx.fill()
+  } else {
+    // Vertical wall — door swings east
+    ctx.rotate(angle)
+    ctx.fillStyle = '#7a5a3d'
+    ctx.fillRect(-t / 2, 0, t, lenPx)
+    ctx.fillStyle = '#5c4322'
+    ctx.fillRect(-t / 2, 0, 1, lenPx)
+    ctx.fillRect(t / 2 - 1, 0, 1, lenPx)
+    ctx.fillStyle = '#fbbf24'
+    ctx.beginPath()
+    ctx.arc(0, lenPx - Math.max(3, t * 0.5), Math.max(1.5, t * 0.22), 0, Math.PI * 2)
+    ctx.fill()
+  }
+  ctx.restore()
 }
 
 // Circle-vs-AABB slide (same shape as the 3D version, in percent units)
@@ -371,8 +434,19 @@ function updateSeasonalParticles(list, dt, w, h) {
   }
 }
 
-function drawSeasonalParticles(ctx, list) {
+// `indoorRects` (optional) is a list of screen-space rectangles for indoor
+// rooms. Particles whose position falls inside any of these are skipped — so
+// the season's leaves/snow/petals don't fall through the roof.
+function drawSeasonalParticles(ctx, list, indoorRects) {
+  const isIndoors = (px, py) => {
+    if (!indoorRects || !indoorRects.length) return false
+    for (const r of indoorRects) {
+      if (px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h) return true
+    }
+    return false
+  }
   for (const p of list) {
+    if (isIndoors(p.x, p.y)) continue
     if (p.type === 'rain') {
       ctx.strokeStyle = 'rgba(150,200,255,0.55)'
       ctx.lineWidth = 1
@@ -1000,7 +1074,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     () => condenseLayout(aspectFloor?.rooms || [], aspectPlants || [], CONDENSE_FACTOR),
     [aspectFloor, aspectPlants],
   )
-  const walls = useMemo(() => computeGameWalls(gameRooms), [gameRooms])
+  const { walls, doors } = useMemo(() => computeGameWalls(gameRooms), [gameRooms])
 
   // Bounding box of the actual world the gardener should be allowed to roam,
   // padded a little so you can step out onto the lawn around the rooms. The
@@ -1094,11 +1168,14 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
     if (!id) return
     const s = stateRef.current
     // uncondensePoint gives us aspect-and-factor-scaled percent; then reverse
-    // both transforms so the saved coords live in the same 0–100 original
-    // space as the rest of the app.
+    // both transforms so the saved coords live in the same original storage
+    // space as the rest of the app. We deliberately don't clamp to 0–100: the
+    // gardener can wander into the lawn padding and dropping a plant there
+    // should leave it where the gardener stands, not snap it to the floorplan
+    // edge.
     const { x: rawX, y: rawY } = uncondensePoint(s.x, s.y, gameRooms, CONDENSE_FACTOR)
-    const newX = Math.max(0, Math.min(100, (rawX - 50) / scaleFactor + 50))
-    const newY = Math.max(0, Math.min(100, (rawY - 50) * aspect / scaleFactor + 50))
+    const newX = (rawX - 50) / scaleFactor + 50
+    const newY = (rawY - 50) * aspect / scaleFactor + 50
     let newRoom = null
     for (const r of (floor?.rooms || [])) {
       if (r.hidden) continue
@@ -1482,6 +1559,11 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         }
       }
 
+      // Visible doors — swing open as the gardener approaches
+      for (const door of doors) {
+        drawDoor(ctx, door, s, worldToScreen, tile)
+      }
+
       // Room labels (drawn after walls, inside the floor)
       ctx.font = '600 11px system-ui, sans-serif'
       ctx.fillStyle = COLORS.roomLabel
@@ -1574,9 +1656,17 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
         wildlifeRef.current = []
       }
 
-      // Seasonal/weather particles draw on top of the scene
+      // Seasonal/weather particles draw on top of the scene — but only outside
+      // indoor rooms, so leaves/snow don't fall through the roof.
       if (seasonParticlesRef.current.length) {
-        drawSeasonalParticles(ctx, seasonParticlesRef.current)
+        const indoorRects = []
+        for (const r of rooms) {
+          const indoor = !(r.type === 'outdoor' || floor?.type === 'outdoor')
+          if (!indoor) continue
+          const [rx, ry] = worldToScreen(r.x, r.y)
+          indoorRects.push({ x: rx, y: ry, w: r.width * tile, h: r.height * tile })
+        }
+        drawSeasonalParticles(ctx, seasonParticlesRef.current, indoorRects)
       }
 
       // Waypoint + minimap overlay — only when enabled
@@ -1624,7 +1714,7 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       cancelAnimationFrame(rafId)
       ro.disconnect()
     }
-  }, [walls, gameRooms, gamePlants, weather, floors, floor, performAction, pickupPlant, dropPlant])
+  }, [walls, doors, gameRooms, gamePlants, weather, floors, floor, performAction, pickupPlant, dropPlant])
 
   return (
     <div ref={wrapperRef} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: COLORS.grassDark }}>

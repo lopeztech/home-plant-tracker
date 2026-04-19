@@ -1962,8 +1962,10 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
     const [ax, , az] = positionRef.current
     const scaledX = ax / SCALE + 50
     const scaledY = az / SCALE + 50
-    const newX = Math.max(0, Math.min(100, (scaledX - 50) / scaleFactor + 50))
-    const newY = Math.max(0, Math.min(100, (scaledY - 50) * aspect / scaleFactor + 50))
+    // Don't clamp to 0–100 — the avatar can stand outside the floorplan grid
+    // and the dropped plant should land where they're standing.
+    const newX = (scaledX - 50) / scaleFactor + 50
+    const newY = (scaledY - 50) * aspect / scaleFactor + 50
     // Find containing room for the new room assignment
     let newRoom = null
     for (const r of (floor?.rooms || [])) {
