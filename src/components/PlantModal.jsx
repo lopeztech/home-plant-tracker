@@ -574,9 +574,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           )}
           {/* Primary action: fetch an AI watering recommendation. Frequency,
               method, and amount below all derive from its response. */}
-          <div className="d-grid mb-3">
-            <Button variant="success" onClick={handleGetWateringRec} disabled={wateringRecLoading}>
-              {wateringRecLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#zap"></use></svg>}
+          <div className="mb-3">
+            <Button variant="success" size="sm" onClick={handleGetWateringRec} disabled={wateringRecLoading}>
+              {wateringRecLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
               {wateringRecLoading ? 'Loading...' : wateringRec ? 'Refresh Watering Recommendation' : 'Get Watering Recommendation'}
             </Button>
           </div>
@@ -612,53 +612,41 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             )
           })()}
           {/* Frequency, Watering Method, Water Amount are driven entirely by
-              the AI watering recommendation above — shown read-only so they
-              always match the latest advice. */}
-          <Row className="mb-3">
-            <Col md={4}>
-              <Form.Group>
-                <Form.Label>Frequency</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={form.frequencyDays ? `${form.frequencyDays} day${Number(form.frequencyDays) === 1 ? '' : 's'}` : ''}
-                  placeholder="— Fetch a recommendation —"
-                  readOnly
-                />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group>
-                <Form.Label>Watering Method</Form.Label>
-                <Form.Control
-                  type="text"
-                  value={WATER_METHODS.find((m) => m.value === form.waterMethod)?.label || form.waterMethod || ''}
-                  placeholder="— Fetch a recommendation —"
-                  readOnly
-                />
-              </Form.Group>
-            </Col>
-            <Col md={4}>
-              <Form.Group>
-                <Form.Label>Water Amount</Form.Label>
-                <Form.Control
-                  type="text"
-                  placeholder="— Fetch a recommendation —"
-                  value={form.waterAmount || ''}
-                  readOnly
-                />
-              </Form.Group>
-            </Col>
-          </Row>
-          {/* Suggested water amount */}
-          {plant.waterAmount && (() => {
-            const adjusted = getAdjustedWaterAmount(plant, weather, floors)
+              the AI watering recommendation above — shown as wrapping text
+              (not inputs) so long guidance isn't truncated. */}
+          {(() => {
+            const frequencyText = form.frequencyDays
+              ? `${form.frequencyDays} day${Number(form.frequencyDays) === 1 ? '' : 's'}`
+              : null
+            const methodText = WATER_METHODS.find((m) => m.value === form.waterMethod)?.label || form.waterMethod || null
+            const amountText = form.waterAmount || null
+            const empty = !frequencyText && !methodText && !amountText
+            if (empty) {
+              return (
+                <p className="text-muted fs-sm mb-3">
+                  Click <strong>Get Watering Recommendation</strong> to fill in frequency, method, and amount.
+                </p>
+              )
+            }
             return (
-              <div className="d-flex align-items-center gap-2 mb-3 p-2 rounded bg-body-tertiary fs-sm">
-                <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                <span>Suggested: <strong className={adjusted.adjusted ? 'text-primary' : ''}>{adjusted.amount}</strong></span>
-                {adjusted.adjusted && <small className="text-muted">({adjusted.reason})</small>}
-                {!adjusted.adjusted && <small className="text-muted">(base amount)</small>}
-              </div>
+              <Row className="mb-3 g-3">
+                <Col md={4}>
+                  <h6 className="text-muted text-uppercase fs-xs fw-600 mb-1">Frequency</h6>
+                  <p className="mb-0">{frequencyText || <span className="text-muted">—</span>}</p>
+                </Col>
+                <Col md={4}>
+                  <h6 className="text-muted text-uppercase fs-xs fw-600 mb-1">Watering Method</h6>
+                  <p className="mb-0" style={{ wordBreak: 'break-word' }}>
+                    {methodText || <span className="text-muted">—</span>}
+                  </p>
+                </Col>
+                <Col md={4}>
+                  <h6 className="text-muted text-uppercase fs-xs fw-600 mb-1">Water Amount</h6>
+                  <p className="mb-0" style={{ wordBreak: 'break-word' }}>
+                    {amountText || <span className="text-muted">—</span>}
+                  </p>
+                </Col>
+              </Row>
             )
           })()}
           <div className="mb-3">
