@@ -6,6 +6,7 @@ import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
 import { calculateReorganisedPositions } from '../utils/reorganise.js'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
+import { derivePlantName } from '../utils/plantName.js'
 
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 const FloorplanGame = lazy(() => import('./FloorplanGame.jsx'))
@@ -76,7 +77,9 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     }
     // Fall back to current room if drop position isn't inside any zone
     if (!room) room = dirtyMovesRef.current[plant.id]?.room || plant.room
-    const move = { x, y, room }
+    // Re-derive the display name from species + new room so the list/marker
+    // labels follow the plant when it moves between rooms.
+    const move = { x, y, room, name: derivePlantName({ species: plant.species, room }) }
     console.log(`Drag ${plant.name} to x=${x.toFixed(1)}, y=${y.toFixed(1)}, room=${room}`)
     updatePlantsLocally({ [plant.id]: move })
     dirtyMovesRef.current[plant.id] = move
@@ -92,9 +95,9 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
     setSaving(true)
     if (!isGuest) {
       const results = await Promise.allSettled(
-        entries.map(([id, { x, y, room }]) => {
+        entries.map(([id, { x, y, room, name }]) => {
           console.log(`Saving plant ${id}: x=${x}, y=${y}, room=${room}`)
-          return plantsApi.update(id, { x, y, room })
+          return plantsApi.update(id, { x, y, room, name })
         })
       )
       const failed = results.filter((r) => r.status === 'rejected')

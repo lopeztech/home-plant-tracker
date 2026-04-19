@@ -6,6 +6,7 @@ import { getWateringStatus, getSeason } from '../utils/watering.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import { useImageAspect } from '../hooks/useImageAspect.js'
+import { derivePlantName } from '../utils/plantName.js'
 
 // Scale room + plant coords around the centre (50). `aspect` reshapes the Y
 // axis so the square world reflects the image's true proportions (X untouched
@@ -1976,13 +1977,17 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       }
     }
     const updates = { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
-    if (newRoom) updates.room = newRoom
+    if (newRoom) {
+      updates.room = newRoom
+      const carried = plants.find((p) => p.id === id)
+      updates.name = derivePlantName({ species: carried?.species, room: newRoom })
+    }
     updatePlantsLocally({ [id]: updates })
     if (!isGuest) {
       plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
     }
     setCarriedPlantId(null)
-  }, [floor, aspect, scaleFactor, updatePlantsLocally, isGuest])
+  }, [floor, aspect, scaleFactor, plants, updatePlantsLocally, isGuest])
   // In-world hour (0..24), starts at real wall-clock time and drifts forward
   // while the canvas is rendering so lighting evolves through the day.
   const timeRef = useRef((() => {

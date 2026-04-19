@@ -3,6 +3,7 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import { getWateringStatus, getSeason, isOutdoor as isOutdoorPlant } from '../utils/watering.js'
 import { useImageAspect } from '../hooks/useImageAspect.js'
+import { derivePlantName } from '../utils/plantName.js'
 
 // Scale room + plant percentages around the centre (50). `aspect` reshapes
 // the Y axis so the square world reflects the image's true proportions.
@@ -1185,13 +1186,17 @@ export default function FloorplanGame({ floor, floors, plants, weather, onPlantC
       }
     }
     const updates = { x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 }
-    if (newRoom) updates.room = newRoom
+    if (newRoom) {
+      updates.room = newRoom
+      const carried = plants.find((p) => p.id === id)
+      updates.name = derivePlantName({ species: carried?.species, room: newRoom })
+    }
     updatePlantsLocally({ [id]: updates })
     if (!isGuest) {
       plantsApi.update(id, updates).catch((err) => console.error('Move plant failed:', err))
     }
     setCarriedPlantId(null)
-  }, [floor, aspect, scaleFactor, gameRooms, updatePlantsLocally, isGuest])
+  }, [floor, aspect, scaleFactor, gameRooms, plants, updatePlantsLocally, isGuest])
 
   // Perform the selected tool's action on the targeted plant. Water hits the
   // real backend and awards XP + coins; prune/fertilise are client-only.
