@@ -413,11 +413,10 @@ describe('PlantModal', () => {
     // Previous-entries toggle appears and reveals the old recommendation.
     const toggle = await screen.findByRole('button', { name: /show previous recommendations/i })
     fireEvent.click(toggle)
-    // The old entry's timestamp renders using toLocaleDateString. Assert on
-    // the month+year substring from the computed date — timezone-stable and
-    // unique to the history entry's formatted timestamp.
-    const marker = prevDate.toLocaleDateString('en', { month: 'short', year: 'numeric' })
-    expect(await screen.findByText(new RegExp(marker, 'i'))).toBeInTheDocument()
+    // Mirror the component's formatter exactly so the expected string matches
+    // regardless of locale/timezone differences between local and CI.
+    const expectedDateText = `${prevDate.toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })} · ${prevDate.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}`
+    expect(await screen.findByText(expectedDateText)).toBeInTheDocument()
   })
 
   // ── Error states / missing props ──────────────────────────────────────────
