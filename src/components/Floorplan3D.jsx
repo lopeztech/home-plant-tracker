@@ -1905,6 +1905,110 @@ function Joystick({ joyRef }) {
   )
 }
 
+// ── Minimap overlay (walk mode) ──────────────────────────────────────────────
+// Mirrors the game-mode minimap: rooms as tan rects, plants coloured by
+// watering urgency, and a white triangle pointing in the avatar's facing.
+// Reads positionRef/yawRef via rAF so camera motion never rerenders React.
+const MINIMAP_3D_SIZE = 120
+
+function Minimap3D({ floor, plants, weather, floors, positionRef, yawRef }) {
+  const canvasRef = useRef(null)
+
+  useEffect(() => {
+    let raf = 0
+    const render = () => {
+      const canvas = canvasRef.current
+      if (canvas) {
+        const size = MINIMAP_3D_SIZE
+        const dpr = window.devicePixelRatio || 1
+        if (canvas.width !== size * dpr) {
+          canvas.width = size * dpr
+          canvas.height = size * dpr
+        }
+        const ctx = canvas.getContext('2d')
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+        ctx.clearRect(0, 0, size, size)
+
+        const visible = (floor?.rooms || []).filter((r) => !r.hidden)
+        if (visible.length) {
+          const [wx, , wz] = positionRef.current
+          const playerX = wx / SCALE + 50
+          const playerY = wz / SCALE + 50
+
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+          for (const r of visible) {
+            minX = Math.min(minX, r.x); maxX = Math.max(maxX, r.x + r.width)
+            minY = Math.min(minY, r.y); maxY = Math.max(maxY, r.y + r.height)
+          }
+          minX = Math.min(minX, playerX); maxX = Math.max(maxX, playerX)
+          minY = Math.min(minY, playerY); maxY = Math.max(maxY, playerY)
+          const w2 = Math.max(1, maxX - minX)
+          const h2 = Math.max(1, maxY - minY)
+          const pad = 6
+          const sc = Math.min((size - pad * 2) / w2, (size - pad * 2) / h2)
+          const offX = (size - w2 * sc) / 2
+          const offY = (size - h2 * sc) / 2
+          const toMap = (px, py) => [offX + (px - minX) * sc, offY + (py - minY) * sc]
+
+          ctx.fillStyle = 'rgba(0,0,0,0.55)'
+          ctx.fillRect(0, 0, size, size)
+          ctx.fillStyle = 'rgba(127,182,133,0.5)'
+          ctx.fillRect(2, 2, size - 4, size - 4)
+
+          ctx.strokeStyle = 'rgba(122,90,61,0.85)'
+          ctx.lineWidth = 1
+          for (const r of visible) {
+            const [x1, y1] = toMap(r.x, r.y)
+            const [x2, y2] = toMap(r.x + r.width, r.y + r.height)
+            ctx.fillStyle = 'rgba(230,213,185,0.85)'
+            ctx.fillRect(x1, y1, x2 - x1, y2 - y1)
+            ctx.strokeRect(x1, y1, x2 - x1, y2 - y1)
+          }
+
+          for (const p of plants || []) {
+            const [px, py] = toMap(p.x, p.y)
+            const { color } = getWateringStatus(p, weather, floors)
+            ctx.fillStyle = color
+            ctx.beginPath(); ctx.arc(px, py, 2.2, 0, Math.PI * 2); ctx.fill()
+          }
+
+          const [ax, ay] = toMap(playerX, playerY)
+          ctx.save()
+          ctx.translate(ax, ay)
+          // Canvas y is flipped vs. world z, so rotate by -yaw to match facing.
+          ctx.rotate(-yawRef.current)
+          ctx.fillStyle = '#ffffff'
+          ctx.strokeStyle = 'rgba(0,0,0,0.6)'
+          ctx.lineWidth = 1
+          ctx.beginPath()
+          ctx.moveTo(0, -5); ctx.lineTo(4, 4); ctx.lineTo(-4, 4)
+          ctx.closePath()
+          ctx.fill(); ctx.stroke()
+          ctx.restore()
+
+          ctx.strokeStyle = 'rgba(255,255,255,0.35)'
+          ctx.lineWidth = 1
+          ctx.strokeRect(0.5, 0.5, size - 1, size - 1)
+        }
+      }
+      raf = requestAnimationFrame(render)
+    }
+    raf = requestAnimationFrame(render)
+    return () => cancelAnimationFrame(raf)
+  }, [floor, plants, weather, floors, positionRef, yawRef])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute', top: 10, left: 10, zIndex: 5,
+        width: MINIMAP_3D_SIZE, height: MINIMAP_3D_SIZE,
+        pointerEvents: 'none',
+      }}
+    />
+  )
+}
+
 export default function Floorplan3D({ floor, floors, plants, weather, onPlantClick, onFloorplanClick }) {
   const { handleWaterPlant, updatePlantsLocally, isGuest } = usePlantContext()
 
@@ -2201,10 +2305,18 @@ export default function Floorplan3D({ floor, floors, plants, weather, onPlantCli
       {/* HUD */}
       {walkMode && (
         <>
+          <Minimap3D
+            floor={aspectFloor}
+            plants={aspectPlants}
+            weather={weather}
+            floors={floors}
+            positionRef={positionRef}
+            yawRef={yawRef}
+          />
           {!isTouch && (
             <div
               style={{
-                position: 'absolute', top: 10, left: 10, zIndex: 5,
+                position: 'absolute', top: 140, left: 10, zIndex: 5,
                 padding: '8px 12px', borderRadius: 8,
                 background: 'rgba(0,0,0,0.65)', color: '#fff', fontSize: 12, lineHeight: 1.4,
                 fontFamily: 'system-ui, sans-serif', pointerEvents: 'none',
