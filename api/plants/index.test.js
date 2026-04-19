@@ -339,6 +339,18 @@ describe('POST /recommend', () => {
     expect(res.body.error).not.toMatch(/position \d+/i);
     expect(res.body.error).not.toMatch(/object key/i);
   });
+
+  it('returns a friendly error when Gemini truncates the response at MAX_TOKENS', async () => {
+    geminiGenerateFn = async () => ({
+      response: {
+        text: () => '{"summary":"Anthuriums thrive in warm, humid climates with bright, indirect light. Ensure well-draining, rich soil and consistent moisture for',
+        candidates: [{ finishReason: 'MAX_TOKENS' }],
+      },
+    });
+    const res = await request(app).post('/recommend').send({ name: 'Anthurium', species: 'Anthurium' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/cut off|too long/i);
+  });
 });
 
 // ── POST /recommend-watering ──────────────────────────────────────────────────

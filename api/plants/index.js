@@ -316,6 +316,19 @@ function parseGeminiJson(text) {
   }
 }
 
+// Gemini sets finishReason: 'MAX_TOKENS' when it cut the response off at the
+// configured limit. The JSON is guaranteed to be invalid in that case, so we
+// fail loudly with a clearer message instead of surfacing a parse error.
+function assertNotTruncated(result, label) {
+  const reason = result?.response?.candidates?.[0]?.finishReason;
+  if (reason === 'MAX_TOKENS') {
+    log.error('gemini response truncated', { endpoint: label, finishReason: reason });
+    const err = new Error("The AI response was too long and got cut off. Please try again.");
+    err.status = 502;
+    throw err;
+  }
+}
+
 const ANALYSE_SCHEMA = {
   type: SchemaType.OBJECT,
   properties: {
@@ -706,13 +719,16 @@ app.post('/recommend', async (req, res) => {
         parts: [{ text: RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor }) }],
       }],
       generationConfig: {
-        maxOutputTokens: 1024,
+        // 1024 tokens is not enough for the 9-field schema; truncated output
+        // produces invalid JSON and surfaces as a parse error to the user.
+        maxOutputTokens: 3072,
         temperature: 0.3,
         responseMimeType: 'application/json',
         responseSchema: RECOMMEND_SCHEMA,
       },
     });
 
+    assertNotTruncated(result, '/recommend');
     const parsed = parseGeminiJson(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
@@ -731,13 +747,14 @@ app.post('/recommend-watering', async (req, res) => {
         parts: [{ text: WATERING_RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, potSize, potMaterial, soilType, sunExposure, health, season, maturity, temperature }) }],
       }],
       generationConfig: {
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
         temperature: 0.3,
         responseMimeType: 'application/json',
         responseSchema: WATERING_RECOMMEND_SCHEMA,
       },
     });
 
+    assertNotTruncated(result, '/recommend-watering');
     const parsed = parseGeminiJson(result.response.text());
     res.status(200).json(parsed);
   } catch (err) {
