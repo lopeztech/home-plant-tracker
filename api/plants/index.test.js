@@ -4,6 +4,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const request = require('supertest');
 const proxyquire = require('proxyquire').noCallThru();
+const { jsonrepair: realJsonrepair } = require('jsonrepair');
 
 // ── In-memory Firestore store ─────────────────────────────────────────────────
 
@@ -71,6 +72,7 @@ let storageDeletedPaths;
 let storageSavedFiles;
 let vertexaiCheckStatusFn;
 let vertexaiPredictFn;
+let jsonrepairFn;
 
 // ── Load the express app via proxyquire ───────────────────────────────────────
 
@@ -114,6 +116,9 @@ beforeAll(() => {
       predict: function() { return vertexaiPredictFn.apply(this, arguments); },
       batchPredict: async () => ({}),
     },
+    'jsonrepair': {
+      jsonrepair: function(s) { return jsonrepairFn(s); },
+    },
   });
 });
 
@@ -126,6 +131,9 @@ beforeEach(() => {
   storageSavedFiles = [];
   vertexaiCheckStatusFn = async () => ({ status: 'ok', project: 'test', location: 'us-central1', endpointCount: 0 });
   vertexaiPredictFn = async () => [];
+  // Default to the real implementation so existing tests that exercise the
+  // repair fallback behave unchanged; individual tests can override.
+  jsonrepairFn = realJsonrepair;
 });
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
@@ -317,6 +325,19 @@ describe('POST /recommend', () => {
     const res = await request(app).post('/recommend').send({ name: 'Rose', species: 'Rosa', plantedIn: 'ground', isOutdoor: true });
     expect(res.status).toBe(200);
     expect(res.body.summary).toBeTruthy();
+  });
+
+  it('returns a friendly error when Gemini output is unparseable', async () => {
+    // Force JSON.parse to fail at every stage so the jsonrepair fallback runs,
+    // then make jsonrepair throw the style of error the user reported.
+    geminiGenerateFn = async () => ({ response: { text: () => '{"summary": not-valid}' } });
+    jsonrepairFn = () => { throw new Error('Object key expected at position 14.'); };
+    const res = await request(app).post('/recommend').send({ name: 'Mystery', species: 'Unknown' });
+    expect(res.status).toBe(502);
+    expect(res.body.error).toMatch(/unexpected response|try again/i);
+    // No raw jsonrepair jargon leaking out.
+    expect(res.body.error).not.toMatch(/position \d+/i);
+    expect(res.body.error).not.toMatch(/object key/i);
   });
 });
 

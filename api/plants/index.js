@@ -299,8 +299,21 @@ function parseGeminiJson(text) {
   try { return JSON.parse(s); } catch (_e) {} // eslint-disable-line no-unused-vars
 
   // Last resort: jsonrepair handles unescaped quotes, trailing commas, etc.
+  // If it still fails the raw error ("Object key expected at position N") is
+  // useless to the user — surface a friendly message but keep the real cause
+  // in server logs for debugging.
   log.warn('parseGeminiJson: falling back to jsonrepair', { raw: text.slice(0, 500) });
-  return JSON.parse(jsonrepair(s));
+  try {
+    return JSON.parse(jsonrepair(s));
+  } catch (repairErr) {
+    log.error('parseGeminiJson: jsonrepair failed', {
+      repairError: repairErr.message,
+      raw: text.slice(0, 500),
+    });
+    const friendly = new Error("The AI gave an unexpected response. Please try again in a moment.");
+    friendly.status = 502;
+    throw friendly;
+  }
 }
 
 const ANALYSE_SCHEMA = {

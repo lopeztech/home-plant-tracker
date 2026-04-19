@@ -8,7 +8,7 @@ import { GUEST_PLANTS, GUEST_FLOORS } from '../data/guestData.js'
 
 const DEFAULT_FLOORS = []
 
-const PlantContext = createContext(undefined)
+export const PlantContext = createContext(undefined)
 
 export function usePlantContext() {
   const ctx = useContext(PlantContext)

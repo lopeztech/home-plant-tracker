@@ -1,10 +1,34 @@
-import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
 import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col, Pagination } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount, getSuggestedFrequency, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import { derivePlantName } from '../utils/plantName.js'
+import { PlantContext } from '../context/PlantContext.jsx'
+
+// Max recommendation entries retained per plant. Older entries are trimmed
+// when a new one is appended so Firestore docs don't grow unbounded.
+const RECOMMENDATION_HISTORY_LIMIT = 20
+
+// Render common low-level errors as friendly text; otherwise pass through.
+function friendlyErrorMessage(err) {
+  const raw = err?.message || String(err || '')
+  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
+    return "Couldn't reach the server. Check your connection and try again."
+  }
+  if (/position \d+/i.test(raw) && /object key|expected/i.test(raw)) {
+    return 'The AI gave an unexpected response. Please try again in a moment.'
+  }
+  return raw || 'Something went wrong. Please try again.'
+}
+
+function formatRecDate(iso) {
+  try {
+    const d = new Date(iso)
+    return `${d.toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}`
+  } catch { return iso }
+}
 
 // Derive rooms from configured floors
 function getRoomsFromFloors(floors) {
@@ -183,12 +207,22 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const [careData, setCareData] = useState(() => plant?.careRecommendations || null)
+  const careHistoryInitial = plant?.careRecommendationHistory || []
+  const wateringHistoryInitial = plant?.wateringRecommendationHistory || []
+  const [careHistory, setCareHistory] = useState(careHistoryInitial)
+  const [careData, setCareData] = useState(
+    () => careHistoryInitial[careHistoryInitial.length - 1]?.data || plant?.careRecommendations || null,
+  )
   const [careLoading, setCareLoading] = useState(false)
   const [careError, setCareError] = useState(null)
-  const [wateringRec, setWateringRec] = useState(null)
+  const [showCareHistory, setShowCareHistory] = useState(false)
+  const [wateringHistory, setWateringHistory] = useState(wateringHistoryInitial)
+  const [wateringRec, setWateringRec] = useState(
+    () => wateringHistoryInitial[wateringHistoryInitial.length - 1]?.data || null,
+  )
   const [wateringRecLoading, setWateringRecLoading] = useState(false)
   const [wateringRecError, setWateringRecError] = useState(null)
+  const [showWateringHistory, setShowWateringHistory] = useState(false)
   const [deletedPhotoUrls, setDeletedPhotoUrls] = useState([])
   const [confirmDeletePhoto, setConfirmDeletePhoto] = useState(null)
   const [deletingPhoto, setDeletingPhoto] = useState(false)
@@ -196,6 +230,39 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [moistureLogging, setMoistureLogging] = useState(false)
   const [moisturePage, setMoisturePage] = useState(1)
   const [wateringPage, setWateringPage] = useState(1)
+
+  // Optional: when rendered inside the app PlantProvider we can update the
+  // in-memory plants list so history persists across modal reopens without a
+  // page refresh. Tests render PlantModal without a provider, so this is
+  // intentionally undefined-safe.
+  const plantCtx = useContext(PlantContext)
+  const updatePlantsLocally = plantCtx?.updatePlantsLocally
+  const contextIsGuest = plantCtx?.isGuest ?? false
+
+  // Persist recommendation history on the plant doc. Guest plants stay local
+  // (their IDs aren't in Firestore). Failures are swallowed — the UI already
+  // shows the latest entry and will re-sync on next load.
+  const persistHistory = useCallback(async (field, history) => {
+    if (!plant?.id) return
+    if (updatePlantsLocally) updatePlantsLocally({ [plant.id]: { [field]: history } })
+    const looksLikeGuest = contextIsGuest || String(plant.id).startsWith('guest-')
+    if (looksLikeGuest) return
+    try { await plantsApi.update(plant.id, { [field]: history }) }
+    catch (err) { console.warn('Failed to persist recommendation history:', err) }
+  }, [plant, updatePlantsLocally, contextIsGuest])
+
+  useEffect(() => {
+    const ch = plant?.careRecommendationHistory || []
+    const wh = plant?.wateringRecommendationHistory || []
+    setCareHistory(ch)
+    setWateringHistory(wh)
+    setCareData(ch[ch.length - 1]?.data || plant?.careRecommendations || null)
+    setWateringRec(wh[wh.length - 1]?.data || null)
+    setShowCareHistory(false)
+    setShowWateringHistory(false)
+    setCareError(null)
+    setWateringRecError(null)
+  }, [plant?.id])
 
   useEffect(() => {
     if (plant) {
@@ -291,10 +358,13 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       const derivedName = derivePlantName({ species: form.species, room: form.room })
       const data = await recommendApi.get(derivedName, form.species, { plantedIn: form.plantedIn, isOutdoor: outdoor })
       setCareData(data)
+      const next = [...careHistory, { date: new Date().toISOString(), data }].slice(-RECOMMENDATION_HISTORY_LIMIT)
+      setCareHistory(next)
+      persistHistory('careRecommendationHistory', next)
     }
-    catch (err) { setCareError(err.message) }
+    catch (err) { setCareError(friendlyErrorMessage(err)) }
     finally { setCareLoading(false) }
-  }, [form, plant, floors])
+  }, [form, plant, floors, careHistory, persistHistory])
 
   const handleGetWateringRec = useCallback(async () => {
     setWateringRecLoading(true); setWateringRecError(null)
@@ -312,10 +382,13 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         temperature: weather?.current?.temp || null,
       })
       setWateringRec(data)
+      const next = [...wateringHistory, { date: new Date().toISOString(), data }].slice(-RECOMMENDATION_HISTORY_LIMIT)
+      setWateringHistory(next)
+      persistHistory('wateringRecommendationHistory', next)
     }
-    catch (err) { setWateringRecError(err.message) }
+    catch (err) { setWateringRecError(friendlyErrorMessage(err)) }
     finally { setWateringRecLoading(false) }
-  }, [form, plant, floors, wateringStatus])
+  }, [form, plant, floors, wateringStatus, wateringHistory, persistHistory])
 
   return (
     <Modal show onHide={onClose} size="lg" centered scrollable>
@@ -613,6 +686,28 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 )}
               </div>
             )}
+            {wateringHistory.length > 1 && (
+              <div className="mt-2">
+                <Button variant="link" size="sm" className="p-0 fs-xs" onClick={() => setShowWateringHistory((v) => !v)}>
+                  {showWateringHistory ? 'Hide' : 'Show'} previous recommendations ({wateringHistory.length - 1})
+                </Button>
+                {showWateringHistory && (
+                  <div className="mt-2 ps-2 border-start">
+                    {[...wateringHistory].slice(0, -1).reverse().map((entry, i) => (
+                      <div key={entry.date + i} className="mb-2 pb-2 border-bottom">
+                        <div className="fs-xs text-muted fw-500 mb-1">{formatRecDate(entry.date)}</div>
+                        {entry.data?.summary && <p className="fs-xs mb-1">{entry.data.summary}</p>}
+                        <div className="fs-xs text-muted">
+                          {entry.data?.frequency && <span className="me-2"><strong>Freq:</strong> {entry.data.frequency}</span>}
+                          {entry.data?.amount && <span className="me-2"><strong>Amount:</strong> {entry.data.amount}</span>}
+                          {entry.data?.method && <span className="me-2"><strong>Method:</strong> {entry.data.method}</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           {/* Moisture meter reading */}
           <div className="mb-3">
@@ -884,6 +979,28 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           )}
           {!careData && !careLoading && !careError && (
             <p className="text-muted text-center py-4">Click "Get Recommendations" for AI-powered care advice tailored to your plant.</p>
+          )}
+          {careHistory.length > 1 && (
+            <div className="mt-3">
+              <Button variant="link" size="sm" className="p-0 fs-xs" onClick={() => setShowCareHistory((v) => !v)}>
+                {showCareHistory ? 'Hide' : 'Show'} previous recommendations ({careHistory.length - 1})
+              </Button>
+              {showCareHistory && (
+                <div className="mt-2 ps-2 border-start">
+                  {[...careHistory].slice(0, -1).reverse().map((entry, i) => (
+                    <div key={entry.date + i} className="mb-3 pb-2 border-bottom">
+                      <div className="fs-xs text-muted fw-500 mb-1">{formatRecDate(entry.date)}</div>
+                      {entry.data?.summary && <p className="fs-xs mb-1">{entry.data.summary}</p>}
+                      <div className="fs-xs text-muted">
+                        {entry.data?.watering && <div><strong>Watering:</strong> {entry.data.watering}</div>}
+                        {entry.data?.light && <div><strong>Light:</strong> {entry.data.light}</div>}
+                        {entry.data?.humidity && <div><strong>Humidity:</strong> {entry.data.humidity}</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </Modal.Body>
       )}

@@ -8,9 +8,17 @@ vi.mock('../components/ImageAnalyser.jsx', () => ({
   default: () => <div data-testid="image-analyser" />,
 }))
 
-// Stub imagesApi and recommendApi so no real network calls happen.
+// Stub imagesApi, recommendApi, plantsApi, and analyseApi so no real network
+// calls happen. plantsApi.update is needed because PlantModal persists
+// recommendation history via the plant doc on success.
 vi.mock('../api/plants.js', () => ({
   imagesApi: { upload: vi.fn().mockResolvedValue('https://example.com/img.jpg') },
+  plantsApi: {
+    update: vi.fn().mockResolvedValue({}),
+    deletePhoto: vi.fn().mockResolvedValue({}),
+    diagnostic: vi.fn().mockResolvedValue({}),
+  },
+  analyseApi: { analyse: vi.fn().mockResolvedValue(null) },
   recommendApi: {
     get: vi.fn().mockResolvedValue({
       summary: 'A lovely fern.',
@@ -351,6 +359,65 @@ describe('PlantModal', () => {
     fireEvent.click(screen.getByText('Recommendations'))
     fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
     expect(await screen.findByText(/network error/i)).toBeInTheDocument()
+  })
+
+  it('surfaces a friendly message when a jsonrepair-style parse error bubbles up', async () => {
+    const { recommendApi } = await import('../api/plants.js')
+    recommendApi.get.mockRejectedValueOnce(new Error('Object key expected at position 14.'))
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
+    expect(await screen.findByText(/please try again/i)).toBeInTheDocument()
+    // Raw jsonrepair jargon should not be shown.
+    expect(screen.queryByText(/position 14/i)).not.toBeInTheDocument()
+  })
+
+  it('persists recommendation history on the plant doc and renders previous entries', async () => {
+    const { recommendApi, plantsApi } = await import('../api/plants.js')
+    // Use a safely mid-day-local timestamp so the formatted date is stable
+    // regardless of CI timezone.
+    const prevDate = new Date()
+    prevDate.setHours(12, 0, 0, 0)
+    prevDate.setDate(prevDate.getDate() - 3)
+    const plantWithHistory = {
+      ...existingPlant,
+      careRecommendationHistory: [
+        {
+          date: prevDate.toISOString(),
+          data: { summary: 'Previous guidance.', watering: 'Once a week.' },
+        },
+      ],
+    }
+    renderModal({ plant: plantWithHistory })
+    fireEvent.click(screen.getByText('Recommendations'))
+    // Latest entry from history is preloaded, no fetch needed yet.
+    expect(await screen.findByText('Previous guidance.')).toBeInTheDocument()
+
+    // Fetch a new recommendation — should push to history and persist.
+    fireEvent.click(screen.getByRole('button', { name: /refresh|get recommendations/i }))
+    await waitFor(() => expect(recommendApi.get).toHaveBeenCalled())
+    expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
+
+    await waitFor(() =>
+      expect(plantsApi.update).toHaveBeenCalledWith(
+        'plant-1',
+        expect.objectContaining({ careRecommendationHistory: expect.any(Array) }),
+      ),
+    )
+    const call = plantsApi.update.mock.calls.find(
+      ([, body]) => body && body.careRecommendationHistory,
+    )
+    expect(call[1].careRecommendationHistory).toHaveLength(2)
+    expect(call[1].careRecommendationHistory[1].data.summary).toBe('A lovely fern.')
+
+    // Previous-entries toggle appears and reveals the old recommendation.
+    const toggle = await screen.findByRole('button', { name: /show previous recommendations/i })
+    fireEvent.click(toggle)
+    // The old entry's timestamp renders using toLocaleDateString. Assert on
+    // the month+year substring from the computed date — timezone-stable and
+    // unique to the history entry's formatted timestamp.
+    const marker = prevDate.toLocaleDateString('en', { month: 'short', year: 'numeric' })
+    expect(await screen.findByText(new RegExp(marker, 'i'))).toBeInTheDocument()
   })
 
   // ── Error states / missing props ──────────────────────────────────────────
