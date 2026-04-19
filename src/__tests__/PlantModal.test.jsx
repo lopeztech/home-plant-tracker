@@ -332,20 +332,18 @@ describe('PlantModal', () => {
     expect(screen.getByText(/no watering history yet/i)).toBeInTheDocument()
   })
 
-  // ── Care tab ──────────────────────────────────────────────────────────────
+  // ── Care tab (includes AI recommendations, merged in) ───────────────────
 
-  // ── Recommendations tab ──────────────────────────────────────────────────
-
-  it('shows Get Recommendations button on the Recommendations tab', () => {
+  it('shows Get Recommendations button on the Care tab', () => {
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByText('Care'))
     expect(screen.getByRole('button', { name: /get recommendations|refresh/i })).toBeInTheDocument()
   })
 
   it('calls recommendApi.get and shows results when Get Recommendations is clicked', async () => {
     const { recommendApi } = await import('../api/plants.js')
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByText('Care'))
     fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
     await waitFor(() => expect(recommendApi.get).toHaveBeenCalledWith('Nephrolepis - Kitchen', 'Nephrolepis', expect.anything()))
     expect(await screen.findByText('A lovely fern.')).toBeInTheDocument()
@@ -356,7 +354,7 @@ describe('PlantModal', () => {
     const { recommendApi } = await import('../api/plants.js')
     recommendApi.get.mockRejectedValueOnce(new Error('Network error'))
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByText('Care'))
     fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
     expect(await screen.findByText(/network error/i)).toBeInTheDocument()
   })
@@ -365,7 +363,7 @@ describe('PlantModal', () => {
     const { recommendApi } = await import('../api/plants.js')
     recommendApi.get.mockRejectedValueOnce(new Error('Object key expected at position 14.'))
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByText('Care'))
     fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
     expect(await screen.findByText(/please try again/i)).toBeInTheDocument()
     // Raw jsonrepair jargon should not be shown.
@@ -389,7 +387,7 @@ describe('PlantModal', () => {
       ],
     }
     renderModal({ plant: plantWithHistory })
-    fireEvent.click(screen.getByText('Recommendations'))
+    fireEvent.click(screen.getByText('Care'))
     // Latest entry from history is preloaded, no fetch needed yet.
     expect(await screen.findByText('Previous guidance.')).toBeInTheDocument()
 

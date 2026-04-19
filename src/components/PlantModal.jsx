@@ -461,7 +461,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Tab nav for editing */}
       {isEditing && (
         <Nav variant="tabs" className="px-3 pt-2">
-          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'care', label: 'Care' }, { id: 'recommendations', label: 'Recommendations' }].map((tab) => (
+          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'care', label: 'Care' }].map((tab) => (
             <Nav.Item key={tab.id}>
               <Nav.Link active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}</Nav.Link>
             </Nav.Item>
@@ -923,12 +923,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             )
           })()}
 
-        </Modal.Body>
-      )}
+          <hr />
 
-      {/* Recommendations tab */}
-      {isEditing && activeTab === 'recommendations' && (
-        <Modal.Body>
+          {/* AI Care Recommendations — merged in from the former separate tab
+              so all care-related information lives in one place. */}
           <div className="d-flex align-items-center justify-content-between mb-3">
             <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">AI Care Recommendations</h6>
             <Button variant="outline-success" size="sm" onClick={handleGetRecommendations} disabled={careLoading}>
@@ -982,7 +980,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             </div>
           )}
           {!careData && !careLoading && !careError && (
-            <p className="text-muted text-center py-4">Click "Get Recommendations" for AI-powered care advice tailored to your plant.</p>
+            <p className="text-muted text-center py-4 mb-0">Click "Get Recommendations" for AI-powered care advice tailored to your plant.</p>
           )}
           {careHistory.length > 1 && (
             <div className="mt-3">
@@ -1006,6 +1004,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               )}
             </div>
           )}
+
         </Modal.Body>
       )}
 
