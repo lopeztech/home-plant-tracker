@@ -31,6 +31,25 @@ function formatRecDate(iso) {
   } catch { return iso }
 }
 
+// Human-readable "X ago" for a recommendation's age. Full timestamp is
+// exposed separately via formatRecDate() for title tooltips.
+function formatRelativeAge(iso) {
+  if (!iso) return null
+  const ms = Date.now() - new Date(iso).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return null
+  const m = Math.floor(ms / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  if (d < 30) return `${d}d ago`
+  const mo = Math.floor(d / 30)
+  if (mo < 12) return `${mo}mo ago`
+  const y = Math.floor(mo / 12)
+  return `${y}y ago`
+}
+
 // Derive rooms from configured floors
 function getRoomsFromFloors(floors) {
   const rooms = []
@@ -758,7 +777,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           )}
           {/* Primary action: fetch an AI watering recommendation. Frequency,
               method, and amount below all derive from its response. */}
-          <div className="d-flex flex-wrap gap-2 mb-3">
+          <div className="d-flex flex-wrap align-items-center gap-2 mb-1">
             <Button variant="success" size="sm" onClick={handleGetWateringRec} disabled={wateringRecLoading}>
               {wateringRecLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
               {wateringRecLoading ? 'Loading...' : wateringRec ? 'Refresh Watering Recommendation' : 'Get Watering Recommendation'}
@@ -769,6 +788,15 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 Mark as Watered
               </Button>
             )}
+            {wateringRec && wateringHistory.length > 0 && (() => {
+              const iso = wateringHistory[wateringHistory.length - 1]?.date
+              const rel = formatRelativeAge(iso)
+              return rel ? (
+                <small className="text-muted ms-auto" title={formatRecDate(iso)}>
+                  Updated {rel}
+                </small>
+              ) : null
+            })()}
           </div>
           {(plant.waterMethod || plant.waterAmount) && (() => {
             const adjusted = getAdjustedWaterAmount(plant, weather, floors)
@@ -1044,8 +1072,19 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
           {/* AI Care Recommendations — merged in from the former separate tab
               so all care-related information lives in one place. */}
-          <div className="d-flex align-items-center justify-content-between mb-3">
-            <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">AI Care Recommendations</h6>
+          <div className="d-flex align-items-center justify-content-between gap-2 mb-3">
+            <div className="d-flex align-items-center gap-2 min-w-0">
+              <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">AI Care Recommendations</h6>
+              {careData && careHistory.length > 0 && (() => {
+                const iso = careHistory[careHistory.length - 1]?.date
+                const rel = formatRelativeAge(iso)
+                return rel ? (
+                  <small className="text-muted fs-xs" title={formatRecDate(iso)}>
+                    · updated {rel}
+                  </small>
+                ) : null
+              })()}
+            </div>
             <Button variant="outline-success" size="sm" onClick={handleGetRecommendations} disabled={careLoading}>
               {careLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
               {careLoading ? 'Loading...' : careData ? 'Refresh' : 'Get Recommendations'}
