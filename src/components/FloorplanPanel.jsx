@@ -1,9 +1,11 @@
 import { useMemo, useState, useCallback, lazy, Suspense, useRef } from 'react'
+import { useSearchParams } from 'react-router'
 import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
+import PlantListPanel from './PlantListPanel.jsx'
 import { calculateReorganisedPositions } from '../utils/reorganise.js'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import { derivePlantName } from '../utils/plantName.js'
@@ -11,7 +13,9 @@ import { derivePlantName } from '../utils/plantName.js'
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 const FloorplanGame = lazy(() => import('./FloorplanGame.jsx'))
 
-export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWaterRef, fullWidth = false }) {
+const VIEW_MODES = ['2d', '3d', 'game', 'list']
+
+export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPlant, gnomeWaterRef, fullWidth = false }) {
   const {
     plants, floors, activeFloorId, setActiveFloorId,
     weather, handleFloorRoomsChange,
@@ -19,7 +23,17 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
   } = usePlantContext()
 
   const { houseHeight } = useLayoutContext()
-  const [viewMode, setViewMode] = useState('2d')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const viewParam = searchParams.get('view')
+  const viewMode = VIEW_MODES.includes(viewParam) ? viewParam : '2d'
+  const setViewMode = useCallback((mode) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (mode === '2d') next.delete('view')
+      else next.set('view', mode)
+      return next
+    }, { replace: true })
+  }, [setSearchParams])
   const [saving, setSaving] = useState(false)
 
   // Track dragged positions directly — { plantId: { x, y, room } }
@@ -148,7 +162,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
           ))}
         </Nav>
         <div className="d-flex gap-2 flex-shrink-0">
-          {plantsOnFloor.length > 0 && activeFloor?.rooms?.length > 0 && (
+          {viewMode !== 'list' && plantsOnFloor.length > 0 && activeFloor?.rooms?.length > 0 && (
             <Button variant="outline-secondary" size="sm" onClick={handleReorganise} title="Evenly space plants within their rooms">
               <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
               Reorganise
@@ -167,11 +181,27 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
               <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#zap"></use></svg>
               Game
             </Button>
+            <Button variant={viewMode === 'list' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('list')} title="List View">
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#list"></use></svg>
+              List
+            </Button>
           </ButtonGroup>
         </div>
       </div>
 
+      {/* List view — same floor-tabs/weather wrapper, no fixed-height map area */}
+      {viewMode === 'list' && (
+        <div className="p-3">
+          <PlantListPanel
+            onPlantClick={onPlantClick}
+            onAddPlant={onAddPlant}
+            gnomeWaterRef={gnomeWaterRef}
+          />
+        </div>
+      )}
+
       {/* Map view */}
+      {viewMode !== 'list' && (
       <div
         className="floorplan-wrapper"
         style={{ height: fullWidth ? 'calc(100vh - 180px)' : (houseHeight || 500), minHeight: fullWidth ? 500 : undefined }}
@@ -225,9 +255,10 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
           </Suspense>
         )}
       </div>
+      )}
 
       {/* Save positions button */}
-      {hasDirty && (
+      {viewMode !== 'list' && hasDirty && (
         <div className="d-flex align-items-center justify-content-between px-3 py-2 border-top bg-warning bg-opacity-10">
           <small className="text-muted">{Object.keys(dirtyMovesRef.current).length} plant{Object.keys(dirtyMovesRef.current).length !== 1 ? 's' : ''} moved</small>
           <div className="d-flex gap-2">
@@ -242,7 +273,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, gnomeWa
       )}
 
       {/* Legend */}
-      {plantsOnFloor.length > 0 && (
+      {viewMode !== 'list' && plantsOnFloor.length > 0 && (
         <div className="d-flex align-items-center gap-3 px-3 py-2 border-top fs-xs text-muted">
           {[
             { color: '#ef4444', label: 'Overdue' },

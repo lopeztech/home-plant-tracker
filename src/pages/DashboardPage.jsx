@@ -28,6 +28,12 @@ export default function DashboardPage() {
     setShowPlantModal(true)
   }, [])
 
+  const handleAddPlant = useCallback(() => {
+    setPendingPosition({ x: 50, y: 50 })
+    setEditingPlantId(null)
+    setShowPlantModal(true)
+  }, [])
+
   const handleSave = useCallback(async (plantData) => {
     try {
       await handleSavePlant(plantData, editingPlant, pendingPosition)
@@ -80,6 +86,7 @@ export default function DashboardPage() {
           <FloorplanPanel
             onPlantClick={handlePlantClick}
             onFloorplanClick={handleFloorplanClick}
+            onAddPlant={handleAddPlant}
             gnomeWaterRef={gnomeWaterRef}
             fullWidth
           />

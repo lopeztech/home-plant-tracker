@@ -246,6 +246,21 @@ describe('PlantModal', () => {
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ emoji: null }))
   })
 
+  it('renders Identity, Environment, and Photos sections in the Plant tab when editing', () => {
+    renderModal({ plant: existingPlant })
+    expect(screen.getByRole('button', { name: /^Identity$/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Environment$/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Photos$/ })).toBeInTheDocument()
+  })
+
+  it('does not render the Photos section for a new plant', () => {
+    renderModal()
+    selectMode('manual')
+    expect(screen.getByRole('button', { name: /^Identity$/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Environment$/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Photos$/ })).not.toBeInTheDocument()
+  })
+
   it('calls onClose when the Cancel button is clicked', () => {
     const onClose = vi.fn()
     renderModal({ onClose })

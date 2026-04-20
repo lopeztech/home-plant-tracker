@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
-import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col, Pagination } from 'react-bootstrap'
+import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -482,123 +482,136 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <hr />
             </>
           )}
-          <Form.Group className="mb-3">
-            <Form.Label>Species *</Form.Label>
-            <Form.Control type="text" placeholder="e.g. Nephrolepis exaltata" value={form.species}
-              onChange={(e) => update('species', e.target.value)} required />
-            <Form.Text className="text-muted">
-              Display name will be {form.species ? <strong>{derivePlantName({ species: form.species, room: form.room })}</strong> : 'derived from species + room'}
-            </Form.Text>
-          </Form.Group>
-          <Form.Group className="mb-3">
-            <Form.Label>
-              Marker Emoji <span className="text-muted fs-xs">(shown on the floorplan)</span>
-            </Form.Label>
-            <div className="d-flex flex-wrap gap-1">
-              <Button
-                type="button"
-                size="sm"
-                variant={form.emoji ? 'outline-secondary' : 'primary'}
-                onClick={() => update('emoji', null)}
-                title="Auto-pick from species"
-              >
-                Auto <span className="ms-1">{getPlantEmoji({ species: form.species })}</span>
-              </Button>
-              {PLANT_EMOJI_OPTIONS.map((e) => (
-                <Button
-                  key={e}
-                  type="button"
-                  size="sm"
-                  variant={form.emoji === e ? 'primary' : 'outline-secondary'}
-                  onClick={() => update('emoji', e)}
-                  style={{ fontSize: '1.1rem', lineHeight: 1, padding: '0.25rem 0.5rem' }}
-                  aria-label={`Use ${e} as marker`}
-                >
-                  {e}
-                </Button>
-              ))}
-            </div>
-          </Form.Group>
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Floor</Form.Label>
-                <Form.Select value={form.floor} onChange={(e) => update('floor', e.target.value)}>
-                  {(floors ?? []).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Room / Zone</Form.Label>
-                <Form.Select value={form.room} onChange={(e) => update('room', e.target.value)}>
-                  {getRoomsFromFloors(floors).map((r) => <option key={r} value={r}>{r}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-          </Row>
-          <Row className="mb-3">
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Sun Exposure</Form.Label>
-                <Form.Select value={form.sunExposure || ''} onChange={(e) => update('sunExposure', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {SUN_EXPOSURE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={6}>
-              <Form.Group>
-                <Form.Label>Sun Hours / Day{form.sunHoursPerDay ? `: ${form.sunHoursPerDay}h` : ''}</Form.Label>
-                <Form.Range min={0} max={16} value={form.sunHoursPerDay || 0} onChange={(e) => update('sunHoursPerDay', Number(e.target.value) || null)} className="mt-2" />
-                <div className="d-flex justify-content-between fs-xs text-muted"><span>0h</span><span>16h</span></div>
-              </Form.Group>
-            </Col>
-          </Row>
-          <Form.Group className="mb-3">
-            <Form.Label>Planted In</Form.Label>
-            <Form.Select value={form.plantedIn || ''} onChange={(e) => update('plantedIn', e.target.value || null)}>
-              <option value="">— Select —</option>
-              {PLANTED_IN_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-            </Form.Select>
-          </Form.Group>
-          {form.plantedIn === 'pot' && (
-            <>
-              <Row className="mb-3">
-                <Col md={6}>
-                  <Form.Group>
-                    <Form.Label>Pot Size</Form.Label>
-                    <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
-                      <option value="">— Select —</option>
-                      {POT_SIZE_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-                <Col md={6}>
-                  <Form.Group>
-                    <Form.Label>Soil Type</Form.Label>
-                    <Form.Select value={form.soilType || ''} onChange={(e) => update('soilType', e.target.value || null)}>
-                      <option value="">— Select —</option>
-                      {SOIL_TYPE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-              </Row>
-              <Form.Group className="mb-3">
-                <Form.Label>Pot Material</Form.Label>
-                <Form.Select value={form.potMaterial || ''} onChange={(e) => update('potMaterial', e.target.value || null)}>
-                  <option value="">— Select —</option>
-                  {POT_MATERIAL_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-                </Form.Select>
-              </Form.Group>
-            </>
-          )}
+          <Accordion defaultActiveKey={isEditing ? ['identity'] : ['identity', 'environment']} alwaysOpen>
+            <Accordion.Item eventKey="identity">
+              <Accordion.Header>Identity</Accordion.Header>
+              <Accordion.Body>
+                <Form.Group className="mb-3">
+                  <Form.Label>Species *</Form.Label>
+                  <Form.Control type="text" placeholder="e.g. Nephrolepis exaltata" value={form.species}
+                    onChange={(e) => update('species', e.target.value)} required />
+                  <Form.Text className="text-muted">
+                    Display name will be {form.species ? <strong>{derivePlantName({ species: form.species, room: form.room })}</strong> : 'derived from species + room'}
+                  </Form.Text>
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label>
+                    Marker Emoji <span className="text-muted fs-xs">(shown on the floorplan)</span>
+                  </Form.Label>
+                  <div className="d-flex flex-wrap gap-1">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={form.emoji ? 'outline-secondary' : 'primary'}
+                      onClick={() => update('emoji', null)}
+                      title="Auto-pick from species"
+                    >
+                      Auto <span className="ms-1">{getPlantEmoji({ species: form.species })}</span>
+                    </Button>
+                    {PLANT_EMOJI_OPTIONS.map((e) => (
+                      <Button
+                        key={e}
+                        type="button"
+                        size="sm"
+                        variant={form.emoji === e ? 'primary' : 'outline-secondary'}
+                        onClick={() => update('emoji', e)}
+                        style={{ fontSize: '1.1rem', lineHeight: 1, padding: '0.25rem 0.5rem' }}
+                        aria-label={`Use ${e} as marker`}
+                      >
+                        {e}
+                      </Button>
+                    ))}
+                  </div>
+                </Form.Group>
+              </Accordion.Body>
+            </Accordion.Item>
 
-          {/* Photo capture + gallery — only available once the plant exists,
-              because the upload endpoints target plant.id. */}
-          {isEditing && (
-            <>
-              <hr />
+            <Accordion.Item eventKey="environment">
+              <Accordion.Header>Environment</Accordion.Header>
+              <Accordion.Body>
+                <Row className="mb-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>Floor</Form.Label>
+                      <Form.Select value={form.floor} onChange={(e) => update('floor', e.target.value)}>
+                        {(floors ?? []).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>Room / Zone</Form.Label>
+                      <Form.Select value={form.room} onChange={(e) => update('room', e.target.value)}>
+                        {getRoomsFromFloors(floors).map((r) => <option key={r} value={r}>{r}</option>)}
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Row className="mb-3">
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>Sun Exposure</Form.Label>
+                      <Form.Select value={form.sunExposure || ''} onChange={(e) => update('sunExposure', e.target.value || null)}>
+                        <option value="">— Select —</option>
+                        {SUN_EXPOSURE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group>
+                      <Form.Label>Sun Hours / Day{form.sunHoursPerDay ? `: ${form.sunHoursPerDay}h` : ''}</Form.Label>
+                      <Form.Range min={0} max={16} value={form.sunHoursPerDay || 0} onChange={(e) => update('sunHoursPerDay', Number(e.target.value) || null)} className="mt-2" />
+                      <div className="d-flex justify-content-between fs-xs text-muted"><span>0h</span><span>16h</span></div>
+                    </Form.Group>
+                  </Col>
+                </Row>
+                <Form.Group className="mb-3">
+                  <Form.Label>Planted In</Form.Label>
+                  <Form.Select value={form.plantedIn || ''} onChange={(e) => update('plantedIn', e.target.value || null)}>
+                    <option value="">— Select —</option>
+                    {PLANTED_IN_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                  </Form.Select>
+                </Form.Group>
+                {form.plantedIn === 'pot' && (
+                  <>
+                    <Row className="mb-3">
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Pot Size</Form.Label>
+                          <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
+                            <option value="">— Select —</option>
+                            {POT_SIZE_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                          </Form.Select>
+                        </Form.Group>
+                      </Col>
+                      <Col md={6}>
+                        <Form.Group>
+                          <Form.Label>Soil Type</Form.Label>
+                          <Form.Select value={form.soilType || ''} onChange={(e) => update('soilType', e.target.value || null)}>
+                            <option value="">— Select —</option>
+                            {SOIL_TYPE_OPTIONS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                          </Form.Select>
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                    <Form.Group>
+                      <Form.Label>Pot Material</Form.Label>
+                      <Form.Select value={form.potMaterial || ''} onChange={(e) => update('potMaterial', e.target.value || null)}>
+                        <option value="">— Select —</option>
+                        {POT_MATERIAL_OPTIONS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </Form.Select>
+                    </Form.Group>
+                  </>
+                )}
+              </Accordion.Body>
+            </Accordion.Item>
+
+            {/* Photo capture + gallery — only available once the plant exists,
+                because the upload endpoints target plant.id. */}
+            {isEditing && (
+            <Accordion.Item eventKey="photos">
+              <Accordion.Header>Photos</Accordion.Header>
+              <Accordion.Body>
               <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Take a Photo</h6>
               <div className="d-flex gap-2 mb-3">
                 <GrowthUpload plantId={plant.id} onComplete={(result) => {
@@ -674,8 +687,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   </>
                 )
               })()}
-            </>
-          )}
+              </Accordion.Body>
+            </Accordion.Item>
+            )}
+          </Accordion>
         </Modal.Body>
       )}
 

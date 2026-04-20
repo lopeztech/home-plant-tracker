@@ -5,8 +5,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // ── Mocks ────────────────────────────────────────────────────────────────────
 
 const navigateMock = vi.fn()
+const setSearchParamsMock = vi.fn()
+let currentSearchParams = new URLSearchParams()
 vi.mock('react-router', () => ({
   useNavigate: () => navigateMock,
+  useSearchParams: () => [currentSearchParams, setSearchParamsMock],
 }))
 
 // Provide controllable context state
@@ -45,6 +48,12 @@ vi.mock('../components/HouseWeatherFrame.jsx', () => ({
 // Avoid loading the heavy Floorplan3D module under lazy()
 vi.mock('../components/Floorplan3D.jsx', () => ({
   default: () => <div data-testid="floorplan-3d" />,
+}))
+
+// Stub PlantListPanel so we can assert the list view without pulling its
+// context requirements in this suite.
+vi.mock('../components/PlantListPanel.jsx', () => ({
+  default: () => <div data-testid="plant-list-stub" />,
 }))
 
 // Mock plants API so drag/save paths don't explode
@@ -112,6 +121,7 @@ function setupContexts(overrides = {}) {
 describe('FloorplanPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    currentSearchParams = new URLSearchParams()
     setupContexts()
   })
 
@@ -170,6 +180,26 @@ describe('FloorplanPanel', () => {
 
     // 3D view replaces the main 2D map while lazily loading
     expect(screen.queryByRole('button', { name: /2D/ })).toBeInTheDocument()
+  })
+
+  it('clicking the List button updates the view search param', () => {
+    render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /^List$/ }))
+
+    expect(setSearchParamsMock).toHaveBeenCalled()
+    const updater = setSearchParamsMock.mock.calls[0][0]
+    const next = updater(new URLSearchParams())
+    expect(next.get('view')).toBe('list')
+  })
+
+  it('renders PlantListPanel when the view search param is list', () => {
+    currentSearchParams = new URLSearchParams('view=list')
+
+    render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
+
+    expect(screen.getByTestId('plant-list-stub')).toBeInTheDocument()
+    expect(screen.queryByTestId('leaflet-stub')).not.toBeInTheDocument()
   })
 
   it('hides the Reorganise button when there are no plants on the floor', () => {
