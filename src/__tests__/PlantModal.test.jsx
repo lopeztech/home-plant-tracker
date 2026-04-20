@@ -221,6 +221,25 @@ describe('PlantModal', () => {
     )
   })
 
+  it('groups the marker emoji picker into labelled categories', () => {
+    renderModal()
+    selectMode('manual')
+    expect(screen.getByText('Foliage')).toBeInTheDocument()
+    expect(screen.getByText('Flowers')).toBeInTheDocument()
+    expect(screen.getByText('Trees')).toBeInTheDocument()
+    expect(screen.getByText('Citrus & Fruit')).toBeInTheDocument()
+  })
+
+  it('shows a marker preview with the auto emoji for the current species', () => {
+    renderModal()
+    selectMode('manual')
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Meyer lemon' },
+    })
+    const preview = screen.getByLabelText(/marker preview/i)
+    expect(preview.textContent).toBe('🍋')
+  })
+
   it('sends the picked marker emoji in the onSave payload', async () => {
     const onSave = vi.fn()
     renderModal({ onSave })
@@ -229,6 +248,8 @@ describe('PlantModal', () => {
       target: { value: 'Nephrolepis exaltata' },
     })
     fireEvent.click(screen.getByRole('button', { name: /use 🌻 as marker/i }))
+    // After picking a custom emoji, a "Use auto" link appears to revert.
+    expect(screen.getByRole('button', { name: /use auto/i })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
     await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ emoji: '🌻' }))

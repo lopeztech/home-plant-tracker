@@ -16,7 +16,14 @@ export default function WeatherStrip({ weather, location, onLocationClick }) {
     whiteSpace: 'nowrap',
   }
 
-  const dayLabel = (day, i) => i === 0 ? 'Tmrw' : new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' })
+  const weekdayShort = (day) => new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' })
+  const dayLabel = (day) => weekdayShort(day).slice(0, 2)
+  const dayTitle = (day, i) => {
+    const full = new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'long' })
+    const prefix = i === 0 ? 'Tomorrow' : full
+    const rain = day.precipitation >= 2 ? ` · ${day.precipitation.toFixed(0)}mm` : ''
+    return `${prefix} · ${day.maxTemp}°/${day.minTemp}°${rain}`
+  }
 
   return (
     <div className="d-flex align-items-center gap-1 px-3 pt-2 overflow-auto" style={{ scrollbarWidth: 'none' }}>
@@ -28,9 +35,9 @@ export default function WeatherStrip({ weather, location, onLocationClick }) {
         <span
           key={day.date}
           style={pillStyle}
-          title={`${dayLabel(day, i)} · ${day.maxTemp}°/${day.minTemp}°${day.precipitation >= 2 ? ` · ${day.precipitation.toFixed(0)}mm` : ''}`}
+          title={dayTitle(day, i)}
         >
-          <span style={{ opacity: 0.8, marginRight: 3 }}>{dayLabel(day, i).slice(0, 1)}</span>
+          <span style={{ opacity: 0.8, marginRight: 3 }}>{dayLabel(day)}</span>
           <span style={{ fontSize: '0.75rem', marginRight: 2 }}>{day.condition.emoji}</span>
           <span>{`${day.maxTemp}°`}</span>
         </span>

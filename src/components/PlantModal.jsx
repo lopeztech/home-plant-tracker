@@ -5,7 +5,7 @@ import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import { derivePlantName } from '../utils/plantName.js'
-import { getPlantEmoji, PLANT_EMOJI_OPTIONS } from '../utils/plantEmoji.js'
+import { getPlantEmoji, PLANT_EMOJI_GROUPS } from '../utils/plantEmoji.js'
 import { PlantContext } from '../context/PlantContext.jsx'
 
 // Max recommendation entries retained per plant. Older entries are trimmed
@@ -495,33 +495,64 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   </Form.Text>
                 </Form.Group>
                 <Form.Group>
-                  <Form.Label>
-                    Marker Emoji <span className="text-muted fs-xs">(shown on the floorplan)</span>
-                  </Form.Label>
-                  <div className="d-flex flex-wrap gap-1">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant={form.emoji ? 'outline-secondary' : 'primary'}
-                      onClick={() => update('emoji', null)}
-                      title="Auto-pick from species"
-                    >
-                      Auto <span className="ms-1">{getPlantEmoji({ species: form.species })}</span>
-                    </Button>
-                    {PLANT_EMOJI_OPTIONS.map((e) => (
+                  <Form.Label className="d-flex align-items-center justify-content-between">
+                    <span>
+                      Marker Emoji <span className="text-muted fs-xs">(shown on the floorplan)</span>
+                    </span>
+                    {form.emoji && (
                       <Button
-                        key={e}
                         type="button"
+                        variant="link"
                         size="sm"
-                        variant={form.emoji === e ? 'primary' : 'outline-secondary'}
-                        onClick={() => update('emoji', e)}
-                        style={{ fontSize: '1.1rem', lineHeight: 1, padding: '0.25rem 0.5rem' }}
-                        aria-label={`Use ${e} as marker`}
+                        className="p-0 fs-xs"
+                        onClick={() => update('emoji', null)}
                       >
-                        {e}
+                        Use auto
                       </Button>
-                    ))}
+                    )}
+                  </Form.Label>
+                  <div className="d-flex align-items-center gap-3 mb-2">
+                    <div
+                      className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                      style={{
+                        width: 44,
+                        height: 44,
+                        background: '#fff',
+                        border: '2px solid #22c55e',
+                        boxShadow: '0 2px 8px rgba(34,197,94,0.5), 0 0 0 3px rgba(34,197,94,0.18)',
+                      }}
+                      aria-label="Marker preview"
+                    >
+                      <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>
+                        {getPlantEmoji({ species: form.species, emoji: form.emoji })}
+                      </span>
+                    </div>
+                    <small className="text-muted">
+                      {form.emoji
+                        ? 'Custom marker — tap "Use auto" to let the species name pick.'
+                        : 'Auto — derived from the species name. Tap any emoji below to override.'}
+                    </small>
                   </div>
+                  {PLANT_EMOJI_GROUPS.map((group) => (
+                    <div key={group.label} className="mb-2">
+                      <div className="text-muted fs-xs fw-600 text-uppercase mb-1">{group.label}</div>
+                      <div className="d-flex flex-wrap gap-1">
+                        {group.emojis.map((e) => (
+                          <Button
+                            key={e}
+                            type="button"
+                            size="sm"
+                            variant={form.emoji === e ? 'primary' : 'outline-secondary'}
+                            onClick={() => update('emoji', e)}
+                            style={{ fontSize: '1.1rem', lineHeight: 1, padding: '0.25rem 0.5rem', minWidth: 36 }}
+                            aria-label={`Use ${e} as marker`}
+                          >
+                            {e}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </Form.Group>
               </Accordion.Body>
             </Accordion.Item>

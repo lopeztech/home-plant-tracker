@@ -44,6 +44,22 @@ describe('WeatherStrip', () => {
     expect(container.firstChild).toBeNull()
   })
 
+  it('uses 2-letter weekday abbreviations for forecast pills', () => {
+    const { container } = render(<WeatherStrip weather={baseWeather} />)
+    // 2025-06-02 is a Monday, 2025-06-03 is Tuesday, 2025-06-04 is Wednesday.
+    // Each should appear as a 2-letter abbreviation (Mo, Tu, We) rather than
+    // single letters that collide (T for both Tue/Thu/Tmrw).
+    expect(container.textContent).toMatch(/Mo/)
+    expect(container.textContent).toMatch(/Tu/)
+    expect(container.textContent).toMatch(/We/)
+  })
+
+  it('marks the first forecast pill as tomorrow in its tooltip', () => {
+    render(<WeatherStrip weather={baseWeather} />)
+    const tomorrowPill = screen.getByTitle(/^Tomorrow ·/)
+    expect(tomorrowPill).toBeInTheDocument()
+  })
+
   it('fires onLocationClick when the location button is clicked', () => {
     const onLocationClick = vi.fn()
     render(<WeatherStrip weather={baseWeather} location={{ name: 'London' }} onLocationClick={onLocationClick} />)
