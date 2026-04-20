@@ -530,9 +530,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                     <small className="text-muted">
                       {form.emoji
                         ? 'Custom marker — tap "Use auto" to let the species name pick.'
-                        : 'Auto — derived from the species name. Tap any emoji below to override.'}
+                        : 'Auto — derived from the species name. Open the picker to override.'}
                     </small>
                   </div>
+                  <details>
+                    <summary className="text-muted fs-xs fw-500 user-select-none mb-2" style={{ cursor: 'pointer' }}>
+                      Choose a different emoji
+                    </summary>
+                    <div className="pt-2">
                   {PLANT_EMOJI_GROUPS.map((group) => (
                     <div key={group.label} className="mb-2">
                       <div className="text-muted fs-xs fw-600 text-uppercase mb-1">{group.label}</div>
@@ -553,6 +558,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                       </div>
                     </div>
                   ))}
+                    </div>
+                  </details>
                 </Form.Group>
               </Accordion.Body>
             </Accordion.Item>
