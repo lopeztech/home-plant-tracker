@@ -1,9 +1,14 @@
 import { useMemo, useState, useCallback } from 'react'
-import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner } from 'react-bootstrap'
+import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner, ProgressBar } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
-import { plantsApi } from '../api/plants.js'
+import { plantsApi, recommendApi } from '../api/plants.js'
 import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS, getSeason, isOutdoor } from '../utils/watering.js'
+import { derivePlantName } from '../utils/plantName.js'
+import { fanOut } from '../utils/concurrency.js'
 import PlantIcon from './PlantIcon.jsx'
+
+const RECOMMENDATION_HISTORY_LIMIT = 20
+const BATCH_CONCURRENCY = 3
 
 function UrgencyIcon({ days, skippedRain }) {
   if (skippedRain) return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#cloud-rain"></use></svg>
@@ -69,12 +74,16 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
 }
 
 export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef }) {
-  const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading } = usePlantContext()
+  const plantCtx = usePlantContext()
+  const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading } = plantCtx
+  const location = plantCtx.location || null
+  const tempUnitCode = plantCtx.tempUnit?.unit || null
   const [searchTerm, setSearchTerm] = useState('')
   const [roomFilter, setRoomFilter] = useState(null)
   const [gnomeActive, setGnomeActive] = useState(false)
   const [recalculating, setRecalculating] = useState(false)
   const [recalcResult, setRecalcResult] = useState(null)
+  const [batchStatus, setBatchStatus] = useState(null) // { total, done, failed }
 
   const handleRecalculate = useCallback(async () => {
     setRecalculating(true); setRecalcResult(null)
@@ -87,6 +96,64 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
     } catch (err) { setRecalcResult({ error: err.message }) }
     finally { setRecalculating(false) }
   }, [weather])
+
+  // Fan out Gemini care + watering recommendations across all plants on the
+  // active floor with capped concurrency. Each plant gets two Gemini calls
+  // + one Firestore update; we expose live progress via batchStatus so the
+  // UI can show "n of N" without long-polling from the server.
+  const refreshOne = useCallback(async (plant) => {
+    const outdoor = isOutdoor(plant, floors)
+    const season = getSeason(weather?.location?.lat)
+    const name = derivePlantName({ species: plant.species, room: plant.room })
+
+    const [careData, wateringData] = await Promise.all([
+      recommendApi.get(name, plant.species, {
+        plantedIn: plant.plantedIn, isOutdoor: outdoor,
+        location, tempUnit: tempUnitCode,
+      }),
+      recommendApi.getWatering({
+        name, species: plant.species,
+        plantedIn: plant.plantedIn, isOutdoor: outdoor,
+        potSize: plant.plantedIn === 'pot' ? plant.potSize : null,
+        potMaterial: plant.plantedIn === 'pot' ? plant.potMaterial : null,
+        soilType: plant.plantedIn === 'pot' ? plant.soilType : null,
+        sunExposure: plant.sunExposure, health: plant.health,
+        maturity: plant.maturity, season,
+        temperature: weather?.current?.temp || null,
+        location, tempUnit: tempUnitCode,
+      }),
+    ])
+
+    const now = new Date().toISOString()
+    const careHistory = [...(plant.careRecommendationHistory || []), { date: now, data: careData }]
+      .slice(-RECOMMENDATION_HISTORY_LIMIT)
+    const wateringHistory = [...(plant.wateringRecommendationHistory || []), { date: now, data: wateringData }]
+      .slice(-RECOMMENDATION_HISTORY_LIMIT)
+
+    await plantsApi.update(plant.id, {
+      careRecommendationHistory: careHistory,
+      wateringRecommendationHistory: wateringHistory,
+    })
+  }, [floors, weather, location, tempUnitCode])
+
+  const handleBatchRefresh = useCallback(async (targetPlants) => {
+    if (!targetPlants?.length || batchStatus?.running) return
+    setBatchStatus({ running: true, total: targetPlants.length, done: 0, failed: 0 })
+
+    await fanOut(targetPlants, refreshOne, {
+      limit: BATCH_CONCURRENCY,
+      onResult: (_i, r) => {
+        setBatchStatus((prev) => prev ? {
+          ...prev,
+          done: prev.done + 1,
+          failed: prev.failed + (r.ok ? 0 : 1),
+        } : prev)
+      },
+    })
+
+    // Reload so image URLs re-sign and the modal picks up fresh history.
+    window.location.reload()
+  }, [batchStatus, refreshOne])
 
   const handleGnomeBatchWater = useCallback((targetPlants) => {
     if (gnomeActive) return
@@ -218,6 +285,40 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
                 {gnomeActive ? <span className="spinner-border spinner-border-sm me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>}
                 {gnomeActive ? 'Watering...' : 'Water All Plants'}
               </Button>
+            </div>
+          )}
+
+          {/* Refresh AI recommendations (fan-out with concurrency) */}
+          {floorPlants.length > 0 && (
+            <div className="px-3 pb-2">
+              {batchStatus?.running ? (
+                <div className="border rounded p-2 bg-body-tertiary">
+                  <div className="d-flex align-items-center justify-content-between mb-1 fs-xs">
+                    <span className="fw-500">
+                      Refreshing AI advice — {batchStatus.done} of {batchStatus.total}
+                    </span>
+                    {batchStatus.failed > 0 && (
+                      <span className="text-danger">{batchStatus.failed} failed</span>
+                    )}
+                  </div>
+                  <ProgressBar
+                    now={(batchStatus.done / batchStatus.total) * 100}
+                    variant={batchStatus.failed > 0 ? 'warning' : 'success'}
+                    style={{ height: 6 }}
+                  />
+                </div>
+              ) : (
+                <Button
+                  variant="outline-success"
+                  size="sm"
+                  className="w-100"
+                  onClick={() => handleBatchRefresh(floorPlants)}
+                  title="Fetch fresh Gemini care + watering advice for every plant on this floor"
+                >
+                  <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>
+                  Refresh AI Advice for All Plants ({floorPlants.length})
+                </Button>
+              )}
             </div>
           )}
 
