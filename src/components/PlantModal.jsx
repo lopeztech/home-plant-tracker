@@ -495,10 +495,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   </Form.Text>
                 </Form.Group>
                 <Form.Group>
-                  <Form.Label className="d-flex align-items-center justify-content-between">
-                    <span>
+                  <div className="d-flex align-items-center justify-content-between mb-1">
+                    <Form.Label className="mb-0">
                       Marker Emoji <span className="text-muted fs-xs">(shown on the floorplan)</span>
-                    </span>
+                    </Form.Label>
                     {form.emoji && (
                       <Button
                         type="button"
@@ -510,7 +510,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                         Use auto
                       </Button>
                     )}
-                  </Form.Label>
+                  </div>
                   <div className="d-flex align-items-center gap-3 mb-2">
                     <div
                       className="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
