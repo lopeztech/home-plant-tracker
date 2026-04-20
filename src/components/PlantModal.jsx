@@ -591,13 +591,28 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   <Col md={6}>
                     <Form.Group>
                       <Form.Label>Sun Hours / Day{form.sunHoursPerDay ? `: ${form.sunHoursPerDay}h` : ''}</Form.Label>
-                      <Form.Range min={0} max={16} value={form.sunHoursPerDay || 0} onChange={(e) => update('sunHoursPerDay', Number(e.target.value) || null)} className="mt-2" />
-                      <div className="d-flex justify-content-between fs-xs text-muted"><span>0h</span><span>16h</span></div>
+                      <Form.Range
+                        min={0} max={16}
+                        value={form.sunHoursPerDay || 0}
+                        onChange={(e) => update('sunHoursPerDay', Number(e.target.value) || null)}
+                        className="mt-2"
+                        list="sun-hours-ticks"
+                      />
+                      <datalist id="sun-hours-ticks">
+                        <option value="4" label="4h" />
+                        <option value="8" label="8h" />
+                        <option value="12" label="12h" />
+                      </datalist>
+                      <div className="d-flex justify-content-between fs-xs text-muted">
+                        <span>0h</span><span>4h</span><span>8h</span><span>12h</span><span>16h</span>
+                      </div>
                     </Form.Group>
                   </Col>
                 </Row>
                 <Form.Group className="mb-3">
-                  <Form.Label>Planted In</Form.Label>
+                  <Form.Label>
+                    Planted In <span className="text-muted fs-xs">(shapes the watering advice)</span>
+                  </Form.Label>
                   <Form.Select value={form.plantedIn || ''} onChange={(e) => update('plantedIn', e.target.value || null)}>
                     <option value="">— Select —</option>
                     {PLANTED_IN_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
@@ -736,11 +751,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           )}
           {/* Primary action: fetch an AI watering recommendation. Frequency,
               method, and amount below all derive from its response. */}
-          <div className="mb-3">
+          <div className="d-flex flex-wrap gap-2 mb-3">
             <Button variant="success" size="sm" onClick={handleGetWateringRec} disabled={wateringRecLoading}>
               {wateringRecLoading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#zap"></use></svg>}
               {wateringRecLoading ? 'Loading...' : wateringRec ? 'Refresh Watering Recommendation' : 'Get Watering Recommendation'}
             </Button>
+            {onWater && (
+              <Button variant="outline-info" size="sm" onClick={() => onWater(plant.id)}>
+                <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                Mark as Watered
+              </Button>
+            )}
           </div>
           {(plant.waterMethod || plant.waterAmount) && (() => {
             const adjusted = getAdjustedWaterAmount(plant, weather, floors)
@@ -897,87 +918,96 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             </div>
             {plant.moistureLog?.length > 0 && (() => {
               const reversed = [...plant.moistureLog].reverse()
-              const totalPages = Math.ceil(reversed.length / 5)
-              const page = Math.min(moisturePage, totalPages)
-              const paged = reversed.slice((page - 1) * 5, page * 5)
               const latest = reversed[0]
               const latestDisplay = getMoistureDisplay(latest.reading)
               const ago = Math.round((Date.now() - new Date(latest.date).getTime()) / 3600000)
               const agoLabel = ago < 1 ? 'just now' : ago < 24 ? `${ago}h ago` : `${Math.round(ago / 24)}d ago`
               return (
-                <div className="mt-2">
-                  {page === 1 && (
-                    <div className="d-flex align-items-center gap-2 mb-2 fs-sm">
-                      <span className="rounded-circle d-inline-block" style={{ width: 10, height: 10, background: latestDisplay.color }} />
-                      <span>Last: <strong>{latest.reading}/10</strong> ({latestDisplay.label})</span>
-                      <span className="text-muted">— {agoLabel}</span>
-                    </div>
-                  )}
-                  {paged.map((entry, i) => {
-                    const d = getMoistureDisplay(entry.reading)
-                    return (
-                      <div key={i} className="d-flex align-items-center gap-2 mb-1 fs-xs text-muted">
-                        <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: d.color }} />
-                        <span><strong>{entry.reading}/10</strong></span>
-                        <span>{new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</span>
-                        <span>{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
-                        {entry.note && <span>— {entry.note}</span>}
-                      </div>
-                    )
-                  })}
-                  {totalPages > 1 && (
-                    <Pagination size="sm" className="mt-2 mb-0 justify-content-center">
-                      <Pagination.Prev disabled={page <= 1} onClick={() => setMoisturePage(page - 1)} />
-                      {[...Array(totalPages)].map((_, i) => (
-                        <Pagination.Item key={i + 1} active={i + 1 === page} onClick={() => setMoisturePage(i + 1)}>{i + 1}</Pagination.Item>
-                      ))}
-                      <Pagination.Next disabled={page >= totalPages} onClick={() => setMoisturePage(page + 1)} />
-                    </Pagination>
-                  )}
+                <div className="d-flex align-items-center gap-2 mb-2 fs-sm">
+                  <span className="rounded-circle d-inline-block" style={{ width: 10, height: 10, background: latestDisplay.color }} />
+                  <span>Last: <strong>{latest.reading}/10</strong> ({latestDisplay.label})</span>
+                  <span className="text-muted">— {agoLabel}</span>
                 </div>
               )
             })()}
           </div>
-          <div>
-            <div className="d-flex align-items-center justify-content-between mb-3">
-              <h6 className="text-muted text-uppercase fs-xs fw-600 mb-0">Watering History</h6>
-              {onWater && (
-                <Button variant="outline-info" size="sm" onClick={() => onWater(plant.id)}>
-                  <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                  Mark as Watered
-                </Button>
-              )}
-            </div>
-            {plant.wateringLog?.length > 0 ? (() => {
-              const reversed = [...plant.wateringLog].reverse()
-              const totalPages = Math.ceil(reversed.length / 5)
-              const page = Math.min(wateringPage, totalPages)
-              const paged = reversed.slice((page - 1) * 5, page * 5)
-              return (
-                <>
-                  {paged.map((entry, i) => (
-                    <div key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm text-muted">
-                      <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                      {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      <span className="text-muted">{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
-                      {entry.note && <span>— {entry.note}</span>}
+          {/* History: tucked behind a disclosure so the tab lands on
+              "should I water today?" not a wall of past readings. */}
+          {(plant.moistureLog?.length > 0 || plant.wateringLog?.length > 0) ? (
+            <details className="mb-3">
+              <summary className="text-muted fs-sm fw-500 user-select-none" style={{ cursor: 'pointer' }}>
+                History
+              </summary>
+              <div className="pt-3">
+                {plant.moistureLog?.length > 0 && (() => {
+                  const reversed = [...plant.moistureLog].reverse()
+                  const totalPages = Math.ceil(reversed.length / 5)
+                  const page = Math.min(moisturePage, totalPages)
+                  const paged = reversed.slice((page - 1) * 5, page * 5)
+                  return (
+                    <div className="mb-3">
+                      <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Moisture Log</h6>
+                      {paged.map((entry, i) => {
+                        const d = getMoistureDisplay(entry.reading)
+                        return (
+                          <div key={i} className="d-flex align-items-center gap-2 mb-1 fs-xs text-muted">
+                            <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: d.color }} />
+                            <span><strong>{entry.reading}/10</strong></span>
+                            <span>{new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</span>
+                            <span>{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+                            {entry.note && <span>— {entry.note}</span>}
+                          </div>
+                        )
+                      })}
+                      {totalPages > 1 && (
+                        <Pagination size="sm" className="mt-2 mb-0 justify-content-center">
+                          <Pagination.Prev disabled={page <= 1} onClick={() => setMoisturePage(page - 1)} />
+                          {[...Array(totalPages)].map((_, i) => (
+                            <Pagination.Item key={i + 1} active={i + 1 === page} onClick={() => setMoisturePage(i + 1)}>{i + 1}</Pagination.Item>
+                          ))}
+                          <Pagination.Next disabled={page >= totalPages} onClick={() => setMoisturePage(page + 1)} />
+                        </Pagination>
+                      )}
                     </div>
-                  ))}
-                  {totalPages > 1 && (
-                    <Pagination size="sm" className="mt-2 mb-0 justify-content-center">
-                      <Pagination.Prev disabled={page <= 1} onClick={() => setWateringPage(page - 1)} />
-                      {[...Array(totalPages)].map((_, i) => (
-                        <Pagination.Item key={i + 1} active={i + 1 === page} onClick={() => setWateringPage(i + 1)}>{i + 1}</Pagination.Item>
-                      ))}
-                      <Pagination.Next disabled={page >= totalPages} onClick={() => setWateringPage(page + 1)} />
-                    </Pagination>
+                  )
+                })()}
+                <div>
+                  <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">Watering History</h6>
+                  {plant.wateringLog?.length > 0 ? (() => {
+                    const reversed = [...plant.wateringLog].reverse()
+                    const totalPages = Math.ceil(reversed.length / 5)
+                    const page = Math.min(wateringPage, totalPages)
+                    const paged = reversed.slice((page - 1) * 5, page * 5)
+                    return (
+                      <>
+                        {paged.map((entry, i) => (
+                          <div key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm text-muted">
+                            <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
+                            {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            <span className="text-muted">{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+                            {entry.note && <span>— {entry.note}</span>}
+                          </div>
+                        ))}
+                        {totalPages > 1 && (
+                          <Pagination size="sm" className="mt-2 mb-0 justify-content-center">
+                            <Pagination.Prev disabled={page <= 1} onClick={() => setWateringPage(page - 1)} />
+                            {[...Array(totalPages)].map((_, i) => (
+                              <Pagination.Item key={i + 1} active={i + 1 === page} onClick={() => setWateringPage(i + 1)}>{i + 1}</Pagination.Item>
+                            ))}
+                            <Pagination.Next disabled={page >= totalPages} onClick={() => setWateringPage(page + 1)} />
+                          </Pagination>
+                        )}
+                      </>
+                    )
+                  })() : (
+                    <p className="text-muted fs-sm mb-0">No watering history yet.</p>
                   )}
-                </>
-              )
-            })() : (
-              <p className="text-muted text-center py-4 mb-0">No watering history yet.</p>
-            )}
-          </div>
+                </div>
+              </div>
+            </details>
+          ) : (
+            <p className="text-muted fs-sm text-center py-3 mb-0">No watering history yet.</p>
+          )}
         </Modal.Body>
       )}
 

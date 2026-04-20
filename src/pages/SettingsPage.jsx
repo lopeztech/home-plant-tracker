@@ -99,10 +99,11 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                   onRoomsChange={(newRooms) => onChange({ ...floor, rooms: newRooms })}
                 />
               </div>
-              <p className="text-muted fs-xs mb-3">
-                <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#info"></use></svg>
-                Drag rooms to move, drag corners to resize, or draw new zones by clicking and dragging on empty space.
-              </p>
+              <ul className="text-muted fs-xs mb-3 ps-3">
+                <li>Drag a room to move it.</li>
+                <li>Drag the corners to resize.</li>
+                <li>Click and drag on empty space to draw a new zone.</li>
+              </ul>
 
               <h6 className="text-muted text-uppercase fs-xs fw-600 mb-2">
                 Rooms / Zones ({rooms.length})
@@ -126,12 +127,18 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                         onChange={(e) => updateRoom(i, { name: e.target.value })}
                       />
                       <Badge
+                        as="button"
+                        type="button"
                         bg={room.type === 'outdoor' ? 'success' : 'info'}
-                        style={{ cursor: 'pointer', fontSize: '0.65rem' }}
+                        style={{ cursor: 'pointer', fontSize: '0.65rem', border: 0 }}
                         onClick={() => updateRoom(i, { type: room.type === 'outdoor' ? 'indoor' : 'outdoor' })}
                         title="Toggle indoor/outdoor"
+                        aria-label={`Toggle room type, currently ${room.type === 'outdoor' ? 'outdoor' : 'indoor'}`}
                       >
-                        {room.type === 'outdoor' ? '☀ outdoor' : '🏠 indoor'}
+                        <svg className="sa-icon me-1" style={{ width: 10, height: 10 }} aria-hidden="true">
+                          <use href={`/icons/sprite.svg#${room.type === 'outdoor' ? 'sun' : 'home'}`}></use>
+                        </svg>
+                        {room.type === 'outdoor' ? 'outdoor' : 'indoor'}
                       </Badge>
                       {(room.type === 'outdoor' || floor.type === 'outdoor') && (
                         <Form.Select

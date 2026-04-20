@@ -23,8 +23,8 @@ export default function Sidebar() {
 
       {/* Collapse toggle */}
       <div className="d-none d-md-flex align-items-center justify-content-end px-3 pt-1">
-        <button type="button" className="btn btn-sm p-1 text-white-50" onClick={toggleSidenav} title="Collapse sidebar">
-          <svg className="sa-icon" style={{ width: 16, height: 16 }}>
+        <button type="button" className="btn btn-sm p-1 text-white-50" onClick={toggleSidenav} title="Collapse sidebar" aria-label="Collapse sidebar">
+          <svg className="sa-icon" style={{ width: 16, height: 16 }} aria-hidden="true">
             <use href="/icons/sprite.svg#chevrons-left"></use>
           </svg>
         </button>
@@ -54,12 +54,12 @@ export default function Sidebar() {
           {/* Sign out — below Settings */}
           <ul className="nav-menu d-flex flex-column">
             <li>
-              <a onClick={logout} style={{ cursor: 'pointer' }}>
-                <svg className="sa-icon">
+              <button type="button" onClick={logout} className="nav-link-btn text-start w-100 bg-transparent border-0">
+                <svg className="sa-icon" aria-hidden="true">
                   <use href="/icons/sprite.svg#log-out"></use>
                 </svg>
                 <span className="nav-link-text">Sign Out</span>
-              </a>
+              </button>
             </li>
           </ul>
         </div>

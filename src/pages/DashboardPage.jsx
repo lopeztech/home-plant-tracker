@@ -68,7 +68,12 @@ export default function DashboardPage() {
       <div className="main-content">
         {plantsError && (
           <Alert variant="danger" className="mx-3 mt-3 mb-0" dismissible>
-            Failed to load plants: {plantsError}
+            <Alert.Heading as="h6" className="mb-1">Couldn't load your plants</Alert.Heading>
+            <p className="mb-1 fs-sm">Check your connection and refresh the page. If this keeps happening, try signing out and back in.</p>
+            <details className="fs-xs text-muted">
+              <summary>Error details</summary>
+              <code>{plantsError}</code>
+            </details>
           </Alert>
         )}
         {plantsLoading ? (

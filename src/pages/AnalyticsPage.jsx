@@ -85,7 +85,18 @@ function OverviewTab({ plants }) {
             <div className="panel-hdr"><span>Health Distribution</span></div>
             <div className="panel-container"><div className="panel-content">
               {plants.length === 0 ? <p className="text-muted">No plants yet.</p> : (
-                <Chart options={healthChartOpts} series={healthData.map((d) => d.value)} type="donut" height={200} />
+                <>
+                  <Chart options={healthChartOpts} series={healthData.map((d) => d.value)} type="donut" height={200} />
+                  <table className="visually-hidden">
+                    <caption>Health distribution of tracked plants</caption>
+                    <thead><tr><th scope="col">Health</th><th scope="col">Plants</th></tr></thead>
+                    <tbody>
+                      {healthData.map((d) => (
+                        <tr key={d.name}><td>{d.name}</td><td>{d.value}</td></tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
             </div></div>
           </div>
@@ -128,7 +139,7 @@ function OverviewTab({ plants }) {
       <div className="panel panel-icon mb-4">
         <div className="panel-hdr"><span>Watering Activity — Last 12 Weeks</span></div>
         <div className="panel-container"><div className="panel-content">
-          <div className="d-flex gap-1 flex-wrap">
+          <div className="d-flex gap-1 flex-wrap" role="img" aria-label="Watering activity heatmap, last 12 weeks">
             {heatmapDays.map((day) => (
               <div
                 key={day.dateStr}
@@ -142,6 +153,15 @@ function OverviewTab({ plants }) {
             {[0, 1, 2, 3].map((n) => <div key={n} style={{ width: 12, height: 12, borderRadius: 2, background: heatColor(n) }} />)}
             <span>More</span>
           </div>
+          <table className="visually-hidden">
+            <caption>Days where at least one plant was watered, last 12 weeks</caption>
+            <thead><tr><th scope="col">Date</th><th scope="col">Plants watered</th></tr></thead>
+            <tbody>
+              {heatmapDays.filter((d) => d.count > 0).map((d) => (
+                <tr key={d.dateStr}><td>{d.dateStr}</td><td>{d.count}</td></tr>
+              ))}
+            </tbody>
+          </table>
         </div></div>
       </div>
     </div>
@@ -195,7 +215,12 @@ function PerPlantTab({ plants }) {
             <div className="panel-hdr"><span>Consistency Score</span></div>
             <div className="panel-container"><div className="panel-content text-center">
               {score === null ? <p className="text-muted fs-sm py-3">Need at least 2 watering events.</p> : (
-                <Chart options={radialOpts} series={[score]} type="radialBar" height={200} />
+                <>
+                  <Chart options={radialOpts} series={[score]} type="radialBar" height={200} />
+                  <p className="visually-hidden">
+                    Consistency score {score} out of 100 — {radialOpts.labels[0]}.
+                  </p>
+                </>
               )}
             </div></div>
           </div>
@@ -231,7 +256,18 @@ function PerPlantTab({ plants }) {
           {weeklyData.every((w) => w.count === 0) ? (
             <p className="text-muted fs-sm">No watering events in the last 12 weeks.</p>
           ) : (
-            <Chart options={barOpts} series={[{ name: 'Waterings', data: weeklyData.map((w) => w.count) }]} type="bar" height={200} />
+            <>
+              <Chart options={barOpts} series={[{ name: 'Waterings', data: weeklyData.map((w) => w.count) }]} type="bar" height={200} />
+              <table className="visually-hidden">
+                <caption>Weekly watering count, last 12 weeks</caption>
+                <thead><tr><th scope="col">Week starting</th><th scope="col">Waterings</th></tr></thead>
+                <tbody>
+                  {weeklyData.map((w) => (
+                    <tr key={w.week}><td>{w.week}</td><td>{w.count}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
           )}
         </div></div>
       </div>

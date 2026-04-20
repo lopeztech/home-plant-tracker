@@ -138,3 +138,20 @@
   align-items: center;
   gap: 0.25rem;
 }
+
+/* Sign-out lives in the sidebar's nav-menu but is a <button> (performs an
+   action) rather than a <NavLink>. Mirror the surrounding anchor styles so
+   it looks identical while staying keyboard- and screen-reader-correct. */
+.nav-menu li > .nav-link-btn {
+  line-height: 1.5rem;
+  padding-left: calc(1.9rem + 2px);
+  border-radius: 0.625rem;
+  font-size: 0.85rem;
+  font-weight: 400;
+  cursor: pointer;
+  color: inherit;
+
+  &:hover {
+    background-color: var(--app-nav-item-hover-bg);
+  }
+}
