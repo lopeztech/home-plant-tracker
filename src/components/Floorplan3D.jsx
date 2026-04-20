@@ -7,7 +7,7 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import { useImageAspect } from '../hooks/useImageAspect.js'
 import { derivePlantName } from '../utils/plantName.js'
-import { getPlantEmoji } from '../utils/plantEmoji.js'
+import { getPlantEmoji, getPlantShape } from '../utils/plantEmoji.js'
 
 // Scale room + plant coords around the centre (50). `aspect` reshapes the Y
 // axis so the square world reflects the image's true proportions (X untouched
@@ -673,15 +673,223 @@ function Room({ room, floorType }) {
   )
 }
 
-// Leaf colour by species keyword — defaults to bright leaf green.
-function getLeafColor(plant) {
-  const s = (plant.species || '').toLowerCase()
-  if (/cactus|succulent|aloe/.test(s))                return '#86b56c'
-  if (/tree|palm|fig|olive|eucalyptus/.test(s))       return '#2e7d32'
-  if (/herb|basil|mint|rosemary/.test(s))             return '#5aa852'
-  if (/vine|ivy|pothos|philodendron|monstera/.test(s)) return '#3f8a3f'
-  if (/grass|hedge|shrub/.test(s))                    return '#4f9f4d'
-  return '#48a148'
+// Small sub-renderers for the various 3D silhouettes driven by the plant's
+// marker emoji. Each rises from the pot so the group shares a common base.
+
+function LeafyFoliage({ leafColor, leaves, scale = 1 }) {
+  return (
+    <group scale={scale}>
+      <mesh position={[0, 0.4, 0]} castShadow>
+        <cylinderGeometry args={[0.02, 0.025, 0.14, 6]} />
+        <meshStandardMaterial color="#6b4423" />
+      </mesh>
+      {leaves.map((leaf, i) => (
+        <group key={i} rotation={[0, leaf.angle, 0]}>
+          <mesh
+            position={[0.14, 0.45 + leaf.length / 2, 0]}
+            rotation={[0, 0, -leaf.tilt]}
+            castShadow
+          >
+            <coneGeometry args={[leaf.radius, leaf.length, 6]} />
+            <meshStandardMaterial color={leafColor} roughness={0.7} side={2} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  )
+}
+
+function CactusFoliage({ leafColor }) {
+  return (
+    <>
+      <mesh position={[0, 0.62, 0]} castShadow>
+        <cylinderGeometry args={[0.1, 0.12, 0.5, 12]} />
+        <meshStandardMaterial color={leafColor} roughness={0.9} />
+      </mesh>
+      <mesh position={[0, 0.92, 0]} castShadow>
+        <sphereGeometry args={[0.1, 12, 12]} />
+        <meshStandardMaterial color={leafColor} roughness={0.9} />
+      </mesh>
+    </>
+  )
+}
+
+function TreeFoliage({ leafColor }) {
+  return (
+    <>
+      <mesh position={[0, 0.8, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.07, 1.0, 8]} />
+        <meshStandardMaterial color="#5c3317" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 1.45, 0]} castShadow>
+        <sphereGeometry args={[0.38, 14, 14]} />
+        <meshStandardMaterial color={leafColor} roughness={0.8} />
+      </mesh>
+      <mesh position={[-0.18, 1.35, 0.1]} castShadow>
+        <sphereGeometry args={[0.22, 10, 10]} />
+        <meshStandardMaterial color={leafColor} roughness={0.8} />
+      </mesh>
+    </>
+  )
+}
+
+function ConiferFoliage({ leafColor }) {
+  return (
+    <>
+      <mesh position={[0, 0.6, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.06, 0.6, 8]} />
+        <meshStandardMaterial color="#5c3317" roughness={0.95} />
+      </mesh>
+      <mesh position={[0, 1.0, 0]} castShadow>
+        <coneGeometry args={[0.38, 0.7, 10]} />
+        <meshStandardMaterial color={leafColor} roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 1.4, 0]} castShadow>
+        <coneGeometry args={[0.28, 0.55, 10]} />
+        <meshStandardMaterial color={leafColor} roughness={0.8} />
+      </mesh>
+      <mesh position={[0, 1.75, 0]} castShadow>
+        <coneGeometry args={[0.18, 0.4, 10]} />
+        <meshStandardMaterial color={leafColor} roughness={0.8} />
+      </mesh>
+    </>
+  )
+}
+
+function PalmFoliage({ leafColor }) {
+  const fronds = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => ({
+      angle: (i / 7) * Math.PI * 2,
+      tilt: 0.4,
+    })),
+    [],
+  )
+  return (
+    <>
+      <mesh position={[0, 0.95, 0]} castShadow>
+        <cylinderGeometry args={[0.05, 0.08, 1.3, 8]} />
+        <meshStandardMaterial color="#8b6f4e" roughness={0.95} />
+      </mesh>
+      {fronds.map((f, i) => (
+        <group key={i} rotation={[0, f.angle, 0]}>
+          <mesh
+            position={[0.28, 1.6, 0]}
+            rotation={[0, 0, -f.tilt]}
+            castShadow
+          >
+            <coneGeometry args={[0.07, 0.55, 6]} />
+            <meshStandardMaterial color={leafColor} roughness={0.7} side={2} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  )
+}
+
+function BambooFoliage({ leafColor }) {
+  const stalks = useMemo(
+    () => Array.from({ length: 5 }, (_, i) => ({
+      x: (i - 2) * 0.05,
+      z: ((i % 2) - 0.5) * 0.08,
+      height: 1.1 + (i % 3) * 0.2,
+    })),
+    [],
+  )
+  return (
+    <>
+      {stalks.map((s, i) => (
+        <mesh key={i} position={[s.x, 0.4 + s.height / 2, s.z]} castShadow>
+          <cylinderGeometry args={[0.025, 0.03, s.height, 6]} />
+          <meshStandardMaterial color={leafColor} roughness={0.7} />
+        </mesh>
+      ))}
+    </>
+  )
+}
+
+function WheatFoliage({ leafColor }) {
+  const stalks = useMemo(
+    () => Array.from({ length: 9 }, (_, i) => {
+      const a = (i / 9) * Math.PI * 2
+      return { x: Math.cos(a) * 0.08, z: Math.sin(a) * 0.08, height: 0.5 + (i % 3) * 0.05 }
+    }),
+    [],
+  )
+  return (
+    <>
+      {stalks.map((s, i) => (
+        <group key={i}>
+          <mesh position={[s.x, 0.3 + s.height / 2, s.z]} castShadow>
+            <cylinderGeometry args={[0.008, 0.008, s.height, 4]} />
+            <meshStandardMaterial color="#b88b3a" roughness={0.9} />
+          </mesh>
+          <mesh position={[s.x, 0.3 + s.height + 0.07, s.z]} castShadow>
+            <coneGeometry args={[0.035, 0.15, 5]} />
+            <meshStandardMaterial color={leafColor} roughness={0.8} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  )
+}
+
+function FlowerCluster({ flower }) {
+  if (!flower) return null
+  const count = flower.count || 1
+  const radius = flower.size === 'big' ? 0.14 : 0.08
+  const baseY = 0.78
+
+  if (flower.fruit) {
+    return (
+      <>
+        {Array.from({ length: count }).map((_, i) => {
+          const angle = (i / count) * Math.PI * 2
+          const x = Math.cos(angle) * 0.16
+          const z = Math.sin(angle) * 0.16
+          return (
+            <mesh key={i} position={[x, baseY - 0.1, z]} castShadow>
+              <sphereGeometry args={[0.07, 10, 10]} />
+              <meshStandardMaterial color={flower.color} roughness={0.55} />
+            </mesh>
+          )
+        })}
+      </>
+    )
+  }
+
+  if (flower.shape === 'cup') {
+    return (
+      <mesh position={[0, baseY, 0]} castShadow>
+        <cylinderGeometry args={[0.08, 0.04, 0.11, 12, 1, true]} />
+        <meshStandardMaterial color={flower.color} roughness={0.55} side={2} />
+      </mesh>
+    )
+  }
+
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => {
+        const angle = count === 1 ? 0 : (i / count) * Math.PI * 2
+        const offset = count === 1 ? 0 : 0.1
+        const x = Math.cos(angle) * offset
+        const z = Math.sin(angle) * offset
+        return (
+          <group key={i}>
+            <mesh position={[x, baseY, z]} castShadow>
+              <sphereGeometry args={[radius, 12, 12]} />
+              <meshStandardMaterial color={flower.color} roughness={0.6} />
+            </mesh>
+            {flower.size === 'big' && (
+              <mesh position={[x, baseY, z]} castShadow>
+                <sphereGeometry args={[radius * 0.45, 10, 10]} />
+                <meshStandardMaterial color="#78350f" roughness={0.7} />
+              </mesh>
+            )}
+          </group>
+        )
+      })}
+    </>
+  )
 }
 
 function PlantMarker({ plant, weather, floors, onClick }) {
@@ -689,10 +897,8 @@ function PlantMarker({ plant, weather, floors, onClick }) {
   const [x, , z] = pctToWorld(plant.x, plant.y)
   const hitRef = useRef()
   const foliageRef = useRef()
-  const leafColor = getLeafColor(plant)
-  const species = (plant.species || '').toLowerCase()
-  const hasFlower = /flower|rose|orchid|lily|daisy|tulip|lavender|bird of paradise/.test(species)
-  const isCactus = /cactus|succulent|aloe/.test(species)
+  const shapeDesc = getPlantShape(plant)
+  const { shape, leafColor, flower, scale: shapeScale = 1 } = shapeDesc
 
   // 5 leaves around the pot, alternating size for variation
   const leaves = useMemo(() =>
@@ -780,45 +986,14 @@ function PlantMarker({ plant, weather, floors, onClick }) {
       {/* Foliage pivots at the pot base so the droop animation leans the
           whole plant forward without detaching it from the pot. */}
       <group ref={foliageRef}>
-        {isCactus ? (
-          // Cactus: a tall barrel with ridges
-          <>
-            <mesh position={[0, 0.62, 0]} castShadow>
-              <cylinderGeometry args={[0.1, 0.12, 0.5, 12]} />
-              <meshStandardMaterial color={leafColor} roughness={0.9} />
-            </mesh>
-            <mesh position={[0, 0.92, 0]} castShadow>
-              <sphereGeometry args={[0.1, 12, 12]} />
-              <meshStandardMaterial color={leafColor} roughness={0.9} />
-            </mesh>
-          </>
-        ) : (
-          // Leafy plant: cones around a stem
-          <>
-            <mesh position={[0, 0.4, 0]} castShadow>
-              <cylinderGeometry args={[0.02, 0.025, 0.14, 6]} />
-              <meshStandardMaterial color="#6b4423" />
-            </mesh>
-            {leaves.map((leaf, i) => (
-              <group key={i} rotation={[0, leaf.angle, 0]}>
-                <mesh
-                  position={[0.14, 0.45 + leaf.length / 2, 0]}
-                  rotation={[0, 0, -leaf.tilt]}
-                  castShadow
-                >
-                  <coneGeometry args={[leaf.radius, leaf.length, 6]} />
-                  <meshStandardMaterial color={leafColor} roughness={0.7} side={2} />
-                </mesh>
-              </group>
-            ))}
-          </>
-        )}
-        {hasFlower && (
-          <mesh position={[0, 0.78, 0]} castShadow>
-            <sphereGeometry args={[0.08, 12, 12]} />
-            <meshStandardMaterial color="#ec4899" roughness={0.6} />
-          </mesh>
-        )}
+        {shape === 'cactus'  && <CactusFoliage  leafColor={leafColor} />}
+        {shape === 'tree'    && <TreeFoliage    leafColor={leafColor} />}
+        {shape === 'conifer' && <ConiferFoliage leafColor={leafColor} />}
+        {shape === 'palm'    && <PalmFoliage    leafColor={leafColor} />}
+        {shape === 'bamboo'  && <BambooFoliage  leafColor={leafColor} />}
+        {shape === 'wheat'   && <WheatFoliage   leafColor={leafColor} />}
+        {shape === 'leafy'   && <LeafyFoliage leafColor={leafColor} leaves={leaves} scale={shapeScale} />}
+        <FlowerCluster flower={flower} />
       </group>
 
       {/* Billboard name + status — floats above the plant */}
@@ -1931,9 +2106,7 @@ function CarriedPlant({ plant, positionRef, yawRef }) {
     // Slight continuous tilt so it reads as held
     groupRef.current.rotation.x = Math.sin(performance.now() / 400) * 0.04
   })
-  const leafColor = getLeafColor(plant)
-  const species = (plant.species || '').toLowerCase()
-  const isCactus = /cactus|succulent|aloe/.test(species)
+  const { shape, leafColor, flower } = getPlantShape(plant)
   return (
     <group ref={groupRef}>
       {/* Pot */}
@@ -1945,16 +2118,44 @@ function CarriedPlant({ plant, positionRef, yawRef }) {
         <cylinderGeometry args={[0.2, 0.2, 0.02, 16]} />
         <meshStandardMaterial color="#3a2a1b" />
       </mesh>
-      {/* Simplified foliage */}
-      {isCactus ? (
+      {/* Simplified foliage — lumped shapes for the carried variant so it
+          stays readable from a distance without re-rendering all the detail. */}
+      {shape === 'cactus' ? (
         <mesh position={[0, 0.35, 0]} castShadow>
           <cylinderGeometry args={[0.1, 0.12, 0.4, 10]} />
           <meshStandardMaterial color={leafColor} roughness={0.9} />
+        </mesh>
+      ) : shape === 'tree' || shape === 'conifer' ? (
+        <mesh position={[0, 0.5, 0]} castShadow>
+          <coneGeometry args={[0.22, 0.5, 10]} />
+          <meshStandardMaterial color={leafColor} roughness={0.8} />
+        </mesh>
+      ) : shape === 'palm' ? (
+        <>
+          <mesh position={[0, 0.35, 0]} castShadow>
+            <cylinderGeometry args={[0.04, 0.05, 0.4, 8]} />
+            <meshStandardMaterial color="#8b6f4e" roughness={0.95} />
+          </mesh>
+          <mesh position={[0, 0.58, 0]} castShadow>
+            <sphereGeometry args={[0.18, 10, 10]} />
+            <meshStandardMaterial color={leafColor} roughness={0.8} />
+          </mesh>
+        </>
+      ) : shape === 'wheat' ? (
+        <mesh position={[0, 0.32, 0]} castShadow>
+          <coneGeometry args={[0.14, 0.3, 8]} />
+          <meshStandardMaterial color={leafColor} roughness={0.85} />
         </mesh>
       ) : (
         <mesh position={[0, 0.32, 0]} castShadow>
           <sphereGeometry args={[0.22, 10, 10]} />
           <meshStandardMaterial color={leafColor} roughness={0.8} />
+        </mesh>
+      )}
+      {flower && (
+        <mesh position={[0, 0.5, 0]} castShadow>
+          <sphereGeometry args={[0.06, 10, 10]} />
+          <meshStandardMaterial color={flower.color} roughness={0.6} />
         </mesh>
       )}
     </group>
