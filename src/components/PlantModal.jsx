@@ -5,6 +5,7 @@ import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import { derivePlantName } from '../utils/plantName.js'
+import { getPlantEmoji, PLANT_EMOJI_OPTIONS } from '../utils/plantEmoji.js'
 import { PlantContext } from '../context/PlantContext.jsx'
 
 // Max recommendation entries retained per plant. Older entries are trimmed
@@ -204,6 +205,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     sunExposure: null, sunHoursPerDay: null,
     potSize: null, soilType: null, potMaterial: null,
     plantedIn: null,
+    emoji: null,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -284,6 +286,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         soilType: plant.soilType || null,
         potMaterial: plant.potMaterial || null,
         plantedIn: plant.plantedIn || null,
+        emoji: plant.emoji || null,
       })
     }
   }, [plant, activeFloorId])
@@ -347,6 +350,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       soilType: form.plantedIn === 'pot' ? form.soilType : null,
       potMaterial: form.plantedIn === 'pot' ? form.potMaterial : null,
       plantedIn: form.plantedIn,
+      emoji: form.emoji || null,
     })
     setIsSaving(false)
   }, [form, onSave])
@@ -485,6 +489,35 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <Form.Text className="text-muted">
               Display name will be {form.species ? <strong>{derivePlantName({ species: form.species, room: form.room })}</strong> : 'derived from species + room'}
             </Form.Text>
+          </Form.Group>
+          <Form.Group className="mb-3">
+            <Form.Label>
+              Marker Emoji <span className="text-muted fs-xs">(shown on the floorplan)</span>
+            </Form.Label>
+            <div className="d-flex flex-wrap gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={form.emoji ? 'outline-secondary' : 'primary'}
+                onClick={() => update('emoji', null)}
+                title="Auto-pick from species"
+              >
+                Auto <span className="ms-1">{getPlantEmoji({ species: form.species })}</span>
+              </Button>
+              {PLANT_EMOJI_OPTIONS.map((e) => (
+                <Button
+                  key={e}
+                  type="button"
+                  size="sm"
+                  variant={form.emoji === e ? 'primary' : 'outline-secondary'}
+                  onClick={() => update('emoji', e)}
+                  style={{ fontSize: '1.1rem', lineHeight: 1, padding: '0.25rem 0.5rem' }}
+                  aria-label={`Use ${e} as marker`}
+                >
+                  {e}
+                </Button>
+              ))}
+            </div>
           </Form.Group>
           <Row className="mb-3">
             <Col md={6}>

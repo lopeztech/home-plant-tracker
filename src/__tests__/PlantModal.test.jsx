@@ -221,6 +221,31 @@ describe('PlantModal', () => {
     )
   })
 
+  it('sends the picked marker emoji in the onSave payload', async () => {
+    const onSave = vi.fn()
+    renderModal({ onSave })
+    selectMode('manual')
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Nephrolepis exaltata' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /use 🌻 as marker/i }))
+    fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ emoji: '🌻' }))
+  })
+
+  it('sends emoji: null when the Auto option is kept', async () => {
+    const onSave = vi.fn()
+    renderModal({ onSave })
+    selectMode('manual')
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Nephrolepis exaltata' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /add plant/i }))
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ emoji: null }))
+  })
+
   it('calls onClose when the Cancel button is clicked', () => {
     const onClose = vi.fn()
     renderModal({ onClose })

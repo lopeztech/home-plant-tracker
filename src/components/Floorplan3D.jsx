@@ -7,6 +7,7 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import { useImageAspect } from '../hooks/useImageAspect.js'
 import { derivePlantName } from '../utils/plantName.js'
+import { getPlantEmoji } from '../utils/plantEmoji.js'
 
 // Scale room + plant coords around the centre (50). `aspect` reshapes the Y
 // axis so the square world reflects the image's true proportions (X untouched
@@ -35,17 +36,6 @@ function applyAspectToPlants(plants, aspect, factor = 1) {
     x: (p.x - 50) * factor + 50,
     y: (p.y - 50) * factor / aspect + 50,
   }))
-}
-
-function getPlantEmoji(plant) {
-  const species = (plant.species || '').toLowerCase()
-  if (/cactus|succulent|aloe/i.test(species)) return '🌵'
-  if (/tree|palm|fig|olive|eucalyptus/i.test(species)) return '🌳'
-  if (/herb|basil|mint|rosemary/i.test(species)) return '🌿'
-  if (/vine|ivy|pothos|philodendron|monstera/i.test(species)) return '🍃'
-  if (/flower|rose|orchid|lily|daisy|tulip|lavender|bird of paradise/i.test(species)) return '🌸'
-  if (/grass|hedge|shrub/i.test(species)) return '🌲'
-  return '🪴'
 }
 
 const SCALE = 0.14 // 100% → 14 world units — keeps rooms snug to the avatar

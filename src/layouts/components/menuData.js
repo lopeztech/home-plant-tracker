@@ -2,7 +2,7 @@ const mlInsightsEnabled = import.meta.env.VITE_ML_INSIGHTS_ENABLED === 'true'
 
 export const menuItems = [
   { key: 'overview', label: 'Overview', isTitle: true },
-  { key: 'dashboard', label: 'Dashboard', icon: '/icons/sprite.svg#home', url: '/' },
+  { key: 'dashboard', label: 'Garden', icon: '/icons/sprite.svg#home', url: '/' },
   { key: 'plants', label: 'Plants', icon: '/icons/sprite.svg#list', url: '/plants' },
   { key: 'analytics', label: 'Analytics', icon: '/icons/sprite.svg#bar-chart-2', url: '/analytics' },
   { key: 'calendar', label: 'Care Calendar', icon: '/icons/sprite.svg#calendar', url: '/calendar' },

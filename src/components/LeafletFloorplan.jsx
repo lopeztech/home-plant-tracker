@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { getWateringStatus } from '../utils/watering.js'
+import { getPlantEmoji } from '../utils/plantEmoji.js'
 
 // ── Coordinate helpers ────────────────────────────────────────────────────────
 // Gemini / stored coords: (x, y) percentages, y axis goes DOWN.
@@ -13,18 +14,6 @@ function fromLL({ lat, lng }) { return { x: lng, y: 100 - lat } }
 const BOUNDS = L.latLngBounds([[0, 0], [100, 100]])
 
 // ── Plant marker DivIcon ──────────────────────────────────────────────────────
-// Map plant type to a simple emoji for the marker
-function getPlantEmoji(plant) {
-  const species = (plant.species || '').toLowerCase()
-  if (/cactus|succulent|aloe/i.test(species)) return '🌵'
-  if (/tree|palm|fig|olive|eucalyptus/i.test(species)) return '🌳'
-  if (/herb|basil|mint|rosemary/i.test(species)) return '🌿'
-  if (/vine|ivy|pothos|philodendron|monstera/i.test(species)) return '🍃'
-  if (/flower|rose|orchid|lily|daisy|tulip|lavender|bird of paradise/i.test(species)) return '🌸'
-  if (/grass|hedge|shrub/i.test(species)) return '🌲'
-  return '🪴'
-}
-
 function makePlantIcon(plant, weather, floors) {
   const { color, daysUntil } = getWateringStatus(plant, weather, floors)
   const overdue = daysUntil < 0
