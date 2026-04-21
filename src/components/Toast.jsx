@@ -21,9 +21,12 @@ function ToastItem({ toast, onDismiss }) {
       bg={isError ? 'danger' : 'dark'}
       autohide
       delay={toast.duration}
+      role={isError ? 'alert' : 'status'}
+      aria-live={isError ? 'assertive' : 'polite'}
+      aria-atomic="true"
     >
       <BsToast.Header closeButton>
-        <svg className={`sa-icon me-2 ${isError ? 'text-danger' : 'text-success'}`} style={{ width: 14, height: 14 }}>
+        <svg className={`sa-icon me-2 ${isError ? 'text-danger' : 'text-success'}`} style={{ width: 14, height: 14 }} aria-hidden="true">
           <use href={`/icons/sprite.svg#${isError ? 'alert-circle' : 'check-circle'}`}></use>
         </svg>
         <strong className="me-auto">{isError ? 'Error' : 'Success'}</strong>

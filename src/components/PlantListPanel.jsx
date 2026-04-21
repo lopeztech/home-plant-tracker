@@ -12,11 +12,11 @@ const RECOMMENDATION_HISTORY_LIMIT = 20
 const BATCH_CONCURRENCY = 3
 
 function UrgencyIcon({ days, skippedRain }) {
-  if (skippedRain) return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#cloud-rain"></use></svg>
-  if (days < 0) return <svg className="sa-icon status-overdue" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#alert-circle"></use></svg>
-  if (days === 0) return <svg className="sa-icon status-today" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-  if (days <= 2) return <svg className="sa-icon status-soon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#clock"></use></svg>
-  return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#check-circle"></use></svg>
+  if (skippedRain) return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#cloud-rain"></use></svg>
+  if (days < 0) return <svg className="sa-icon status-overdue" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#alert-circle"></use></svg>
+  if (days === 0) return <svg className="sa-icon status-today" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#droplet"></use></svg>
+  if (days <= 2) return <svg className="sa-icon status-soon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#clock"></use></svg>
+  return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#check-circle"></use></svg>
 }
 
 function PlantCard({ plant, onClick, onWater, weather, floors }) {
@@ -58,17 +58,15 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
       </div>
 
       {onWater && (
-        <span
-          role="button"
-          tabIndex={0}
-          className="flex-shrink-0 p-1 text-muted"
+        <button
+          type="button"
+          className="flex-shrink-0 p-1 text-muted btn-plant-water"
           onClick={(e) => { e.stopPropagation(); onWater(plant.id) }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onWater(plant.id) } }}
+          aria-label={`Water ${plant.name}`}
           title={`Water ${plant.name}`}
-          style={{ cursor: 'pointer' }}
         >
-          <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-        </span>
+          <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#droplet"></use></svg>
+        </button>
       )}
     </ListGroup.Item>
   )
