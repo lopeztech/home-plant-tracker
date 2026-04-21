@@ -11,7 +11,7 @@ import { accountApi, exportApi } from '../api/plants.js'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
-  { id: 'preferences', label: 'Preferences', icon: 'sliders', tags: 'theme dark mode light temperature celsius fahrenheit location city weather' },
+  { id: 'preferences', label: 'Preferences', icon: 'sliders', tags: 'theme dark mode light temperature celsius fahrenheit metric imperial units location city weather' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'advanced', label: 'Advanced', icon: 'tool', tags: 'reset onboarding developer version advanced' },
 ]
@@ -320,7 +320,7 @@ function PropertyTab({ search }) {
 }
 
 function PreferencesTab({ search }) {
-  const { tempUnit, location, setLocation } = usePlantContext()
+  const { tempUnit, unitSystem, location, setLocation } = usePlantContext()
   const { themeMode, changeThemeMode } = useLayoutContext()
   const [locationSearch, setLocationSearch] = useState('')
   const [locationResults, setLocationResults] = useState([])
@@ -360,17 +360,30 @@ function PreferencesTab({ search }) {
         </div>
       </SettingSection>
 
-      {tempUnit && (
+      {(tempUnit || unitSystem) && (
         <SettingSection id="units" title="Units" icon="thermometer" search={search}>
-          <div className="d-flex align-items-center justify-content-between">
-            <span className="d-flex align-items-center gap-1">
-              Temperature
-              <HelpTooltip articleId="temperature-units" label="What does temperature unit affect?" />
-            </span>
-            <Button variant="outline-default" size="sm" onClick={tempUnit.toggle}>
-              <svg className="sa-icon me-1" aria-hidden="true"><use href="/icons/sprite.svg#thermometer"></use></svg>
-              {tempUnit.unit === 'celsius' ? '°C → °F' : '°F → °C'}
-            </Button>
+          <div className="d-flex flex-column gap-3">
+            {tempUnit && (
+              <div className="d-flex align-items-center justify-content-between">
+                <span className="d-flex align-items-center gap-1">
+                  Temperature
+                  <HelpTooltip articleId="temperature-units" label="What does temperature unit affect?" />
+                </span>
+                <Button variant="outline-default" size="sm" onClick={tempUnit.toggle}>
+                  <svg className="sa-icon me-1" aria-hidden="true"><use href="/icons/sprite.svg#thermometer"></use></svg>
+                  {tempUnit.unit === 'celsius' ? '°C → °F' : '°F → °C'}
+                </Button>
+              </div>
+            )}
+            {unitSystem && (
+              <div className="d-flex align-items-center justify-content-between">
+                <span>Measurements</span>
+                <Button variant="outline-default" size="sm" onClick={unitSystem.toggle}>
+                  <svg className="sa-icon me-1" aria-hidden="true"><use href="/icons/sprite.svg#ruler"></use></svg>
+                  {unitSystem.system === 'metric' ? 'Metric → Imperial' : 'Imperial → Metric'}
+                </Button>
+              </div>
+            )}
           </div>
         </SettingSection>
       )}
