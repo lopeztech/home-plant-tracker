@@ -1625,6 +1625,295 @@ app.delete('/plants/:id/harvests/:harvestId', requireUser, async (req, res) => {
   }
 });
 
+// ── Incident log (pest, disease, deficiency, environmental) ──────────────────
+
+const INCIDENT_CATEGORIES = new Set(['pest', 'disease', 'deficiency', 'environmental']);
+const OUTBREAK_WINDOW_DAYS = 14;
+
+app.get('/plants/:id/incidents', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const entries = (doc.data().incidents || []).sort((a, b) => new Date(b.firstObservedAt) - new Date(a.firstObservedAt));
+    res.status(200).json(entries);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/incidents', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { category, specificType, severity, firstObservedAt, notes } = req.body || {};
+    if (!category || !INCIDENT_CATEGORIES.has(category)) {
+      return res.status(400).json({ error: `category must be one of: ${[...INCIDENT_CATEGORIES].join(', ')}` });
+    }
+    if (!specificType || !String(specificType).trim()) {
+      return res.status(400).json({ error: 'specificType is required' });
+    }
+    if (severity != null && (Number(severity) < 1 || Number(severity) > 5)) {
+      return res.status(400).json({ error: 'severity must be between 1 and 5' });
+    }
+
+    const now = new Date().toISOString();
+    const observedAt = firstObservedAt || now;
+    const plantData = doc.data();
+
+    // Auto-group outbreak: scan other plants in same room for same category+specificType within 14 days
+    const windowStart = new Date(observedAt);
+    windowStart.setDate(windowStart.getDate() - OUTBREAK_WINDOW_DAYS);
+    let outbreakId = null;
+
+    if (plantData.room) {
+      const plantsSnap = await userPlants(req.userId).get();
+      for (const plantDoc of plantsSnap.docs) {
+        if (plantDoc.id === req.params.id) continue;
+        const other = plantDoc.data();
+        if (other.room !== plantData.room) continue;
+        const linked = (other.incidents || []).find(i =>
+          !i.resolvedAt &&
+          i.category === category &&
+          i.specificType === specificType &&
+          new Date(i.firstObservedAt) >= windowStart,
+        );
+        if (linked) {
+          outbreakId = outbreakId || linked.outbreakId || crypto.randomUUID();
+          if (!linked.outbreakId) {
+            const updatedIncidents = (other.incidents || []).map(i =>
+              i.id === linked.id ? { ...i, outbreakId } : i,
+            );
+            await userPlants(req.userId).doc(plantDoc.id).set(
+              { incidents: updatedIncidents, updatedAt: now }, { merge: true },
+            );
+          }
+        }
+      }
+    }
+
+    const entry = {
+      id: crypto.randomUUID(),
+      category,
+      specificType: String(specificType).trim(),
+      severity: severity != null ? Number(severity) : null,
+      firstObservedAt: observedAt,
+      resolvedAt: null,
+      treatments: [],
+      notes: notes ? String(notes).trim() : null,
+      outbreakId: outbreakId || null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const incidents = [...(plantData.incidents || []), entry];
+    await ref.set({ incidents, updatedAt: now }, { merge: true });
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/plants/:id/incidents/:incidentId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { category, specificType, severity, notes } = req.body || {};
+    if (category !== undefined && !INCIDENT_CATEGORIES.has(category)) {
+      return res.status(400).json({ error: `category must be one of: ${[...INCIDENT_CATEGORIES].join(', ')}` });
+    }
+    if (severity != null && (Number(severity) < 1 || Number(severity) > 5)) {
+      return res.status(400).json({ error: 'severity must be between 1 and 5' });
+    }
+
+    const now = new Date().toISOString();
+    const existing = doc.data();
+    const incidents = (existing.incidents || []).map(e => {
+      if (e.id !== req.params.incidentId) return e;
+      return {
+        ...e,
+        ...(category !== undefined ? { category } : {}),
+        ...(specificType !== undefined ? { specificType: String(specificType).trim() } : {}),
+        ...(severity !== undefined ? { severity: severity != null ? Number(severity) : null } : {}),
+        ...(notes !== undefined ? { notes: notes ? String(notes).trim() : null } : {}),
+        updatedAt: now,
+      };
+    });
+    await ref.set({ incidents, updatedAt: now }, { merge: true });
+    const updated = incidents.find(e => e.id === req.params.incidentId);
+    if (!updated) return res.status(404).json({ error: 'Incident not found' });
+    res.status(200).json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/incidents/:incidentId/treatments', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { treatment, appliedAt, outcome } = req.body || {};
+    if (!treatment || !String(treatment).trim()) {
+      return res.status(400).json({ error: 'treatment is required' });
+    }
+
+    const now = new Date().toISOString();
+    const treatmentEntry = {
+      id: crypto.randomUUID(),
+      treatment: String(treatment).trim(),
+      appliedAt: appliedAt || now,
+      outcome: outcome ? String(outcome).trim() : null,
+      createdAt: now,
+    };
+    const existing = doc.data();
+    let found = false;
+    const incidents = (existing.incidents || []).map(e => {
+      if (e.id !== req.params.incidentId) return e;
+      found = true;
+      return { ...e, treatments: [...(e.treatments || []), treatmentEntry], updatedAt: now };
+    });
+    if (!found) return res.status(404).json({ error: 'Incident not found' });
+    await ref.set({ incidents, updatedAt: now }, { merge: true });
+    res.status(201).json(treatmentEntry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/incidents/:incidentId/resolve', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const now = new Date().toISOString();
+    const existing = doc.data();
+    let found = false;
+    const incidents = (existing.incidents || []).map(e => {
+      if (e.id !== req.params.incidentId) return e;
+      found = true;
+      return { ...e, resolvedAt: req.body?.resolvedAt || now, updatedAt: now };
+    });
+    if (!found) return res.status(404).json({ error: 'Incident not found' });
+    await ref.set({ incidents, updatedAt: now }, { merge: true });
+    res.status(200).json(incidents.find(e => e.id === req.params.incidentId));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/incidents/:incidentId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const existing = doc.data();
+    const incidents = (existing.incidents || []).filter(e => e.id !== req.params.incidentId);
+    await ref.set({ incidents, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/outbreaks', requireUser, async (req, res) => {
+  try {
+    const plantsSnap = await userPlants(req.userId).get();
+    const outbreakMap = {};
+
+    for (const plantDoc of plantsSnap.docs) {
+      const plant = plantDoc.data();
+      for (const incident of (plant.incidents || [])) {
+        if (incident.resolvedAt) continue;
+        if (!incident.outbreakId) continue;
+        if (!outbreakMap[incident.outbreakId]) {
+          outbreakMap[incident.outbreakId] = {
+            outbreakId: incident.outbreakId,
+            category: incident.category,
+            specificType: incident.specificType,
+            plants: [],
+            firstObservedAt: incident.firstObservedAt,
+            maxSeverity: incident.severity || 0,
+          };
+        }
+        const ob = outbreakMap[incident.outbreakId];
+        ob.plants.push({ plantId: plantDoc.id, plantName: plant.name, room: plant.room, incidentId: incident.id, severity: incident.severity });
+        if ((incident.severity || 0) > ob.maxSeverity) ob.maxSeverity = incident.severity || 0;
+        if (new Date(incident.firstObservedAt) < new Date(ob.firstObservedAt)) ob.firstObservedAt = incident.firstObservedAt;
+      }
+    }
+
+    const outbreaks = Object.values(outbreakMap)
+      .filter(ob => ob.plants.length > 0)
+      .sort((a, b) => (b.maxSeverity * b.plants.length) - (a.maxSeverity * a.plants.length));
+
+    res.status(200).json(outbreaks);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/outbreaks/:outbreakId/treat', requireUser, async (req, res) => {
+  try {
+    const { treatment, appliedAt, outcome } = req.body || {};
+    if (!treatment || !String(treatment).trim()) {
+      return res.status(400).json({ error: 'treatment is required' });
+    }
+    const now = new Date().toISOString();
+    const treatmentEntry = {
+      id: crypto.randomUUID(),
+      treatment: String(treatment).trim(),
+      appliedAt: appliedAt || now,
+      outcome: outcome ? String(outcome).trim() : null,
+      createdAt: now,
+    };
+
+    const plantsSnap = await userPlants(req.userId).get();
+    let updatedCount = 0;
+    for (const plantDoc of plantsSnap.docs) {
+      const plant = plantDoc.data();
+      const hasMatch = (plant.incidents || []).some(i => i.outbreakId === req.params.outbreakId && !i.resolvedAt);
+      if (!hasMatch) continue;
+      const incidents = (plant.incidents || []).map(i => {
+        if (i.outbreakId !== req.params.outbreakId || i.resolvedAt) return i;
+        return { ...i, treatments: [...(i.treatments || []), treatmentEntry], updatedAt: now };
+      });
+      await userPlants(req.userId).doc(plantDoc.id).set({ incidents, updatedAt: now }, { merge: true });
+      updatedCount++;
+    }
+    res.status(200).json({ applied: updatedCount, treatment: treatmentEntry });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/outbreaks/:outbreakId/resolve', requireUser, async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const resolvedAt = req.body?.resolvedAt || now;
+    const plantsSnap = await userPlants(req.userId).get();
+    let updatedCount = 0;
+    for (const plantDoc of plantsSnap.docs) {
+      const plant = plantDoc.data();
+      const hasMatch = (plant.incidents || []).some(i => i.outbreakId === req.params.outbreakId && !i.resolvedAt);
+      if (!hasMatch) continue;
+      const incidents = (plant.incidents || []).map(i => {
+        if (i.outbreakId !== req.params.outbreakId || i.resolvedAt) return i;
+        return { ...i, resolvedAt, updatedAt: now };
+      });
+      await userPlants(req.userId).doc(plantDoc.id).set({ incidents, updatedAt: now }, { merge: true });
+      updatedCount++;
+    }
+    res.status(200).json({ resolved: updatedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Fertiliser recommendation (Gemini, structured) ───────────────────────────
 
 const FERTILISER_RECOMMEND_SCHEMA = {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } 
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import PlantQRTag from './PlantQRTag.jsx'
-import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, incidentApi } from '../api/plants.js'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
@@ -285,6 +285,16 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [harvestSaving, setHarvestSaving] = useState(false)
   const [harvestError, setHarvestError] = useState(null)
 
+  // Health tab state (incidents)
+  const [incidents, setIncidents] = useState(
+    () => [...(plant?.incidents || [])].sort((a, b) => new Date(b.firstObservedAt) - new Date(a.firstObservedAt))
+  )
+  const [newIncident, setNewIncident] = useState({ category: 'pest', specificType: '', severity: '', firstObservedAt: new Date().toISOString().slice(0, 10), notes: '' })
+  const [incidentSaving, setIncidentSaving] = useState(false)
+  const [incidentError, setIncidentError] = useState(null)
+  const [treatmentInput, setTreatmentInput] = useState({})
+  const [treatmentSaving, setTreatmentSaving] = useState({})
+
   // Validation + unsaved-change guard state. `isDirty` is set by user-initiated
   // edits only (not programmatic resyncs like the wateringRec effect).
   const [isDirty, setIsDirty] = useState(false)
@@ -470,8 +480,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       { id: 'growth', label: 'Growth' },
       { id: 'journal', label: 'Journal' },
       ...(isEdiblePlant ? [{ id: 'harvest', label: 'Harvest' }] : []),
+      ...(isEditing ? [{ id: 'health', label: 'Health' }] : []),
     ],
-    [isEdiblePlant],
+    [isEdiblePlant, isEditing],
   )
 
   const handleTabKeyDown = useCallback((e, index) => {
@@ -622,6 +633,58 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       await harvestApi.delete(plant.id, harvestId)
       setHarvestEntries(prev => prev.filter(e => e.id !== harvestId))
     } catch (err) { console.error('Delete harvest entry failed:', err) }
+  }, [plant])
+
+  const handleAddIncident = useCallback(async () => {
+    const { category, specificType, severity, firstObservedAt, notes } = newIncident
+    if (!specificType.trim()) {
+      setIncidentError('Specify the pest or disease type.')
+      return
+    }
+    setIncidentSaving(true)
+    setIncidentError(null)
+    try {
+      const entry = await incidentApi.add(plant.id, {
+        category, specificType: specificType.trim(),
+        severity: severity ? Number(severity) : null,
+        firstObservedAt, notes: notes.trim() || null,
+      })
+      setIncidents(prev => [entry, ...prev])
+      setNewIncident({ category: 'pest', specificType: '', severity: '', firstObservedAt: new Date().toISOString().slice(0, 10), notes: '' })
+    } catch (err) {
+      setIncidentError(friendlyErrorMessage(err))
+    } finally {
+      setIncidentSaving(false)
+    }
+  }, [newIncident, plant])
+
+  const handleResolveIncident = useCallback(async (incidentId) => {
+    try {
+      const updated = await incidentApi.resolve(plant.id, incidentId)
+      setIncidents(prev => prev.map(e => e.id === incidentId ? updated : e))
+    } catch (err) { console.error('Resolve incident failed:', err) }
+  }, [plant])
+
+  const handleAddTreatment = useCallback(async (incidentId) => {
+    const treatment = treatmentInput[incidentId] || ''
+    if (!treatment.trim()) return
+    setTreatmentSaving(prev => ({ ...prev, [incidentId]: true }))
+    try {
+      const entry = await incidentApi.addTreatment(plant.id, incidentId, { treatment: treatment.trim() })
+      setIncidents(prev => prev.map(e => e.id === incidentId
+        ? { ...e, treatments: [...(e.treatments || []), entry] }
+        : e,
+      ))
+      setTreatmentInput(prev => ({ ...prev, [incidentId]: '' }))
+    } catch (err) { console.error('Add treatment failed:', err) }
+    finally { setTreatmentSaving(prev => ({ ...prev, [incidentId]: false })) }
+  }, [plant, treatmentInput])
+
+  const handleDeleteIncident = useCallback(async (incidentId) => {
+    try {
+      await incidentApi.delete(plant.id, incidentId)
+      setIncidents(prev => prev.filter(e => e.id !== incidentId))
+    } catch (err) { console.error('Delete incident failed:', err) }
   }, [plant])
 
   const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
@@ -1854,6 +1917,107 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               No harvests logged yet. Log your first harvest to start tracking yield over time.
             </p>
           )}
+        </Modal.Body>
+      )}
+
+      {/* Health tab — incident log */}
+      {isEditing && activeTab === 'health' && (
+        <Modal.Body className="pt-3 pb-4">
+          <h6 className="fw-600 mb-3">Log Pest / Disease Incident</h6>
+          {incidentError && <div className="alert alert-danger py-2 fs-sm mb-3">{incidentError}</div>}
+          <Row className="g-2 mb-2">
+            <Col xs={6}>
+              <Form.Select size="sm" value={newIncident.category}
+                onChange={e => setNewIncident(p => ({ ...p, category: e.target.value }))}>
+                <option value="pest">Pest</option>
+                <option value="disease">Disease</option>
+                <option value="deficiency">Deficiency</option>
+                <option value="environmental">Environmental</option>
+              </Form.Select>
+            </Col>
+            <Col xs={6}>
+              <Form.Control size="sm" placeholder="Type (e.g. Spider mites)" value={newIncident.specificType}
+                onChange={e => setNewIncident(p => ({ ...p, specificType: e.target.value }))} />
+            </Col>
+            <Col xs={4}>
+              <Form.Control size="sm" type="date" value={newIncident.firstObservedAt}
+                onChange={e => setNewIncident(p => ({ ...p, firstObservedAt: e.target.value }))} />
+            </Col>
+            <Col xs={4}>
+              <Form.Select size="sm" value={newIncident.severity}
+                onChange={e => setNewIncident(p => ({ ...p, severity: e.target.value }))}>
+                <option value="">Severity</option>
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} — {['Minimal','Moderate','Significant','Severe','Critical'][n-1]}</option>)}
+              </Form.Select>
+            </Col>
+            <Col xs={4}>
+              <Button size="sm" variant="primary" className="w-100" onClick={handleAddIncident} disabled={incidentSaving || !newIncident.specificType.trim()}>
+                {incidentSaving ? <Spinner size="sm" /> : 'Log Incident'}
+              </Button>
+            </Col>
+            <Col xs={12}>
+              <Form.Control size="sm" as="textarea" rows={2} placeholder="Notes (optional)" value={newIncident.notes}
+                onChange={e => setNewIncident(p => ({ ...p, notes: e.target.value }))} />
+            </Col>
+          </Row>
+
+          <hr className="my-3" />
+          <h6 className="fw-600 mb-2">Incident History</h6>
+          {incidents.length === 0 ? (
+            <p className="text-muted text-center py-3 mb-0 fs-sm">No incidents logged yet.</p>
+          ) : incidents.map(incident => (
+            <div key={incident.id} className="border rounded p-3 mb-3">
+              <div className="d-flex align-items-start gap-2 mb-1">
+                <Badge bg={incident.category === 'pest' ? 'danger' : incident.category === 'disease' ? 'warning' : 'secondary'}
+                  text={incident.category === 'disease' ? 'dark' : undefined} className="fs-xs text-capitalize">
+                  {incident.category}
+                </Badge>
+                <span className="fw-500 fs-sm">{incident.specificType}</span>
+                {incident.severity && (
+                  <Badge bg="light" text="dark" className="fs-xs ms-1">Severity {incident.severity}/5</Badge>
+                )}
+                {incident.outbreakId && (
+                  <Badge bg="danger" className="fs-xs ms-1">Outbreak</Badge>
+                )}
+                <span className="ms-auto fs-xs text-muted">{incident.firstObservedAt?.slice(0,10)}</span>
+              </div>
+              {incident.notes && <p className="fs-xs text-muted mb-2">{incident.notes}</p>}
+
+              {/* Treatments */}
+              {(incident.treatments || []).length > 0 && (
+                <div className="mb-2">
+                  <span className="fs-xs fw-600 text-muted d-block mb-1">Treatments applied:</span>
+                  {incident.treatments.map(t => (
+                    <div key={t.id} className="fs-xs text-muted ps-2 border-start border-2">
+                      {t.appliedAt?.slice(0,10)} — {t.treatment}{t.outcome ? ` → ${t.outcome}` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!incident.resolvedAt && (
+                <div className="d-flex gap-2 mt-2">
+                  <Form.Control size="sm" placeholder="Add treatment…" value={treatmentInput[incident.id] || ''}
+                    onChange={e => setTreatmentInput(p => ({ ...p, [incident.id]: e.target.value }))} />
+                  <Button size="sm" variant="outline-secondary" disabled={treatmentSaving[incident.id] || !treatmentInput[incident.id]?.trim()}
+                    onClick={() => handleAddTreatment(incident.id)}>
+                    {treatmentSaving[incident.id] ? <Spinner size="sm" /> : 'Add'}
+                  </Button>
+                  <Button size="sm" variant="outline-success" onClick={() => handleResolveIncident(incident.id)}>
+                    Resolve
+                  </Button>
+                </div>
+              )}
+              {incident.resolvedAt && (
+                <div className="mt-1">
+                  <Badge bg="success" className="fs-xs">Resolved {incident.resolvedAt.slice(0,10)}</Badge>
+                </div>
+              )}
+              <Button variant="link" size="sm" className="text-danger p-0 fs-xs d-block mt-2" onClick={() => handleDeleteIncident(incident.id)}>
+                Delete
+              </Button>
+            </div>
+          ))}
         </Modal.Body>
       )}
 

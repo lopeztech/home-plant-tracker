@@ -209,6 +209,21 @@ export const qrApi = {
   scan: (shortCode) => request(`/scan/${encodeURIComponent(shortCode)}`),
 }
 
+export const incidentApi = {
+  list: (id) => request(`/plants/${id}/incidents`),
+  add: (id, data) => request(`/plants/${id}/incidents`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, incidentId, data) => request(`/plants/${id}/incidents/${incidentId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  addTreatment: (id, incidentId, data) => request(`/plants/${id}/incidents/${incidentId}/treatments`, { method: 'POST', body: JSON.stringify(data) }),
+  resolve: (id, incidentId, data) => request(`/plants/${id}/incidents/${incidentId}/resolve`, { method: 'POST', body: JSON.stringify(data || {}) }),
+  delete: (id, incidentId) => request(`/plants/${id}/incidents/${incidentId}`, { method: 'DELETE' }),
+}
+
+export const outbreakApi = {
+  list: () => request('/outbreaks'),
+  bulkTreat: (outbreakId, data) => request(`/outbreaks/${outbreakId}/treat`, { method: 'POST', body: JSON.stringify(data) }),
+  bulkResolve: (outbreakId, data) => request(`/outbreaks/${outbreakId}/resolve`, { method: 'POST', body: JSON.stringify(data || {}) }),
+}
+
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),

@@ -89,6 +89,18 @@
   animation: plant-bounce 1.8s ease-in-out infinite;
 }
 
+.plant-lf-incident {
+  animation: incident-pulse 1.4s ease-in-out infinite;
+  outline: 2px solid #dc3545;
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+@keyframes incident-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.6); }
+  50% { box-shadow: 0 0 0 6px rgba(220, 53, 69, 0); }
+}
+
 /* Gnome watering animation */
 @keyframes gnome-walk {
   0%, 100% { transform: translateY(0) scaleX(var(--gnome-dir, 1)); }

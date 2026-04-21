@@ -20,10 +20,12 @@ function makePlantIcon(plant, weather, floors) {
   const attention = daysUntil >= 0 && daysUntil <= 2
   const emoji = getPlantEmoji(plant)
   const cls = overdue ? ' plant-lf-overdue' : attention ? ' plant-lf-attention' : ''
+  const hasActiveIncident = (plant.incidents || []).some(i => !i.resolvedAt)
+  const incidentPulse = hasActiveIncident ? ' plant-lf-incident' : ''
 
   return L.divIcon({
     className: 'plant-lf-icon',
-    html: `<div class="plant-lf-inner${cls}"
+    html: `<div class="plant-lf-inner${cls}${incidentPulse}"
                 style="width:32px;height:32px;border-radius:50%;
                        border:2px solid ${color};
                        background:#fff;
