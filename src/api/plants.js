@@ -198,6 +198,11 @@ export const journalApi = {
   delete: (id, entryId) => request(`/plants/${id}/journal/${entryId}`, { method: 'DELETE' }),
 }
 
+export const accountApi = {
+  deleteAccount: () => request('/account', { method: 'DELETE' }),
+  exportData: () => request('/account/export'),
+}
+
 export const billingApi = {
   getSubscription: () => request('/billing/subscription'),
   createCheckoutSession: (tier, interval = 'month') => request('/billing/create-checkout-session', {

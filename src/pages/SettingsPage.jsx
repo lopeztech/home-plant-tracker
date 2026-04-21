@@ -3,9 +3,11 @@ import { Link, useParams, Navigate } from 'react-router'
 import { Button, Form, Table, Badge, Nav, InputGroup, FormControl } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
+import { useAuth } from '../contexts/AuthContext.jsx'
 import HelpTooltip from '../components/HelpTooltip.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
+import { accountApi } from '../api/plants.js'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
@@ -446,12 +448,106 @@ function PreferencesTab({ search }) {
 }
 
 function DataTab({ search }) {
+  const { logout } = useAuth()
+  const [exportLoading, setExportLoading] = useState(false)
+  const [exportError, setExportError] = useState(null)
+  const [deletePhase, setDeletePhase] = useState(0)
+  const [deleteInput, setDeleteInput] = useState('')
+  const [deleteError, setDeleteError] = useState(null)
+
+  const handleExport = async () => {
+    setExportLoading(true)
+    setExportError(null)
+    try {
+      const data = await accountApi.exportData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `plant-tracker-export-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setExportError(err.message)
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setDeletePhase(3)
+    setDeleteError(null)
+    try {
+      await accountApi.deleteAccount()
+      logout()
+    } catch (err) {
+      setDeleteError(err.message)
+      setDeletePhase(1)
+    }
+  }
+
   return (
-    <SettingSection id="export" title="Data export" icon="download" search={search}>
-      <p className="text-muted mb-0">
-        CSV and PDF export of your plant inventory and care history is coming soon.
-      </p>
-    </SettingSection>
+    <>
+      <SettingSection id="export" title="Data export" icon="download" search={search}>
+        <p className="text-muted mb-3">
+          Download all your plant data as a JSON file, including care history, measurements, and journal entries.
+        </p>
+        {exportError && <div className="alert alert-danger py-2 mb-3">{exportError}</div>}
+        <Button variant="outline-primary" onClick={handleExport} disabled={exportLoading}>
+          <svg className="sa-icon me-2" style={{ width: 14, height: 14 }} aria-hidden="true">
+            <use href="/icons/sprite.svg#download"></use>
+          </svg>
+          {exportLoading ? 'Exporting…' : 'Export my data (JSON)'}
+        </Button>
+      </SettingSection>
+
+      <SettingSection id="account-delete" title="Delete account" icon="trash-2" search={search}>
+        <p className="text-muted mb-3">
+          Permanently delete your account and all associated data. This cannot be undone and will purge
+          all plant records, care history, and uploaded photos within 30 days (GDPR Article 17).
+        </p>
+        {deletePhase === 0 && (
+          <Button variant="outline-danger" onClick={() => setDeletePhase(1)}>
+            Delete my account
+          </Button>
+        )}
+        {deletePhase >= 1 && (
+          <div className="border border-danger rounded p-3">
+            <p className="fw-500 text-danger mb-2">This action is irreversible.</p>
+            <p className="text-muted fs-sm mb-3">
+              Type <strong>DELETE</strong> to confirm account deletion.
+            </p>
+            <Form.Group controlId="delete-confirm" className="mb-3">
+              <Form.Label visuallyHidden>Type DELETE to confirm</Form.Label>
+              <Form.Control
+                type="text"
+                placeholder="Type DELETE to confirm"
+                value={deleteInput}
+                onChange={(e) => setDeleteInput(e.target.value)}
+                disabled={deletePhase === 3}
+              />
+            </Form.Group>
+            {deleteError && <div className="alert alert-danger py-2 mb-3">{deleteError}</div>}
+            <div className="d-flex gap-2">
+              <Button
+                variant="danger"
+                onClick={handleDelete}
+                disabled={deleteInput !== 'DELETE' || deletePhase === 3}
+              >
+                {deletePhase === 3 ? 'Deleting…' : 'Delete account'}
+              </Button>
+              <Button
+                variant="light"
+                onClick={() => { setDeletePhase(0); setDeleteInput(''); setDeleteError(null) }}
+                disabled={deletePhase === 3}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+      </SettingSection>
+    </>
   )
 }
 

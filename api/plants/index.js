@@ -2556,4 +2556,91 @@ app.delete('/plants/:id', requireUser, async (req, res) => {
   }
 });
 
+// ── Account management ────────────────────────────────────────────────────────
+
+async function deleteSubCollection(collRef) {
+  const snap = await collRef.get();
+  await Promise.all(snap.docs.map((d) => collRef.doc(d.id).delete()));
+}
+
+app.delete('/account', requireUser, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const plantsRef = userPlants(userId);
+    const plantsSnap = await plantsRef.get();
+
+    const imagesToDelete = [];
+    for (const plantDoc of plantsSnap.docs) {
+      const plant = plantDoc.data();
+      if (plant.imageUrl) imagesToDelete.push(gcsPath(plant.imageUrl));
+      for (const entry of (plant.photoLog || [])) {
+        if (entry.url) imagesToDelete.push(gcsPath(entry.url));
+      }
+      const plantRef = plantsRef.doc(plantDoc.id);
+      await deleteSubCollection(plantRef.collection('measurements'));
+      await deleteSubCollection(plantRef.collection('phenology'));
+      await deleteSubCollection(plantRef.collection('journal'));
+      await plantRef.delete();
+    }
+
+    const configRef = userConfig(userId);
+    await configRef.doc('floors').delete();
+    await configRef.doc('floorplan').delete();
+
+    await Promise.all(
+      imagesToDelete.filter(Boolean).map((path) =>
+        storage.bucket(IMAGES_BUCKET).file(path).delete().catch(() => {}),
+      ),
+    );
+
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/account/export', requireUser, async (req, res) => {
+  try {
+    const userId = req.userId;
+    const plantsRef = userPlants(userId);
+    const plantsSnap = await plantsRef.get();
+
+    const plants = await Promise.all(
+      plantsSnap.docs.map(async (plantDoc) => {
+        const plant = { id: plantDoc.id, ...plantDoc.data() };
+        const plantRef = plantsRef.doc(plantDoc.id);
+
+        const [measurementsSnap, phenologySnap, journalSnap] = await Promise.all([
+          plantRef.collection('measurements').get(),
+          plantRef.collection('phenology').get(),
+          plantRef.collection('journal').get(),
+        ]);
+
+        plant.measurements = measurementsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        plant.phenologyEvents = phenologySnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        plant.journalEntries = journalSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+        // Strip signed URL query params — export raw GCS paths
+        if (plant.imageUrl) plant.imageUrl = plant.imageUrl.split('?')[0];
+        if (plant.photoLog) {
+          plant.photoLog = plant.photoLog.map((e) => ({ ...e, url: e.url?.split('?')[0] }));
+        }
+        return plant;
+      }),
+    );
+
+    const floorsDoc = await userConfig(userId).doc('floors').get();
+    const floors = floorsDoc.exists ? floorsDoc.data().floors : [];
+
+    res.status(200).json({
+      exportedAt: new Date().toISOString(),
+      userId,
+      plants,
+      floors,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 functions.http('plantsApi', app);
