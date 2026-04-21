@@ -21,6 +21,8 @@ vi.mock('../api/plants.js', () => ({
   analyseApi: { analyseFloorplan: vi.fn(), analyse: vi.fn() },
   setApiCredential: vi.fn(),
   recommendApi: { get: vi.fn() },
+  flushOfflineMutations: vi.fn().mockResolvedValue({ flushed: 0, remaining: 0, errors: 0 }),
+  OfflineQueuedError: class OfflineQueuedError extends Error {},
 }))
 
 vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {
