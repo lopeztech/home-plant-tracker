@@ -4,6 +4,7 @@ import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import { usePlantContext } from '../../context/PlantContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
 import WeatherStrip from '../../components/WeatherStrip.jsx'
+import OfflineIndicator from '../../components/OfflineIndicator.jsx'
 import { menuItems } from './menuData.js'
 
 export default function Sidebar() {
@@ -46,6 +47,8 @@ export default function Sidebar() {
           </>
         )}
       </div>
+
+      <OfflineIndicator />
 
       {/* Navigation */}
       <div className="primary-nav flex-grow-1 overflow-auto">

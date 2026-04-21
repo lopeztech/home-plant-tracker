@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { plantsApi, imagesApi, floorsApi, analyseApi } from '../api/plants.js'
+import { plantsApi, imagesApi, floorsApi, analyseApi, flushOfflineMutations, OfflineQueuedError } from '../api/plants.js'
+import { subscribe as subscribeOfflineQueue, size as offlineQueueSize } from '../utils/offlineQueue.js'
 import { useWeather } from '../hooks/useWeather.js'
 import { useTempUnit } from '../hooks/useTempUnit.js'
 import { getWateringStatus, isOutdoor } from '../utils/watering.js'
@@ -27,11 +28,38 @@ export function PlantProvider({ children }) {
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
   const [activeFloorId, setActiveFloorId] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
+  const [pendingSyncCount, setPendingSyncCount] = useState(() => offlineQueueSize())
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false)
 
   const overdueCount = useMemo(
     () => plants.filter((p) => getWateringStatus(p, weather, floors).daysUntil < 0).length,
     [plants, weather, floors],
   )
+
+  // Track offline queue size so the UI can show a pending-sync badge.
+  useEffect(() => subscribeOfflineQueue(setPendingSyncCount), [])
+
+  // Listen for connectivity changes: on reconnect, replay queued mutations
+  // and then refresh the plant list so server-side derived fields update.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const goOnline = () => {
+      setIsOnline(true)
+      if (isGuest) return
+      flushOfflineMutations()
+        .then(({ flushed }) => {
+          if (flushed > 0) plantsApi.list().then(setPlants).catch(() => {})
+        })
+        .catch(() => {})
+    }
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [isGuest])
 
   // Auto-mark every outdoor plant as watered once per rainy day.
   // Dedupes off the wateringLog — if the latest entry is method:'rain' dated
@@ -102,6 +130,13 @@ export function PlantProvider({ children }) {
       })
       .catch(() => {})
 
+    // Flush any offline mutations accumulated while the app was closed.
+    flushOfflineMutations()
+      .then(({ flushed }) => {
+        if (flushed > 0) plantsApi.list().then(setPlants).catch(() => {})
+      })
+      .catch(() => {})
+
     Promise.all([loadPlants, loadFloors]).finally(() => setPlantsLoading(false))
   }, [isAuthenticated, isGuest])
 
@@ -137,8 +172,20 @@ export function PlantProvider({ children }) {
       setPlants((prev) => prev.map((p) => (p.id === plantId ? updater(p) : p)))
       return
     }
-    const updated = await plantsApi.water(plantId)
-    setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    try {
+      const updated = await plantsApi.water(plantId)
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        const now = new Date().toISOString()
+        const entry = { date: now, note: '' }
+        setPlants((prev) => prev.map((p) => (p.id === plantId
+          ? { ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] }
+          : p)))
+        return
+      }
+      throw err
+    }
   }, [isGuest])
 
   const handleMoisturePlant = useCallback(async (plantId, reading, note) => {
@@ -153,8 +200,23 @@ export function PlantProvider({ children }) {
       } : p))
       return
     }
-    const updated = await plantsApi.moisture(plantId, reading, note)
-    setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    try {
+      const updated = await plantsApi.moisture(plantId, reading, note)
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        const now = new Date().toISOString()
+        const entry = { date: now, reading, note: note || '' }
+        setPlants((prev) => prev.map((p) => (p.id === plantId ? {
+          ...p,
+          lastMoistureReading: reading,
+          lastMoistureDate: now,
+          moistureLog: [...(p.moistureLog || []), entry],
+        } : p)))
+        return
+      }
+      throw err
+    }
   }, [isGuest])
 
   const handleBatchWater = useCallback(async (plantIds) => {
@@ -287,6 +349,7 @@ export function PlantProvider({ children }) {
     weather, locationDenied, location, setLocation, tempUnit,
     overdueCount, isAnalysingFloorplan,
     isGuest,
+    isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
@@ -294,6 +357,7 @@ export function PlantProvider({ children }) {
   }), [
     plants, plantsLoading, plantsError, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
+    isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
