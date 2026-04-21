@@ -5,6 +5,7 @@ import { PlantProvider } from '../context/PlantContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
 import Onboarding from '../components/Onboarding.jsx'
+import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
 
 function Loader() {
   return (
@@ -29,6 +30,9 @@ export default function MainLayout() {
         <Sidebar />
         <main className="app-body">
           <div className="app-content">
+            <div className="px-3 pt-3">
+              <WeatherAlertBanner />
+            </div>
             <Suspense fallback={<Loader />}>
               <Outlet />
             </Suspense>
