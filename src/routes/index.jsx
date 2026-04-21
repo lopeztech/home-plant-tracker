@@ -1,4 +1,4 @@
-import { lazy } from 'react'
+import { lazy, Suspense } from 'react'
 import { Navigate } from 'react-router'
 import MainLayout from '../layouts/MainLayout.jsx'
 import AuthLayout from '../layouts/AuthLayout.jsx'
@@ -14,10 +14,14 @@ const InsightsPage = lazy(() => import('../pages/InsightsPage.jsx'))
 const BulkUploadPage = lazy(() => import('../pages/BulkUploadPage.jsx'))
 const BillingPage = lazy(() => import('../pages/BillingPage.jsx'))
 const PricingPage = lazy(() => import('../pages/PricingPage.jsx'))
+const PrivacyPage = lazy(() => import('../pages/PrivacyPage.jsx'))
+const TermsPage = lazy(() => import('../pages/TermsPage.jsx'))
 
 const mlInsightsEnabled = import.meta.env.VITE_ML_INSIGHTS_ENABLED === 'true'
 
 export const routes = [
+  { path: '/privacy', element: <Suspense fallback={null}><PrivacyPage /></Suspense> },
+  { path: '/terms', element: <Suspense fallback={null}><TermsPage /></Suspense> },
   {
     element: <AuthLayout />,
     children: [

@@ -67,6 +67,10 @@ export default function MainLayout() {
               <div className="app-footer-content flex-grow-1">
                 Plant Tracker &copy; {new Date().getFullYear()}
               </div>
+              <div className="app-footer-content">
+                <a href="/privacy" className="text-muted fs-xs me-3">Privacy</a>
+                <a href="/terms" className="text-muted fs-xs">Terms</a>
+              </div>
             </footer>
           </main>
           <Onboarding />

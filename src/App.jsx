@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext.jsx'
 import { LayoutProvider } from './context/LayoutContext.jsx'
 import { SubscriptionProvider } from './context/SubscriptionContext.jsx'
 import { ToastProvider } from './components/Toast.jsx'
+import ConsentBanner from './components/ConsentBanner.jsx'
 import { routes } from './routes/index.jsx'
 
 const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || 'placeholder'
@@ -20,6 +21,7 @@ export default function App() {
           <SubscriptionProvider>
             <ToastProvider>
               <AppRoutes />
+              <ConsentBanner />
             </ToastProvider>
           </SubscriptionProvider>
         </LayoutProvider>

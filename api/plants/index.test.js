@@ -2881,3 +2881,154 @@ describe('DELETE /plants/:id/journal/:entryId', () => {
     expect(store[plantPath('p1')].journalEntries[0].id).toBe('e1');
   });
 });
+
+// ── DELETE /account ───────────────────────────────────────────────────────────
+
+describe('DELETE /account', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).delete('/account');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 204 when user has no plants or config', async () => {
+    const res = await request(app).delete('/account').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+  });
+
+  it('deletes all plant documents', async () => {
+    store[plantPath('p1')] = { name: 'Rose' };
+    store[plantPath('p2')] = { name: 'Fern' };
+
+    const res = await request(app).delete('/account').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(store[plantPath('p1')]).toBeUndefined();
+    expect(store[plantPath('p2')]).toBeUndefined();
+  });
+
+  it('deletes plant subcollections (measurements, phenology, journal)', async () => {
+    store[plantPath('p1')] = { name: 'Rose' };
+    store[`users/${USER_SUB}/plants/p1/measurements/m1`] = { value: 5, measuredAt: '2024-01-01' };
+    store[`users/${USER_SUB}/plants/p1/phenology/ph1`] = { event: 'bloom', observedAt: '2024-02-01' };
+    store[`users/${USER_SUB}/plants/p1/journal/j1`] = { body: 'looking great', createdAt: '2024-01-15' };
+
+    await request(app).delete('/account').set('Authorization', authHeader());
+
+    expect(store[`users/${USER_SUB}/plants/p1/measurements/m1`]).toBeUndefined();
+    expect(store[`users/${USER_SUB}/plants/p1/phenology/ph1`]).toBeUndefined();
+    expect(store[`users/${USER_SUB}/plants/p1/journal/j1`]).toBeUndefined();
+  });
+
+  it('deletes config documents', async () => {
+    store[`users/${USER_SUB}/config/floors`] = { floors: [] };
+    store[`users/${USER_SUB}/config/floorplan`] = { imageUrl: null };
+
+    await request(app).delete('/account').set('Authorization', authHeader());
+
+    expect(store[`users/${USER_SUB}/config/floors`]).toBeUndefined();
+    expect(store[`users/${USER_SUB}/config/floorplan`]).toBeUndefined();
+  });
+
+  it('deletes GCS images from plant imageUrl', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      imageUrl: 'https://storage.googleapis.com/undefined/plants/fern.jpg',
+    };
+
+    await request(app).delete('/account').set('Authorization', authHeader());
+
+    expect(storageDeletedPaths).toContain('plants/fern.jpg');
+  });
+
+  it('deletes GCS images from plant photoLog', async () => {
+    store[plantPath('p1')] = {
+      name: 'Orchid',
+      imageUrl: null,
+      photoLog: [
+        { url: 'https://storage.googleapis.com/undefined/plants/orchid1.jpg', date: '2024-01-01' },
+        { url: 'https://storage.googleapis.com/undefined/plants/orchid2.jpg', date: '2024-02-01' },
+      ],
+    };
+
+    await request(app).delete('/account').set('Authorization', authHeader());
+
+    expect(storageDeletedPaths).toContain('plants/orchid1.jpg');
+    expect(storageDeletedPaths).toContain('plants/orchid2.jpg');
+  });
+
+  it('still succeeds even if GCS delete fails', async () => {
+    store[plantPath('p1')] = {
+      name: 'Cactus',
+      imageUrl: 'https://storage.googleapis.com/undefined/plants/cactus.jpg',
+    };
+    storageDeleteFn = async () => { throw new Error('GCS error'); };
+
+    const res = await request(app).delete('/account').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(store[plantPath('p1')]).toBeUndefined();
+  });
+});
+
+// ── GET /account/export ───────────────────────────────────────────────────────
+
+describe('GET /account/export', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/account/export');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 200 with export structure when no data exists', async () => {
+    const res = await request(app).get('/account/export').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plants).toEqual([]);
+    expect(res.body.floors).toEqual([]);
+    expect(res.body.exportedAt).toBeTruthy();
+    expect(res.body.userId).toBe(USER_SUB);
+  });
+
+  it('includes plant data in the export', async () => {
+    store[plantPath('p1')] = { name: 'Rose', species: 'Rosa' };
+    store[plantPath('p2')] = { name: 'Fern', species: 'Nephrolepis' };
+
+    const res = await request(app).get('/account/export').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plants).toHaveLength(2);
+    const names = res.body.plants.map(p => p.name);
+    expect(names).toContain('Rose');
+    expect(names).toContain('Fern');
+  });
+
+  it('includes subcollection data in the export', async () => {
+    store[plantPath('p1')] = { name: 'Monstera' };
+    store[`users/${USER_SUB}/plants/p1/measurements/m1`] = { value: 30, measuredAt: '2024-03-01' };
+    store[`users/${USER_SUB}/plants/p1/journal/j1`] = { body: 'First leaf', createdAt: '2024-03-01' };
+
+    const res = await request(app).get('/account/export').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+
+    const plant = res.body.plants[0];
+    expect(plant.measurements).toHaveLength(1);
+    expect(plant.measurements[0].value).toBe(30);
+    expect(plant.journalEntries).toHaveLength(1);
+    expect(plant.journalEntries[0].body).toBe('First leaf');
+  });
+
+  it('includes floors config in the export', async () => {
+    store[`users/${USER_SUB}/config/floors`] = { floors: [{ id: 'g1', name: 'Ground Floor' }] };
+
+    const res = await request(app).get('/account/export').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.floors).toHaveLength(1);
+    expect(res.body.floors[0].name).toBe('Ground Floor');
+  });
+
+  it('strips signed URL query params from imageUrl', async () => {
+    store[plantPath('p1')] = {
+      name: 'Lily',
+      imageUrl: 'https://storage.googleapis.com/undefined/plants/lily.jpg?X-Goog-Signature=abc',
+    };
+
+    const res = await request(app).get('/account/export').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plants[0].imageUrl).toBe('https://storage.googleapis.com/undefined/plants/lily.jpg');
+  });
+});
