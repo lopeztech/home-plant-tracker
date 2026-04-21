@@ -3,6 +3,7 @@ import { Button, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus } from '../utils/watering.js'
 import { getFeedingStatus } from '../utils/feeding.js'
+import EmptyState from '../components/EmptyState.jsx'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -88,6 +89,30 @@ export default function CalendarPage() {
 
   const selectedEvents = selectedDay ? dayMap[selectedDay] || [] : []
 
+  if (plants.length === 0) {
+    return (
+      <div className="content-wrapper">
+        <h1 className="subheader-title mb-4">Care Calendar</h1>
+        <div className="main-content">
+          <div className="panel panel-icon">
+            <div className="panel-container"><div className="panel-content">
+              <EmptyState
+                icon="calendar"
+                title="Nothing scheduled yet"
+                description="Your care calendar will fill up once you add plants and start logging waterings. Add your first plant to get started."
+                actions={[
+                  { label: 'Add a plant', icon: 'plus', href: '/' },
+                ]}
+              />
+            </div></div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const hasEventsThisMonth = Object.keys(dayMap).length > 0
+
   return (
     <div className="content-wrapper">
       <h1 className="subheader-title mb-4">Care Calendar</h1>
@@ -168,6 +193,14 @@ export default function CalendarPage() {
                   <span className="rounded-circle bg-primary d-inline-block" style={{ width: 6, height: 6 }} /> Feed due
                 </span>
               </div>
+
+              {/* Empty month notice */}
+              {!hasEventsThisMonth && (
+                <div className="mt-3 text-center text-muted fs-sm">
+                  <svg className="sa-icon me-1" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#calendar"></use></svg>
+                  No care events recorded or scheduled this month.
+                </div>
+              )}
 
               {/* Selected day events */}
               {selectedDay && (

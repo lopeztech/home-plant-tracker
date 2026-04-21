@@ -7,6 +7,7 @@ import { derivePlantName } from '../utils/plantName.js'
 import { fanOut } from '../utils/concurrency.js'
 import PlantIcon from './PlantIcon.jsx'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
+import EmptyState from './EmptyState.jsx'
 
 const RECOMMENDATION_HISTORY_LIMIT = 20
 const BATCH_CONCURRENCY = 3
@@ -357,16 +358,18 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
                 <div className="spinner-border spinner-border-sm text-primary" />
               </div>
             ) : filteredPlants.length === 0 ? (
-              <div className="text-center py-5 px-3">
-                <svg className="sa-icon sa-icon-5x text-muted mb-3"><use href="/icons/sprite.svg#feather"></use></svg>
-                <p className="text-muted mb-1">{plants.length === 0 ? 'No plants yet' : 'No plants match'}</p>
-                {plants.length === 0 && (
-                  <Button variant="primary" size="sm" onClick={onAddPlant} className="mt-2">
-                    <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
-                    Get started
-                  </Button>
-                )}
-              </div>
+              plants.length === 0 ? (
+                <EmptyState
+                  icon="feather"
+                  title="No plants yet"
+                  description="Add your first plant to start tracking watering schedules and care history."
+                  actions={[
+                    { label: 'Add a plant', icon: 'plus', onClick: onAddPlant },
+                  ]}
+                />
+              ) : (
+                <div className="text-center py-4 text-muted fs-sm">No plants match your search.</div>
+              )
             ) : (
               <div>
                 {(() => {

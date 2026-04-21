@@ -4,6 +4,7 @@ import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 const GRADE_COLORS = { A: '#10b981', B: '#22c55e', C: '#f59e0b', D: '#ef4444', F: '#991b1b' }
 const PATTERN_COLORS = { optimal: '#10b981', over_watered: '#3b82f6', under_watered: '#ef4444', inconsistent: '#f59e0b', insufficient_data: '#9ca3af' }
@@ -78,19 +79,34 @@ export default function InsightsPage() {
     const totalWaterings = plants.reduce((sum, p) => sum + (p.wateringLog || []).length, 0)
     const plantsNeeded = Math.max(0, 3 - plants.length)
     const wateringsNeeded = Math.max(0, 10 - totalWaterings)
+    const progressPct = Math.min(100, (totalWaterings / 10) * 100)
+    const descParts = []
+    if (plantsNeeded > 0) descParts.push(`Add ${plantsNeeded} more plant${plantsNeeded > 1 ? 's' : ''}`)
+    if (wateringsNeeded > 0) descParts.push(`log ${wateringsNeeded} more watering${wateringsNeeded > 1 ? 's' : ''}`)
     return (
-      <div className="p-4">
-        <h2 className="mb-4">ML Insights</h2>
-        <Card className="text-center p-5">
-          <Card.Body>
-            <svg className="sa-icon sa-icon-5x text-muted mb-3"><use href="/icons/sprite.svg#bar-chart-2"></use></svg>
-            <h4>Not enough data yet</h4>
-            <p className="text-muted mb-4">Insights will appear as you log more plant care history.</p>
-            {plantsNeeded > 0 && <p>Add {plantsNeeded} more plant{plantsNeeded > 1 ? 's' : ''} to get started</p>}
-            {wateringsNeeded > 0 && <p>Log {wateringsNeeded} more watering{wateringsNeeded > 1 ? 's' : ''} to unlock health predictions</p>}
-            <ProgressBar now={Math.min(100, (totalWaterings / 10) * 100)} label={`${totalWaterings}/10 waterings`} className="mt-3" style={{ maxWidth: 300, margin: '0 auto' }} />
-          </Card.Body>
-        </Card>
+      <div className="content-wrapper">
+        <h1 className="subheader-title mb-4">ML Insights</h1>
+        <div className="panel panel-icon">
+          <div className="panel-container"><div className="panel-content">
+            <EmptyState
+              icon="bar-chart-2"
+              title="Not enough data yet"
+              description={descParts.length > 0 ? `${descParts.join(' and ')} to unlock health predictions.` : 'Insights will appear as you log more plant care history.'}
+              actions={[
+                { label: 'Go to dashboard', icon: 'home', href: '/' },
+              ]}
+            />
+            <div className="px-4 pb-4" style={{ maxWidth: 340, margin: '0 auto' }}>
+              <ProgressBar
+                now={progressPct}
+                label={`${totalWaterings}/10 waterings`}
+                variant="success"
+                style={{ height: 8 }}
+              />
+              <p className="text-muted fs-xs text-center mt-2">{totalWaterings} of 10 waterings logged</p>
+            </div>
+          </div></div>
+        </div>
       </div>
     )
   }
