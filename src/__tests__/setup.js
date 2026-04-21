@@ -20,6 +20,10 @@ if (typeof PointerEvent === 'undefined') {
 // Suppress noisy React act() warnings in tests that don't need them
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
+// Vite build-time constants injected by vite.config.js — not available in jsdom
+globalThis.__APP_VERSION__ = '0.0.0-test'
+globalThis.__BUILD_TIME__ = '2026-01-01T00:00:00.000Z'
+
 // jsdom doesn't implement matchMedia — needed by useTheme
 if (typeof window.matchMedia !== 'function') {
   window.matchMedia = vi.fn().mockImplementation(query => ({
