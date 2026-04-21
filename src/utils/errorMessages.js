@@ -72,6 +72,19 @@ export function toFriendlyError(err, opts = {}) {
     }
   }
 
+  // Upload-specific failures carry their own 4xx/5xx codes — route them to the
+  // dedicated recovery copy before the generic auth/permission branches fire.
+  if (/GCS upload failed|upload failed/i.test(raw)) {
+    return {
+      title: "Couldn't upload that photo",
+      message: 'Check your connection, then try uploading the photo again.',
+      action: 'Retry upload',
+      kind: 'transient',
+      isRetryable: true,
+      rawCode: raw,
+    }
+  }
+
   if (/\b401\b|unauthenticated|unauthorized|session expired|invalid token|token expired/i.test(raw)) {
     return {
       title: 'Your session has expired',
@@ -176,17 +189,6 @@ export function toFriendlyError(err, opts = {}) {
       action: 'Go back',
       kind: 'input',
       isRetryable: false,
-      rawCode: raw,
-    }
-  }
-
-  if (/GCS upload failed|upload failed/i.test(raw)) {
-    return {
-      title: "Couldn't upload that photo",
-      message: 'Check your connection, then try uploading the photo again.',
-      action: 'Retry upload',
-      kind: 'transient',
-      isRetryable: true,
       rawCode: raw,
     }
   }
