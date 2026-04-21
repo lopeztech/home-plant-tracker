@@ -58,6 +58,11 @@ vi.mock('../hooks/useTempUnit.js', () => ({
   useTempUnit: () => ({ unit: 'celsius', toggle: vi.fn() }),
 }))
 
+// react-apexcharts uses canvas APIs not available in jsdom
+vi.mock('react-apexcharts', () => ({
+  default: () => <div data-testid="apex-chart" />,
+}))
+
 // Leaflet is not available in jsdom
 vi.mock('../components/LeafletFloorplan.jsx', () => ({
   default: () => <div data-testid="leaflet-floorplan" />,

@@ -179,6 +179,18 @@ export const recommendApi = {
   }),
 }
 
+export const measurementsApi = {
+  list: (id) => request(`/plants/${id}/measurements`),
+  add: (id, data) => request(`/plants/${id}/measurements`, { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id, measurementId) => request(`/plants/${id}/measurements/${measurementId}`, { method: 'DELETE' }),
+}
+
+export const phenologyApi = {
+  list: (id) => request(`/plants/${id}/phenology`),
+  add: (id, data) => request(`/plants/${id}/phenology`, { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id, eventId) => request(`/plants/${id}/phenology/${eventId}`, { method: 'DELETE' }),
+}
+
 export const billingApi = {
   getSubscription: () => request('/billing/subscription'),
   createCheckoutSession: (tier, interval = 'month') => request('/billing/create-checkout-session', {

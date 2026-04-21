@@ -2,15 +2,22 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import PlantModal from '../components/PlantModal.jsx'
+import { measurementsApi, phenologyApi } from '../api/plants.js'
 
 // Stub out ImageAnalyser to avoid triggering real API calls in unit tests.
 vi.mock('../components/ImageAnalyser.jsx', () => ({
   default: () => <div data-testid="image-analyser" />,
 }))
 
-// Stub imagesApi, recommendApi, plantsApi, and analyseApi so no real network
-// calls happen. plantsApi.update is needed because PlantModal persists
-// recommendation history via the plant doc on success.
+// Stub react-apexcharts so the Growth tab chart renders without canvas issues.
+vi.mock('react-apexcharts', () => ({
+  default: ({ series, type }) => (
+    <div data-testid="apex-chart" data-type={type} data-series={JSON.stringify(series)} />
+  ),
+}))
+
+// Stub imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, and
+// phenologyApi so no real network calls happen.
 vi.mock('../api/plants.js', () => ({
   imagesApi: { upload: vi.fn().mockResolvedValue('https://example.com/img.jpg') },
   plantsApi: {
@@ -39,6 +46,16 @@ vi.mock('../api/plants.js', () => ({
       signs: 'Yellow leaves = overwatering',
       summary: 'Water moderately.',
     }),
+  },
+  measurementsApi: {
+    list: vi.fn().mockResolvedValue([]),
+    add: vi.fn().mockResolvedValue({ id: 'new-m', date: '2026-04-21T00:00:00.000Z', height_cm: 45, notes: '' }),
+    delete: vi.fn().mockResolvedValue({ deleted: true }),
+  },
+  phenologyApi: {
+    list: vi.fn().mockResolvedValue([]),
+    add: vi.fn().mockResolvedValue({ id: 'new-ev', date: '2026-04-21', event: 'first-bloom', notes: '' }),
+    delete: vi.fn().mockResolvedValue({ deleted: true }),
   },
 }))
 
@@ -787,7 +804,7 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     expect(screen.getByRole('tablist', { name: /plant sections/i })).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth'])
   })
 
   it('marks the active tab with aria-selected="true"', () => {
@@ -816,9 +833,9 @@ describe('PlantModal', () => {
 
   it('wraps to the first tab when ArrowRight is pressed on the last tab', () => {
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Care'))
-    const careTab = screen.getAllByRole('tab')[2]
-    fireEvent.keyDown(careTab, { key: 'ArrowRight' })
+    fireEvent.click(screen.getByText('Growth'))
+    const growthTab = screen.getAllByRole('tab')[3]
+    fireEvent.keyDown(growthTab, { key: 'ArrowRight' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
 
@@ -835,8 +852,125 @@ describe('PlantModal', () => {
     fireEvent.click(screen.getByText('Watering'))
     const wateringTab = screen.getAllByRole('tab')[1]
     fireEvent.keyDown(wateringTab, { key: 'End' })
-    expect(screen.getAllByRole('tab')[2]).toHaveAttribute('aria-selected', 'true')
-    fireEvent.keyDown(screen.getAllByRole('tab')[2], { key: 'Home' })
+    // Growth is now the last tab (index 3)
+    expect(screen.getAllByRole('tab')[3]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(screen.getAllByRole('tab')[3], { key: 'Home' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+// ── Growth tab ────────────────────────────────────────────────────────────────
+
+describe('Growth tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    measurementsApi.add.mockResolvedValue({ id: 'new-m', date: '2026-04-21T00:00:00.000Z', height_cm: 45, notes: '' })
+    phenologyApi.add.mockResolvedValue({ id: 'new-ev', date: '2026-04-21', event: 'first-bloom', notes: '' })
+  })
+
+  it('renders the Growth tab button for existing plants', () => {
+    renderModal({ plant: existingPlant })
+    expect(screen.getByRole('tab', { name: 'Growth' })).toBeInTheDocument()
+  })
+
+  it('does not render the Growth tab for new plants', () => {
+    renderModal({ plant: null })
+    expect(screen.queryByRole('tab', { name: 'Growth' })).not.toBeInTheDocument()
+  })
+
+  it('shows measurement form when Growth tab is active', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    expect(screen.getByLabelText(/height \(cm\)/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/leaf count/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /log measurement/i })).toBeInTheDocument()
+  })
+
+  it('shows validation error when Log Measurement clicked with no values', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    fireEvent.click(screen.getByRole('button', { name: /log measurement/i }))
+    expect(screen.getByText(/at least one measurement/i)).toBeInTheDocument()
+  })
+
+  it('calls measurementsApi.add and adds entry on success', async () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    fireEvent.change(screen.getByLabelText(/height \(cm\)/i), { target: { value: '45' } })
+    fireEvent.click(screen.getByRole('button', { name: /log measurement/i }))
+    await waitFor(() => expect(measurementsApi.add).toHaveBeenCalledWith('plant-1', expect.objectContaining({ height_cm: 45 })))
+  })
+
+  it('shows measurement history when plant has existing measurements', () => {
+    const plantWithMeasurements = {
+      ...existingPlant,
+      measurements: [
+        { id: 'm1', date: '2026-01-01T00:00:00.000Z', height_cm: 40, notes: '' },
+      ],
+    }
+    renderModal({ plant: plantWithMeasurements })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    expect(screen.getByText('40 cm')).toBeInTheDocument()
+  })
+
+  it('renders chart when plant has 2+ height measurements', () => {
+    const plantWithMeasurements = {
+      ...existingPlant,
+      measurements: [
+        { id: 'm1', date: '2026-01-01T00:00:00.000Z', height_cm: 40, notes: '' },
+        { id: 'm2', date: '2026-02-01T00:00:00.000Z', height_cm: 45, notes: '' },
+      ],
+    }
+    renderModal({ plant: plantWithMeasurements })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    expect(screen.getByTestId('apex-chart')).toBeInTheDocument()
+  })
+
+  it('does not render chart for fewer than 2 height measurements', () => {
+    const plantWithOneMeasurement = {
+      ...existingPlant,
+      measurements: [{ id: 'm1', date: '2026-01-01T00:00:00.000Z', height_cm: 40, notes: '' }],
+    }
+    renderModal({ plant: plantWithOneMeasurement })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    expect(screen.queryByTestId('apex-chart')).not.toBeInTheDocument()
+  })
+
+  it('shows phenology form and empty state message', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    expect(screen.getByRole('heading', { name: /phenology events/i })).toBeInTheDocument()
+    expect(screen.getByText(/no phenology events logged/i)).toBeInTheDocument()
+  })
+
+  it('calls phenologyApi.add when Log Event is clicked with a selected event', async () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'first-bloom' } })
+    fireEvent.click(screen.getByRole('button', { name: /log event/i }))
+    await waitFor(() => expect(phenologyApi.add).toHaveBeenCalledWith('plant-1', expect.objectContaining({ event: 'first-bloom' })))
+  })
+
+  it('shows existing phenology events', () => {
+    const plantWithEvents = {
+      ...existingPlant,
+      phenologyEvents: [{ id: 'ev1', date: '2026-04-14', event: 'first-bloom', notes: 'Pink flowers' }],
+    }
+    renderModal({ plant: plantWithEvents })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    expect(screen.getByText('first-bloom')).toBeInTheDocument()
+    expect(screen.getByText('Pink flowers')).toBeInTheDocument()
+  })
+
+  it('calls measurementsApi.delete when delete button is clicked', async () => {
+    measurementsApi.delete.mockResolvedValue({ deleted: true })
+    const plantWithMeasurements = {
+      ...existingPlant,
+      measurements: [{ id: 'm1', date: '2026-01-01T00:00:00.000Z', height_cm: 40, notes: '' }],
+    }
+    renderModal({ plant: plantWithMeasurements })
+    fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
+    fireEvent.click(screen.getByRole('button', { name: /delete measurement/i }))
+    await waitFor(() => expect(measurementsApi.delete).toHaveBeenCalledWith('plant-1', 'm1'))
   })
 })

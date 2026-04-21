@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
-import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi } from '../api/plants.js'
+import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import { derivePlantName } from '../utils/plantName.js'
@@ -252,6 +253,15 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [moisturePage, setMoisturePage] = useState(1)
   const [wateringPage, setWateringPage] = useState(1)
 
+  // Growth tab state
+  const [measurements, setMeasurements] = useState(plant?.measurements || [])
+  const [phenologyEvents, setPhenologyEvents] = useState(plant?.phenologyEvents || [])
+  const [newMeasurement, setNewMeasurement] = useState({ height_cm: '', width_cm: '', leafCount: '', stemCount: '', notes: '' })
+  const [newPhenology, setNewPhenology] = useState({ event: '', date: new Date().toISOString().slice(0, 10), notes: '' })
+  const [measurementSaving, setMeasurementSaving] = useState(false)
+  const [measurementError, setMeasurementError] = useState(null)
+  const [phenologySaving, setPhenologySaving] = useState(false)
+
   // Validation + unsaved-change guard state. `isDirty` is set by user-initiated
   // edits only (not programmatic resyncs like the wateringRec effect).
   const [isDirty, setIsDirty] = useState(false)
@@ -428,6 +438,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       { id: 'edit', label: 'Plant' },
       { id: 'watering', label: 'Watering' },
       { id: 'care', label: 'Care' },
+      { id: 'growth', label: 'Growth' },
     ],
     [],
   )
@@ -460,6 +471,55 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       setDeletedPhotoUrls((prev) => [...prev, url.split('?')[0]])
     } catch (err) { console.error('Photo delete failed:', err) }
     finally { setDeletingPhoto(false); setConfirmDeletePhoto(null) }
+  }, [plant])
+
+  const handleAddMeasurement = useCallback(async () => {
+    const { height_cm, width_cm, leafCount, stemCount, notes } = newMeasurement
+    const payload = {}
+    if (height_cm !== '') payload.height_cm = Number(height_cm)
+    if (width_cm  !== '') payload.width_cm  = Number(width_cm)
+    if (leafCount  !== '') payload.leafCount  = Number(leafCount)
+    if (stemCount  !== '') payload.stemCount  = Number(stemCount)
+    if (Object.keys(payload).length === 0) {
+      setMeasurementError('Enter at least one measurement value (height, width, leaf count, or stem count).')
+      return
+    }
+    setMeasurementSaving(true)
+    setMeasurementError(null)
+    try {
+      const entry = await measurementsApi.add(plant.id, { ...payload, notes })
+      setMeasurements(prev => [...prev, entry])
+      setNewMeasurement({ height_cm: '', width_cm: '', leafCount: '', stemCount: '', notes: '' })
+    } catch (err) {
+      setMeasurementError(friendlyErrorMessage(err))
+    } finally {
+      setMeasurementSaving(false)
+    }
+  }, [newMeasurement, plant])
+
+  const handleDeleteMeasurement = useCallback(async (measurementId) => {
+    try {
+      await measurementsApi.delete(plant.id, measurementId)
+      setMeasurements(prev => prev.filter(m => m.id !== measurementId))
+    } catch (err) { console.error('Delete measurement failed:', err) }
+  }, [plant])
+
+  const handleAddPhenology = useCallback(async () => {
+    if (!newPhenology.event) return
+    setPhenologySaving(true)
+    try {
+      const entry = await phenologyApi.add(plant.id, newPhenology)
+      setPhenologyEvents(prev => [...prev, entry])
+      setNewPhenology({ event: '', date: new Date().toISOString().slice(0, 10), notes: '' })
+    } catch (err) { console.error('Add phenology event failed:', err) }
+    finally { setPhenologySaving(false) }
+  }, [newPhenology, plant])
+
+  const handleDeletePhenology = useCallback(async (eventId) => {
+    try {
+      await phenologyApi.delete(plant.id, eventId)
+      setPhenologyEvents(prev => prev.filter(e => e.id !== eventId))
+    } catch (err) { console.error('Delete phenology event failed:', err) }
   }, [plant])
 
   const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
@@ -1302,6 +1362,165 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             </div>
           )}
 
+        </Modal.Body>
+      )}
+
+      {/* Growth tab */}
+      {isEditing && activeTab === 'growth' && (
+        <Modal.Body role="tabpanel" id="plant-tabpanel-growth" aria-labelledby="plant-tab-growth">
+          {measurements.filter(m => m.height_cm != null).length >= 2 && (
+            <div className="mb-4">
+              <h6 className="fw-500 mb-2">Height over time</h6>
+              <Chart
+                type="line"
+                height={180}
+                options={{
+                  chart: { type: 'line', toolbar: { show: false }, background: 'transparent' },
+                  xaxis: { categories: measurements.filter(m => m.height_cm != null).map(m => m.date.slice(0, 10)), type: 'category' },
+                  yaxis: { title: { text: 'cm' }, min: 0 },
+                  stroke: { curve: 'smooth', width: 2 },
+                  markers: { size: 4 },
+                  tooltip: { x: { show: true } },
+                  grid: { borderColor: 'rgba(128,128,128,0.15)' },
+                }}
+                series={[{ name: 'Height (cm)', data: measurements.filter(m => m.height_cm != null).map(m => m.height_cm) }]}
+              />
+            </div>
+          )}
+
+          <div className="mb-4">
+            <h6 className="fw-500 mb-2">Log Measurement</h6>
+            <Row className="g-2">
+              <Col xs={6}>
+                <Form.Group controlId="growth-height-cm">
+                  <Form.Label className="fs-xs">Height (cm)</Form.Label>
+                  <Form.Control type="number" min="0" step="0.1" placeholder="e.g. 45"
+                    value={newMeasurement.height_cm}
+                    onChange={e => setNewMeasurement(prev => ({ ...prev, height_cm: e.target.value }))}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={6}>
+                <Form.Group controlId="growth-width-cm">
+                  <Form.Label className="fs-xs">Width (cm)</Form.Label>
+                  <Form.Control type="number" min="0" step="0.1" placeholder="e.g. 30"
+                    value={newMeasurement.width_cm}
+                    onChange={e => setNewMeasurement(prev => ({ ...prev, width_cm: e.target.value }))}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={6}>
+                <Form.Group controlId="growth-leaf-count">
+                  <Form.Label className="fs-xs">Leaf count</Form.Label>
+                  <Form.Control type="number" min="0" placeholder="e.g. 12"
+                    value={newMeasurement.leafCount}
+                    onChange={e => setNewMeasurement(prev => ({ ...prev, leafCount: e.target.value }))}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={6}>
+                <Form.Group controlId="growth-stem-count">
+                  <Form.Label className="fs-xs">Stem count</Form.Label>
+                  <Form.Control type="number" min="0" placeholder="e.g. 3"
+                    value={newMeasurement.stemCount}
+                    onChange={e => setNewMeasurement(prev => ({ ...prev, stemCount: e.target.value }))}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={12}>
+                <Form.Group controlId="growth-notes">
+                  <Form.Label className="fs-xs">Notes</Form.Label>
+                  <Form.Control as="textarea" rows={2} placeholder="Optional notes…"
+                    value={newMeasurement.notes}
+                    onChange={e => setNewMeasurement(prev => ({ ...prev, notes: e.target.value }))}
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            {measurementError && <div className="text-danger fs-xs mt-2">{measurementError}</div>}
+            <Button variant="outline-primary" size="sm" className="mt-2" onClick={handleAddMeasurement} disabled={measurementSaving}>
+              {measurementSaving && <Spinner size="sm" className="me-1" />}
+              + Log Measurement
+            </Button>
+          </div>
+
+          {measurements.length > 0 && (
+            <div className="mb-4">
+              <h6 className="fw-500 mb-2">Measurement history</h6>
+              <div className="table-responsive">
+                <table className="table table-sm fs-xs mb-0">
+                  <thead><tr><th>Date</th><th>Height</th><th>Width</th><th>Leaves</th><th>Stems</th><th></th></tr></thead>
+                  <tbody>
+                    {[...measurements].reverse().map(m => (
+                      <tr key={m.id}>
+                        <td>{m.date.slice(0, 10)}</td>
+                        <td>{m.height_cm != null ? `${m.height_cm} cm` : '—'}</td>
+                        <td>{m.width_cm  != null ? `${m.width_cm} cm`  : '—'}</td>
+                        <td>{m.leafCount  != null ? m.leafCount  : '—'}</td>
+                        <td>{m.stemCount  != null ? m.stemCount  : '—'}</td>
+                        <td>
+                          <Button variant="link" size="sm" className="text-danger p-0" aria-label="Delete measurement"
+                            onClick={() => handleDeleteMeasurement(m.id)}>
+                            <svg className="sa-icon"><use href="/icons/sprite.svg#trash-2"></use></svg>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="mb-2">
+            <h6 className="fw-500 mb-2">Phenology Events</h6>
+            <Row className="g-2 mb-2">
+              <Col xs={12} sm={6}>
+                <Form.Select size="sm" value={newPhenology.event}
+                  onChange={e => setNewPhenology(prev => ({ ...prev, event: e.target.value }))}>
+                  <option value="">Select event type…</option>
+                  <option value="first-leaf">First leaf</option>
+                  <option value="first-bud">First bud</option>
+                  <option value="first-bloom">First bloom</option>
+                  <option value="first-fruit">First fruit</option>
+                  <option value="leaf-drop">Leaf drop</option>
+                  <option value="dormancy">Dormancy</option>
+                  <option value="new-growth">New growth</option>
+                  <option value="other">Other</option>
+                </Form.Select>
+              </Col>
+              <Col xs={12} sm={6}>
+                <Form.Control type="date" size="sm" value={newPhenology.date}
+                  onChange={e => setNewPhenology(prev => ({ ...prev, date: e.target.value }))} />
+              </Col>
+              <Col xs={12}>
+                <Form.Control size="sm" placeholder="Notes (optional)" value={newPhenology.notes}
+                  onChange={e => setNewPhenology(prev => ({ ...prev, notes: e.target.value }))} />
+              </Col>
+            </Row>
+            <Button variant="outline-secondary" size="sm" className="mb-3"
+              onClick={handleAddPhenology} disabled={!newPhenology.event || phenologySaving}>
+              {phenologySaving && <Spinner size="sm" className="me-1" />}
+              + Log Event
+            </Button>
+            {phenologyEvents.length > 0 ? (
+              <ul className="list-unstyled mb-0">
+                {[...phenologyEvents].reverse().map(ev => (
+                  <li key={ev.id} className="d-flex align-items-center gap-2 mb-1 fs-xs">
+                    <Badge bg="secondary">{ev.event}</Badge>
+                    <span className="text-muted">{ev.date.slice(0, 10)}</span>
+                    {ev.notes && <span className="flex-grow-1">{ev.notes}</span>}
+                    <Button variant="link" size="sm" className="text-danger p-0 ms-auto" aria-label="Delete event"
+                      onClick={() => handleDeletePhenology(ev.id)}>
+                      <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#x"></use></svg>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-muted fs-xs mb-0">No phenology events logged yet. Record milestones like first bloom, first fruit, or leaf drop.</p>
+            )}
+          </div>
         </Modal.Body>
       )}
 

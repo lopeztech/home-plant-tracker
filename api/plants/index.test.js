@@ -80,6 +80,7 @@ let app;
 
 beforeAll(() => {
   proxyquire('./index', {
+    'express-rate-limit': () => (_req, _res, next) => next(),
     '@google-cloud/functions-framework': {
       http: (_, handler) => { app = handler; },
     },
@@ -2381,5 +2382,266 @@ describe('POST /recommend-fertiliser', () => {
     const res = await request(app).post('/recommend-fertiliser').send({ name: 'Rose' });
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Gemini down');
+  });
+});
+
+// ── Growth measurements ───────────────────────────────────────────────────────
+
+describe('GET /plants/:id/measurements', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/plants/p1/measurements');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/measurements')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns empty array when plant has no measurements', async () => {
+    store[plantPath('p1')] = { species: 'Fern' };
+    const res = await request(app).get('/plants/p1/measurements')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('returns existing measurements array', async () => {
+    const measurements = [{ id: 'uuid-1', date: '2026-01-01', height_cm: 45, notes: '' }];
+    store[plantPath('p1')] = { species: 'Monstera', measurements };
+    const res = await request(app).get('/plants/p1/measurements')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(measurements);
+  });
+});
+
+describe('POST /plants/:id/measurements', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).post('/plants/p1/measurements').send({ height_cm: 30 });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).post('/plants/missing/measurements')
+      .set('Authorization', authHeader()).send({ height_cm: 30 });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when no measurement values provided', async () => {
+    store[plantPath('p1')] = { species: 'Fern' };
+    const res = await request(app).post('/plants/p1/measurements')
+      .set('Authorization', authHeader()).send({ notes: 'just notes' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/required/);
+  });
+
+  it('creates a measurement with height_cm and returns 201', async () => {
+    store[plantPath('p1')] = { species: 'Monstera' };
+    const res = await request(app).post('/plants/p1/measurements')
+      .set('Authorization', authHeader()).send({ height_cm: 45, notes: 'looking good' });
+    expect(res.status).toBe(201);
+    expect(res.body.height_cm).toBe(45);
+    expect(res.body.notes).toBe('looking good');
+    expect(res.body.id).toBeDefined();
+    expect(res.body.date).toBeDefined();
+    // confirm saved to store
+    expect(store[plantPath('p1')].measurements).toHaveLength(1);
+    expect(store[plantPath('p1')].measurements[0].height_cm).toBe(45);
+  });
+
+  it('creates a measurement with multiple fields', async () => {
+    store[plantPath('p1')] = { species: 'Monstera' };
+    const res = await request(app).post('/plants/p1/measurements')
+      .set('Authorization', authHeader())
+      .send({ height_cm: 50, width_cm: 30, leafCount: 12, stemCount: 2 });
+    expect(res.status).toBe(201);
+    expect(res.body.width_cm).toBe(30);
+    expect(res.body.leafCount).toBe(12);
+    expect(res.body.stemCount).toBe(2);
+  });
+
+  it('appends to existing measurements', async () => {
+    const existing = [{ id: 'old-1', date: '2026-01-01', height_cm: 40, notes: '' }];
+    store[plantPath('p1')] = { species: 'Monstera', measurements: existing };
+    await request(app).post('/plants/p1/measurements')
+      .set('Authorization', authHeader()).send({ height_cm: 45 });
+    expect(store[plantPath('p1')].measurements).toHaveLength(2);
+  });
+
+  it('accepts leafCount only (no height)', async () => {
+    store[plantPath('p1')] = { species: 'Pothos' };
+    const res = await request(app).post('/plants/p1/measurements')
+      .set('Authorization', authHeader()).send({ leafCount: 8 });
+    expect(res.status).toBe(201);
+    expect(res.body.leafCount).toBe(8);
+    expect(res.body.height_cm).toBeUndefined();
+  });
+});
+
+describe('DELETE /plants/:id/measurements/:measurementId', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).delete('/plants/p1/measurements/mid1');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).delete('/plants/missing/measurements/mid1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('removes the matching measurement and returns { deleted: true }', async () => {
+    store[plantPath('p1')] = {
+      species: 'Monstera',
+      measurements: [
+        { id: 'mid1', date: '2026-01-01', height_cm: 40, notes: '' },
+        { id: 'mid2', date: '2026-02-01', height_cm: 45, notes: '' },
+      ],
+    };
+    const res = await request(app).delete('/plants/p1/measurements/mid1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ deleted: true });
+    expect(store[plantPath('p1')].measurements).toHaveLength(1);
+    expect(store[plantPath('p1')].measurements[0].id).toBe('mid2');
+  });
+
+  it('is a no-op when measurement id does not exist', async () => {
+    store[plantPath('p1')] = { species: 'Fern', measurements: [{ id: 'mid1', height_cm: 10, notes: '' }] };
+    const res = await request(app).delete('/plants/p1/measurements/nonexistent')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(store[plantPath('p1')].measurements).toHaveLength(1);
+  });
+});
+
+// ── Phenology events ──────────────────────────────────────────────────────────
+
+describe('GET /plants/:id/phenology', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/plants/p1/phenology');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/phenology')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns empty array when plant has no phenology events', async () => {
+    store[plantPath('p1')] = { species: 'Rose' };
+    const res = await request(app).get('/plants/p1/phenology')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('returns existing phenology events', async () => {
+    const events = [{ id: 'ev1', date: '2026-04-14', event: 'first-bloom', notes: 'pink flowers' }];
+    store[plantPath('p1')] = { species: 'Rose', phenologyEvents: events };
+    const res = await request(app).get('/plants/p1/phenology')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(events);
+  });
+});
+
+describe('POST /plants/:id/phenology', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).post('/plants/p1/phenology').send({ event: 'first-bloom' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).post('/plants/missing/phenology')
+      .set('Authorization', authHeader()).send({ event: 'first-bloom' });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when event is missing', async () => {
+    store[plantPath('p1')] = { species: 'Rose' };
+    const res = await request(app).post('/plants/p1/phenology')
+      .set('Authorization', authHeader()).send({ notes: 'no event type' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/event must be one of/);
+  });
+
+  it('returns 400 for invalid event type', async () => {
+    store[plantPath('p1')] = { species: 'Rose' };
+    const res = await request(app).post('/plants/p1/phenology')
+      .set('Authorization', authHeader()).send({ event: 'invalid-type' });
+    expect(res.status).toBe(400);
+  });
+
+  it('creates a phenology event and returns 201', async () => {
+    store[plantPath('p1')] = { species: 'Rose' };
+    const res = await request(app).post('/plants/p1/phenology')
+      .set('Authorization', authHeader())
+      .send({ event: 'first-bloom', notes: 'Beautiful pink flowers', date: '2026-04-14' });
+    expect(res.status).toBe(201);
+    expect(res.body.event).toBe('first-bloom');
+    expect(res.body.notes).toBe('Beautiful pink flowers');
+    expect(res.body.date).toBe('2026-04-14');
+    expect(res.body.id).toBeDefined();
+    expect(store[plantPath('p1')].phenologyEvents).toHaveLength(1);
+  });
+
+  it('accepts all valid event types', async () => {
+    const validEvents = ['first-leaf', 'first-bud', 'first-bloom', 'first-fruit', 'leaf-drop', 'dormancy', 'new-growth', 'other'];
+    for (const event of validEvents) {
+      store[plantPath('plant-ev')] = { species: 'Test' };
+      const res = await request(app).post('/plants/plant-ev/phenology')
+        .set('Authorization', authHeader()).send({ event });
+      expect(res.status).toBe(201);
+    }
+  });
+
+  it('uses current timestamp when date is not provided', async () => {
+    store[plantPath('p1')] = { species: 'Rose' };
+    const before = new Date().toISOString();
+    const res = await request(app).post('/plants/p1/phenology')
+      .set('Authorization', authHeader()).send({ event: 'new-growth' });
+    expect(res.status).toBe(201);
+    expect(new Date(res.body.date) >= new Date(before)).toBe(true);
+  });
+
+  it('appends to existing phenology events', async () => {
+    const existing = [{ id: 'ev1', date: '2026-01-01', event: 'first-leaf', notes: '' }];
+    store[plantPath('p1')] = { species: 'Rose', phenologyEvents: existing };
+    await request(app).post('/plants/p1/phenology')
+      .set('Authorization', authHeader()).send({ event: 'first-bloom' });
+    expect(store[plantPath('p1')].phenologyEvents).toHaveLength(2);
+  });
+});
+
+describe('DELETE /plants/:id/phenology/:eventId', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).delete('/plants/p1/phenology/ev1');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).delete('/plants/missing/phenology/ev1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('removes the matching phenology event', async () => {
+    store[plantPath('p1')] = {
+      species: 'Rose',
+      phenologyEvents: [
+        { id: 'ev1', date: '2026-01-01', event: 'first-leaf', notes: '' },
+        { id: 'ev2', date: '2026-04-14', event: 'first-bloom', notes: '' },
+      ],
+    };
+    const res = await request(app).delete('/plants/p1/phenology/ev1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ deleted: true });
+    expect(store[plantPath('p1')].phenologyEvents).toHaveLength(1);
+    expect(store[plantPath('p1')].phenologyEvents[0].id).toBe('ev2');
   });
 });
