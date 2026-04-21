@@ -1097,6 +1097,18 @@ app.get('/plants', requireUser, async (req, res) => {
   }
 });
 
+// ── QR short-code helpers ─────────────────────────────────────────────────────
+
+const SHORT_CODE_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+function generateShortCode() {
+  let code = 'hp-';
+  for (let i = 0; i < 5; i++) {
+    code += SHORT_CODE_CHARS[Math.floor(Math.random() * SHORT_CODE_CHARS.length)];
+  }
+  return code;
+}
+
 app.post('/plants', requireUser, checkQuota('plants', countPlantsForReq), async (req, res) => {
   try {
     const now = new Date().toISOString();
@@ -1105,7 +1117,7 @@ app.post('/plants', requireUser, checkQuota('plants', countPlantsForReq), async 
       try { body.imageUrl = body.imageUrl.split('?')[0]; } catch {}
       body.photoLog = [{ url: body.imageUrl, date: now, type: 'growth', analysis: null }];
     }
-    const data = { ...body, createdAt: now, updatedAt: now };
+    const data = { ...body, shortCode: generateShortCode(), createdAt: now, updatedAt: now };
     const docRef = await userPlants(req.userId).add(data);
     const response = { id: docRef.id, ...data };
     try { await signPlantData(response); } catch (signErr) {
@@ -1189,6 +1201,37 @@ app.put('/plants/:id', requireUser, async (req, res) => {
 
     const updated = await ref.get();
     res.status(200).json({ id: updated.id, ...updated.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── QR short-code resolution & scan ──────────────────────────────────────────
+
+app.get('/plants/:id/short-code', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    let { shortCode } = doc.data();
+    if (!shortCode) {
+      shortCode = generateShortCode();
+      await ref.set({ shortCode }, { merge: true });
+    }
+    res.status(200).json({ shortCode, plantId: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/scan/:shortCode', requireUser, async (req, res) => {
+  try {
+    const { shortCode } = req.params;
+    const plantsRef = userPlants(req.userId);
+    const snap = await plantsRef.get();
+    const match = snap.docs.find(d => d.data().shortCode === shortCode);
+    if (!match) return res.status(404).json({ error: 'QR code not found or belongs to a different account' });
+    res.status(200).json({ plantId: match.id, name: match.data().name, species: match.data().species });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
