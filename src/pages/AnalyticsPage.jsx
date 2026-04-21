@@ -157,8 +157,8 @@ function OverviewTab({ plants, theme }) {
                       <li key={p.id} className="d-flex align-items-start gap-2 mb-2">
                         <svg className="sa-icon text-warning flex-shrink-0 mt-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#alert-triangle"></use></svg>
                         <div>
-                          <span className="fw-500 fs-sm">{p.name}</span>
-                          <div className="fs-xs text-muted">
+                          <span className="tx-title">{p.name}</span>
+                          <div className="tx-muted">
                             {(p.health === 'Poor' || p.health === 'Fair') && <span className="text-warning">{p.health} health</span>}
                             {daysOverdue > 3 && <span className="text-danger ms-1">{daysOverdue}d overdue</span>}
                           </div>
@@ -189,7 +189,7 @@ function OverviewTab({ plants, theme }) {
               />
             ))}
           </div>
-          <div className="d-flex align-items-center gap-1 mt-2 fs-xs text-muted">
+          <div className="d-flex align-items-center gap-1 mt-2 tx-muted">
             <span>Less</span>
             {[0, 1, 2, 3].map((n) => <div key={n} style={{ width: 12, height: 12, borderRadius: 2, background: heatColor(n) }} />)}
             <span>More</span>
@@ -212,15 +212,15 @@ function OverviewTab({ plants, theme }) {
         <div className="panel-container"><div className="panel-content">
           <Row>
             <Col xs={6} md={3} className="mb-3 text-center">
-              <div className="fs-3 fw-700 text-danger">{pestStats.activeCount}</div>
-              <div className="fs-xs text-muted">Active incidents</div>
+              <div className="fs-3 fw-600 text-danger">{pestStats.activeCount}</div>
+              <div className="tx-muted">Active incidents</div>
             </Col>
             <Col xs={6} md={3} className="mb-3 text-center">
-              <div className="fs-3 fw-700">{pestStats.avgResolutionDays !== null ? `${pestStats.avgResolutionDays}d` : '—'}</div>
-              <div className="fs-xs text-muted">Avg. resolution time</div>
+              <div className="fs-3 fw-600">{pestStats.avgResolutionDays !== null ? `${pestStats.avgResolutionDays}d` : '—'}</div>
+              <div className="tx-muted">Avg. resolution time</div>
             </Col>
             <Col md={6} className="mb-3">
-              <div className="fs-xs fw-600 text-muted mb-2">Most common issues</div>
+              <div className="tx-muted fw-600 mb-2">Most common issues</div>
               {pestStats.topTypes.length === 0
                 ? <p className="text-muted fs-sm mb-0">No incidents logged yet.</p>
                 : pestStats.topTypes.map(t => (
@@ -384,7 +384,7 @@ export default function AnalyticsPage() {
   return (
     <div className="content-wrapper">
       <h1 className="subheader-title mb-2">Analytics</h1>
-      <p className="text-muted mb-4">{plants.length} plant{plants.length !== 1 ? 's' : ''} tracked</p>
+      <p className="tx-muted mb-4">{plants.length} plant{plants.length !== 1 ? 's' : ''} tracked</p>
 
       <Nav variant="tabs" className="mb-4">
         <Nav.Item><Nav.Link active={tab === 'overview'} onClick={() => setTab('overview')}>Overview</Nav.Link></Nav.Item>
