@@ -330,6 +330,15 @@
 		outline: none;
 	}
 
+	// WCAG 2.4.7 — keyboard focus ring must be visible for `.btn-system`.
+	// Smart Admin suppresses the default outline on hover/click for polish;
+	// re-enable it for keyboard-only focus so Tab navigation is visible.
+	&:focus-visible {
+		outline: 2px solid rgba(var(--primary), 0.9);
+		outline-offset: 2px;
+		border-radius: 50%;
+	}
+
 	&:hover,
 	&.show {
 		border: none;
@@ -343,7 +352,7 @@
 		&::before {
 			background: rgba(var(--bs-emphasis-color-rgb), var(--btn-system-bg-opacity, 0.03));
 		}
-		
+
 	}
 
 	&.btn-system-light {

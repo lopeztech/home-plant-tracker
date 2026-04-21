@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
-import { Modal, Button, Form, Nav, Tab, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
+import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi } from '../api/plants.js'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -7,22 +7,11 @@ import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern
 import { derivePlantName } from '../utils/plantName.js'
 import { getPlantEmoji, PLANT_EMOJI_GROUPS } from '../utils/plantEmoji.js'
 import { PlantContext } from '../context/PlantContext.jsx'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 // Max recommendation entries retained per plant. Older entries are trimmed
 // when a new one is appended so Firestore docs don't grow unbounded.
 const RECOMMENDATION_HISTORY_LIMIT = 20
-
-// Render common low-level errors as friendly text; otherwise pass through.
-function friendlyErrorMessage(err) {
-  const raw = err?.message || String(err || '')
-  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
-    return "Couldn't reach the server. Check your connection and try again."
-  }
-  if (/position \d+/i.test(raw) && /object key|expected/i.test(raw)) {
-    return 'The AI gave an unexpected response. Please try again in a moment.'
-  }
-  return raw || 'Something went wrong. Please try again.'
-}
 
 function formatRecDate(iso) {
   try {
@@ -120,6 +109,17 @@ const PLANTED_IN_OPTIONS = [
 const DAYS_OF_WEEK = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function today() { return new Date().toISOString().split('T')[0] }
+
+const SPECIES_MAX_LENGTH = 80
+
+function validateSpecies(value) {
+  const trimmed = (value || '').trim()
+  if (!trimmed) return 'Species is required.'
+  if (trimmed.length > SPECIES_MAX_LENGTH) {
+    return `Species must be at most ${SPECIES_MAX_LENGTH} characters (currently ${trimmed.length}).`
+  }
+  return null
+}
 
 function GrowthUpload({ plantId, onComplete }) {
   const [uploading, setUploading] = useState(false)
@@ -252,6 +252,15 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [moisturePage, setMoisturePage] = useState(1)
   const [wateringPage, setWateringPage] = useState(1)
 
+  // Validation + unsaved-change guard state. `isDirty` is set by user-initiated
+  // edits only (not programmatic resyncs like the wateringRec effect).
+  const [isDirty, setIsDirty] = useState(false)
+  const [showUnsavedGuard, setShowUnsavedGuard] = useState(false)
+  const [speciesError, setSpeciesError] = useState(null)
+  const [submitAttempted, setSubmitAttempted] = useState(false)
+  const speciesInputRef = useRef(null)
+  const errorSummaryRef = useRef(null)
+
   // Optional: when rendered inside the app PlantProvider we can update the
   // in-memory plants list so history persists across modal reopens without a
   // page refresh. Tests render PlantModal without a provider, so this is
@@ -310,7 +319,16 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     }
   }, [plant, activeFloorId])
 
-  const update = useCallback((key, value) => setForm((prev) => ({ ...prev, [key]: value })), [])
+  const update = useCallback((key, value) => {
+    setForm((prev) => ({ ...prev, [key]: value }))
+    setIsDirty(true)
+  }, [])
+
+  // Mirror species validity whenever the field changes so the error clears as
+  // soon as the user fixes it (no blur needed).
+  useEffect(() => {
+    if (submitAttempted || speciesError) setSpeciesError(validateSpecies(form.species))
+  }, [form.species, submitAttempted, speciesError])
 
   // Frequency, watering method, and water amount are no longer user-editable —
   // they mirror whatever the latest AI watering recommendation produced, so
@@ -340,13 +358,28 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       ...(result.potSize ? { potSize: result.potSize } : {}),
       ...(result.soilType ? { soilType: result.soilType } : {}),
     }))
+    setIsDirty(true)
   }, [])
 
-  const handleImageChange = useCallback((file) => setForm((prev) => ({ ...prev, imageFile: file, imageUrl: null })), [])
+  const handleImageChange = useCallback((file) => {
+    setForm((prev) => ({ ...prev, imageFile: file, imageUrl: null }))
+    setIsDirty(true)
+  }, [])
 
   const handleSubmit = useCallback(async (e) => {
     e.preventDefault()
-    if (!form.species.trim()) return
+    setSubmitAttempted(true)
+    const err = validateSpecies(form.species)
+    setSpeciesError(err)
+    if (err) {
+      // Scroll the error summary into view and return focus to the invalid
+      // field so keyboard + screen-reader users can recover immediately.
+      requestAnimationFrame(() => {
+        errorSummaryRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+        speciesInputRef.current?.focus?.()
+      })
+      return
+    }
     setIsSaving(true)
     let imageUrl = form.imageUrl
     if (form.imageFile) {
@@ -371,8 +404,49 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       plantedIn: form.plantedIn,
       emoji: form.emoji || null,
     })
+    setIsDirty(false)
     setIsSaving(false)
   }, [form, onSave])
+
+  // Unsaved-change guard. All close paths (X, Esc, backdrop, Cancel) route
+  // through this so dirty edits aren't silently discarded.
+  const handleClose = useCallback(() => {
+    if (isDirty) setShowUnsavedGuard(true)
+    else onClose()
+  }, [isDirty, onClose])
+
+  const handleDiscardChanges = useCallback(() => {
+    setShowUnsavedGuard(false)
+    setIsDirty(false)
+    onClose()
+  }, [onClose])
+
+  // Keyboard navigation between tabs (Left/Right, Home/End) per WAI-ARIA
+  // Tabs Pattern.
+  const TABS = useMemo(
+    () => [
+      { id: 'edit', label: 'Plant' },
+      { id: 'watering', label: 'Watering' },
+      { id: 'care', label: 'Care' },
+    ],
+    [],
+  )
+
+  const handleTabKeyDown = useCallback((e, index) => {
+    if (e.key === 'ArrowRight') {
+      e.preventDefault()
+      setActiveTab(TABS[(index + 1) % TABS.length].id)
+    } else if (e.key === 'ArrowLeft') {
+      e.preventDefault()
+      setActiveTab(TABS[(index - 1 + TABS.length) % TABS.length].id)
+    } else if (e.key === 'Home') {
+      e.preventDefault()
+      setActiveTab(TABS[0].id)
+    } else if (e.key === 'End') {
+      e.preventDefault()
+      setActiveTab(TABS[TABS.length - 1].id)
+    }
+  }, [TABS])
 
   const handleDelete = useCallback(() => {
     if (confirmDelete) { onDelete(plant.id); setConfirmDelete(false) }
@@ -439,7 +513,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   }, [form, plant, floors, wateringStatus, wateringHistory, persistHistory, ctxLocation, ctxTempUnit, weather])
 
   return (
-    <Modal show onHide={onClose} size="lg" centered scrollable>
+    <Modal show onHide={handleClose} size="lg" centered scrollable>
       <Modal.Header closeButton className="border-bottom">
         <Modal.Title className="d-flex align-items-center gap-2 fs-6">
           <svg className="sa-icon text-primary"><use href="/icons/sprite.svg#feather"></use></svg>
@@ -481,20 +555,66 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         </Modal.Body>
       )}
 
-      {/* Tab nav for editing */}
+      {/* Tab nav for editing — WAI-ARIA Tabs Pattern. Using native buttons
+          (rather than Nav.Link) so aria-controls / aria-selected are preserved
+          exactly as set; React-Bootstrap's Nav.Link filters them when it's not
+          nested inside a Tab.Container. */}
       {isEditing && (
-        <Nav variant="tabs" className="px-3 pt-2">
-          {[{ id: 'edit', label: 'Plant' }, { id: 'watering', label: 'Watering' }, { id: 'care', label: 'Care' }].map((tab) => (
-            <Nav.Item key={tab.id}>
-              <Nav.Link active={activeTab === tab.id} onClick={() => setActiveTab(tab.id)}>{tab.label}</Nav.Link>
-            </Nav.Item>
-          ))}
-        </Nav>
+        <ul className="nav nav-tabs px-3 pt-2" role="tablist" aria-label="Plant sections">
+          {TABS.map((tab, i) => {
+            const selected = activeTab === tab.id
+            return (
+              <li key={tab.id} className="nav-item" role="presentation">
+                <button
+                  type="button"
+                  role="tab"
+                  id={`plant-tab-${tab.id}`}
+                  aria-selected={selected}
+                  aria-controls={`plant-tabpanel-${tab.id}`}
+                  tabIndex={selected ? 0 : -1}
+                  className={`nav-link${selected ? ' active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  onKeyDown={(e) => handleTabKeyDown(e, i)}
+                >
+                  {tab.label}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       )}
 
       {/* Edit form */}
       {mode !== null && (!isEditing || activeTab === 'edit') && (
-        <Modal.Body as="form" onSubmit={handleSubmit}>
+        <Modal.Body
+          as="form"
+          onSubmit={handleSubmit}
+          noValidate
+          {...(isEditing
+            ? { role: 'tabpanel', id: 'plant-tabpanel-edit', 'aria-labelledby': 'plant-tab-edit' }
+            : {})}
+        >
+          {submitAttempted && speciesError && (
+            <div
+              ref={errorSummaryRef}
+              role="alert"
+              aria-live="assertive"
+              className="alert alert-danger py-2 mb-3"
+            >
+              <strong className="d-block mb-1">Please fix the following before saving:</strong>
+              <ul className="mb-0 ps-3">
+                <li>
+                  <a
+                    href="#plant-species-input"
+                    className="alert-link"
+                    onClick={(e) => { e.preventDefault(); speciesInputRef.current?.focus() }}
+                  >
+                    {speciesError}
+                  </a>
+                </li>
+              </ul>
+            </div>
+          )}
           {!isEditing && mode === 'photo' && (
             <>
               <ImageAnalyser initialImage={form.imageUrl} onAnalysisComplete={handleAnalysisComplete} onImageChange={handleImageChange} />
@@ -506,12 +626,33 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <Accordion.Header>Identity</Accordion.Header>
               <Accordion.Body>
                 <Form.Group className="mb-3">
-                  <Form.Label>Species *</Form.Label>
-                  <Form.Control type="text" placeholder="e.g. Nephrolepis exaltata" value={form.species}
-                    onChange={(e) => update('species', e.target.value)} required />
-                  <Form.Text className="text-muted">
-                    Display name will be {form.species ? <strong>{derivePlantName({ species: form.species, room: form.room })}</strong> : 'derived from species + room'}
-                  </Form.Text>
+                  <Form.Label htmlFor="plant-species-input">
+                    Species <span aria-hidden="true">*</span>
+                    <span className="visually-hidden"> (required)</span>
+                  </Form.Label>
+                  <Form.Control
+                    id="plant-species-input"
+                    ref={speciesInputRef}
+                    type="text"
+                    placeholder="e.g. Nephrolepis exaltata"
+                    value={form.species}
+                    onChange={(e) => update('species', e.target.value)}
+                    onBlur={() => setSpeciesError(validateSpecies(form.species))}
+                    aria-required="true"
+                    aria-invalid={speciesError ? 'true' : 'false'}
+                    aria-describedby={speciesError ? 'plant-species-error' : 'plant-species-help'}
+                    isInvalid={!!speciesError}
+                    maxLength={SPECIES_MAX_LENGTH + 20}
+                  />
+                  {speciesError ? (
+                    <Form.Control.Feedback type="invalid" id="plant-species-error">
+                      {speciesError}
+                    </Form.Control.Feedback>
+                  ) : (
+                    <Form.Text className="text-muted" id="plant-species-help">
+                      Display name will be {form.species ? <strong>{derivePlantName({ species: form.species, room: form.room })}</strong> : 'derived from species + room'}
+                    </Form.Text>
+                  )}
                 </Form.Group>
                 <Form.Group>
                   <div className="d-flex align-items-center justify-content-between mb-1">
@@ -768,7 +909,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
       {/* Watering tab */}
       {isEditing && activeTab === 'watering' && (
-        <Modal.Body>
+        <Modal.Body role="tabpanel" id="plant-tabpanel-watering" aria-labelledby="plant-tab-watering">
           {wateringStatus?.seasonNote && (
             <div className="mb-3 p-2 rounded border fs-sm d-flex align-items-center gap-2" style={{ borderColor: '#60a5fa', background: 'rgba(96,165,250,0.08)' }}>
               <svg className="sa-icon text-info" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#sun"></use></svg>
@@ -1048,7 +1189,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
       {/* Care tab — consolidated: health, maturity, notes, photos, recommendations */}
       {isEditing && activeTab === 'care' && (
-        <Modal.Body>
+        <Modal.Body role="tabpanel" id="plant-tabpanel-care" aria-labelledby="plant-tab-care">
           {/* Health & Maturity (read-only, updated by AI) */}
           <Row className="mb-3">
             <Col md={4}>
@@ -1164,6 +1305,35 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         </Modal.Body>
       )}
 
+      {/* Unsaved-change guard */}
+      {showUnsavedGuard && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="unsaved-guard-title"
+          aria-describedby="unsaved-guard-body"
+          className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{ background: 'rgba(0,0,0,0.6)', zIndex: 10, borderRadius: 'inherit' }}
+        >
+          <div className="card shadow-lg mx-4" style={{ maxWidth: 360 }}>
+            <div className="card-body p-4">
+              <p id="unsaved-guard-title" className="fw-500 mb-1">Discard unsaved changes?</p>
+              <p id="unsaved-guard-body" className="text-muted fs-sm mb-3">
+                Your edits to this plant haven't been saved. Leaving now will lose them.
+              </p>
+              <div className="d-flex gap-2 justify-content-end">
+                <Button variant="light" onClick={() => setShowUnsavedGuard(false)} autoFocus>
+                  Keep editing
+                </Button>
+                <Button variant="danger" onClick={handleDiscardChanges}>
+                  Discard changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete confirmation */}
       {confirmDelete && (
         <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.6)', zIndex: 10, borderRadius: 'inherit' }}>
@@ -1191,7 +1361,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             Delete
           </Button>
         )}
-        <Button variant="light" onClick={onClose}>Cancel</Button>
+        <Button variant="light" onClick={handleClose}>Cancel</Button>
         {mode !== null && (!isEditing || activeTab === 'edit') && (
           <Button variant="primary" onClick={handleSubmit} disabled={!form.species.trim() || isSaving}>
             {isSaving ? <Spinner size="sm" className="me-2" /> : <svg className="sa-icon me-1"><use href="/icons/sprite.svg#save"></use></svg>}

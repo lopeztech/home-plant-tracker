@@ -6,16 +6,18 @@ import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS, getSeason, isOutdoor } 
 import { derivePlantName } from '../utils/plantName.js'
 import { fanOut } from '../utils/concurrency.js'
 import PlantIcon from './PlantIcon.jsx'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
+import EmptyState from './EmptyState.jsx'
 
 const RECOMMENDATION_HISTORY_LIMIT = 20
 const BATCH_CONCURRENCY = 3
 
 function UrgencyIcon({ days, skippedRain }) {
-  if (skippedRain) return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#cloud-rain"></use></svg>
-  if (days < 0) return <svg className="sa-icon status-overdue" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#alert-circle"></use></svg>
-  if (days === 0) return <svg className="sa-icon status-today" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-  if (days <= 2) return <svg className="sa-icon status-soon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#clock"></use></svg>
-  return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#check-circle"></use></svg>
+  if (skippedRain) return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#cloud-rain"></use></svg>
+  if (days < 0) return <svg className="sa-icon status-overdue" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#alert-circle"></use></svg>
+  if (days === 0) return <svg className="sa-icon status-today" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#droplet"></use></svg>
+  if (days <= 2) return <svg className="sa-icon status-soon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#clock"></use></svg>
+  return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#check-circle"></use></svg>
 }
 
 function PlantCard({ plant, onClick, onWater, weather, floors }) {
@@ -57,17 +59,15 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
       </div>
 
       {onWater && (
-        <span
-          role="button"
-          tabIndex={0}
-          className="flex-shrink-0 p-1 text-muted"
+        <button
+          type="button"
+          className="flex-shrink-0 p-1 text-muted btn-plant-water"
           onClick={(e) => { e.stopPropagation(); onWater(plant.id) }}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onWater(plant.id) } }}
+          aria-label={`Water ${plant.name}`}
           title={`Water ${plant.name}`}
-          style={{ cursor: 'pointer' }}
         >
-          <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-        </span>
+          <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#droplet"></use></svg>
+        </button>
       )}
     </ListGroup.Item>
   )
@@ -93,7 +93,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
       setRecalcResult(data)
       // Reload plants to reflect new frequencies
       window.location.reload()
-    } catch (err) { setRecalcResult({ error: err.message }) }
+    } catch (err) { setRecalcResult({ error: friendlyErrorMessage(err, { context: 'recalculating watering frequencies' }) }) }
     finally { setRecalculating(false) }
   }, [weather])
 
@@ -358,16 +358,18 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
                 <div className="spinner-border spinner-border-sm text-primary" />
               </div>
             ) : filteredPlants.length === 0 ? (
-              <div className="text-center py-5 px-3">
-                <svg className="sa-icon sa-icon-5x text-muted mb-3"><use href="/icons/sprite.svg#feather"></use></svg>
-                <p className="text-muted mb-1">{plants.length === 0 ? 'No plants yet' : 'No plants match'}</p>
-                {plants.length === 0 && (
-                  <Button variant="primary" size="sm" onClick={onAddPlant} className="mt-2">
-                    <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
-                    Get started
-                  </Button>
-                )}
-              </div>
+              plants.length === 0 ? (
+                <EmptyState
+                  icon="feather"
+                  title="No plants yet"
+                  description="Add your first plant to start tracking watering schedules and care history."
+                  actions={[
+                    { label: 'Add a plant', icon: 'plus', onClick: onAddPlant },
+                  ]}
+                />
+              ) : (
+                <div className="text-center py-4 text-muted fs-sm">No plants match your search.</div>
+              )
             ) : (
               <div>
                 {(() => {

@@ -1,3 +1,5 @@
+import { enqueue as enqueueMutation, flush as flushQueue } from '../utils/offlineQueue.js'
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 const API_KEY = import.meta.env.VITE_API_KEY
 
@@ -5,6 +7,18 @@ let _credential = null
 
 export function setApiCredential(credential) {
   _credential = credential
+}
+
+export class OfflineQueuedError extends Error {
+  constructor(type) {
+    super(`Mutation queued for offline replay: ${type}`)
+    this.name = 'OfflineQueuedError'
+    this.type = type
+  }
+}
+
+function isOffline() {
+  return typeof navigator !== 'undefined' && navigator.onLine === false
 }
 
 function headers() {
@@ -39,8 +53,27 @@ export const plantsApi = {
   create: (data) => request('/plants', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/plants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/plants/${id}`, { method: 'DELETE' }),
-  water: (id) => request(`/plants/${id}/water`, { method: 'POST' }),
-  moisture: (id, reading, note) => request(`/plants/${id}/moisture`, { method: 'POST', body: JSON.stringify({ reading, note }) }),
+  water: (id) => {
+    if (isOffline()) {
+      enqueueMutation({ type: 'water', payload: { id } })
+      throw new OfflineQueuedError('water')
+    }
+    return request(`/plants/${id}/water`, { method: 'POST' })
+  },
+  moisture: (id, reading, note) => {
+    if (isOffline()) {
+      enqueueMutation({ type: 'moisture', payload: { id, reading, note } })
+      throw new OfflineQueuedError('moisture')
+    }
+    return request(`/plants/${id}/moisture`, { method: 'POST', body: JSON.stringify({ reading, note }) })
+  },
+  fertilise: (id, fields = {}) => {
+    if (isOffline()) {
+      enqueueMutation({ type: 'fertilise', payload: { id, fields } })
+      throw new OfflineQueuedError('fertilise')
+    }
+    return request(`/plants/${id}/fertilise`, { method: 'POST', body: JSON.stringify(fields) })
+  },
   wateringPattern: (id) => request(`/plants/${id}/watering-pattern`),
   wateringRecommendation: (id) => request(`/plants/${id}/watering-recommendation`),
   healthPrediction: (id) => request(`/plants/${id}/health-prediction`),
@@ -66,6 +99,34 @@ export const plantsApi = {
 export const floorsApi = {
   get: () => request('/config/floors'),
   save: (floors) => request('/config/floors', { method: 'PUT', body: JSON.stringify({ floors }) }),
+}
+
+/**
+ * Replay queued offline mutations against the live API. Stops at the first
+ * failure so items remain in FIFO order for a later retry. Returns the
+ * flush result from the offline-queue module.
+ */
+export function flushOfflineMutations() {
+  if (isOffline()) return Promise.resolve({ flushed: 0, remaining: undefined, errors: 0 })
+  return flushQueue(async (item) => {
+    const { type, payload } = item
+    if (type === 'water') {
+      return request(`/plants/${payload.id}/water`, { method: 'POST' })
+    }
+    if (type === 'moisture') {
+      return request(`/plants/${payload.id}/moisture`, {
+        method: 'POST',
+        body: JSON.stringify({ reading: payload.reading, note: payload.note }),
+      })
+    }
+    if (type === 'fertilise') {
+      return request(`/plants/${payload.id}/fertilise`, {
+        method: 'POST',
+        body: JSON.stringify(payload.fields || {}),
+      })
+    }
+    throw new Error(`Unknown queued mutation type: ${type}`)
+  })
 }
 
 async function fileToBase64(file) {
@@ -111,6 +172,22 @@ export const recommendApi = {
   getWatering: (params) => request('/recommend-watering', {
     method: 'POST',
     body: JSON.stringify(params),
+  }),
+  getFertiliser: (params) => request('/recommend-fertiliser', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  }),
+}
+
+export const billingApi = {
+  getSubscription: () => request('/billing/subscription'),
+  createCheckoutSession: (tier, interval = 'month') => request('/billing/create-checkout-session', {
+    method: 'POST',
+    body: JSON.stringify({ tier, interval }),
+  }),
+  createPortalSession: () => request('/billing/create-portal-session', {
+    method: 'POST',
+    body: JSON.stringify({}),
   }),
 }
 

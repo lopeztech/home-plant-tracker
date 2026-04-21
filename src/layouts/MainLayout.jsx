@@ -5,6 +5,9 @@ import { PlantProvider } from '../context/PlantContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
 import Onboarding from '../components/Onboarding.jsx'
+import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
+import ErrorBoundary from '../components/ErrorBoundary.jsx'
+import OfflineBanner from '../components/OfflineBanner.jsx'
 
 function Loader() {
   return (
@@ -29,9 +32,15 @@ export default function MainLayout() {
         <Sidebar />
         <main className="app-body">
           <div className="app-content">
-            <Suspense fallback={<Loader />}>
-              <Outlet />
-            </Suspense>
+            <OfflineBanner />
+            <div className="px-3 pt-3">
+              <WeatherAlertBanner />
+            </div>
+            <ErrorBoundary context="this page">
+              <Suspense fallback={<Loader />}>
+                <Outlet />
+              </Suspense>
+            </ErrorBoundary>
           </div>
           {isGuest && (
             <div className="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 text-center py-2 mb-0 rounded-0 fs-sm">

@@ -1,10 +1,12 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { plantsApi, imagesApi, floorsApi, analyseApi } from '../api/plants.js'
+import { plantsApi, imagesApi, floorsApi, analyseApi, flushOfflineMutations, OfflineQueuedError } from '../api/plants.js'
+import { subscribe as subscribeOfflineQueue, size as offlineQueueSize } from '../utils/offlineQueue.js'
 import { useWeather } from '../hooks/useWeather.js'
 import { useTempUnit } from '../hooks/useTempUnit.js'
 import { getWateringStatus, isOutdoor } from '../utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from '../data/guestData.js'
+import { toFriendlyError } from '../utils/errorMessages.js'
 
 const DEFAULT_FLOORS = []
 
@@ -27,11 +29,38 @@ export function PlantProvider({ children }) {
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
   const [activeFloorId, setActiveFloorId] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
+  const [pendingSyncCount, setPendingSyncCount] = useState(() => offlineQueueSize())
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false)
 
   const overdueCount = useMemo(
     () => plants.filter((p) => getWateringStatus(p, weather, floors).daysUntil < 0).length,
     [plants, weather, floors],
   )
+
+  // Track offline queue size so the UI can show a pending-sync badge.
+  useEffect(() => subscribeOfflineQueue(setPendingSyncCount), [])
+
+  // Listen for connectivity changes: on reconnect, replay queued mutations
+  // and then refresh the plant list so server-side derived fields update.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const goOnline = () => {
+      setIsOnline(true)
+      if (isGuest) return
+      flushOfflineMutations()
+        .then(({ flushed }) => {
+          if (flushed > 0) plantsApi.list().then(setPlants).catch(() => {})
+        })
+        .catch(() => {})
+    }
+    const goOffline = () => setIsOnline(false)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [isGuest])
 
   // Auto-mark every outdoor plant as watered once per rainy day.
   // Dedupes off the wateringLog — if the latest entry is method:'rain' dated
@@ -65,31 +94,26 @@ export function PlantProvider({ children }) {
     }
   }, [weather?.current?.condition?.sky, plants.length, floors, isGuest])
 
-  useEffect(() => {
-    if (!isAuthenticated) return
-    if (isGuest) {
-      setPlants(GUEST_PLANTS)
-      setFloors(GUEST_FLOORS)
-      setActiveFloorId('ground')
-      return
-    }
-    setPlants([])
-    setFloors(DEFAULT_FLOORS)
+  // Track the latest `logout` without re-triggering `reloadPlants` memo
+  // (AuthContext doesn't memoize its functions).
+  const logoutRef = useRef(logout)
+  useEffect(() => { logoutRef.current = logout }, [logout])
+
+  const reloadPlants = useCallback(() => {
+    if (!isAuthenticated || isGuest) return Promise.resolve()
     setPlantsLoading(true)
     setPlantsError(null)
 
     const loadPlants = plantsApi.list()
       .then(setPlants)
       .catch((err) => {
-        const msg = err.message || ''
-        const isAuthError = msg.includes('NetworkError') || msg.includes('Failed to fetch')
-          || msg.includes('Load failed') || msg.includes('401') || msg.includes('403')
-        if (isAuthError) {
-          setPlantsError('Session expired. Please sign in again.')
-          logout()
+        const friendly = toFriendlyError(err, { context: 'plants' })
+        if (friendly.kind === 'auth') {
+          setPlantsError(friendly)
+          logoutRef.current()
           return
         }
-        setPlantsError(msg)
+        setPlantsError(friendly)
       })
 
     const loadFloors = floorsApi.get()
@@ -102,8 +126,28 @@ export function PlantProvider({ children }) {
       })
       .catch(() => {})
 
-    Promise.all([loadPlants, loadFloors]).finally(() => setPlantsLoading(false))
+    // Flush any offline mutations accumulated while the app was closed.
+    flushOfflineMutations()
+      .then(({ flushed }) => {
+        if (flushed > 0) plantsApi.list().then(setPlants).catch(() => {})
+      })
+      .catch(() => {})
+
+    return Promise.all([loadPlants, loadFloors]).finally(() => setPlantsLoading(false))
   }, [isAuthenticated, isGuest])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    if (isGuest) {
+      setPlants(GUEST_PLANTS)
+      setFloors(GUEST_FLOORS)
+      setActiveFloorId('ground')
+      return
+    }
+    setPlants([])
+    setFloors(DEFAULT_FLOORS)
+    reloadPlants()
+  }, [isAuthenticated, isGuest, reloadPlants])
 
   const handleSavePlant = useCallback(async (plantData, editingPlant, pendingPosition) => {
     const data = {
@@ -137,8 +181,65 @@ export function PlantProvider({ children }) {
       setPlants((prev) => prev.map((p) => (p.id === plantId ? updater(p) : p)))
       return
     }
-    const updated = await plantsApi.water(plantId)
-    setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    try {
+      const updated = await plantsApi.water(plantId)
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        const now = new Date().toISOString()
+        const entry = { date: now, note: '' }
+        setPlants((prev) => prev.map((p) => (p.id === plantId
+          ? { ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] }
+          : p)))
+        return
+      }
+      throw err
+    }
+  }, [isGuest])
+
+  const handleFertilisePlant = useCallback(async (plantId, fields = {}) => {
+    if (isGuest) {
+      const now = new Date().toISOString()
+      const entry = {
+        date: now,
+        productName: fields.productName || null,
+        npk: fields.npk || null,
+        dilution: fields.dilution || null,
+        amount: fields.amount || null,
+        notes: fields.notes || '',
+      }
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? {
+        ...p,
+        lastFertilised: now,
+        fertiliserLog: [...(p.fertiliserLog || []), entry],
+        fertiliser: { ...(p.fertiliser || {}), ...fields },
+      } : p)))
+      return
+    }
+    try {
+      const updated = await plantsApi.fertilise(plantId, fields)
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        const now = new Date().toISOString()
+        const entry = {
+          date: now,
+          productName: fields.productName || null,
+          npk: fields.npk || null,
+          dilution: fields.dilution || null,
+          amount: fields.amount || null,
+          notes: fields.notes || '',
+        }
+        setPlants((prev) => prev.map((p) => (p.id === plantId ? {
+          ...p,
+          lastFertilised: now,
+          fertiliserLog: [...(p.fertiliserLog || []), entry],
+          fertiliser: { ...(p.fertiliser || {}), ...fields },
+        } : p)))
+        return
+      }
+      throw err
+    }
   }, [isGuest])
 
   const handleMoisturePlant = useCallback(async (plantId, reading, note) => {
@@ -153,8 +254,23 @@ export function PlantProvider({ children }) {
       } : p))
       return
     }
-    const updated = await plantsApi.moisture(plantId, reading, note)
-    setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    try {
+      const updated = await plantsApi.moisture(plantId, reading, note)
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        const now = new Date().toISOString()
+        const entry = { date: now, reading, note: note || '' }
+        setPlants((prev) => prev.map((p) => (p.id === plantId ? {
+          ...p,
+          lastMoistureReading: reading,
+          lastMoistureDate: now,
+          moistureLog: [...(p.moistureLog || []), entry],
+        } : p)))
+        return
+      }
+      throw err
+    }
   }, [isGuest])
 
   const handleBatchWater = useCallback(async (plantIds) => {
@@ -282,19 +398,23 @@ export function PlantProvider({ children }) {
   }, [activeFloorId, isGuest])
 
   const value = useMemo(() => ({
-    plants, plantsLoading, plantsError,
+    plants, plantsLoading, plantsError, reloadPlants,
     floors, activeFloorId, setActiveFloorId,
     weather, locationDenied, location, setLocation, tempUnit,
     overdueCount, isAnalysingFloorplan,
     isGuest,
+    isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
+    handleFertilisePlant,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
   }), [
-    plants, plantsLoading, plantsError, floors, activeFloorId,
+    plants, plantsLoading, plantsError, reloadPlants, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
+    isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
+    handleFertilisePlant,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,

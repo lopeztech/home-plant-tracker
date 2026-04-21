@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef } from 'react'
-import { Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
+import UpgradePrompt from '../components/UpgradePrompt.jsx'
+import ErrorAlert from '../components/ErrorAlert.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 export default function DashboardPage() {
-  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading } = usePlantContext()
+  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading, reloadPlants, isGuest } = usePlantContext()
   const gnomeWaterRef = useRef(null)
 
   const hasFloors = floors.length > 0
@@ -66,15 +68,15 @@ export default function DashboardPage() {
   return (
     <div className="content-wrapper" style={{ padding: 0 }}>
       <div className="main-content">
+        <div className="px-3 pt-2">
+          <UpgradePrompt id="dashboard-plant-limit" quota="plants">
+            You've reached your Free-tier plant limit. Unlock unlimited plants with Home Pro.
+          </UpgradePrompt>
+        </div>
         {plantsError && (
-          <Alert variant="danger" className="mx-3 mt-3 mb-0" dismissible>
-            <Alert.Heading as="h6" className="mb-1">Couldn't load your plants</Alert.Heading>
-            <p className="mb-1 fs-sm">Check your connection and refresh the page. If this keeps happening, try signing out and back in.</p>
-            <details className="fs-xs text-muted">
-              <summary>Error details</summary>
-              <code>{plantsError}</code>
-            </details>
-          </Alert>
+          <div className="mx-3 mt-3">
+            <ErrorAlert error={plantsError} context="plants" onRetry={reloadPlants} />
+          </div>
         )}
         {plantsLoading ? (
           <div className="p-4">
@@ -98,10 +100,22 @@ export default function DashboardPage() {
         ) : (
           <div className="p-4">
             <div className="panel panel-icon">
-              <div className="panel-container"><div className="panel-content text-center py-5">
-                <svg className="sa-icon sa-icon-5x text-muted mb-3"><use href="/icons/sprite.svg#upload"></use></svg>
-                <h5 className="fw-500 mb-2">No floorplan uploaded yet</h5>
-                <p className="text-muted mb-0">Go to <a href="/settings">Settings</a> to upload a floorplan or add floors manually.</p>
+              <div className="panel-container"><div className="panel-content">
+                <EmptyState
+                  icon="map"
+                  title="No floorplan yet"
+                  description="Add a floor to place plants on a map of your home, or skip straight to adding plants by species and room."
+                  actions={
+                    isGuest
+                      ? [
+                          { label: 'Sign in to get started', icon: 'log-in', href: '/login' },
+                        ]
+                      : [
+                          { label: 'Set up floors', icon: 'layers', href: '/settings' },
+                          { label: 'Add a plant first', icon: 'plus', onClick: handleAddPlant },
+                        ]
+                  }
+                />
               </div></div>
             </div>
           </div>

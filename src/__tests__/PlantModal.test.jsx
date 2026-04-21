@@ -417,7 +417,9 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
     fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
-    expect(await screen.findByText(/network error/i)).toBeInTheDocument()
+    // Raw "Network error" is mapped to friendly recovery copy.
+    expect(await screen.findByText(/check your connection/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^network error$/i)).not.toBeInTheDocument()
   })
 
   it('surfaces a friendly message when a jsonrepair-style parse error bubbles up', async () => {
@@ -660,5 +662,181 @@ describe('PlantModal', () => {
     // the rec) and the recommendation card's Amount row. Either is fine — just
     // assert at least one is visible.
     expect(screen.getAllByText('250ml').length).toBeGreaterThan(0)
+  })
+
+  // ── Required-field indicators & inline validation ─────────────────────────
+
+  it('marks the species input as required for screen readers', () => {
+    renderModal()
+    selectMode('manual')
+    const speciesInput = screen.getByPlaceholderText(/nephrolepis/i)
+    expect(speciesInput).toHaveAttribute('aria-required', 'true')
+  })
+
+  it('includes a visually-hidden "(required)" label for the species field', () => {
+    renderModal()
+    selectMode('manual')
+    // The "*" is aria-hidden; the accessible label is the hidden text.
+    expect(screen.getByText(/\(required\)/i)).toBeInTheDocument()
+  })
+
+  it('shows an inline error when species is blurred empty', () => {
+    renderModal()
+    selectMode('manual')
+    const speciesInput = screen.getByPlaceholderText(/nephrolepis/i)
+    fireEvent.blur(speciesInput)
+    expect(screen.getByText(/species is required/i)).toBeInTheDocument()
+    expect(speciesInput).toHaveAttribute('aria-invalid', 'true')
+  })
+
+  it('shows an inline error when species exceeds the 80-character limit', () => {
+    renderModal()
+    selectMode('manual')
+    const speciesInput = screen.getByPlaceholderText(/nephrolepis/i)
+    fireEvent.change(speciesInput, { target: { value: 'x'.repeat(81) } })
+    fireEvent.blur(speciesInput)
+    expect(screen.getByText(/at most 80 characters/i)).toBeInTheDocument()
+  })
+
+  it('clears the species error as soon as the user fixes the field', () => {
+    renderModal()
+    selectMode('manual')
+    const speciesInput = screen.getByPlaceholderText(/nephrolepis/i)
+    fireEvent.blur(speciesInput)
+    expect(screen.getByText(/species is required/i)).toBeInTheDocument()
+    fireEvent.change(speciesInput, { target: { value: 'Monstera' } })
+    expect(screen.queryByText(/species is required/i)).not.toBeInTheDocument()
+  })
+
+  it('shows a form-level error summary and does not call onSave when submitting with an invalid species', async () => {
+    const onSave = vi.fn()
+    renderModal({ plant: { ...existingPlant, species: '' }, onSave })
+    // Invalid species → submit should block. The Save button is disabled in
+    // that state, so we submit the form directly to exercise handleSubmit's
+    // validation path (e.g. user pressing Enter in a disabled-button scenario).
+    const speciesInput = screen.getByPlaceholderText(/nephrolepis/i)
+    expect(speciesInput).toHaveValue('')
+    fireEvent.submit(speciesInput.closest('form'))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/please fix the following/i)
+    expect(onSave).not.toHaveBeenCalled()
+  })
+
+  // ── Unsaved-change guard ──────────────────────────────────────────────────
+
+  it('does not prompt to discard when closing a pristine modal', () => {
+    const onClose = vi.fn()
+    renderModal({ onClose })
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(onClose).toHaveBeenCalledOnce()
+    expect(screen.queryByText(/discard unsaved changes/i)).not.toBeInTheDocument()
+  })
+
+  it('prompts to discard unsaved changes when closing a dirty modal', () => {
+    const onClose = vi.fn()
+    renderModal({ onClose })
+    selectMode('manual')
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Monstera' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    expect(screen.getByText(/discard unsaved changes/i)).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('keeps the modal open when the user picks "Keep editing" in the guard', () => {
+    const onClose = vi.fn()
+    renderModal({ onClose })
+    selectMode('manual')
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Monstera' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    fireEvent.click(screen.getByRole('button', { name: /keep editing/i }))
+    expect(screen.queryByText(/discard unsaved changes/i)).not.toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+    // Typed value is preserved.
+    expect(screen.getByPlaceholderText(/nephrolepis/i)).toHaveValue('Monstera')
+  })
+
+  it('closes the modal when the user confirms "Discard changes"', () => {
+    const onClose = vi.fn()
+    renderModal({ onClose })
+    selectMode('manual')
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Monstera' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
+    fireEvent.click(screen.getByRole('button', { name: /discard changes/i }))
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('also guards the modal header close (X) button when dirty', () => {
+    const onClose = vi.fn()
+    renderModal({ plant: existingPlant, onClose })
+    fireEvent.change(screen.getByPlaceholderText(/nephrolepis/i), {
+      target: { value: 'Nephrolepis exaltata var.' },
+    })
+    fireEvent.click(screen.getByLabelText('Close'))
+    expect(screen.getByText(/discard unsaved changes/i)).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  // ── ARIA tab semantics ────────────────────────────────────────────────────
+
+  it('exposes the tabs with role="tablist" and role="tab"', () => {
+    renderModal({ plant: existingPlant })
+    expect(screen.getByRole('tablist', { name: /plant sections/i })).toBeInTheDocument()
+    const tabs = screen.getAllByRole('tab')
+    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care'])
+  })
+
+  it('marks the active tab with aria-selected="true"', () => {
+    renderModal({ plant: existingPlant })
+    const [plantTab, wateringTab, careTab] = screen.getAllByRole('tab')
+    expect(plantTab).toHaveAttribute('aria-selected', 'true')
+    expect(wateringTab).toHaveAttribute('aria-selected', 'false')
+    expect(careTab).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('links each tab to its panel via aria-controls / aria-labelledby', () => {
+    renderModal({ plant: existingPlant })
+    const [plantTab] = screen.getAllByRole('tab')
+    expect(plantTab).toHaveAttribute('aria-controls', 'plant-tabpanel-edit')
+    const panel = screen.getByRole('tabpanel')
+    expect(panel).toHaveAttribute('id', 'plant-tabpanel-edit')
+    expect(panel).toHaveAttribute('aria-labelledby', 'plant-tab-edit')
+  })
+
+  it('moves focus to the next tab when ArrowRight is pressed', () => {
+    renderModal({ plant: existingPlant })
+    const [plantTab, wateringTab] = screen.getAllByRole('tab')
+    fireEvent.keyDown(plantTab, { key: 'ArrowRight' })
+    expect(wateringTab).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('wraps to the first tab when ArrowRight is pressed on the last tab', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByText('Care'))
+    const careTab = screen.getAllByRole('tab')[2]
+    fireEvent.keyDown(careTab, { key: 'ArrowRight' })
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('moves focus to the previous tab when ArrowLeft is pressed', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByText('Watering'))
+    const wateringTab = screen.getAllByRole('tab')[1]
+    fireEvent.keyDown(wateringTab, { key: 'ArrowLeft' })
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('jumps to the first tab on Home and the last on End', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByText('Watering'))
+    const wateringTab = screen.getAllByRole('tab')[1]
+    fireEvent.keyDown(wateringTab, { key: 'End' })
+    expect(screen.getAllByRole('tab')[2]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(screen.getAllByRole('tab')[2], { key: 'Home' })
+    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
 })

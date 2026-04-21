@@ -3,6 +3,7 @@ import { Row, Col, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { isOutdoor } from '../utils/watering.js'
 import SeasonBadge from '../components/SeasonBadge.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 function dayLabel(dateStr, index) {
   if (index === 0) return 'Today'
@@ -23,9 +24,15 @@ export default function ForecastPage() {
       <div className="content-wrapper">
         <h1 className="subheader-title mb-4">Forecast</h1>
         <div className="panel panel-icon">
-          <div className="panel-container"><div className="panel-content text-center py-5 text-muted">
-            <p>Waiting for weather data...</p>
-            <p className="fs-sm">Enable location access or set your location in Settings.</p>
+          <div className="panel-container"><div className="panel-content">
+            <EmptyState
+              icon="cloud"
+              title="No weather data yet"
+              description="Allow location access so we can fetch your local forecast, or set a city manually in Settings."
+              actions={[
+                { label: 'Set location', icon: 'map-pin', href: '/settings' },
+              ]}
+            />
           </div></div>
         </div>
       </div>

@@ -81,4 +81,20 @@ describe('Toast', () => {
     render(<Probe />)
     expect(received).toBeNull()
   })
+
+  it('announces success toasts to screen readers via role=status', () => {
+    const button = renderWithProvider((toast) => toast('Saved!'))
+    act(() => button.click())
+    const live = screen.getByRole('status')
+    expect(live).toHaveTextContent('Saved!')
+    expect(live).toHaveAttribute('aria-live', 'polite')
+  })
+
+  it('announces error toasts assertively via role=alert', () => {
+    const button = renderWithProvider((toast) => toast.error('Boom'))
+    act(() => button.click())
+    const live = screen.getByRole('alert')
+    expect(live).toHaveTextContent('Boom')
+    expect(live).toHaveAttribute('aria-live', 'assertive')
+  })
 })

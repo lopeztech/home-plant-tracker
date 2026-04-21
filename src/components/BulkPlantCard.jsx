@@ -73,7 +73,12 @@ export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove
     <Card className={`mb-3 ${status === 'saved' ? 'border-success' : status === 'error' ? 'border-danger' : ''}`}>
       {/* Thumbnail with overlay */}
       <div className="position-relative" style={{ height: 140, overflow: 'hidden' }}>
-        <img src={previewUrl} alt="" className="w-100 h-100" style={{ objectFit: 'cover' }} />
+        <img
+          src={previewUrl}
+          alt={form.species ? `Photo of ${form.species}` : 'Uploaded plant photo pending identification'}
+          className="w-100 h-100"
+          style={{ objectFit: 'cover' }}
+        />
         {status === 'analysing' && (
           <AnalysingOverlay stageIndex={entry.stageIndex || 0} />
         )}
@@ -86,8 +91,13 @@ export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove
           </div>
         )}
         {status === 'saved' && (
-          <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.4)' }}>
-            <svg className="sa-icon text-success" style={{ width: 48, height: 48 }}><use href="/icons/sprite.svg#check-circle"></use></svg>
+          <div
+            className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            style={{ background: 'rgba(0,0,0,0.4)' }}
+            role="status"
+            aria-label="Saved"
+          >
+            <svg className="sa-icon text-success" style={{ width: 48, height: 48 }} aria-hidden="true"><use href="/icons/sprite.svg#check-circle"></use></svg>
           </div>
         )}
         {status !== 'saving' && status !== 'saved' && (
@@ -96,8 +106,9 @@ export default function BulkPlantCard({ entry, floors, rooms, onChange, onRemove
             className="position-absolute top-0 end-0 m-1 rounded-circle p-0"
             style={{ width: 24, height: 24 }}
             onClick={onRemove}
+            aria-label="Remove photo"
           >
-            <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
+            <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#x"></use></svg>
           </Button>
         )}
       </div>
