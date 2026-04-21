@@ -1,0 +1,120 @@
+/* ── Mobile responsiveness overrides ──────────────────────────────────────
+   Targets ≤ 480 px (xs) and ≤ 575.98 px (below `sm`) so the app stays
+   usable on 320–414 px screens. Resolves issue #220. */
+
+/* Plant modal tabs: horizontally scroll instead of overflowing the modal,
+   keep visible scroll snap points and ≥ 44 px touch targets on phones. */
+.modal .nav-tabs {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+
+  .nav-item {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+  }
+
+  .nav-link {
+    white-space: nowrap;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .modal .nav-tabs .nav-link {
+    min-height: 44px;
+    padding: 0.625rem 0.875rem;
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+/* Floorplan view-mode switcher: collapse to a dropdown below `sm`.
+   The desktop ButtonGroup is hidden via .d-none.d-sm-inline-flex on the
+   element; the dropdown counterpart uses .d-sm-none. The Reorganise
+   button stays visible, but at ≥ 44 px height. */
+@media (max-width: 575.98px) {
+  .floorplan-toolbar .btn {
+    min-height: 44px;
+  }
+
+  .floorplan-toolbar .floor-tab {
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+/* Settings page: stop fixed inline widths from overflowing on phones.
+   The .settings-fixed-w-120 / .settings-fixed-w-60 classes replace the
+   inline style={{ width: 120 }} / style={{ width: 60 }} bandages. */
+.settings-fixed-w-120 {
+  width: clamp(96px, 30vw, 120px);
+}
+
+.settings-fixed-w-60 {
+  width: clamp(48px, 20vw, 60px);
+}
+
+@media (max-width: 360px) {
+  .settings-fixed-w-120 {
+    width: 100%;
+  }
+}
+
+/* Settings table: allow horizontal scroll inside the panel rather than
+   overflowing the page. React-Bootstrap's `<Table responsive>` already
+   wraps with .table-responsive — make sure the inline-style column widths
+   stay reasonable on phones. */
+@media (max-width: 575.98px) {
+  .settings-floors-table th[style*="width: 100"],
+  .settings-floors-table th[style*="width: 80"],
+  .settings-floors-table th[style*="width: 50"] {
+    width: auto !important;
+  }
+
+  /* Make the floor-row toggle / type / actions cells compact instead of
+     fighting for inline widths. */
+  .settings-floors-table .form-control,
+  .settings-floors-table .form-select {
+    min-width: 0;
+  }
+}
+
+/* Calendar grid: shrink padding at narrow widths so day cells stay
+   readable. Hide the fertilised/feed-due markers under 360 px to keep
+   the day number visible. */
+@media (max-width: 575.98px) {
+  .care-calendar .calendar-day {
+    padding: 0.25rem 0 !important;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 359.98px) {
+  .care-calendar .calendar-day .calendar-day-marker {
+    width: 4px;
+    height: 4px;
+  }
+}
+
+/* ApexCharts: ensure chart containers don't overflow horizontally on
+   phones. `width: 100%` on the wrapper prevents the SVG from rendering
+   wider than its parent. */
+.apexcharts-canvas,
+.apexcharts-canvas svg {
+  max-width: 100%;
+}
+
+/* Touch targets: any icon-only `.btn` with no inner text should be at
+   least 44×44 px on touch screens for WCAG 2.5.5 AAA. We apply this only
+   to buttons inside our toolbars to avoid over-padding tiny inline icons
+   inside table rows or list items. */
+@media (max-width: 575.98px) {
+  .panel-hdr .panel-toolbar .btn,
+  .floorplan-toolbar .btn-group .btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

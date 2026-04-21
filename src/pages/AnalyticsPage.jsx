@@ -75,6 +75,15 @@ function OverviewTab({ plants }) {
     legend: { position: 'right', fontSize: '13px' },
     plotOptions: { pie: { donut: { size: '65%' } } },
     dataLabels: { enabled: false },
+    responsive: [
+      {
+        breakpoint: 480,
+        options: {
+          legend: { position: 'bottom', fontSize: '12px' },
+          plotOptions: { pie: { donut: { size: '60%' } } },
+        },
+      },
+    ],
   }
 
   return (
@@ -191,6 +200,15 @@ function PerPlantTab({ plants }) {
     annotations: plant.frequencyDays ? {
       yaxis: [{ y: +(7 / plant.frequencyDays).toFixed(2), borderColor: '#f59e0b', strokeDashArray: 4, label: { text: 'Target', style: { color: '#f59e0b', background: 'transparent' } } }]
     } : {},
+    responsive: [
+      {
+        breakpoint: 480,
+        options: {
+          xaxis: { labels: { rotate: -45, style: { fontSize: '10px' } } },
+          plotOptions: { bar: { columnWidth: '80%' } },
+        },
+      },
+    ],
   }
 
   const radialOpts = {
@@ -198,6 +216,19 @@ function PerPlantTab({ plants }) {
     plotOptions: { radialBar: { hollow: { size: '65%' }, dataLabels: { name: { show: true, fontSize: '12px' }, value: { show: true, fontSize: '24px', fontWeight: 700 } } } },
     labels: [score !== null ? (score >= 80 ? 'Consistent' : score >= 60 ? 'Moderate' : 'Irregular') : 'No data'],
     colors: [score !== null ? (score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444') : '#6b7280'],
+    responsive: [
+      {
+        breakpoint: 480,
+        options: {
+          plotOptions: {
+            radialBar: {
+              hollow: { size: '55%' },
+              dataLabels: { name: { fontSize: '10px' }, value: { fontSize: '18px' } },
+            },
+          },
+        },
+      },
+    ],
   }
 
   return (

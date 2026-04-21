@@ -108,11 +108,15 @@ export default function CalendarPage() {
             </div>
           </div>
           <div className="panel-container">
-            <div className="panel-content">
-              {/* Weekday headers */}
+            <div className="panel-content care-calendar">
+              {/* Weekday headers — show first letter only on phones to keep cells wide */}
               <div className="d-grid mb-1" style={{ gridTemplateColumns: 'repeat(7, 1fr)' }}>
                 {WEEKDAYS.map((d) => (
-                  <div key={d} className="text-center text-muted fs-xs fw-600 py-1">{d}</div>
+                  <div key={d} className="text-center text-muted fs-xs fw-600 py-1">
+                    <span className="d-none d-sm-inline">{d}</span>
+                    <span className="d-inline d-sm-none" aria-hidden="true">{d.charAt(0)}</span>
+                    <span className="visually-hidden d-sm-none">{d}</span>
+                  </div>
                 ))}
               </div>
 
@@ -131,17 +135,17 @@ export default function CalendarPage() {
                     <button
                       key={day}
                       onClick={() => setSelectedDay(selectedDay === day ? null : day)}
-                      className={`btn btn-sm d-flex flex-column align-items-center justify-content-center py-2 ${
+                      className={`btn btn-sm calendar-day d-flex flex-column align-items-center justify-content-center py-2 ${
                         isSelected ? 'btn-primary' : isToday(day) ? 'btn-outline-primary fw-bold' : 'btn-light'
                       }`}
                     >
                       <span>{day}</span>
                       {events && (
                         <div className="d-flex gap-1 mt-1">
-                          {hasWatered && <span className="rounded-circle bg-info d-inline-block" style={{ width: 5, height: 5 }} />}
-                          {hasDue && <span className="rounded-circle bg-warning d-inline-block" style={{ width: 5, height: 5 }} />}
-                          {hasFertilised && <span className="rounded-circle bg-success d-inline-block" style={{ width: 5, height: 5 }} />}
-                          {hasFeedDue && <span className="rounded-circle bg-primary d-inline-block" style={{ width: 5, height: 5 }} />}
+                          {hasWatered && <span className="rounded-circle bg-info d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
+                          {hasDue && <span className="rounded-circle bg-warning d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
+                          {hasFertilised && <span className="rounded-circle bg-success d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
+                          {hasFeedDue && <span className="rounded-circle bg-primary d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
                         </div>
                       )}
                     </button>
