@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useLayoutContext } from '../../context/LayoutContext.jsx'
@@ -6,12 +7,18 @@ import SidebarMenu from './SidebarMenu.jsx'
 import WeatherStrip from '../../components/WeatherStrip.jsx'
 import OfflineIndicator from '../../components/OfflineIndicator.jsx'
 import { menuItems } from './menuData.js'
+import { buildWaterTasks } from '../../utils/todayTasks.js'
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const { navMinified, toggleSetting } = useLayoutContext()
-  const { weather, location } = usePlantContext()
+  const { weather, location, plants, floors } = usePlantContext()
   const navigate = useNavigate()
+
+  const todayCount = useMemo(
+    () => buildWaterTasks(plants, weather, floors).tasks.length,
+    [plants, weather, floors],
+  )
 
   const toggleSidenav = () => {
     toggleSetting('navMinified', !navMinified)
@@ -53,7 +60,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <div className="primary-nav flex-grow-1 overflow-auto">
         <div className="scrollbar">
-          <SidebarMenu items={menuItems} />
+          <SidebarMenu items={menuItems} badges={{ today: todayCount }} />
           {/* Sign out — below Settings */}
           <ul className="nav-menu d-flex flex-column">
             <li>

@@ -5,6 +5,7 @@ import AuthLayout from '../layouts/AuthLayout.jsx'
 
 const LoginPage = lazy(() => import('../pages/LoginPage.jsx'))
 const DashboardPage = lazy(() => import('../pages/DashboardPage.jsx'))
+const TodayPage = lazy(() => import('../pages/TodayPage.jsx'))
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage.jsx'))
 const CalendarPage = lazy(() => import('../pages/CalendarPage.jsx'))
 const SettingsPage = lazy(() => import('../pages/SettingsPage.jsx'))
@@ -25,6 +26,7 @@ export const routes = [
     element: <MainLayout />,
     children: [
       { index: true, element: <DashboardPage /> },
+      { path: 'today', element: <TodayPage /> },
       { path: 'plants', element: <Navigate to="/?view=list" replace /> },
       { path: 'analytics', element: <AnalyticsPage /> },
       { path: 'calendar', element: <CalendarPage /> },
