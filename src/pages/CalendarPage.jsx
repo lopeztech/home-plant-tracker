@@ -26,7 +26,7 @@ export default function CalendarPage() {
   const month = viewDate.getMonth()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDay = (new Date(year, month, 1).getDay() + 6) % 7
-  const monthName = viewDate.toLocaleDateString('en', { month: 'long', year: 'numeric' })
+  const monthName = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(viewDate)
 
   const isToday = (day) => {
     const t = new Date()
