@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import HelpTooltip from '../components/HelpTooltip.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
-import { accountApi } from '../api/plants.js'
+import { accountApi, exportApi } from '../api/plants.js'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
@@ -449,14 +449,14 @@ function PreferencesTab({ search }) {
 
 function DataTab({ search }) {
   const { logout } = useAuth()
-  const [exportLoading, setExportLoading] = useState(false)
+  const [exportLoading, setExportLoading] = useState(null)
   const [exportError, setExportError] = useState(null)
   const [deletePhase, setDeletePhase] = useState(0)
   const [deleteInput, setDeleteInput] = useState('')
   const [deleteError, setDeleteError] = useState(null)
 
   const handleExport = async () => {
-    setExportLoading(true)
+    setExportLoading('json')
     setExportError(null)
     try {
       const data = await accountApi.exportData()
@@ -470,7 +470,21 @@ function DataTab({ search }) {
     } catch (err) {
       setExportError(err.message)
     } finally {
-      setExportLoading(false)
+      setExportLoading(null)
+    }
+  }
+
+  const handleCsvExport = async (type) => {
+    setExportLoading(type)
+    setExportError(null)
+    try {
+      if (type === 'plants-csv') await exportApi.downloadPlants('csv')
+      else if (type === 'watering-csv') await exportApi.downloadWateringHistory('csv')
+      else if (type === 'schedule-html') await exportApi.downloadCareSchedule()
+    } catch (err) {
+      setExportError(err.message)
+    } finally {
+      setExportLoading(null)
     }
   }
 
@@ -490,15 +504,36 @@ function DataTab({ search }) {
     <>
       <SettingSection id="export" title="Data export" icon="download" search={search}>
         <p className="text-muted mb-3">
-          Download all your plant data as a JSON file, including care history, measurements, and journal entries.
+          Download your plant data in multiple formats. CSV files open in Excel or any spreadsheet app.
+          The care schedule exports as a printable HTML page — open it in your browser and use File → Print to save as PDF.
         </p>
         {exportError && <div className="alert alert-danger py-2 mb-3">{exportError}</div>}
-        <Button variant="outline-primary" onClick={handleExport} disabled={exportLoading}>
-          <svg className="sa-icon me-2" style={{ width: 14, height: 14 }} aria-hidden="true">
-            <use href="/icons/sprite.svg#download"></use>
-          </svg>
-          {exportLoading ? 'Exporting…' : 'Export my data (JSON)'}
-        </Button>
+        <div className="d-flex flex-wrap gap-2">
+          <Button variant="outline-primary" onClick={handleExport} disabled={exportLoading !== null}>
+            <svg className="sa-icon me-2" style={{ width: 14, height: 14 }} aria-hidden="true">
+              <use href="/icons/sprite.svg#download"></use>
+            </svg>
+            {exportLoading === 'json' ? 'Exporting…' : 'All data (JSON)'}
+          </Button>
+          <Button variant="outline-secondary" onClick={() => handleCsvExport('plants-csv')} disabled={exportLoading !== null}>
+            <svg className="sa-icon me-2" style={{ width: 14, height: 14 }} aria-hidden="true">
+              <use href="/icons/sprite.svg#file-text"></use>
+            </svg>
+            {exportLoading === 'plants-csv' ? 'Exporting…' : 'Plant inventory (CSV)'}
+          </Button>
+          <Button variant="outline-secondary" onClick={() => handleCsvExport('watering-csv')} disabled={exportLoading !== null}>
+            <svg className="sa-icon me-2" style={{ width: 14, height: 14 }} aria-hidden="true">
+              <use href="/icons/sprite.svg#droplets"></use>
+            </svg>
+            {exportLoading === 'watering-csv' ? 'Exporting…' : 'Watering history (CSV)'}
+          </Button>
+          <Button variant="outline-secondary" onClick={() => handleCsvExport('schedule-html')} disabled={exportLoading !== null}>
+            <svg className="sa-icon me-2" style={{ width: 14, height: 14 }} aria-hidden="true">
+              <use href="/icons/sprite.svg#calendar"></use>
+            </svg>
+            {exportLoading === 'schedule-html' ? 'Exporting…' : 'Care schedule (printable)'}
+          </Button>
+        </div>
       </SettingSection>
 
       <SettingSection id="account-delete" title="Delete account" icon="trash-2" search={search}>

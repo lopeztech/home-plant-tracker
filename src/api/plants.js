@@ -250,6 +250,52 @@ export const billingApi = {
   }),
 }
 
+function downloadHeaders() {
+  const h = { 'x-api-key': API_KEY }
+  if (_credential) h['Authorization'] = `Bearer ${_credential}`
+  return h
+}
+
+async function fetchBlob(path) {
+  const res = await fetch(`${BASE_URL}${path}`, { headers: downloadHeaders() })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(text || `HTTP ${res.status}`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match ? match[1] : 'export'
+  return { blob, filename }
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+export const exportApi = {
+  async downloadPlants(format = 'csv') {
+    const { blob, filename } = await fetchBlob(`/export/plants?format=${format}`)
+    triggerDownload(blob, filename)
+  },
+  async downloadWateringHistory(format = 'csv', { from, to } = {}) {
+    let path = `/export/watering-history?format=${format}`
+    if (from) path += `&from=${from}`
+    if (to) path += `&to=${to}`
+    const { blob, filename } = await fetchBlob(path)
+    triggerDownload(blob, filename)
+  },
+  async downloadCareSchedule() {
+    const { blob, filename } = await fetchBlob('/export/care-schedule?format=html')
+    triggerDownload(blob, filename)
+  },
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()
