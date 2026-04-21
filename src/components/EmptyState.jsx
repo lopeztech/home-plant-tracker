@@ -60,19 +60,22 @@ function EmptyStateAction({ label, to, href, onClick, variant = 'primary', size 
       {label}
     </>
   )
+  // Plain anchors keep their implicit role="link" — react-bootstrap's <Button as={Link}>
+  // forces role="button" onto the anchor, which breaks screen-reader expectations.
+  const linkClass = `btn btn-${variant} btn-${size}`
 
   if (to) {
     return (
-      <Button as={Link} to={to} variant={variant} size={size} aria-label={ariaLabel}>
+      <Link to={to} className={linkClass} aria-label={ariaLabel}>
         {inner}
-      </Button>
+      </Link>
     )
   }
   if (href) {
     return (
-      <Button as="a" href={href} variant={variant} size={size} aria-label={ariaLabel}>
+      <a href={href} className={linkClass} aria-label={ariaLabel}>
         {inner}
-      </Button>
+      </a>
     )
   }
   return (
