@@ -173,7 +173,9 @@ export default function InsightsPage() {
                 className="d-flex align-items-center justify-content-between"
                 style={{ cursor: 'pointer' }}
                 onClick={() => handleExpand(score.plantId)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleExpand(score.plantId) } }}
                 role="button"
+                tabIndex={0}
                 aria-expanded={expandedPlant === score.plantId}
                 aria-label={`${score.name} care score details`}
               >

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react'
-import { Toast as BsToast, ToastContainer } from 'react-bootstrap'
+import { ToastContainer } from 'react-bootstrap'
 
 const ToastContext = createContext(null)
 
@@ -7,6 +7,10 @@ export function useToast() {
   return useContext(ToastContext)
 }
 
+// Render the Bootstrap toast markup directly — react-bootstrap's <Toast>
+// hardcodes role="alert"/aria-live="assertive", which is too noisy for our
+// success confirmations. We want polite announcements for success and
+// assertive ones for errors.
 function ToastItem({ toast, onDismiss }) {
   useEffect(() => {
     const timer = setTimeout(() => onDismiss(toast.id), toast.duration)
@@ -14,24 +18,31 @@ function ToastItem({ toast, onDismiss }) {
   }, [toast, onDismiss])
 
   const isError = toast.type === 'error'
+  const bgClass = isError ? 'bg-danger' : 'bg-dark'
 
   return (
-    <BsToast
-      onClose={() => onDismiss(toast.id)}
-      bg={isError ? 'danger' : 'dark'}
-      autohide
-      delay={toast.duration}
+    <div
+      className={`toast show ${bgClass}`}
+      role={isError ? 'alert' : 'status'}
+      aria-live={isError ? 'assertive' : 'polite'}
+      aria-atomic="true"
     >
-      <BsToast.Header closeButton>
-        <svg className={`sa-icon me-2 ${isError ? 'text-danger' : 'text-success'}`} style={{ width: 14, height: 14 }}>
+      <div className="toast-header">
+        <svg className={`sa-icon me-2 ${isError ? 'text-danger' : 'text-success'}`} style={{ width: 14, height: 14 }} aria-hidden="true">
           <use href={`/icons/sprite.svg#${isError ? 'alert-circle' : 'check-circle'}`}></use>
         </svg>
         <strong className="me-auto">{isError ? 'Error' : 'Success'}</strong>
-      </BsToast.Header>
-      <BsToast.Body className={isError ? 'text-white' : ''}>
+        <button
+          type="button"
+          className="btn-close"
+          aria-label="Close"
+          onClick={() => onDismiss(toast.id)}
+        />
+      </div>
+      <div className={`toast-body ${isError ? 'text-white' : ''}`}>
         {toast.message}
-      </BsToast.Body>
-    </BsToast>
+      </div>
+    </div>
   )
 }
 

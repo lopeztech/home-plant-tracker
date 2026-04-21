@@ -177,6 +177,22 @@ describe('BulkPlantCard', () => {
     )
   })
 
+  it('gives the plant thumbnail a species-aware alt text', () => {
+    renderCard()
+    const img = screen.getByAltText(/Monstera deliciosa/i)
+    expect(img).toBeInTheDocument()
+  })
+
+  it('falls back to a generic alt before analysis has identified the species', () => {
+    renderCard({ form: { ...makeEntry().form, species: '' } })
+    expect(screen.getByAltText(/pending identification/i)).toBeInTheDocument()
+  })
+
+  it('labels the remove button for assistive tech', () => {
+    renderCard()
+    expect(screen.getByRole('button', { name: /remove photo/i })).toBeInTheDocument()
+  })
+
   it('keeps room when switching to a floor that has the same room', () => {
     // Entry has room 'Kitchen' on floor 'ground'
     // Switching to a floor that also has 'Kitchen' should keep it

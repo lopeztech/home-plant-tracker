@@ -102,9 +102,20 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
         </div>
       ) : (
         <div className="position-relative rounded overflow-hidden border">
-          <img src={previewSrc} alt="Plant" className="w-100" style={{ height: 160, objectFit: 'contain' }} />
-          <Button variant="dark" size="sm" className="position-absolute top-0 end-0 m-1 rounded-circle p-0" style={{ width: 24, height: 24 }} onClick={handleRemoveImage}>
-            <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
+          <img
+            src={previewSrc}
+            alt={analysisResult?.species ? `Photo of ${analysisResult.species}` : 'Uploaded plant photo'}
+            className="w-100"
+            style={{ height: 160, objectFit: 'contain' }}
+          />
+          <Button
+            variant="dark" size="sm"
+            className="position-absolute top-0 end-0 m-1 rounded-circle p-0"
+            style={{ width: 24, height: 24 }}
+            onClick={handleRemoveImage}
+            aria-label="Remove photo"
+          >
+            <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#x"></use></svg>
           </Button>
           {isAnalysing && (
             <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
