@@ -139,6 +139,10 @@ function userConfig(userId) {
   return db.collection('users').doc(userId).collection('config');
 }
 
+function userPropagations(userId) {
+  return db.collection('users').doc(userId).collection('propagations');
+}
+
 // Return a signed read URL valid for 1 hour, or null if no image.
 async function signReadUrl(urlOrPath) {
   const path = gcsPath(urlOrPath);
@@ -3037,6 +3041,182 @@ app.get('/account/export', requireUser, async (req, res) => {
       plants,
       floors,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Propagation tracker ───────────────────────────────────────────────────────
+const PROPAGATION_METHODS = new Set(['seed', 'cutting', 'division', 'layering', 'grafting']);
+const PROPAGATION_STATUSES = new Set(['sown', 'germinated', 'rooted', 'ready', 'transplanted', 'failed']);
+
+// Allowed next-statuses per method (state machine)
+const PROPAGATION_TRANSITIONS = {
+  seed:     ['sown', 'germinated', 'ready', 'transplanted', 'failed'],
+  cutting:  ['rooted', 'ready', 'transplanted', 'failed'],
+  division: ['rooted', 'ready', 'transplanted', 'failed'],
+  layering: ['rooted', 'ready', 'transplanted', 'failed'],
+  grafting: ['rooted', 'ready', 'transplanted', 'failed'],
+};
+
+function initialStatus(method) {
+  return method === 'seed' ? 'sown' : 'rooted';
+}
+
+// GET /propagations — list all batches for the current user
+app.get('/propagations', requireUser, async (req, res) => {
+  try {
+    const snap = await userPropagations(req.userId)
+      .orderBy('startDate', 'desc')
+      .get();
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    res.status(200).json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /propagations — create a propagation batch
+app.post('/propagations', requireUser, async (req, res) => {
+  try {
+    const { method, species, source, startDate, batchSize, expectedDays, notes, parentPlantId } = req.body;
+    if (!method || !PROPAGATION_METHODS.has(method)) {
+      return res.status(400).json({ error: `method must be one of: ${[...PROPAGATION_METHODS].join(', ')}` });
+    }
+    if (!species || typeof species !== 'string' || !species.trim()) {
+      return res.status(400).json({ error: 'species is required' });
+    }
+    const now = new Date().toISOString();
+    const data = {
+      method,
+      species: species.trim(),
+      source: source?.trim() || null,
+      startDate: startDate || now.slice(0, 10),
+      batchSize: Number(batchSize) > 0 ? Number(batchSize) : 1,
+      expectedDays: expectedDays ? Number(expectedDays) : null,
+      status: initialStatus(method),
+      notes: notes?.trim() || null,
+      parentPlantId: parentPlantId || null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const ref = await userPropagations(req.userId).add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /propagations/:id — update fields or advance status
+app.put('/propagations/:id', requireUser, async (req, res) => {
+  try {
+    const ref = userPropagations(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Propagation not found' });
+
+    const current = doc.data();
+    const allowed = ['species', 'source', 'batchSize', 'expectedDays', 'notes', 'status', 'startDate'];
+    const updates = {};
+    for (const key of allowed) {
+      if (key in req.body) updates[key] = req.body[key];
+    }
+
+    if (updates.status) {
+      if (!PROPAGATION_STATUSES.has(updates.status)) {
+        return res.status(400).json({ error: `Invalid status. Must be one of: ${[...PROPAGATION_STATUSES].join(', ')}` });
+      }
+      const validNext = PROPAGATION_TRANSITIONS[current.method] || [];
+      if (!validNext.includes(updates.status)) {
+        return res.status(400).json({ error: `Status '${updates.status}' is not valid for method '${current.method}'` });
+      }
+    }
+
+    updates.updatedAt = new Date().toISOString();
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: doc.id, ...current, ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /propagations/:id/promote — promote batch to one or more Plant records
+app.post('/propagations/:id/promote', requireUser, async (req, res) => {
+  try {
+    const propRef = userPropagations(req.userId).doc(req.params.id);
+    const propDoc = await propRef.get();
+    if (!propDoc.exists) return res.status(404).json({ error: 'Propagation not found' });
+
+    const prop = propDoc.data();
+    const { name, room, floor, x, y, count = 1 } = req.body;
+    if (!name || !name.trim()) return res.status(400).json({ error: 'name is required for the new plant' });
+
+    const now = new Date().toISOString();
+    const newPlants = [];
+
+    for (let i = 0; i < Math.min(Number(count) || 1, prop.batchSize); i++) {
+      const plantName = count > 1 ? `${name.trim()} ${i + 1}` : name.trim();
+      const plantData = {
+        name: plantName,
+        species: prop.species,
+        room: room || null,
+        floor: floor || null,
+        x: x || null,
+        y: y || null,
+        health: 'Good',
+        parentPropagationId: propDoc.id,
+        parentPlantId: prop.parentPlantId || null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const plantRef = await userPlants(req.userId).add(plantData);
+      newPlants.push({ id: plantRef.id, ...plantData });
+    }
+
+    // Mark propagation as transplanted
+    await propRef.set({ status: 'transplanted', updatedAt: now }, { merge: true });
+
+    res.status(201).json({ promoted: newPlants, propagation: { id: propDoc.id, ...prop, status: 'transplanted' } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /propagations/:id
+app.delete('/propagations/:id', requireUser, async (req, res) => {
+  try {
+    const ref = userPropagations(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Propagation not found' });
+    await ref.delete();
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /recommend-propagation — Gemini-powered germination / rooting protocol
+app.post('/recommend-propagation', requireUser, async (req, res) => {
+  try {
+    const { species, method } = req.body;
+    if (!species || !method) return res.status(400).json({ error: 'species and method are required' });
+
+    const prompt = `You are a propagation expert. Give a concise propagation protocol for "${species}" using the "${method}" method.
+Return ONLY valid JSON matching this schema:
+{
+  "temperatureC": { "min": number, "max": number },
+  "mediumRecommendation": "string (e.g. 'perlite/peat mix')",
+  "humidityPercent": number,
+  "lightRequirement": "string (e.g. 'bright indirect')",
+  "expectedDays": number,
+  "steps": ["step 1", "step 2", "step 3", "step 4"],
+  "successTips": ["tip 1", "tip 2"],
+  "commonFailures": ["failure 1", "failure 2"]
+}`;
+
+    const result = await geminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
+    const text = result.response.candidates[0].content.parts[0].text;
+    const protocol = parseGeminiJson(text);
+    res.status(200).json({ species, method, protocol });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

@@ -3559,3 +3559,150 @@ describe('POST /outbreaks/:outbreakId/treat', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// ── Propagation tracker ───────────────────────────────────────────────────────
+
+const propPath = id => `users/${USER_SUB}/propagations/${id}`;
+
+describe('GET /propagations', () => {
+  it('returns empty array when no propagations exist', async () => {
+    const res = await request(app).get('/propagations').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('returns propagations sorted by startDate desc', async () => {
+    store[propPath('p1')] = { method: 'seed', species: 'Tomato', startDate: '2026-04-01', status: 'sown' };
+    store[propPath('p2')] = { method: 'cutting', species: 'Basil', startDate: '2026-04-10', status: 'rooted' };
+    const res = await request(app).get('/propagations').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body[0].startDate).toBe('2026-04-10');
+    expect(res.body[1].startDate).toBe('2026-04-01');
+  });
+});
+
+describe('POST /propagations', () => {
+  it('creates a seed propagation with status sown', async () => {
+    const res = await request(app).post('/propagations')
+      .send({ method: 'seed', species: 'Basil', batchSize: 6 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('sown');
+    expect(res.body.batchSize).toBe(6);
+  });
+
+  it('creates a cutting propagation with status rooted', async () => {
+    const res = await request(app).post('/propagations')
+      .send({ method: 'cutting', species: 'Mint' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe('rooted');
+  });
+
+  it('rejects unknown method', async () => {
+    const res = await request(app).post('/propagations')
+      .send({ method: 'magic', species: 'Fern' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects missing species', async () => {
+    const res = await request(app).post('/propagations')
+      .send({ method: 'seed' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('PUT /propagations/:id', () => {
+  it('advances status for seed (sown → germinated)', async () => {
+    store[propPath('x1')] = { method: 'seed', species: 'Pepper', status: 'sown', batchSize: 3 };
+    const res = await request(app).put('/propagations/x1')
+      .send({ status: 'germinated' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('germinated');
+  });
+
+  it('rejects invalid status value', async () => {
+    store[propPath('x2')] = { method: 'seed', species: 'Pepper', status: 'sown' };
+    const res = await request(app).put('/propagations/x2')
+      .send({ status: 'sprouted' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects status not valid for method (germinated on cutting)', async () => {
+    store[propPath('x3')] = { method: 'cutting', species: 'Mint', status: 'rooted' };
+    const res = await request(app).put('/propagations/x3')
+      .send({ status: 'germinated' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for unknown propagation', async () => {
+    const res = await request(app).put('/propagations/nope')
+      .send({ status: 'ready' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /propagations/:id/promote', () => {
+  it('creates a new plant with lineage link and marks propagation transplanted', async () => {
+    store[propPath('pr1')] = {
+      method: 'cutting', species: 'Mint', status: 'ready', batchSize: 2,
+      parentPlantId: null, startDate: '2026-04-01',
+    };
+    const res = await request(app).post('/propagations/pr1/promote')
+      .send({ name: 'Kitchen Mint', room: 'Kitchen', count: 1 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.promoted).toHaveLength(1);
+    expect(res.body.promoted[0].parentPropagationId).toBe('pr1');
+    expect(res.body.promoted[0].species).toBe('Mint');
+    expect(store[propPath('pr1')].status).toBe('transplanted');
+  });
+
+  it('creates multiple plants when count > 1', async () => {
+    store[propPath('pr2')] = {
+      method: 'seed', species: 'Tomato', status: 'ready', batchSize: 4, parentPlantId: null,
+    };
+    const res = await request(app).post('/propagations/pr2/promote')
+      .send({ name: 'Tomato', count: 3 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.promoted).toHaveLength(3);
+    expect(res.body.promoted[0].name).toBe('Tomato 1');
+    expect(res.body.promoted[2].name).toBe('Tomato 3');
+  });
+
+  it('rejects promote without name', async () => {
+    store[propPath('pr3')] = { method: 'seed', species: 'Basil', status: 'ready', batchSize: 1 };
+    const res = await request(app).post('/propagations/pr3/promote')
+      .send({})
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for unknown propagation', async () => {
+    const res = await request(app).post('/propagations/nope/promote')
+      .send({ name: 'Plant' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('DELETE /propagations/:id', () => {
+  it('deletes an existing propagation', async () => {
+    store[propPath('d1')] = { method: 'seed', species: 'Basil', status: 'sown' };
+    const res = await request(app).delete('/propagations/d1').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(store[propPath('d1')]).toBeUndefined();
+  });
+
+  it('returns 404 for unknown propagation', async () => {
+    const res = await request(app).delete('/propagations/nope').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});

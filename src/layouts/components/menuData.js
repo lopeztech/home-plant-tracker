@@ -4,6 +4,7 @@ export const menuItems = [
   { key: 'overview', label: 'Overview', isTitle: true },
   { key: 'today', label: 'Today', icon: '/icons/sprite.svg#check-circle', url: '/today' },
   { key: 'dashboard', label: 'Garden', icon: '/icons/sprite.svg#home', url: '/' },
+  { key: 'propagation', label: 'Propagation', icon: '/icons/sprite.svg#git-branch', url: '/propagation' },
   { key: 'analytics', label: 'Analytics', icon: '/icons/sprite.svg#bar-chart-2', url: '/analytics' },
   { key: 'calendar', label: 'Care Calendar', icon: '/icons/sprite.svg#calendar', url: '/calendar' },
   { key: 'forecast', label: 'Forecast', icon: '/icons/sprite.svg#cloud', url: '/forecast' },

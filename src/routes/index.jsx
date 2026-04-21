@@ -17,6 +17,7 @@ const PricingPage = lazy(() => import('../pages/PricingPage.jsx'))
 const PrivacyPage = lazy(() => import('../pages/PrivacyPage.jsx'))
 const TermsPage = lazy(() => import('../pages/TermsPage.jsx'))
 const ScanPage = lazy(() => import('../pages/ScanPage.jsx'))
+const PropagationPage = lazy(() => import('../pages/PropagationPage.jsx'))
 
 const mlInsightsEnabled = import.meta.env.VITE_ML_INSIGHTS_ENABLED === 'true'
 
@@ -35,6 +36,7 @@ export const routes = [
     children: [
       { index: true, element: <DashboardPage /> },
       { path: 'today', element: <TodayPage /> },
+      { path: 'propagation', element: <PropagationPage /> },
       { path: 'plants', element: <Navigate to="/?view=list" replace /> },
       { path: 'analytics', element: <AnalyticsPage /> },
       { path: 'calendar', element: <CalendarPage /> },
