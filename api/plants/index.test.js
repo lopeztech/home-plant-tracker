@@ -3032,3 +3032,172 @@ describe('GET /account/export', () => {
     expect(res.body.plants[0].imageUrl).toBe('https://storage.googleapis.com/undefined/plants/lily.jpg');
   });
 });
+
+// ── GET /plants/:id/harvests ──────────────────────────────────────────────────
+
+describe('GET /plants/:id/harvests', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/plants/p1/harvests');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .get('/plants/missing/harvests')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns empty array when no harvests exist', async () => {
+    store[plantPath('p1')] = { name: 'Tomato' };
+    const res = await request(app)
+      .get('/plants/p1/harvests')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('returns harvest entries sorted newest-first', async () => {
+    store[plantPath('p1')] = {
+      name: 'Tomato',
+      harvestLog: [
+        { id: 'h1', date: '2026-01-01', quantity: 1, unit: 'kg' },
+        { id: 'h2', date: '2026-03-01', quantity: 2, unit: 'kg' },
+      ],
+    };
+    const res = await request(app)
+      .get('/plants/p1/harvests')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body[0].id).toBe('h2');
+    expect(res.body[1].id).toBe('h1');
+  });
+});
+
+// ── POST /plants/:id/harvests ─────────────────────────────────────────────────
+
+describe('POST /plants/:id/harvests', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).post('/plants/p1/harvests').send({ quantity: 1, unit: 'kg' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .post('/plants/missing/harvests')
+      .send({ quantity: 1, unit: 'kg' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when quantity is missing', async () => {
+    store[plantPath('p1')] = { name: 'Tomato' };
+    const res = await request(app)
+      .post('/plants/p1/harvests')
+      .send({ unit: 'kg' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/quantity/i);
+  });
+
+  it('returns 400 when unit is invalid', async () => {
+    store[plantPath('p1')] = { name: 'Tomato' };
+    const res = await request(app)
+      .post('/plants/p1/harvests')
+      .send({ quantity: 1, unit: 'gallons' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/unit/i);
+  });
+
+  it('returns 400 when quality is out of range', async () => {
+    store[plantPath('p1')] = { name: 'Tomato' };
+    const res = await request(app)
+      .post('/plants/p1/harvests')
+      .send({ quantity: 1, unit: 'kg', quality: 6 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/quality/i);
+  });
+
+  it('creates a harvest entry and returns 201', async () => {
+    store[plantPath('p1')] = { name: 'Tomato' };
+    const res = await request(app)
+      .post('/plants/p1/harvests')
+      .send({ date: '2026-07-15', quantity: 2.5, unit: 'kg', quality: 4, notes: 'Best batch yet' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.quantity).toBe(2.5);
+    expect(res.body.unit).toBe('kg');
+    expect(res.body.quality).toBe(4);
+    expect(res.body.notes).toBe('Best batch yet');
+    expect(res.body.id).toBeDefined();
+  });
+
+  it('persists harvest entry to the plant document', async () => {
+    store[plantPath('p1')] = { name: 'Tomato' };
+    await request(app)
+      .post('/plants/p1/harvests')
+      .send({ quantity: 500, unit: 'g' })
+      .set('Authorization', authHeader());
+    const saved = store[plantPath('p1')];
+    expect(saved.harvestLog).toHaveLength(1);
+    expect(saved.harvestLog[0].quantity).toBe(500);
+    expect(saved.harvestLog[0].unit).toBe('g');
+  });
+
+  it('accepts count and bunches units', async () => {
+    store[plantPath('p1')] = { name: 'Herb' };
+    const r1 = await request(app)
+      .post('/plants/p1/harvests')
+      .send({ quantity: 10, unit: 'count' })
+      .set('Authorization', authHeader());
+    expect(r1.status).toBe(201);
+    const r2 = await request(app)
+      .post('/plants/p1/harvests')
+      .send({ quantity: 3, unit: 'bunches' })
+      .set('Authorization', authHeader());
+    expect(r2.status).toBe(201);
+  });
+});
+
+// ── DELETE /plants/:id/harvests/:harvestId ────────────────────────────────────
+
+describe('DELETE /plants/:id/harvests/:harvestId', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).delete('/plants/p1/harvests/h1');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .delete('/plants/missing/harvests/h1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('removes the harvest entry and returns 200', async () => {
+    store[plantPath('p1')] = {
+      name: 'Tomato',
+      harvestLog: [
+        { id: 'h1', quantity: 1, unit: 'kg' },
+        { id: 'h2', quantity: 2, unit: 'kg' },
+      ],
+    };
+    const res = await request(app)
+      .delete('/plants/p1/harvests/h1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(true);
+    expect(store[plantPath('p1')].harvestLog).toHaveLength(1);
+    expect(store[plantPath('p1')].harvestLog[0].id).toBe('h2');
+  });
+
+  it('is idempotent — deleting a non-existent id still returns 200', async () => {
+    store[plantPath('p1')] = { name: 'Tomato', harvestLog: [] };
+    const res = await request(app)
+      .delete('/plants/p1/harvests/nonexistent')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+  });
+});

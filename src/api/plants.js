@@ -198,6 +198,12 @@ export const journalApi = {
   delete: (id, entryId) => request(`/plants/${id}/journal/${entryId}`, { method: 'DELETE' }),
 }
 
+export const harvestApi = {
+  list: (id) => request(`/plants/${id}/harvests`),
+  add: (id, data) => request(`/plants/${id}/harvests`, { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id, harvestId) => request(`/plants/${id}/harvests/${harvestId}`, { method: 'DELETE' }),
+}
+
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),
