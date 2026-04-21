@@ -417,7 +417,9 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Care'))
     fireEvent.click(screen.getByRole('button', { name: /get recommendations|refresh/i }))
-    expect(await screen.findByText(/network error/i)).toBeInTheDocument()
+    // Raw "Network error" is mapped to friendly recovery copy.
+    expect(await screen.findByText(/check your connection/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^network error$/i)).not.toBeInTheDocument()
   })
 
   it('surfaces a friendly message when a jsonrepair-style parse error bubbles up', async () => {

@@ -37,21 +37,23 @@ describe('ErrorBoundary', () => {
   })
 
   it('allows recovery by clicking the action button', () => {
-    function Controlled({ state }) {
+    function Controlled({ shouldThrow }) {
       return (
         <ErrorBoundary>
-          <Boom shouldThrow={state.throw} />
+          <Boom shouldThrow={shouldThrow} />
         </ErrorBoundary>
       )
     }
-    const state = { throw: true }
-    const { rerender } = render(<Controlled state={state} />)
+    const { rerender } = render(<Controlled shouldThrow={true} />)
     expect(screen.getByText(/couldn.t reach the server/i)).toBeInTheDocument()
 
-    state.throw = false
-    // Reset boundary state by clicking the primary action.
+    // Re-render with non-throwing children BEFORE clicking — otherwise the
+    // stale captured element still throws on the boundary's reset render.
+    rerender(<Controlled shouldThrow={false} />)
+    // Boundary is still showing the fallback until we explicitly reset its
+    // internal error state via the action button.
+    expect(screen.getByText(/couldn.t reach the server/i)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /retry/i }))
-    rerender(<Controlled state={state} />)
     expect(screen.getByText('all good')).toBeInTheDocument()
   })
 })

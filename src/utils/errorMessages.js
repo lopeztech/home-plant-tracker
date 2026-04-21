@@ -61,7 +61,7 @@ export function toFriendlyError(err, opts = {}) {
     }
   }
 
-  if (/failed to fetch|networkerror|load failed|network request failed|ERR_NETWORK/i.test(raw)) {
+  if (/failed to fetch|networkerror|network error|load failed|network request failed|ERR_NETWORK/i.test(raw)) {
     return {
       title: "Couldn't reach the server",
       message: 'Check your connection — the internet blinked while we were talking to the server.',
@@ -158,7 +158,7 @@ export function toFriendlyError(err, opts = {}) {
   if (/position \d+/i.test(raw) && /object key|expected/i.test(raw)) {
     return {
       title: 'The AI gave an unexpected response',
-      message: 'Our plant assistant got confused. Try again in a moment.',
+      message: 'Our plant assistant got confused — please try again in a moment.',
       action: 'Try again',
       kind: 'transient',
       isRetryable: true,
