@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { Badge, Button } from 'react-bootstrap'
+import { useLocation } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
@@ -15,6 +16,7 @@ export default function DashboardPage() {
   const [outbreaks, setOutbreaks] = useState([])
   const [bulkTreating, setBulkTreating] = useState(null)
   const [bulkTreatInput, setBulkTreatInput] = useState('')
+  const location = useLocation()
 
   useEffect(() => {
     if (isGuest) return
@@ -36,6 +38,22 @@ export default function DashboardPage() {
       setBulkTreatInput('')
     } catch (err) { console.error('Bulk treat failed:', err) }
   }, [bulkTreatInput])
+
+  useEffect(() => {
+    const state = location.state
+    if (!state) return
+    if (state.openPlantId && plants.length > 0) {
+      setEditingPlantId(state.openPlantId)
+      setPendingPosition(null)
+      setShowPlantModal(true)
+      window.history.replaceState({}, '')
+    } else if (state.addPlant) {
+      setPendingPosition({ x: 50, y: 50 })
+      setEditingPlantId(null)
+      setShowPlantModal(true)
+      window.history.replaceState({}, '')
+    }
+  }, [location.state, plants])
 
   const hasFloors = floors.length > 0
 

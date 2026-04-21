@@ -1,9 +1,11 @@
 import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import { useHelp } from '../../context/HelpContext.jsx'
+import { useCommandPalette } from '../../context/CommandPaletteContext.jsx'
 
 export default function Topbar() {
   const { showBackdrop, hideBackdrop } = useLayoutContext()
   const { open: openHelp } = useHelp()
+  const { open: openPalette } = useCommandPalette()
 
   const toggleMobileMenu = () => {
     const isOpen = document.documentElement.classList.toggle('app-mobile-menu-open')
@@ -20,6 +22,17 @@ export default function Topbar() {
           </svg>
         </button>
       </div>
+      <button
+        type="button"
+        className="btn btn-system"
+        onClick={openPalette}
+        aria-label="Open command palette"
+        title="Search (⌘K)"
+      >
+        <svg className="sa-icon sa-icon-2x" aria-hidden="true">
+          <use href="/icons/sprite.svg#search"></use>
+        </svg>
+      </button>
       <button
         type="button"
         className="btn btn-system"
