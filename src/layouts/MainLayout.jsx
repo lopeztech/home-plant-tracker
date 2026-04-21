@@ -1,8 +1,9 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { Outlet, Navigate } from 'react-router'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
 import { HelpProvider } from '../context/HelpContext.jsx'
+import { CommandPaletteProvider, useCommandPalette } from '../context/CommandPaletteContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
 import Onboarding from '../components/Onboarding.jsx'
@@ -10,7 +11,23 @@ import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import OfflineBanner from '../components/OfflineBanner.jsx'
 import HelpDrawer from '../components/HelpDrawer.jsx'
+import CommandPalette from '../components/CommandPalette.jsx'
 import { SkeletonRect, SkeletonText } from '../components/Skeleton.jsx'
+
+function GlobalKeyboardShortcuts() {
+  const { open } = useCommandPalette()
+  useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        open()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open])
+  return null
+}
 
 function PageSkeleton() {
   return (
@@ -42,12 +59,15 @@ export default function MainLayout() {
   return (
     <PlantProvider>
       <HelpProvider>
-        <div className="app-wrap set-header-fixed">
-          <Topbar />
-          <Sidebar />
-          <main className="app-body">
-            <div className="app-content">
-              <OfflineBanner />
+        <CommandPaletteProvider>
+          <GlobalKeyboardShortcuts />
+          <CommandPalette />
+          <div className="app-wrap set-header-fixed">
+            <Topbar />
+            <Sidebar />
+            <main className="app-body">
+              <div className="app-content">
+                <OfflineBanner />
               <div className="px-3 pt-3">
                 <WeatherAlertBanner />
               </div>
@@ -76,6 +96,7 @@ export default function MainLayout() {
           <Onboarding />
           <HelpDrawer />
         </div>
+        </CommandPaletteProvider>
       </HelpProvider>
     </PlantProvider>
   )
