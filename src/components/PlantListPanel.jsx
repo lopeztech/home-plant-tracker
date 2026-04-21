@@ -6,6 +6,7 @@ import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS, getSeason, isOutdoor } 
 import { derivePlantName } from '../utils/plantName.js'
 import { fanOut } from '../utils/concurrency.js'
 import PlantIcon from './PlantIcon.jsx'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 const RECOMMENDATION_HISTORY_LIMIT = 20
 const BATCH_CONCURRENCY = 3
@@ -93,7 +94,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
       setRecalcResult(data)
       // Reload plants to reflect new frequencies
       window.location.reload()
-    } catch (err) { setRecalcResult({ error: err.message }) }
+    } catch (err) { setRecalcResult({ error: friendlyErrorMessage(err, { context: 'recalculating watering frequencies' }) }) }
     finally { setRecalculating(false) }
   }, [weather])
 

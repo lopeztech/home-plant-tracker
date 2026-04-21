@@ -6,6 +6,7 @@ import FeedRecordModal from '../components/FeedRecordModal.jsx'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import { getPlantEmoji } from '../utils/plantEmoji.js'
 import { buildWaterTasks, buildFeedTasks, setSnooze, clampSnooze } from '../utils/todayTasks.js'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 const SNOOZE_PRESETS = [
   { label: '1 day',   days: 1 },
@@ -46,7 +47,7 @@ export default function TodayPage() {
       await handleWaterPlant(plantId)
       toast.success('Marked watered')
     } catch (err) {
-      toast.error(err.message || 'Failed to mark watered')
+      toast.error(friendlyErrorMessage(err, { context: 'marking watered' }))
     } finally {
       setBusy(false)
     }
@@ -60,7 +61,7 @@ export default function TodayPage() {
       const count = await handleBatchWater(ids)
       toast.success(`Marked ${count} watered`)
     } catch (err) {
-      toast.error(err.message || 'Failed to mark watered')
+      toast.error(friendlyErrorMessage(err, { context: 'marking watered' }))
     } finally {
       setBusy(false)
     }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { plantsApi, imagesApi, floorsApi, analyseApi, flushOfflineMutations, OfflineQueuedError } from '../api/plants.js'
 import { subscribe as subscribeOfflineQueue, size as offlineQueueSize } from '../utils/offlineQueue.js'
@@ -6,6 +6,7 @@ import { useWeather } from '../hooks/useWeather.js'
 import { useTempUnit } from '../hooks/useTempUnit.js'
 import { getWateringStatus, isOutdoor } from '../utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from '../data/guestData.js'
+import { toFriendlyError } from '../utils/errorMessages.js'
 
 const DEFAULT_FLOORS = []
 
@@ -93,31 +94,26 @@ export function PlantProvider({ children }) {
     }
   }, [weather?.current?.condition?.sky, plants.length, floors, isGuest])
 
-  useEffect(() => {
-    if (!isAuthenticated) return
-    if (isGuest) {
-      setPlants(GUEST_PLANTS)
-      setFloors(GUEST_FLOORS)
-      setActiveFloorId('ground')
-      return
-    }
-    setPlants([])
-    setFloors(DEFAULT_FLOORS)
+  // Track the latest `logout` without re-triggering `reloadPlants` memo
+  // (AuthContext doesn't memoize its functions).
+  const logoutRef = useRef(logout)
+  useEffect(() => { logoutRef.current = logout }, [logout])
+
+  const reloadPlants = useCallback(() => {
+    if (!isAuthenticated || isGuest) return Promise.resolve()
     setPlantsLoading(true)
     setPlantsError(null)
 
     const loadPlants = plantsApi.list()
       .then(setPlants)
       .catch((err) => {
-        const msg = err.message || ''
-        const isAuthError = msg.includes('NetworkError') || msg.includes('Failed to fetch')
-          || msg.includes('Load failed') || msg.includes('401') || msg.includes('403')
-        if (isAuthError) {
-          setPlantsError('Session expired. Please sign in again.')
-          logout()
+        const friendly = toFriendlyError(err, { context: 'plants' })
+        if (friendly.kind === 'auth') {
+          setPlantsError(friendly)
+          logoutRef.current()
           return
         }
-        setPlantsError(msg)
+        setPlantsError(friendly)
       })
 
     const loadFloors = floorsApi.get()
@@ -137,8 +133,21 @@ export function PlantProvider({ children }) {
       })
       .catch(() => {})
 
-    Promise.all([loadPlants, loadFloors]).finally(() => setPlantsLoading(false))
+    return Promise.all([loadPlants, loadFloors]).finally(() => setPlantsLoading(false))
   }, [isAuthenticated, isGuest])
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    if (isGuest) {
+      setPlants(GUEST_PLANTS)
+      setFloors(GUEST_FLOORS)
+      setActiveFloorId('ground')
+      return
+    }
+    setPlants([])
+    setFloors(DEFAULT_FLOORS)
+    reloadPlants()
+  }, [isAuthenticated, isGuest, reloadPlants])
 
   const handleSavePlant = useCallback(async (plantData, editingPlant, pendingPosition) => {
     const data = {
@@ -389,7 +398,7 @@ export function PlantProvider({ children }) {
   }, [activeFloorId, isGuest])
 
   const value = useMemo(() => ({
-    plants, plantsLoading, plantsError,
+    plants, plantsLoading, plantsError, reloadPlants,
     floors, activeFloorId, setActiveFloorId,
     weather, locationDenied, location, setLocation, tempUnit,
     overdueCount, isAnalysingFloorplan,
@@ -401,7 +410,7 @@ export function PlantProvider({ children }) {
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
   }), [
-    plants, plantsLoading, plantsError, floors, activeFloorId,
+    plants, plantsLoading, plantsError, reloadPlants, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
     isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,

@@ -4,6 +4,7 @@ import { Link } from 'react-router'
 import { useSubscription } from '../context/SubscriptionContext.jsx'
 import { billingApi } from '../api/plants.js'
 import { useToast } from '../components/Toast.jsx'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 const TIER_LABEL = {
   free:           'Free',
@@ -39,7 +40,7 @@ export default function BillingPage() {
       const { url } = await billingApi.createPortalSession()
       window.location.assign(url)
     } catch (err) {
-      toast.error(err.message || 'Failed to open billing portal')
+      toast.error(friendlyErrorMessage(err, { context: 'opening the billing portal' }))
     } finally {
       setBusy(false)
     }
@@ -51,7 +52,7 @@ export default function BillingPage() {
       const { url } = await billingApi.createCheckoutSession(targetTier, 'month')
       window.location.assign(url)
     } catch (err) {
-      toast.error(err.message || 'Failed to start checkout')
+      toast.error(friendlyErrorMessage(err, { context: 'starting checkout' }))
     } finally {
       setBusy(false)
     }
