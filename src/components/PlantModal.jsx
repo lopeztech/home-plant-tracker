@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
-import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi } from '../api/plants.js'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
@@ -226,6 +226,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     potSize: null, soilType: null, potMaterial: null,
     plantedIn: null,
     emoji: null,
+    category: null,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -273,6 +274,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [journalError, setJournalError] = useState(null)
   const [editingEntryId, setEditingEntryId] = useState(null)
   const [editingBody, setEditingBody] = useState('')
+
+  // Harvest tab state
+  const [harvestEntries, setHarvestEntries] = useState(
+    () => [...(plant?.harvestLog || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
+  )
+  const [newHarvest, setNewHarvest] = useState({ date: new Date().toISOString().slice(0, 10), quantity: '', unit: 'kg', quality: '', notes: '' })
+  const [harvestSaving, setHarvestSaving] = useState(false)
+  const [harvestError, setHarvestError] = useState(null)
 
   // Validation + unsaved-change guard state. `isDirty` is set by user-initiated
   // edits only (not programmatic resyncs like the wateringRec effect).
@@ -337,6 +346,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         potMaterial: plant.potMaterial || null,
         plantedIn: plant.plantedIn || null,
         emoji: plant.emoji || null,
+        category: plant.category || null,
       })
     }
   }, [plant, activeFloorId])
@@ -425,6 +435,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       potMaterial: form.plantedIn === 'pot' ? form.potMaterial : null,
       plantedIn: form.plantedIn,
       emoji: form.emoji || null,
+      category: form.category || null,
     })
     setIsDirty(false)
     setIsSaving(false)
@@ -445,6 +456,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
   // Keyboard navigation between tabs (Left/Right, Home/End) per WAI-ARIA
   // Tabs Pattern.
+  const isEdiblePlant = form.category === 'edible'
+
   const TABS = useMemo(
     () => [
       { id: 'edit', label: 'Plant' },
@@ -452,8 +465,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       { id: 'care', label: 'Care' },
       { id: 'growth', label: 'Growth' },
       { id: 'journal', label: 'Journal' },
+      ...(isEdiblePlant ? [{ id: 'harvest', label: 'Harvest' }] : []),
     ],
-    [],
+    [isEdiblePlant],
   )
 
   const handleTabKeyDown = useCallback((e, index) => {
@@ -575,6 +589,36 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       setEditingBody('')
     } catch (err) { console.error('Update journal entry failed:', err) }
   }, [editingBody, plant])
+
+  const handleAddHarvest = useCallback(async () => {
+    const { date, quantity, unit, quality, notes } = newHarvest
+    if (!quantity || isNaN(Number(quantity)) || Number(quantity) <= 0) {
+      setHarvestError('Quantity must be a positive number.')
+      return
+    }
+    setHarvestSaving(true)
+    setHarvestError(null)
+    try {
+      const entry = await harvestApi.add(plant.id, {
+        date, quantity: Number(quantity), unit,
+        quality: quality ? Number(quality) : null,
+        notes: notes.trim() || null,
+      })
+      setHarvestEntries(prev => [entry, ...prev])
+      setNewHarvest({ date: new Date().toISOString().slice(0, 10), quantity: '', unit: 'kg', quality: '', notes: '' })
+    } catch (err) {
+      setHarvestError(friendlyErrorMessage(err))
+    } finally {
+      setHarvestSaving(false)
+    }
+  }, [newHarvest, plant])
+
+  const handleDeleteHarvest = useCallback(async (harvestId) => {
+    try {
+      await harvestApi.delete(plant.id, harvestId)
+      setHarvestEntries(prev => prev.filter(e => e.id !== harvestId))
+    } catch (err) { console.error('Delete harvest entry failed:', err) }
+  }, [plant])
 
   const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
 
@@ -890,6 +934,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                     </Form.Group>
                   </Col>
                 </Row>
+                <Form.Group className="mb-3">
+                  <Form.Label>Plant Category</Form.Label>
+                  <Form.Select value={form.category || ''} onChange={(e) => update('category', e.target.value || null)}>
+                    <option value="">— General —</option>
+                    <option value="edible">Edible (vegetables, herbs, fruit)</option>
+                    <option value="ornamental">Ornamental</option>
+                    <option value="succulent">Succulent / Cactus</option>
+                    <option value="tropical">Tropical / Houseplant</option>
+                    <option value="tree">Tree / Shrub</option>
+                  </Form.Select>
+                </Form.Group>
                 <Form.Group className="mb-3">
                   <Form.Label>
                     Planted In <span className="text-muted fs-xs">(shapes the watering advice)</span>
@@ -1669,6 +1724,111 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           ) : (
             <p className="text-muted text-center py-3 mb-0 fs-sm">
               No journal entries yet. Start recording observations, moves, and milestones for this plant.
+            </p>
+          )}
+        </Modal.Body>
+      )}
+
+      {/* ── Harvest tab ──────────────────────────────────────────────────── */}
+      {isEditing && activeTab === 'harvest' && (
+        <Modal.Body role="tabpanel" id="plant-tabpanel-harvest" aria-labelledby="plant-tab-harvest">
+          <div className="mb-4">
+            <h6 className="fw-500 mb-2">Log Harvest</h6>
+            <Row className="g-2 mb-2">
+              <Col xs={12} sm={4}>
+                <Form.Group controlId="harvest-date">
+                  <Form.Label visuallyHidden>Date</Form.Label>
+                  <Form.Control
+                    type="date"
+                    value={newHarvest.date}
+                    onChange={e => setNewHarvest(h => ({ ...h, date: e.target.value }))}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={6} sm={4}>
+                <Form.Group controlId="harvest-quantity">
+                  <Form.Label visuallyHidden>Quantity</Form.Label>
+                  <Form.Control
+                    type="number"
+                    min="0.001"
+                    step="any"
+                    placeholder="Quantity"
+                    value={newHarvest.quantity}
+                    onChange={e => setNewHarvest(h => ({ ...h, quantity: e.target.value }))}
+                  />
+                </Form.Group>
+              </Col>
+              <Col xs={6} sm={4}>
+                <Form.Select value={newHarvest.unit} onChange={e => setNewHarvest(h => ({ ...h, unit: e.target.value }))}>
+                  <option value="g">g</option>
+                  <option value="kg">kg</option>
+                  <option value="oz">oz</option>
+                  <option value="lb">lb</option>
+                  <option value="count">count</option>
+                  <option value="bunches">bunches</option>
+                </Form.Select>
+              </Col>
+            </Row>
+            <Row className="g-2 mb-2">
+              <Col xs={12} sm={6}>
+                <Form.Select value={newHarvest.quality} onChange={e => setNewHarvest(h => ({ ...h, quality: e.target.value }))}>
+                  <option value="">Quality (optional)</option>
+                  <option value="5">⭐⭐⭐⭐⭐ Excellent</option>
+                  <option value="4">⭐⭐⭐⭐ Good</option>
+                  <option value="3">⭐⭐⭐ Average</option>
+                  <option value="2">⭐⭐ Below average</option>
+                  <option value="1">⭐ Poor</option>
+                </Form.Select>
+              </Col>
+              <Col xs={12} sm={6}>
+                <Form.Control
+                  type="text"
+                  placeholder="Notes (optional)"
+                  value={newHarvest.notes}
+                  onChange={e => setNewHarvest(h => ({ ...h, notes: e.target.value }))}
+                />
+              </Col>
+            </Row>
+            {harvestError && <div className="text-danger fs-xs mb-2">{harvestError}</div>}
+            <Button variant="primary" size="sm" onClick={handleAddHarvest} disabled={harvestSaving || !newHarvest.quantity}>
+              {harvestSaving && <Spinner size="sm" className="me-1" />}
+              Log Harvest
+            </Button>
+          </div>
+
+          {harvestEntries.length > 0 ? (
+            <div>
+              <h6 className="fw-500 mb-2">
+                History ({harvestEntries.length})
+                <span className="text-muted fs-xs fw-400 ms-2">
+                  Total:{' '}
+                  {(() => {
+                    const byUnit = {}
+                    harvestEntries.forEach(e => { byUnit[e.unit] = (byUnit[e.unit] || 0) + e.quantity })
+                    return Object.entries(byUnit).map(([u, q]) => `${q.toFixed(2).replace(/\.?0+$/, '')} ${u}`).join(', ')
+                  })()}
+                </span>
+              </h6>
+              {harvestEntries.map(entry => (
+                <div key={entry.id} className="border rounded p-3 mb-2">
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="fw-500">{entry.quantity} {entry.unit}</span>
+                    <span className="fs-xs text-muted">{entry.date?.slice(0, 10)}</span>
+                    {entry.quality && (
+                      <Badge bg="warning" text="dark" className="fs-xs">{'⭐'.repeat(entry.quality)}</Badge>
+                    )}
+                    <Button variant="link" size="sm" className="text-danger p-0 fs-xs ms-auto" aria-label="Delete harvest"
+                      onClick={() => handleDeleteHarvest(entry.id)}>
+                      Delete
+                    </Button>
+                  </div>
+                  {entry.notes && <p className="mb-0 mt-1 fs-xs text-muted">{entry.notes}</p>}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted text-center py-3 mb-0 fs-sm">
+              No harvests logged yet. Log your first harvest to start tracking yield over time.
             </p>
           )}
         </Modal.Body>

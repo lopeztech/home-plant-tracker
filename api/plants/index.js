@@ -1516,6 +1516,72 @@ app.delete('/plants/:id/journal/:entryId', requireUser, async (req, res) => {
   }
 });
 
+// ── Harvest log (edible plants) ───────────────────────────────────────────────
+
+const HARVEST_UNITS = new Set(['g', 'kg', 'oz', 'lb', 'count', 'bunches']);
+
+app.get('/plants/:id/harvests', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const entries = (doc.data().harvestLog || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+    res.status(200).json(entries);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/harvests', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { date, quantity, unit, quality, notes } = req.body || {};
+    if (quantity == null || isNaN(Number(quantity)) || Number(quantity) <= 0) {
+      return res.status(400).json({ error: 'quantity must be a positive number' });
+    }
+    if (!unit || !HARVEST_UNITS.has(unit)) {
+      return res.status(400).json({ error: `unit must be one of: ${[...HARVEST_UNITS].join(', ')}` });
+    }
+    if (quality != null && (Number(quality) < 1 || Number(quality) > 5)) {
+      return res.status(400).json({ error: 'quality must be between 1 and 5' });
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const entry = {
+      id,
+      date: date || now,
+      quantity: Number(quantity),
+      unit,
+      quality: quality != null ? Number(quality) : null,
+      notes: notes ? String(notes).trim() : null,
+      createdAt: now,
+    };
+    const existing = doc.data();
+    const harvestLog = [...(existing.harvestLog || []), entry];
+    await ref.set({ harvestLog, updatedAt: now }, { merge: true });
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/harvests/:harvestId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const existing = doc.data();
+    const harvestLog = (existing.harvestLog || []).filter(e => e.id !== req.params.harvestId);
+    await ref.set({ harvestLog, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Fertiliser recommendation (Gemini, structured) ───────────────────────────
 
 const FERTILISER_RECOMMEND_SCHEMA = {
@@ -2580,6 +2646,7 @@ app.delete('/account', requireUser, async (req, res) => {
       await deleteSubCollection(plantRef.collection('measurements'));
       await deleteSubCollection(plantRef.collection('phenology'));
       await deleteSubCollection(plantRef.collection('journal'));
+      await deleteSubCollection(plantRef.collection('harvests'));
       await plantRef.delete();
     }
 
