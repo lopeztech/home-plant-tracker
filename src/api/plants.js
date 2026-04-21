@@ -224,6 +224,15 @@ export const outbreakApi = {
   bulkResolve: (outbreakId, data) => request(`/outbreaks/${outbreakId}/resolve`, { method: 'POST', body: JSON.stringify(data || {}) }),
 }
 
+export const propagationApi = {
+  list: () => request('/propagations'),
+  create: (data) => request('/propagations', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/propagations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  promote: (id, data) => request(`/propagations/${id}/promote`, { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id) => request(`/propagations/${id}`, { method: 'DELETE' }),
+  recommend: (data) => request('/recommend-propagation', { method: 'POST', body: JSON.stringify(data) }),
+}
+
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),

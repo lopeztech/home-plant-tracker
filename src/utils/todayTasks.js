@@ -130,6 +130,36 @@ export function buildFeedTasks(plants, weather, now = new Date()) {
   return { tasks }
 }
 
+/**
+ * Build propagation attention tasks — batches that are overdue (past expectedDays)
+ * or have been in sown/rooted status for ≥ 7 days with no expectedDays set.
+ *
+ * @param {Array} propagations
+ * @param {Date} [now]
+ * @returns {{ tasks: Array }}
+ */
+export function buildPropagationTasks(propagations, now = new Date()) {
+  const tasks = []
+  for (const prop of propagations || []) {
+    if (['transplanted', 'failed'].includes(prop.status)) continue
+    const days = Math.floor((now.getTime() - new Date(prop.startDate).getTime()) / 86400000)
+    const isOverdue = prop.expectedDays && days > prop.expectedDays
+    const isStale = !prop.expectedDays && days >= 7
+    if (!isOverdue && !isStale) continue
+    tasks.push({
+      propagationId: prop.id,
+      prop,
+      daysElapsed: days,
+      daysOverdue: prop.expectedDays ? days - prop.expectedDays : null,
+      reason: isOverdue
+        ? `${days - prop.expectedDays}d past expected date (${prop.expectedDays}d)`
+        : `${days}d old — check for progress`,
+    })
+  }
+  tasks.sort((a, b) => (b.daysOverdue ?? 0) - (a.daysOverdue ?? 0))
+  return { tasks }
+}
+
 function buildFeedReason(status, plant) {
   const last = plant?.lastFertilised ? new Date(plant.lastFertilised) : null
   const neverFed = !last
