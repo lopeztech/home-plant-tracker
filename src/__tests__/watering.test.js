@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay, computeRainCredit } from '../utils/watering.js'
 
 function makePlant(overrides = {}) {
   return {
@@ -888,5 +888,65 @@ describe('getMoistureDisplay', () => {
     expect(getMoistureDisplay(2).color).toBe('#d97706')
     expect(getMoistureDisplay(5).color).toBe('#22c55e')
     expect(getMoistureDisplay(8).color).toBe('#3b82f6')
+  })
+})
+
+// ── computeRainCredit ────────────────────────────────────────────────────────
+
+describe('computeRainCredit', () => {
+  it('returns shouldSkip=false when rainfall is below threshold', () => {
+    const result = computeRainCredit({ frequencyDays: 7 }, { recentMm: 3, forecastMm: 0 })
+    expect(result.shouldSkip).toBe(false)
+    expect(result.advanceByDays).toBe(0)
+  })
+
+  it('returns shouldSkip=true when recent rainfall meets threshold', () => {
+    const result = computeRainCredit({ frequencyDays: 7 }, { recentMm: 10, forecastMm: 0 })
+    expect(result.shouldSkip).toBe(true)
+    expect(result.advanceByDays).toBe(4) // 50% of 7d, rounded
+    expect(result.effectiveMm).toBeCloseTo(10)
+  })
+
+  it('combines recent and forecast rainfall', () => {
+    const result = computeRainCredit({ frequencyDays: 7 }, { recentMm: 3, forecastMm: 3 })
+    expect(result.shouldSkip).toBe(true)
+    expect(result.effectiveMm).toBeCloseTo(6)
+  })
+
+  it('applies 0.7x shelter factor for under-cover plants', () => {
+    // 8mm * 0.7 = 5.6mm >= 5mm threshold → skip
+    const result = computeRainCredit({ frequencyDays: 7, isUnderCover: true }, { recentMm: 8 })
+    expect(result.shouldSkip).toBe(true)
+    expect(result.effectiveMm).toBeCloseTo(5.6)
+    expect(result.reason).toMatch(/partial shelter/i)
+  })
+
+  it('does NOT skip for under-cover plants when rain is too low', () => {
+    // 6mm * 0.7 = 4.2mm < 5mm threshold → no skip
+    const result = computeRainCredit({ frequencyDays: 7, isUnderCover: true }, { recentMm: 6 })
+    expect(result.shouldSkip).toBe(false)
+  })
+
+  it('uses full interval for succulent category', () => {
+    const result = computeRainCredit({ frequencyDays: 14, category: 'succulent' }, { recentMm: 20 })
+    expect(result.shouldSkip).toBe(true)
+    expect(result.advanceByDays).toBe(14) // 100% of 14d
+  })
+
+  it('respects explicit rainSkipMultiplier override', () => {
+    const result = computeRainCredit({ frequencyDays: 10, rainSkipMultiplier: 0.3 }, { recentMm: 20 })
+    expect(result.shouldSkip).toBe(true)
+    expect(result.advanceByDays).toBe(3) // 30% of 10d
+  })
+
+  it('handles missing rainfall input gracefully', () => {
+    const result = computeRainCredit({ frequencyDays: 7 }, {})
+    expect(result.shouldSkip).toBe(false)
+    expect(result.effectiveMm).toBe(0)
+  })
+
+  it('clamps rainSkipMultiplier to [0, 1]', () => {
+    const result = computeRainCredit({ frequencyDays: 7, rainSkipMultiplier: 2 }, { recentMm: 20 })
+    expect(result.advanceByDays).toBe(7) // clamped to 1.0 × 7
   })
 })

@@ -169,6 +169,23 @@ export function getWateringStatus(plant, weather = null, floors = []) {
     }
   }
 
+  // Outdoor + sufficient recent/forecast rain → apply rain credit
+  if (outdoor && weather?.precipitation != null) {
+    const forecastMm = weather.days?.slice(0, 1).reduce((s, d) => s + (d.precipitation || 0), 0) ?? 0
+    const rainCredit = computeRainCredit(plant, { recentMm: weather.precipitation, forecastMm })
+    if (rainCredit.shouldSkip) {
+      return {
+        daysUntil:      rainCredit.advanceByDays,
+        skippedRain:    true,
+        note:           rainCredit.reason,
+        color:          '#60a5fa',
+        label:          `Skipped by rain`,
+        season,
+        seasonNote,
+      }
+    }
+  }
+
   // Layer 1: Season
   const base = plant.frequencyDays ?? 7
   let effective = base / seasonMultiplier
@@ -481,4 +498,52 @@ export function getMoistureDisplay(reading) {
   if (reading <= 3) return { label: 'Dry', color: '#d97706' }
   if (reading <= 6) return { label: 'Moist', color: '#22c55e' }
   return { label: 'Wet', color: '#3b82f6' }
+}
+
+// ── Rain credit (outdoor plants) ────────────────────────────────────────────
+
+// Minimum effective rainfall (mm) that earns a skip
+const RAIN_SKIP_THRESHOLD_MM = 5
+
+/**
+ * Compute how much of the plant's next watering should be skipped due to
+ * recent or forecast rainfall.  Only meaningful for outdoor plants.
+ *
+ * @param {object} plant
+ *   - isUnderCover {boolean}       — patio/porch/greenhouse (partial rain shelter)
+ *   - rainSkipMultiplier {number}  — override fraction of interval to skip (0–1)
+ *   - frequencyDays {number}
+ *   - category {string}            — 'succulent' plants get a full-interval skip
+ * @param {object} rainfall
+ *   - recentMm {number}  — total precipitation in the last 72 h
+ *   - forecastMm {number} — expected precipitation in the next 24 h (default 0)
+ * @returns {{ shouldSkip: boolean, advanceByDays: number, effectiveMm: number, reason: string }}
+ */
+export function computeRainCredit(plant, rainfall = {}) {
+  const { recentMm = 0, forecastMm = 0 } = rainfall
+  const totalMm = (recentMm || 0) + (forecastMm || 0)
+
+  // Plants under cover receive only a fraction of open-sky rainfall
+  const shelterFactor = plant.isUnderCover ? 0.7 : 1.0
+  const effectiveMm = totalMm * shelterFactor
+
+  if (effectiveMm < RAIN_SKIP_THRESHOLD_MM) {
+    return { shouldSkip: false, advanceByDays: 0, effectiveMm, reason: 'Insufficient rain for a skip' }
+  }
+
+  // Determine what fraction of the interval the rain credit covers
+  // Drought-tolerant plants (succulents) skip a full interval; others half
+  const defaultFraction = plant.category === 'succulent' ? 1.0 : 0.5
+  const fraction = plant.rainSkipMultiplier != null
+    ? Math.min(1, Math.max(0, plant.rainSkipMultiplier))
+    : defaultFraction
+
+  const frequencyDays = plant.frequencyDays || 7
+  const advanceByDays = Math.round(frequencyDays * fraction)
+
+  const source = recentMm >= RAIN_SKIP_THRESHOLD_MM ? 'Recent rain' : 'Forecast rain'
+  const coverNote = plant.isUnderCover ? ' (partial shelter applied)' : ''
+  const reason = `${source} — ${effectiveMm.toFixed(1)} mm effective${coverNote}`
+
+  return { shouldSkip: true, advanceByDays, effectiveMm, reason }
 }
