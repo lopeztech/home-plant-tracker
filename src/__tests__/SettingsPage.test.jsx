@@ -149,7 +149,7 @@ describe('SettingsPage Data tab', () => {
     })
 
     renderAt('/settings/data')
-    fireEvent.click(screen.getByRole('button', { name: /export my data/i }))
+    fireEvent.click(screen.getByRole('button', { name: /all data \(json\)/i }))
 
     await waitFor(() => expect(accountApi.exportData).toHaveBeenCalledTimes(1))
     expect(createObjectURL).toHaveBeenCalledTimes(1)

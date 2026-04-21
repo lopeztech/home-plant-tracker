@@ -3222,4 +3222,156 @@ Return ONLY valid JSON matching this schema:
   }
 });
 
+// ── Data export (CSV + printable HTML) ───────────────────────────────────────
+
+function csvEscape(v) {
+  if (v == null) return '';
+  const s = String(v);
+  if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function toCsv(headers, rows) {
+  const lines = [headers.map(h => csvEscape(h.label)).join(',')];
+  for (const row of rows) {
+    lines.push(headers.map(h => csvEscape(row[h.key])).join(','));
+  }
+  return lines.join('\n');
+}
+
+// GET /export/plants?format=csv|json — plant inventory (home_pro+)
+app.get('/export/plants', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userPlants(req.userId).get();
+    const plants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    if (req.query.format === 'csv') {
+      const HEADERS = [
+        { key: 'id',                  label: 'ID' },
+        { key: 'name',                label: 'Name' },
+        { key: 'species',             label: 'Species' },
+        { key: 'room',                label: 'Room' },
+        { key: 'floor',               label: 'Floor' },
+        { key: 'health',              label: 'Health' },
+        { key: 'maturity',            label: 'Maturity' },
+        { key: 'frequencyDays',       label: 'Watering Frequency (days)' },
+        { key: 'lastWatered',         label: 'Last Watered' },
+        { key: 'lastFertilised',      label: 'Last Fertilised' },
+        { key: 'potSize',             label: 'Pot Size' },
+        { key: 'soilType',            label: 'Soil Type' },
+        { key: 'plantedIn',           label: 'Planted In' },
+        { key: 'isOutdoor',           label: 'Outdoor' },
+        { key: 'parentPropagationId', label: 'Parent Propagation ID' },
+        { key: 'notes',               label: 'Notes' },
+      ];
+      const csv = toCsv(HEADERS, plants);
+      const filename = `plant-tracker-plants-${new Date().toISOString().slice(0, 10)}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.status(200).send(csv);
+    }
+
+    res.status(200).json(plants);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /export/watering-history?format=csv&from=YYYY-MM-DD&to=YYYY-MM-DD (home_pro+)
+app.get('/export/watering-history', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const fromDate = req.query.from ? new Date(req.query.from) : null;
+    const toDate   = req.query.to   ? new Date(req.query.to)   : null;
+
+    const snap = await userPlants(req.userId).get();
+    const rows = [];
+    for (const doc of snap.docs) {
+      const plant = { id: doc.id, ...doc.data() };
+      for (const entry of plant.wateringLog || []) {
+        const d = new Date(entry.date);
+        if (fromDate && d < fromDate) continue;
+        if (toDate   && d > toDate)   continue;
+        rows.push({
+          date:      entry.date,
+          plantName: plant.name,
+          species:   plant.species || '',
+          room:      plant.room    || '',
+          method:    entry.method  || '',
+          amount:    entry.amount  || '',
+          notes:     entry.notes   || '',
+          plantId:   plant.id,
+        });
+      }
+    }
+    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+    if (req.query.format === 'csv') {
+      const HEADERS = [
+        { key: 'date',      label: 'Date' },
+        { key: 'plantName', label: 'Plant Name' },
+        { key: 'species',   label: 'Species' },
+        { key: 'room',      label: 'Room' },
+        { key: 'method',    label: 'Method' },
+        { key: 'amount',    label: 'Amount' },
+        { key: 'notes',     label: 'Notes' },
+        { key: 'plantId',   label: 'Plant ID' },
+      ];
+      const csv = toCsv(HEADERS, rows);
+      const filename = `plant-tracker-watering-${new Date().toISOString().slice(0, 10)}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      return res.status(200).send(csv);
+    }
+
+    res.status(200).json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /export/care-schedule?format=html — printable care schedule (home_pro+)
+app.get('/export/care-schedule', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userPlants(req.userId).get();
+    const plants = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.frequencyDays)
+      .sort((a, b) => (a.room || '').localeCompare(b.room || '') || (a.name || '').localeCompare(b.name || ''));
+
+    const today = new Date().toLocaleDateString('en-GB', { year: 'numeric', month: 'long', day: 'numeric' });
+    const rows = plants.map(p => {
+      const lastW = p.lastWatered
+        ? new Date(p.lastWatered).toLocaleDateString('en-GB') : '—';
+      const nextW = p.lastWatered && p.frequencyDays
+        ? new Date(new Date(p.lastWatered).getTime() + p.frequencyDays * 86400000).toLocaleDateString('en-GB')
+        : '—';
+      return `<tr><td>${p.name||''}</td><td>${p.species||''}</td><td>${p.room||''}</td>`
+           + `<td>${p.frequencyDays}d</td><td>${lastW}</td><td>${nextW}</td><td>${p.health||''}</td></tr>`;
+    }).join('');
+
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<title>Plant Care Schedule</title>
+<style>body{font-family:system-ui,sans-serif;font-size:13px;color:#111;margin:24px}
+h1{font-size:20px;margin-bottom:4px}p.sub{color:#666;font-size:11px;margin-bottom:16px}
+table{width:100%;border-collapse:collapse}th{background:#f0f0f0;text-align:left;padding:6px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+td{padding:5px 8px;border-bottom:1px solid #e5e5e5}@media print{body{margin:0}}</style>
+</head><body>
+<h1>Plant Care Schedule</h1>
+<p class="sub">Generated ${today} &mdash; ${plants.length} plant${plants.length!==1?'s':''}</p>
+<table><thead><tr><th>Name</th><th>Species</th><th>Room</th><th>Water every</th><th>Last watered</th><th>Next due</th><th>Health</th></tr></thead>
+<tbody>${rows}</tbody></table></body></html>`;
+
+    const filename = `plant-tracker-schedule-${new Date().toISOString().slice(0, 10)}.html`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    if (req.query.format === 'html') {
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    }
+    res.status(200).send(html);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 functions.http('plantsApi', app);

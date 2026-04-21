@@ -3706,3 +3706,101 @@ describe('DELETE /propagations/:id', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Export routes
+// ---------------------------------------------------------------------------
+
+describe('GET /export/plants', () => {
+  beforeEach(() => {
+    store[plantPath('e1')] = { name: 'Basil', species: 'Ocimum basilicum', room: 'Kitchen', health: 'good', frequencyDays: 3, lastWatered: '2026-04-18' };
+    store[plantPath('e2')] = { name: 'Fern, "Boston"', species: 'Nephrolepis', room: 'Bathroom', health: 'fair', frequencyDays: 7, lastWatered: '2026-04-10' };
+  });
+
+  it('returns JSON list of plants without format param', async () => {
+    const res = await request(app).get('/export/plants').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBe(2);
+  });
+
+  it('returns CSV with correct Content-Type for ?format=csv', async () => {
+    const res = await request(app).get('/export/plants?format=csv').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/csv/);
+  });
+
+  it('CSV escapes commas and quotes in field values', async () => {
+    const res = await request(app).get('/export/plants?format=csv').set('Authorization', authHeader());
+    expect(res.text).toContain('"Fern, ""Boston"""');
+  });
+
+  it('CSV includes all plants as rows (header + 2 data rows)', async () => {
+    const res = await request(app).get('/export/plants?format=csv').set('Authorization', authHeader());
+    const lines = res.text.trim().split('\n');
+    expect(lines.length).toBe(3);
+  });
+});
+
+describe('GET /export/watering-history', () => {
+  beforeEach(() => {
+    store[plantPath('w1')] = {
+      name: 'Aloe', species: 'Aloe vera', room: 'Living Room',
+      wateringLog: [
+        { date: '2026-04-15', method: 'bottom', amount: '200ml', notes: '' },
+        { date: '2026-04-08', method: 'top',    amount: '150ml', notes: 'extra' },
+      ],
+    };
+    store[plantPath('w2')] = {
+      name: 'Cactus', species: 'Cactaceae', room: 'Study',
+      wateringLog: [
+        { date: '2026-04-12', method: 'top', amount: '50ml', notes: '' },
+      ],
+    };
+  });
+
+  it('returns JSON array of watering rows', async () => {
+    const res = await request(app).get('/export/watering-history').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBe(3);
+  });
+
+  it('CSV rows are sorted by date ascending', async () => {
+    const res = await request(app).get('/export/watering-history?format=csv').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    const lines = res.text.trim().split('\n');
+    expect(lines[1]).toContain('2026-04-08');
+    expect(lines[3]).toContain('2026-04-15');
+  });
+
+  it('filters rows by ?from date', async () => {
+    const res = await request(app).get('/export/watering-history?from=2026-04-12').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBe(2);
+    expect(res.body.every(r => r.date >= '2026-04-12')).toBe(true);
+  });
+});
+
+describe('GET /export/care-schedule', () => {
+  beforeEach(() => {
+    store[plantPath('c1')] = { name: 'Mint', species: 'Mentha', room: 'Kitchen', frequencyDays: 2, lastWatered: '2026-04-19', health: 'good' };
+    store[plantPath('c2')] = { name: 'Snake Plant', species: 'Sansevieria', room: 'Bedroom', frequencyDays: 14, lastWatered: '2026-04-01', health: 'excellent' };
+  });
+
+  it('returns HTML with a care-schedule table', async () => {
+    const res = await request(app).get('/export/care-schedule').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/html/);
+    expect(res.text).toContain('<table>');
+    expect(res.text).toContain('Mint');
+    expect(res.text).toContain('Snake Plant');
+  });
+
+  it('sets Content-Disposition attachment header when ?format=html', async () => {
+    const res = await request(app).get('/export/care-schedule?format=html').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toMatch(/attachment/);
+    expect(res.headers['content-disposition']).toMatch(/\.html/);
+  });
+});
