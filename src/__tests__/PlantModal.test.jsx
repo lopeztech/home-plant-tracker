@@ -686,14 +686,14 @@ describe('PlantModal', () => {
     renderModal()
     selectMode('manual')
     // Initially no pot size visible (plantedIn not set to pot)
-    expect(screen.queryByRole('option', { name: 'Small (< 15cm)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Small (< 15 cm)' })).not.toBeInTheDocument()
 
     // Select Pot
     const plantedInSelect = screen.getByRole('option', { name: 'Pot' }).closest('select')
     fireEvent.change(plantedInSelect, { target: { value: 'pot' } })
 
     // Now pot size and soil type should be visible
-    expect(screen.getByRole('option', { name: 'Small (< 15cm)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Small (< 15 cm)' })).toBeInTheDocument()
     expect(screen.getByRole('option', { name: 'Standard potting mix' })).toBeInTheDocument()
   })
 
@@ -704,11 +704,11 @@ describe('PlantModal', () => {
 
     // Select Pot first
     fireEvent.change(plantedInSelect, { target: { value: 'pot' } })
-    expect(screen.getByRole('option', { name: 'Small (< 15cm)' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Small (< 15 cm)' })).toBeInTheDocument()
 
     // Switch to In the Ground
     fireEvent.change(plantedInSelect, { target: { value: 'ground' } })
-    expect(screen.queryByRole('option', { name: 'Small (< 15cm)' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('option', { name: 'Small (< 15 cm)' })).not.toBeInTheDocument()
   })
 
   it('calls recommendApi.getWatering and shows results on Watering tab', async () => {

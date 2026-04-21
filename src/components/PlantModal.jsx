@@ -9,6 +9,7 @@ import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern
 import { derivePlantName } from '../utils/plantName.js'
 import { getPlantEmoji, PLANT_EMOJI_GROUPS } from '../utils/plantEmoji.js'
 import { PlantContext } from '../context/PlantContext.jsx'
+import { POT_SIZES, formatLength } from '../utils/units.js'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 // Max recommendation entries retained per plant. Older entries are trimmed
@@ -83,12 +84,7 @@ const SUN_EXPOSURE_OPTIONS = [
   { value: 'part-sun', label: 'Part Sun' },
   { value: 'shade', label: 'Shade' },
 ]
-const POT_SIZE_OPTIONS = [
-  { value: 'small', label: 'Small (< 15cm)' },
-  { value: 'medium', label: 'Medium (15–25cm)' },
-  { value: 'large', label: 'Large (25–40cm)' },
-  { value: 'xlarge', label: 'X-Large (> 40cm)' },
-]
+// POT_SIZE_OPTIONS is derived at render time from POT_SIZES[unitSystem]
 const SOIL_TYPE_OPTIONS = [
   { value: 'standard', label: 'Standard potting mix' },
   { value: 'well-draining', label: 'Well-draining (perlite/sand)' },
@@ -311,6 +307,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const plantCtx = useContext(PlantContext)
   const updatePlantsLocally = plantCtx?.updatePlantsLocally
   const contextIsGuest = plantCtx?.isGuest ?? false
+  const unitSystem = plantCtx?.unitSystem?.system ?? 'metric'
+  const potSizeOptions = POT_SIZES[unitSystem] ?? POT_SIZES.metric
 
   // Persist recommendation history on the plant doc. Guest plants stay local
   // (their IDs aren't in Firestore). Failures are swallowed — the UI already
@@ -518,8 +516,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const handleAddMeasurement = useCallback(async () => {
     const { height_cm, width_cm, leafCount, stemCount, notes } = newMeasurement
     const payload = {}
-    if (height_cm !== '') payload.height_cm = Number(height_cm)
-    if (width_cm  !== '') payload.width_cm  = Number(width_cm)
+    const inToCm = unitSystem === 'imperial' ? (v) => parseFloat((v * 2.54).toFixed(1)) : (v) => v
+    if (height_cm !== '') payload.height_cm = inToCm(Number(height_cm))
+    if (width_cm  !== '') payload.width_cm  = inToCm(Number(width_cm))
     if (leafCount  !== '') payload.leafCount  = Number(leafCount)
     if (stemCount  !== '') payload.stemCount  = Number(stemCount)
     if (Object.keys(payload).length === 0) {
@@ -1040,7 +1039,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                           <Form.Label>Pot Size</Form.Label>
                           <Form.Select value={form.potSize || ''} onChange={(e) => update('potSize', e.target.value || null)}>
                             <option value="">— Select —</option>
-                            {POT_SIZE_OPTIONS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                            {potSizeOptions.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                           </Form.Select>
                         </Form.Group>
                       </Col>
@@ -1572,13 +1571,18 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                 options={{
                   chart: { type: 'line', toolbar: { show: false }, background: 'transparent' },
                   xaxis: { categories: measurements.filter(m => m.height_cm != null).map(m => m.date.slice(0, 10)), type: 'category' },
-                  yaxis: { title: { text: 'cm' }, min: 0 },
+                  yaxis: { title: { text: unitSystem === 'imperial' ? 'in' : 'cm' }, min: 0 },
                   stroke: { curve: 'smooth', width: 2 },
                   markers: { size: 4 },
                   tooltip: { x: { show: true } },
                   grid: { borderColor: 'rgba(128,128,128,0.15)' },
                 }}
-                series={[{ name: 'Height (cm)', data: measurements.filter(m => m.height_cm != null).map(m => m.height_cm) }]}
+                series={[{
+                  name: unitSystem === 'imperial' ? 'Height (in)' : 'Height (cm)',
+                  data: measurements.filter(m => m.height_cm != null).map(m =>
+                    unitSystem === 'imperial' ? parseFloat((m.height_cm / 2.54).toFixed(1)) : m.height_cm
+                  ),
+                }]}
               />
             </div>
           )}
@@ -1588,8 +1592,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             <Row className="g-2">
               <Col xs={6}>
                 <Form.Group controlId="growth-height-cm">
-                  <Form.Label className="fs-xs">Height (cm)</Form.Label>
-                  <Form.Control type="number" min="0" step="0.1" placeholder="e.g. 45"
+                  <Form.Label className="fs-xs">{unitSystem === 'imperial' ? 'Height (in)' : 'Height (cm)'}</Form.Label>
+                  <Form.Control type="number" min="0" step="0.1"
+                    placeholder={unitSystem === 'imperial' ? 'e.g. 18' : 'e.g. 45'}
                     value={newMeasurement.height_cm}
                     onChange={e => setNewMeasurement(prev => ({ ...prev, height_cm: e.target.value }))}
                   />
@@ -1597,8 +1602,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               </Col>
               <Col xs={6}>
                 <Form.Group controlId="growth-width-cm">
-                  <Form.Label className="fs-xs">Width (cm)</Form.Label>
-                  <Form.Control type="number" min="0" step="0.1" placeholder="e.g. 30"
+                  <Form.Label className="fs-xs">{unitSystem === 'imperial' ? 'Width (in)' : 'Width (cm)'}</Form.Label>
+                  <Form.Control type="number" min="0" step="0.1"
+                    placeholder={unitSystem === 'imperial' ? 'e.g. 12' : 'e.g. 30'}
                     value={newMeasurement.width_cm}
                     onChange={e => setNewMeasurement(prev => ({ ...prev, width_cm: e.target.value }))}
                   />

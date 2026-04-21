@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Row, Col, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { isOutdoor } from '../utils/watering.js'
+import { formatTemperatureC } from '../utils/units.js'
 import SeasonBadge from '../components/SeasonBadge.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 
@@ -12,7 +13,7 @@ function dayLabel(dateStr, index) {
 }
 
 export default function ForecastPage() {
-  const { weather, plants, floors, location } = usePlantContext()
+  const { weather, plants, floors, location, tempUnit } = usePlantContext()
 
   const outdoorPlants = useMemo(
     () => plants.filter((p) => isOutdoor(p, floors)),
@@ -124,7 +125,7 @@ export default function ForecastPage() {
                       <div className="d-flex align-items-center gap-2 p-2 rounded bg-warning bg-opacity-10">
                         <svg className="sa-icon text-warning" style={{ width: 16, height: 16 }}><use href="/icons/sprite.svg#sun"></use></svg>
                         <span className="fs-sm">
-                          <strong>{hotDays.length} hot day{hotDays.length !== 1 ? 's' : ''}</strong> — water amounts increased by 25-50%
+                          <strong>{hotDays.length} hot day{hotDays.length !== 1 ? 's' : ''}</strong> (≥{formatTemperatureC(30, tempUnit?.unit)}) — water amounts increased by 25-50%
                         </span>
                       </div>
                     )}
@@ -132,7 +133,7 @@ export default function ForecastPage() {
                       <div className="d-flex align-items-center gap-2 p-2 rounded bg-primary bg-opacity-10">
                         <svg className="sa-icon text-primary" style={{ width: 16, height: 16 }}><use href="/icons/sprite.svg#thermometer"></use></svg>
                         <span className="fs-sm">
-                          <strong>{coldDays.length} cold day{coldDays.length !== 1 ? 's' : ''}</strong> — water amounts reduced by 25%
+                          <strong>{coldDays.length} cold day{coldDays.length !== 1 ? 's' : ''}</strong> (≤{formatTemperatureC(10, tempUnit?.unit)}) — water amounts reduced by 25%
                         </span>
                       </div>
                     )}

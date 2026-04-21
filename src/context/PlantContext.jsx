@@ -4,6 +4,7 @@ import { plantsApi, imagesApi, floorsApi, analyseApi, flushOfflineMutations, Off
 import { subscribe as subscribeOfflineQueue, size as offlineQueueSize } from '../utils/offlineQueue.js'
 import { useWeather } from '../hooks/useWeather.js'
 import { useTempUnit } from '../hooks/useTempUnit.js'
+import { useUnitSystem } from '../hooks/useUnitSystem.js'
 import { getWateringStatus, isOutdoor } from '../utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from '../data/guestData.js'
 import { toFriendlyError } from '../utils/errorMessages.js'
@@ -21,6 +22,7 @@ export function usePlantContext() {
 export function PlantProvider({ children }) {
   const { isAuthenticated, isGuest, logout } = useAuth()
   const tempUnit = useTempUnit()
+  const unitSystem = useUnitSystem()
   const { weather, locationDenied, location, setLocation } = useWeather(tempUnit.unit)
 
   const [plants, setPlants] = useState([])
@@ -400,7 +402,7 @@ export function PlantProvider({ children }) {
   const value = useMemo(() => ({
     plants, plantsLoading, plantsError, reloadPlants,
     floors, activeFloorId, setActiveFloorId,
-    weather, locationDenied, location, setLocation, tempUnit,
+    weather, locationDenied, location, setLocation, tempUnit, unitSystem,
     overdueCount, isAnalysingFloorplan,
     isGuest,
     isOnline, pendingSyncCount,
@@ -411,7 +413,7 @@ export function PlantProvider({ children }) {
     updatePlantsLocally,
   }), [
     plants, plantsLoading, plantsError, reloadPlants, floors, activeFloorId,
-    weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
+    weather, locationDenied, location, setLocation, tempUnit, unitSystem, overdueCount, isAnalysingFloorplan, isGuest,
     isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
     handleFertilisePlant,
