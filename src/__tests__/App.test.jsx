@@ -23,6 +23,15 @@ vi.mock('../api/plants.js', () => ({
   recommendApi: { get: vi.fn() },
   flushOfflineMutations: vi.fn().mockResolvedValue({ flushed: 0, remaining: 0, errors: 0 }),
   OfflineQueuedError: class OfflineQueuedError extends Error {},
+  billingApi: {
+    getSubscription:       vi.fn().mockResolvedValue({
+      billingEnabled: false, tier: 'free', status: 'free',
+      quotas: { plants: 10, ai_analyses: 5, photo_storage_mb: 50 },
+      usage:  { plants: 0, ai_analyses: 0, photo_storage_mb: 0 },
+    }),
+    createCheckoutSession: vi.fn(),
+    createPortalSession:   vi.fn(),
+  },
 }))
 
 vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {

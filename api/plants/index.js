@@ -122,6 +122,15 @@ function requireUser(req, res, next) {
   next();
 }
 
+// For routes that accept anonymous callers but should still attribute usage
+// to a user when an Authorization header is present (e.g. AI analyse during
+// onboarding once Google sign-in has happened).
+function softAuth(req, _res, next) {
+  const sub = getUserSub(req);
+  if (sub) req.userId = sub;
+  next();
+}
+
 function userPlants(userId) {
   return db.collection('users').doc(userId).collection('plants');
 }
@@ -163,8 +172,43 @@ async function signPlantData(data) {
 
 const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace', 'Deck', 'Yard', 'Courtyard', 'Porch', 'Veranda']);
 
+const billing = require('./billing');
+const { createTierGate } = require('./tierGate');
+
 const app = express();
 app.set('trust proxy', true); // Behind API Gateway — trust X-Forwarded-For
+
+// ── Stripe webhook — declared BEFORE app.use(express.json()) so we receive
+// the raw request body for signature verification. Signature is checked via
+// STRIPE_WEBHOOK_SECRET; the webhook deliberately has no api_key auth in the
+// API Gateway spec.
+app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const stripe = billing.getStripe();
+  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!stripe || !secret) return res.status(503).json({ error: 'billing_disabled' });
+
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, secret);
+  } catch (err) {
+    return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+  }
+
+  // Idempotency — Stripe may retry; use event.id as the dedup key.
+  const eventRef = db.collection('stripeEvents').doc(event.id);
+  const seen = await eventRef.get();
+  if (seen.exists) return res.status(200).json({ received: true, duplicate: true });
+  await eventRef.set({ type: event.type, receivedAt: new Date().toISOString() });
+
+  try {
+    await billing.applySubscriptionEvent(db, event);
+    return res.status(200).json({ received: true });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 app.use(express.json({ limit: '10mb' }));
 app.use(cors({
   origin: ['https://plants.lopezcloud.dev', 'http://localhost:5173'],
@@ -476,6 +520,102 @@ Rules:
 - Express ALL temperatures in your response in ${unit}.`;
 };
 
+// ── Tier gating + quota enforcement ──────────────────────────────────────────
+// Bound once here so handlers can reference requireTier/checkQuota directly.
+// Gates no-op when BILLING_ENABLED !== 'true', so this code ships dark.
+
+const { requireTier, checkQuota } = createTierGate(db);
+
+const countPlantsForReq   = (req) => billing.countPlants(db, req.userId);
+const countAiAnalysesForReq = (req) => billing.readAiAnalysesUsage(db, req.userId);
+
+// ── Billing — non-webhook routes ─────────────────────────────────────────────
+// (Webhook is declared earlier, before express.json(), to keep the raw body
+// available for Stripe signature verification.)
+
+const PRICE_ENV = {
+  home_pro:       { month: 'STRIPE_PRICE_HOME_PRO_MONTHLY',       year: 'STRIPE_PRICE_HOME_PRO_ANNUAL' },
+  landscaper_pro: { month: 'STRIPE_PRICE_LANDSCAPER_PRO_MONTHLY', year: 'STRIPE_PRICE_LANDSCAPER_PRO_ANNUAL' },
+};
+
+app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
+  const stripe = billing.getStripe();
+  if (!stripe) return res.status(503).json({ error: 'billing_disabled' });
+  try {
+    const { tier, interval = 'month', successUrl, cancelUrl } = req.body || {};
+    if (!PRICE_ENV[tier] || !PRICE_ENV[tier][interval]) {
+      return res.status(400).json({ error: 'Invalid tier/interval' });
+    }
+    const priceId = process.env[PRICE_ENV[tier][interval]];
+    if (!priceId) return res.status(500).json({ error: `Price ID env var ${PRICE_ENV[tier][interval]} is not configured` });
+
+    // Reuse an existing Stripe Customer if the user already has one.
+    const existing = await billing.readSubscription(db, req.userId);
+    let customerId = existing?.stripeCustomerId || null;
+    if (!customerId) {
+      const customer = await stripe.customers.create({ metadata: { userId: req.userId } });
+      customerId = customer.id;
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode:                  'subscription',
+      customer:              customerId,
+      client_reference_id:   req.userId,
+      line_items:            [{ price: priceId, quantity: 1 }],
+      success_url:           successUrl || `${process.env.BILLING_SUCCESS_URL || 'https://plants.lopezcloud.dev'}/settings/billing?status=success`,
+      cancel_url:            cancelUrl  || `${process.env.BILLING_CANCEL_URL  || 'https://plants.lopezcloud.dev'}/pricing?status=cancelled`,
+      subscription_data:     { metadata: { userId: req.userId, tier } },
+      metadata:              { userId: req.userId, tier },
+    });
+    return res.status(200).json({ url: session.url, id: session.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/billing/create-portal-session', requireUser, async (req, res) => {
+  const stripe = billing.getStripe();
+  if (!stripe) return res.status(503).json({ error: 'billing_disabled' });
+  try {
+    const sub = await billing.readSubscription(db, req.userId);
+    if (!sub?.stripeCustomerId) return res.status(404).json({ error: 'No active subscription' });
+    const portal = await stripe.billingPortal.sessions.create({
+      customer:    sub.stripeCustomerId,
+      return_url:  req.body?.returnUrl || `${process.env.BILLING_SUCCESS_URL || 'https://plants.lopezcloud.dev'}/settings/billing`,
+    });
+    return res.status(200).json({ url: portal.url });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/billing/subscription', requireUser, async (req, res) => {
+  try {
+    const tier = await billing.getCurrentTier(db, req.userId);
+    const sub  = await billing.readSubscription(db, req.userId);
+    const [plantsCount, aiAnalyses, storageMb] = await Promise.all([
+      billing.countPlants(db, req.userId),
+      billing.readAiAnalysesUsage(db, req.userId),
+      billing.readStorageUsageMb(db, req.userId),
+    ]);
+    return res.status(200).json({
+      billingEnabled: billing.billingEnabled(),
+      tier,
+      status:            sub?.status || (billing.billingEnabled() ? 'free' : 'free'),
+      currentPeriodEnd:  sub?.currentPeriodEnd || null,
+      cancelAtPeriodEnd: sub?.cancelAtPeriodEnd || false,
+      quotas: billing.TIERS[tier].quotas,
+      usage: {
+        plants:           plantsCount,
+        ai_analyses:      aiAnalyses,
+        photo_storage_mb: storageMb,
+      },
+    });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {
@@ -679,7 +819,7 @@ app.post('/analyse-floorplan', async (req, res) => {
 
 // ── Plant photo analysis via Gemini (Vertex AI) ───────────────────────────────
 
-app.post('/analyse', async (req, res) => {
+app.post('/analyse', softAuth, checkQuota('ai_analyses', countAiAnalysesForReq), async (req, res) => {
   try {
     const { imageBase64, mimeType } = req.body;
     if (!imageBase64 || !mimeType) {
@@ -698,6 +838,9 @@ app.post('/analyse', async (req, res) => {
     });
 
     const parsed = parseGeminiJson(result.response.text());
+    if (req.userId && billing.billingEnabled()) {
+      try { await billing.incrementAiAnalyses(db, req.userId); } catch (e) { log.warn('ai-usage increment failed', { error: e.message }); }
+    }
     res.status(200).json(parsed);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -706,7 +849,7 @@ app.post('/analyse', async (req, res) => {
 
 // ── Re-analyse with species hint ─────────────────────────────────────────────
 
-app.post('/analyse-with-hint', async (req, res) => {
+app.post('/analyse-with-hint', softAuth, checkQuota('ai_analyses', countAiAnalysesForReq), async (req, res) => {
   try {
     const { imageBase64, mimeType, speciesHint } = req.body;
     if (!imageBase64 || !mimeType) {
@@ -730,6 +873,9 @@ app.post('/analyse-with-hint', async (req, res) => {
     });
 
     const parsed = parseGeminiJson(result.response.text());
+    if (req.userId && billing.billingEnabled()) {
+      try { await billing.incrementAiAnalyses(db, req.userId); } catch (e) { log.warn('ai-usage increment failed', { error: e.message }); }
+    }
     res.status(200).json(parsed);
   } catch (err) {
     res.status(err.status || 500).json({ error: err.message });
@@ -951,7 +1097,7 @@ app.get('/plants', requireUser, async (req, res) => {
   }
 });
 
-app.post('/plants', requireUser, async (req, res) => {
+app.post('/plants', requireUser, checkQuota('plants', countPlantsForReq), async (req, res) => {
   try {
     const now = new Date().toISOString();
     const { imageBase64: _img, ...body } = req.body;
@@ -1619,7 +1765,7 @@ function predictHealthHeuristic(plant) {
   };
 }
 
-app.get('/plants/:id/health-prediction', requireUser, async (req, res) => {
+app.get('/plants/:id/health-prediction', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
@@ -1912,7 +2058,7 @@ app.get('/plants/:id/care-score', requireUser, async (req, res) => {
 });
 
 // Aggregate care scores for all plants (worst-first)
-app.get('/ml/care-scores', requireUser, async (req, res) => {
+app.get('/ml/care-scores', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
     const snapshot = await userPlants(req.userId).get();
     const scores = [];

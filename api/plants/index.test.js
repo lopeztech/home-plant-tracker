@@ -2184,6 +2184,92 @@ describe('POST /analyse-with-hint', () => {
   });
 });
 
+// ── Billing routes ───────────────────────────────────────────────────────────
+
+describe('Billing routes — dark mode (BILLING_ENABLED unset)', () => {
+  it('GET /billing/subscription returns free tier with billingEnabled=false', async () => {
+    delete process.env.BILLING_ENABLED;
+    const res = await request(app).get('/billing/subscription').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.billingEnabled).toBe(false);
+    expect(res.body.tier).toBe('free');
+    expect(res.body.quotas.plants).toBe(10);
+    expect(res.body.usage).toEqual({ plants: 0, ai_analyses: 0, photo_storage_mb: 0 });
+  });
+
+  it('POST /billing/create-checkout-session returns 503 when billing disabled', async () => {
+    delete process.env.BILLING_ENABLED;
+    const res = await request(app).post('/billing/create-checkout-session')
+      .set('Authorization', authHeader())
+      .send({ tier: 'home_pro', interval: 'month' });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('billing_disabled');
+  });
+
+  it('POST /billing/create-portal-session returns 503 when billing disabled', async () => {
+    delete process.env.BILLING_ENABLED;
+    const res = await request(app).post('/billing/create-portal-session').set('Authorization', authHeader());
+    expect(res.status).toBe(503);
+  });
+
+  it('POST /billing/webhook returns 503 when billing disabled', async () => {
+    delete process.env.BILLING_ENABLED;
+    const res = await request(app).post('/billing/webhook').send({});
+    expect(res.status).toBe(503);
+  });
+});
+
+describe('Billing — tier gating is a no-op when BILLING_ENABLED is unset', () => {
+  it('POST /plants allows unlimited plants when billing is disabled', async () => {
+    delete process.env.BILLING_ENABLED;
+    for (let i = 0; i < 11; i++) {
+      store[plantPath(`p-seed-${i}`)] = { name: `Seed ${i}` };
+    }
+    const res = await request(app).post('/plants').set('Authorization', authHeader()).send({ name: 'Eleventh' });
+    expect([200, 201]).toContain(res.status);
+  });
+});
+
+describe('Billing — tier gating enforces plant quota when BILLING_ENABLED=true', () => {
+  it('free-tier user is blocked at the 11th plant with 429 quota_exceeded', async () => {
+    process.env.BILLING_ENABLED = 'true';
+    for (let i = 0; i < 10; i++) {
+      store[plantPath(`p-${i}`)] = { name: `Plant ${i}` };
+    }
+    const res = await request(app).post('/plants').set('Authorization', authHeader()).send({ name: 'Eleventh' });
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe('quota_exceeded');
+    expect(res.body.quotaType).toBe('plants');
+    expect(res.body.limit).toBe(10);
+    expect(res.body.upgradeUrl).toBe('/pricing');
+    delete process.env.BILLING_ENABLED;
+  });
+
+  it('home_pro user is allowed past the free-tier plant limit', async () => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    for (let i = 0; i < 10; i++) {
+      store[plantPath(`p-${i}`)] = { name: `Plant ${i}` };
+    }
+    const res = await request(app).post('/plants').set('Authorization', authHeader()).send({ name: 'Eleventh' });
+    expect([200, 201]).toContain(res.status);
+    delete process.env.BILLING_ENABLED;
+  });
+});
+
+describe('Billing — requireTier on /plants/:id/health-prediction', () => {
+  it('403s a free-tier user with upgrade_required when billing enabled', async () => {
+    process.env.BILLING_ENABLED = 'true';
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).get('/plants/p1/health-prediction').set('Authorization', authHeader());
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('upgrade_required');
+    expect(res.body.requiredTier).toBe('home_pro');
+    expect(res.body.currentTier).toBe('free');
+    delete process.env.BILLING_ENABLED;
+  });
+});
+
 // ── POST /plants/:id/fertilise ───────────────────────────────────────────────
 
 describe('POST /plants/:id/fertilise', () => {

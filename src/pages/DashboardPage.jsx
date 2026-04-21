@@ -3,6 +3,7 @@ import { Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
+import UpgradePrompt from '../components/UpgradePrompt.jsx'
 
 export default function DashboardPage() {
   const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading } = usePlantContext()
@@ -66,6 +67,11 @@ export default function DashboardPage() {
   return (
     <div className="content-wrapper" style={{ padding: 0 }}>
       <div className="main-content">
+        <div className="px-3 pt-2">
+          <UpgradePrompt id="dashboard-plant-limit" quota="plants">
+            You've reached your Free-tier plant limit. Unlock unlimited plants with Home Pro.
+          </UpgradePrompt>
+        </div>
         {plantsError && (
           <Alert variant="danger" className="mx-3 mt-3 mb-0" dismissible>
             <Alert.Heading as="h6" className="mb-1">Couldn't load your plants</Alert.Heading>

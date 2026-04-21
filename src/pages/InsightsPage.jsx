@@ -3,6 +3,7 @@ import { Row, Col, Card, Badge, Spinner, Button, ProgressBar } from 'react-boots
 import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
+import UpgradePrompt from '../components/UpgradePrompt.jsx'
 
 const GRADE_COLORS = { A: '#10b981', B: '#22c55e', C: '#f59e0b', D: '#ef4444', F: '#991b1b' }
 const PATTERN_COLORS = { optimal: '#10b981', over_watered: '#3b82f6', under_watered: '#ef4444', inconsistent: '#f59e0b', insufficient_data: '#9ca3af' }
@@ -97,6 +98,10 @@ export default function InsightsPage() {
   return (
     <div className="p-4">
       <h2 className="mb-4">ML Insights</h2>
+
+      <UpgradePrompt id="insights-lock" feature="home_pro" variant="warning">
+        Full ML Insights are a Home Pro feature. Free-tier users see basic per-plant care scores but not aggregate predictions, anomaly detection, or watering-pattern analysis.
+      </UpgradePrompt>
 
       {loading ? (
         <div className="text-center p-5"><Spinner animation="border" /></div>

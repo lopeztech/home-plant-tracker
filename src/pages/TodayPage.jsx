@@ -3,6 +3,7 @@ import { Button, ButtonGroup, Dropdown, Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useToast } from '../components/Toast.jsx'
 import FeedRecordModal from '../components/FeedRecordModal.jsx'
+import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import { getPlantEmoji } from '../utils/plantEmoji.js'
 import { buildWaterTasks, buildFeedTasks, setSnooze, clampSnooze } from '../utils/todayTasks.js'
 
@@ -90,6 +91,10 @@ export default function TodayPage() {
           </Button>
         )}
       </div>
+
+      <UpgradePrompt id="today-ai-limit" quota="ai_analyses">
+        You've used all free AI plant analyses this month. Upgrade for unlimited analyses.
+      </UpgradePrompt>
 
       {deferredByRain > 0 && (
         <Alert variant="info" className="d-flex align-items-center">

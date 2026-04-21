@@ -179,6 +179,18 @@ export const recommendApi = {
   }),
 }
 
+export const billingApi = {
+  getSubscription: () => request('/billing/subscription'),
+  createCheckoutSession: (tier, interval = 'month') => request('/billing/create-checkout-session', {
+    method: 'POST',
+    body: JSON.stringify({ tier, interval }),
+  }),
+  createPortalSession: () => request('/billing/create-portal-session', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  }),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

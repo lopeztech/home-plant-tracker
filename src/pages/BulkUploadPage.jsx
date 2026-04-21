@@ -3,6 +3,7 @@ import { Button, Row, Col, Badge, ProgressBar, Form } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { analyseApi, imagesApi } from '../api/plants.js'
 import BulkPlantCard from '../components/BulkPlantCard.jsx'
+import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import { derivePlantName } from '../utils/plantName.js'
 
 const CONCURRENCY = 3
@@ -200,6 +201,12 @@ export default function BulkUploadPage() {
 
   return (
     <div className="content-wrapper">
+      <UpgradePrompt id="bulk-plant-limit" quota="plants">
+        You've reached your Free-tier plant limit — bulk uploads past this point will be blocked. Upgrade to Home Pro for unlimited plants.
+      </UpgradePrompt>
+      <UpgradePrompt id="bulk-ai-limit" quota="ai_analyses">
+        You've used your 5 free AI analyses this month. Upgrading to Home Pro gives you unlimited bulk AI plant analysis.
+      </UpgradePrompt>
       <div className="d-flex align-items-center justify-content-between mb-4">
         <h1 className="subheader-title">
           <svg className="sa-icon sa-icon-2x me-2"><use href="/icons/sprite.svg#upload"></use></svg>

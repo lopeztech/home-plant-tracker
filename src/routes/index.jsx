@@ -12,6 +12,8 @@ const SettingsPage = lazy(() => import('../pages/SettingsPage.jsx'))
 const ForecastPage = lazy(() => import('../pages/ForecastPage.jsx'))
 const InsightsPage = lazy(() => import('../pages/InsightsPage.jsx'))
 const BulkUploadPage = lazy(() => import('../pages/BulkUploadPage.jsx'))
+const BillingPage = lazy(() => import('../pages/BillingPage.jsx'))
+const PricingPage = lazy(() => import('../pages/PricingPage.jsx'))
 
 const mlInsightsEnabled = import.meta.env.VITE_ML_INSIGHTS_ENABLED === 'true'
 
@@ -34,6 +36,8 @@ export const routes = [
       ...(mlInsightsEnabled ? [{ path: 'insights', element: <InsightsPage /> }] : []),
       { path: 'bulk-upload', element: <BulkUploadPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'settings/billing', element: <BillingPage /> },
+      { path: 'pricing', element: <PricingPage /> },
     ],
   },
 ]

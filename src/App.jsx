@@ -2,6 +2,7 @@ import { useRoutes } from 'react-router'
 import { GoogleOAuthProvider } from '@react-oauth/google'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { LayoutProvider } from './context/LayoutContext.jsx'
+import { SubscriptionProvider } from './context/SubscriptionContext.jsx'
 import { ToastProvider } from './components/Toast.jsx'
 import { routes } from './routes/index.jsx'
 
@@ -16,9 +17,11 @@ export default function App() {
     <GoogleOAuthProvider clientId={clientId}>
       <AuthProvider>
         <LayoutProvider>
-          <ToastProvider>
-            <AppRoutes />
-          </ToastProvider>
+          <SubscriptionProvider>
+            <ToastProvider>
+              <AppRoutes />
+            </ToastProvider>
+          </SubscriptionProvider>
         </LayoutProvider>
       </AuthProvider>
     </GoogleOAuthProvider>
