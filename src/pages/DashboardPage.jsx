@@ -1,12 +1,15 @@
 import { useState, useCallback, useRef } from 'react'
 import { usePlantContext } from '../context/PlantContext.jsx'
+import { useAuth } from '../contexts/AuthContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import ErrorAlert from '../components/ErrorAlert.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 export default function DashboardPage() {
   const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading, reloadPlants } = usePlantContext()
+  const { isGuest } = useAuth()
   const gnomeWaterRef = useRef(null)
 
   const hasFloors = floors.length > 0
@@ -99,10 +102,19 @@ export default function DashboardPage() {
         ) : (
           <div className="p-4">
             <div className="panel panel-icon">
-              <div className="panel-container"><div className="panel-content text-center py-5">
-                <svg className="sa-icon sa-icon-5x text-muted mb-3"><use href="/icons/sprite.svg#upload"></use></svg>
-                <h5 className="fw-500 mb-2">No floorplan uploaded yet</h5>
-                <p className="text-muted mb-0">Go to <a href="/settings">Settings</a> to upload a floorplan or add floors manually.</p>
+              <div className="panel-container"><div className="panel-content">
+                <EmptyState
+                  icon="upload"
+                  title="Let's map your home"
+                  description="Upload a floorplan so we can show where each plant lives, or start by adding plants and we'll build the map around them."
+                  actions={[
+                    { label: 'Upload a floorplan', to: '/settings', variant: 'primary', icon: 'upload' },
+                    { label: 'Add plants first', onClick: handleAddPlant, variant: 'outline-primary', icon: 'plus' },
+                    ...(isGuest
+                      ? [{ label: 'Sign in to save your plants', to: '/login', variant: 'outline-secondary' }]
+                      : []),
+                  ]}
+                />
               </div></div>
             </div>
           </div>

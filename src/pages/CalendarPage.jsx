@@ -3,6 +3,7 @@ import { Button, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus } from '../utils/watering.js'
 import { getFeedingStatus } from '../utils/feeding.js'
+import EmptyState from '../components/EmptyState.jsx'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -87,6 +88,7 @@ export default function CalendarPage() {
   }, [plants, weather, floors, month, year])
 
   const selectedEvents = selectedDay ? dayMap[selectedDay] || [] : []
+  const hasAnyEventsThisMonth = Object.keys(dayMap).length > 0
 
   return (
     <div className="content-wrapper">
@@ -165,12 +167,35 @@ export default function CalendarPage() {
                 </span>
               </div>
 
+              {/* Month with zero scheduled tasks — nudge the user toward adding a plant. */}
+              {!hasAnyEventsThisMonth && plants.length === 0 && (
+                <div className="mt-3 border-top pt-3">
+                  <EmptyState
+                    compact
+                    icon="calendar"
+                    title="Nothing scheduled this month"
+                    description="Add your first plant and we'll start building a watering and feeding schedule here."
+                    actions={[{ label: 'Add a plant', to: '/', variant: 'primary', icon: 'plus' }]}
+                  />
+                </div>
+              )}
+              {!hasAnyEventsThisMonth && plants.length > 0 && (
+                <div className="mt-3 border-top pt-3">
+                  <EmptyState
+                    compact
+                    icon="calendar"
+                    title="No care tasks scheduled yet"
+                    description="Log a watering or feeding on one of your plants and future due dates will appear on this calendar."
+                  />
+                </div>
+              )}
+
               {/* Selected day events */}
               {selectedDay && (
                 <div className="mt-3 border-top pt-3">
                   <h6 className="fw-500 mb-2">{monthName.split(' ')[0]} {selectedDay}</h6>
                   {selectedEvents.length === 0 ? (
-                    <p className="text-muted fs-sm">No events this day.</p>
+                    <p className="text-muted fs-sm mb-0">Nothing was logged or scheduled on this day — a clean slate.</p>
                   ) : (
                     <ul className="list-unstyled mb-0">
                       {selectedEvents.map((evt, i) => (

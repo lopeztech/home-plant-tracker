@@ -3,6 +3,7 @@ import { Row, Col, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { isOutdoor } from '../utils/watering.js'
 import SeasonBadge from '../components/SeasonBadge.jsx'
+import EmptyState from '../components/EmptyState.jsx'
 
 function dayLabel(dateStr, index) {
   if (index === 0) return 'Today'
@@ -23,9 +24,16 @@ export default function ForecastPage() {
       <div className="content-wrapper">
         <h1 className="subheader-title mb-4">Forecast</h1>
         <div className="panel panel-icon">
-          <div className="panel-container"><div className="panel-content text-center py-5 text-muted">
-            <p>Waiting for weather data...</p>
-            <p className="fs-sm">Enable location access or set your location in Settings.</p>
+          <div className="panel-container"><div className="panel-content">
+            <EmptyState
+              icon="cloud-rain"
+              title="No forecast yet"
+              description="We couldn't pick up your location, so we can't show the weather or adjust watering for rain. Allow location access in your browser or set a city in Settings."
+              actions={[
+                { label: 'Set my location', to: '/settings', variant: 'primary' },
+                { label: 'Try again', onClick: () => window.location.reload(), variant: 'outline-secondary' },
+              ]}
+            />
           </div></div>
         </div>
       </div>

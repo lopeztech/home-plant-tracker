@@ -3,6 +3,7 @@ import { Row, Col, Card, Nav, Form, Badge } from 'react-bootstrap'
 import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
+import EmptyState from '../components/EmptyState.jsx'
 
 const HEALTH_COLORS = { Excellent: '#10b981', Good: '#22c55e', Fair: '#f59e0b', Poor: '#ef4444' }
 const HEALTH_ORDER = ['Excellent', 'Good', 'Fair', 'Poor']
@@ -84,7 +85,15 @@ function OverviewTab({ plants }) {
           <div className="panel panel-icon">
             <div className="panel-hdr"><span>Health Distribution</span></div>
             <div className="panel-container"><div className="panel-content">
-              {plants.length === 0 ? <p className="text-muted">No plants yet.</p> : (
+              {plants.length === 0 ? (
+                <EmptyState
+                  compact
+                  icon="feather"
+                  title="No plants to analyse yet"
+                  description="Add a plant on the Dashboard and its health will appear here."
+                  actions={[{ label: 'Add a plant', to: '/', variant: 'primary', icon: 'plus' }]}
+                />
+              ) : (
                 <>
                   <Chart options={healthChartOpts} series={healthData.map((d) => d.value)} type="donut" height={200} />
                   <table className="visually-hidden">
@@ -180,7 +189,17 @@ function PerPlantTab({ plants }) {
     return Math.round((Date.now() - new Date(plant.lastWatered).getTime()) / 86400000)
   }, [plant])
 
-  if (!plant) return <p className="text-muted">No plants yet.</p>
+  if (!plant) {
+    return (
+      <EmptyState
+        compact
+        icon="feather"
+        title="No plants to analyse yet"
+        description="Add a plant on the Dashboard and its watering trends will appear here."
+        actions={[{ label: 'Add a plant', to: '/', variant: 'primary', icon: 'plus' }]}
+      />
+    )
+  }
 
   const barOpts = {
     chart: { type: 'bar', toolbar: { show: false } },

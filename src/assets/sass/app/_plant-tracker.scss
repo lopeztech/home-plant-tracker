@@ -90,6 +90,22 @@
   object-fit: cover;
 }
 
+/* Shared empty-state surface — use via <EmptyState>. Centered, muted icon,
+   and comfortable breathing room around the copy and CTAs. */
+.empty-state {
+  max-width: 36rem;
+  margin-inline: auto;
+
+  h5 {
+    color: var(--bs-body-color);
+  }
+
+  p {
+    max-width: 28rem;
+    margin-inline: auto;
+  }
+}
+
 /* Icon-only "Water this plant" button on each plant card. Uses a real
    <button> so keyboard/screen-reader users can trigger it; these styles
    strip the default chrome but retain a visible :focus-visible ring. */
