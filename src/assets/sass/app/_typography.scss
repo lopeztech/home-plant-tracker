@@ -1,0 +1,112 @@
+/* ── Typography scale & semantic tokens ─────────────────────────────────
+ *
+ * Scale: Major Third (ratio 1.25) anchored at 1rem = 16px
+ *   Step -1 → xs   :  12px (0.75rem)
+ *   Step  0 → sm   :  14px (0.875rem)   ← UI body default
+ *   Step +1 → base :  16px (1rem)
+ *   Step +2 → lg   :  20px (1.25rem)
+ *   Step +3 → xl   :  25px (1.5625rem)
+ *   Step +4 → 2xl  :  31px (1.9375rem)
+ *   Step +5 → 3xl  :  39px (2.4375rem)
+ *
+ * Weights: 400 body · 500 medium · 600 semibold (drop 300 and 700)
+ * Line-heights: 1.2 headings · 1.4 titles/labels · 1.5 body/muted
+ * ─────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Size scale */
+  --tx-size-xs:   0.75rem;      /* 12px */
+  --tx-size-sm:   0.875rem;     /* 14px */
+  --tx-size-base: 1rem;         /* 16px */
+  --tx-size-lg:   1.25rem;      /* 20px */
+  --tx-size-xl:   1.5625rem;    /* 25px */
+  --tx-size-2xl:  1.9375rem;    /* 31px */
+  --tx-size-3xl:  2.4375rem;    /* 39px */
+
+  /* Semantic text colours (light mode) */
+  --tx-color-body:    var(--bs-body-color);
+  --tx-color-muted:   var(--bs-secondary-color);
+  --tx-color-heading: var(--bs-emphasis-color);
+}
+
+/* ── Dark-mode contrast corrections ────────────────────────────────────
+ * Bootstrap's --bs-secondary-color at opacity .75 on Smart Admin's dark
+ * backgrounds drops below 4.5:1 (WCAG AA).  We bump it to a solid value
+ * that clears the threshold across all 9 theme backgrounds.
+ * ─────────────────────────────────────────────────────────────────────── */
+[data-bs-theme="dark"] {
+  --tx-color-muted: rgba(222, 226, 230, 0.85);  /* ≥ 5:1 on darkest bg */
+  --bs-secondary-color: rgba(222, 226, 230, 0.85);
+}
+
+/* ── Semantic utility classes ─────────────────────────────────────────── */
+
+/* display — page-level hero numbers / empty-state headings */
+.tx-display {
+  font-size: var(--tx-size-2xl);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--tx-color-heading);
+  letter-spacing: -0.01em;
+}
+
+/* heading — section headings, chart titles */
+.tx-heading {
+  font-size: var(--tx-size-lg);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--tx-color-heading);
+}
+
+/* title — panel headers, modal section labels, tab headers */
+.tx-title {
+  font-size: var(--tx-size-sm);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--tx-color-body);
+}
+
+/* body — paragraph / list copy */
+.tx-body {
+  font-size: var(--tx-size-sm);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--tx-color-body);
+}
+
+/* muted — metadata, timestamps, secondary labels */
+.tx-muted {
+  font-size: var(--tx-size-xs);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--tx-color-muted);
+}
+
+/* ── Panel header baseline ─────────────────────────────────────────────
+ * Bring all Smart Admin panel headers to a consistent tx-title weight
+ * so Dashboard / Analytics / Calendar / Settings read as one app.
+ * Smart Admin's panel-hdr children are either <h2> or <span>.
+ * ─────────────────────────────────────────────────────────────────────── */
+.panel-hdr h2,
+.panel-hdr > span:first-child {
+  font-size: var(--tx-size-sm) !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
+}
+
+/* ── Drop fw-700 usage; cap at 600 (semibold) ──────────────────────────── */
+.fw-700 { font-weight: 600 !important; }
+
+/* ── Metadata / secondary text throughout ─────────────────────────────── */
+.panel-tag,
+.app-footer-content {
+  font-size: var(--tx-size-xs);
+  color: var(--tx-color-muted);
+}
+
+/* ── Subheader title consistency ───────────────────────────────────────── */
+.subheader-title {
+  font-size: var(--tx-size-lg);
+  font-weight: 600;
+  line-height: 1.2;
+}
