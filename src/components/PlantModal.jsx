@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
-import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi } from '../api/plants.js'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
@@ -262,6 +262,18 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [measurementError, setMeasurementError] = useState(null)
   const [phenologySaving, setPhenologySaving] = useState(false)
 
+  // Journal tab state
+  const [journalEntries, setJournalEntries] = useState(
+    () => [...(plant?.journalEntries || [])].sort((a, b) => new Date(b.date) - new Date(a.date))
+  )
+  const [newJournalBody, setNewJournalBody] = useState('')
+  const [newJournalMood, setNewJournalMood] = useState('')
+  const [newJournalTags, setNewJournalTags] = useState([])
+  const [journalSaving, setJournalSaving] = useState(false)
+  const [journalError, setJournalError] = useState(null)
+  const [editingEntryId, setEditingEntryId] = useState(null)
+  const [editingBody, setEditingBody] = useState('')
+
   // Validation + unsaved-change guard state. `isDirty` is set by user-initiated
   // edits only (not programmatic resyncs like the wateringRec effect).
   const [isDirty, setIsDirty] = useState(false)
@@ -439,6 +451,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       { id: 'watering', label: 'Watering' },
       { id: 'care', label: 'Care' },
       { id: 'growth', label: 'Growth' },
+      { id: 'journal', label: 'Journal' },
     ],
     [],
   )
@@ -521,6 +534,47 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       setPhenologyEvents(prev => prev.filter(e => e.id !== eventId))
     } catch (err) { console.error('Delete phenology event failed:', err) }
   }, [plant])
+
+  const handleAddJournalEntry = useCallback(async () => {
+    if (!newJournalBody.trim()) {
+      setJournalError('Entry cannot be empty.')
+      return
+    }
+    setJournalSaving(true)
+    setJournalError(null)
+    try {
+      const entry = await journalApi.add(plant.id, {
+        body: newJournalBody.trim(),
+        mood: newJournalMood || undefined,
+        tags: newJournalTags,
+      })
+      setJournalEntries(prev => [entry, ...prev])
+      setNewJournalBody('')
+      setNewJournalMood('')
+      setNewJournalTags([])
+    } catch (err) {
+      setJournalError(friendlyErrorMessage(err))
+    } finally {
+      setJournalSaving(false)
+    }
+  }, [newJournalBody, newJournalMood, newJournalTags, plant])
+
+  const handleDeleteJournalEntry = useCallback(async (entryId) => {
+    try {
+      await journalApi.delete(plant.id, entryId)
+      setJournalEntries(prev => prev.filter(e => e.id !== entryId))
+    } catch (err) { console.error('Delete journal entry failed:', err) }
+  }, [plant])
+
+  const handleSaveJournalEdit = useCallback(async (entryId) => {
+    if (!editingBody.trim()) return
+    try {
+      const updated = await journalApi.update(plant.id, entryId, { body: editingBody.trim() })
+      setJournalEntries(prev => prev.map(e => e.id === entryId ? updated : e))
+      setEditingEntryId(null)
+      setEditingBody('')
+    } catch (err) { console.error('Update journal entry failed:', err) }
+  }, [editingBody, plant])
 
   const wateringStatus = useMemo(() => plant ? getWateringStatus(plant, weather, floors) : null, [plant, weather, floors])
 
@@ -1521,6 +1575,102 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <p className="text-muted fs-xs mb-0">No phenology events logged yet. Record milestones like first bloom, first fruit, or leaf drop.</p>
             )}
           </div>
+        </Modal.Body>
+      )}
+
+      {/* Journal tab */}
+      {isEditing && activeTab === 'journal' && (
+        <Modal.Body role="tabpanel" id="plant-tabpanel-journal" aria-labelledby="plant-tab-journal">
+          <div className="mb-4">
+            <h6 className="fw-500 mb-2">New Entry</h6>
+            <Form.Group controlId="journal-body" className="mb-2">
+              <Form.Label visuallyHidden>Journal entry</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                placeholder="What did you observe? e.g. 'Noticed new leaf bud, moved away from radiator...'"
+                value={newJournalBody}
+                onChange={e => setNewJournalBody(e.target.value)}
+              />
+            </Form.Group>
+            <Row className="g-2 mb-2">
+              <Col xs={12} sm={6}>
+                <Form.Select size="sm" value={newJournalMood} onChange={e => setNewJournalMood(e.target.value)}>
+                  <option value="">Mood (optional)</option>
+                  <option value="thriving">🌿 Thriving</option>
+                  <option value="ok">😐 OK</option>
+                  <option value="struggling">😟 Struggling</option>
+                  <option value="dying">⚠️ Dying</option>
+                </Form.Select>
+              </Col>
+              <Col xs={12} sm={6}>
+                <Form.Select size="sm" value={newJournalTags[0] || ''} onChange={e => setNewJournalTags(e.target.value ? [e.target.value] : [])}>
+                  <option value="">Tag (optional)</option>
+                  <option value="pest">Pest</option>
+                  <option value="disease">Disease</option>
+                  <option value="bloom">Bloom</option>
+                  <option value="new-growth">New growth</option>
+                  <option value="repot">Repot</option>
+                  <option value="propagate">Propagate</option>
+                  <option value="relocate">Relocate</option>
+                  <option value="experiment">Experiment</option>
+                  <option value="other">Other</option>
+                </Form.Select>
+              </Col>
+            </Row>
+            {journalError && <div className="text-danger fs-xs mb-2">{journalError}</div>}
+            <Button variant="primary" size="sm" onClick={handleAddJournalEntry} disabled={journalSaving || !newJournalBody.trim()}>
+              {journalSaving && <Spinner size="sm" className="me-1" />}
+              Add Entry
+            </Button>
+          </div>
+
+          {journalEntries.length > 0 ? (
+            <div>
+              <h6 className="fw-500 mb-2">Entries ({journalEntries.length})</h6>
+              {journalEntries.map(entry => (
+                <div key={entry.id} className="border rounded p-3 mb-2">
+                  <div className="d-flex align-items-center gap-2 mb-1">
+                    <span className="fs-xs text-muted">{entry.date.slice(0, 10)}</span>
+                    {entry.mood && (
+                      <Badge bg="light" text="dark" className="fs-xs">
+                        {entry.mood === 'thriving' ? '🌿' : entry.mood === 'ok' ? '😐' : entry.mood === 'struggling' ? '😟' : '⚠️'} {entry.mood}
+                      </Badge>
+                    )}
+                    {(entry.tags || []).map(tag => (
+                      <Badge key={tag} bg="secondary" className="fs-xs">{tag}</Badge>
+                    ))}
+                    <div className="ms-auto d-flex gap-1">
+                      <Button variant="link" size="sm" className="text-muted p-0 fs-xs"
+                        onClick={() => { setEditingEntryId(entry.id); setEditingBody(entry.body) }}>
+                        Edit
+                      </Button>
+                      <Button variant="link" size="sm" className="text-danger p-0 fs-xs" aria-label="Delete entry"
+                        onClick={() => handleDeleteJournalEntry(entry.id)}>
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                  {editingEntryId === entry.id ? (
+                    <div>
+                      <Form.Control as="textarea" rows={3} value={editingBody}
+                        onChange={e => setEditingBody(e.target.value)} className="mb-2 fs-xs" />
+                      <div className="d-flex gap-2">
+                        <Button size="sm" variant="primary" onClick={() => handleSaveJournalEdit(entry.id)}>Save</Button>
+                        <Button size="sm" variant="light" onClick={() => setEditingEntryId(null)}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mb-0 fs-sm" style={{ whiteSpace: 'pre-wrap' }}>{entry.body}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted text-center py-3 mb-0 fs-sm">
+              No journal entries yet. Start recording observations, moves, and milestones for this plant.
+            </p>
+          )}
         </Modal.Body>
       )}
 

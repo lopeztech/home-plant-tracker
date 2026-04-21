@@ -2,7 +2,7 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import PlantModal from '../components/PlantModal.jsx'
-import { measurementsApi, phenologyApi } from '../api/plants.js'
+import { measurementsApi, phenologyApi, journalApi } from '../api/plants.js'
 
 // Stub out ImageAnalyser to avoid triggering real API calls in unit tests.
 vi.mock('../components/ImageAnalyser.jsx', () => ({
@@ -55,6 +55,27 @@ vi.mock('../api/plants.js', () => ({
   phenologyApi: {
     list: vi.fn().mockResolvedValue([]),
     add: vi.fn().mockResolvedValue({ id: 'new-ev', date: '2026-04-21', event: 'first-bloom', notes: '' }),
+    delete: vi.fn().mockResolvedValue({ deleted: true }),
+  },
+  journalApi: {
+    list: vi.fn().mockResolvedValue([]),
+    add: vi.fn().mockResolvedValue({
+      id: 'entry-1',
+      date: '2026-04-21T00:00:00Z',
+      body: 'New journal entry',
+      tags: [],
+      mood: null,
+      createdAt: '2026-04-21T00:00:00Z',
+    }),
+    update: vi.fn().mockResolvedValue({
+      id: 'entry-1',
+      date: '2026-04-21T00:00:00Z',
+      body: 'Updated entry',
+      tags: [],
+      mood: null,
+      createdAt: '2026-04-21T00:00:00Z',
+      updatedAt: '2026-04-21T01:00:00Z',
+    }),
     delete: vi.fn().mockResolvedValue({ deleted: true }),
   },
 }))
@@ -804,15 +825,17 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     expect(screen.getByRole('tablist', { name: /plant sections/i })).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth', 'Journal'])
   })
 
   it('marks the active tab with aria-selected="true"', () => {
     renderModal({ plant: existingPlant })
-    const [plantTab, wateringTab, careTab] = screen.getAllByRole('tab')
+    const [plantTab, wateringTab, careTab, growthTab, journalTab] = screen.getAllByRole('tab')
     expect(plantTab).toHaveAttribute('aria-selected', 'true')
     expect(wateringTab).toHaveAttribute('aria-selected', 'false')
     expect(careTab).toHaveAttribute('aria-selected', 'false')
+    expect(growthTab).toHaveAttribute('aria-selected', 'false')
+    expect(journalTab).toHaveAttribute('aria-selected', 'false')
   })
 
   it('links each tab to its panel via aria-controls / aria-labelledby', () => {
@@ -833,9 +856,9 @@ describe('PlantModal', () => {
 
   it('wraps to the first tab when ArrowRight is pressed on the last tab', () => {
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Growth'))
-    const growthTab = screen.getAllByRole('tab')[3]
-    fireEvent.keyDown(growthTab, { key: 'ArrowRight' })
+    fireEvent.click(screen.getByText('Journal'))
+    const journalTab = screen.getAllByRole('tab')[4]
+    fireEvent.keyDown(journalTab, { key: 'ArrowRight' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
 
@@ -852,9 +875,8 @@ describe('PlantModal', () => {
     fireEvent.click(screen.getByText('Watering'))
     const wateringTab = screen.getAllByRole('tab')[1]
     fireEvent.keyDown(wateringTab, { key: 'End' })
-    // Growth is now the last tab (index 3)
-    expect(screen.getAllByRole('tab')[3]).toHaveAttribute('aria-selected', 'true')
-    fireEvent.keyDown(screen.getAllByRole('tab')[3], { key: 'Home' })
+    expect(screen.getAllByRole('tab')[4]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(screen.getAllByRole('tab')[4], { key: 'Home' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
 })
@@ -972,5 +994,127 @@ describe('Growth tab', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Growth' }))
     fireEvent.click(screen.getByRole('button', { name: /delete measurement/i }))
     await waitFor(() => expect(measurementsApi.delete).toHaveBeenCalledWith('plant-1', 'm1'))
+  })
+})
+
+// ── Journal tab ───────────────────────────────────────────────────────────────
+
+describe('Journal tab', () => {
+  const plantWithJournal = {
+    ...existingPlant,
+    journalEntries: [
+      { id: 'e1', date: '2026-04-01T00:00:00Z', body: 'First entry', tags: ['bloom'], mood: 'thriving', createdAt: '2026-04-01T00:00:00Z' },
+      { id: 'e2', date: '2026-04-10T00:00:00Z', body: 'Second entry', tags: [], mood: 'ok', createdAt: '2026-04-10T00:00:00Z' },
+    ],
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('shows the Journal tab when editing a plant', () => {
+    renderModal({ plant: existingPlant })
+    expect(screen.getByRole('tab', { name: /journal/i })).toBeInTheDocument()
+  })
+
+  it('shows the journal panel when Journal tab is active', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    expect(screen.getByRole('tabpanel', { name: /journal/i })).toBeInTheDocument()
+  })
+
+  it('shows journal entries from plant prop sorted newest-first', () => {
+    renderModal({ plant: plantWithJournal })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    const entries = screen.getAllByText(/^(First|Second) entry$/)
+    // Second entry (newer date 2026-04-10) appears before first (2026-04-01)
+    expect(entries[0].textContent).toBe('Second entry')
+    expect(entries[1].textContent).toBe('First entry')
+  })
+
+  it('shows empty state when there are no journal entries', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    expect(screen.getByText(/no journal entries yet/i)).toBeInTheDocument()
+  })
+
+  it('shows the entry body textarea and Add Entry button', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    expect(screen.getByLabelText(/journal entry/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add entry/i })).toBeInTheDocument()
+  })
+
+  it('disables Add Entry button when body is empty', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    expect(screen.getByRole('button', { name: /add entry/i })).toBeDisabled()
+  })
+
+  it('enables Add Entry button when body has text', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    fireEvent.change(screen.getByLabelText(/journal entry/i), { target: { value: 'New observation' } })
+    expect(screen.getByRole('button', { name: /add entry/i })).not.toBeDisabled()
+  })
+
+  it('calls journalApi.add and appends entry on submit', async () => {
+    journalApi.add.mockResolvedValueOnce({
+      id: 'new-1', date: '2026-04-21T00:00:00Z', body: 'New observation', tags: [], mood: null, createdAt: '2026-04-21T00:00:00Z',
+    })
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    fireEvent.change(screen.getByLabelText(/journal entry/i), { target: { value: 'New observation' } })
+    fireEvent.click(screen.getByRole('button', { name: /add entry/i }))
+    await waitFor(() => expect(journalApi.add).toHaveBeenCalledWith(
+      existingPlant.id,
+      expect.objectContaining({ body: 'New observation' })
+    ))
+    expect(await screen.findByText('New observation')).toBeInTheDocument()
+  })
+
+  it('disables Add Entry button when body is cleared after typing', () => {
+    renderModal({ plant: existingPlant })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    const textarea = screen.getByLabelText(/journal entry/i)
+    fireEvent.change(textarea, { target: { value: 'Hello' } })
+    fireEvent.change(textarea, { target: { value: '' } })
+    expect(screen.getByRole('button', { name: /add entry/i })).toBeDisabled()
+  })
+
+  it('calls journalApi.delete when the delete button is clicked', async () => {
+    journalApi.delete.mockResolvedValueOnce({ deleted: true })
+    renderModal({ plant: plantWithJournal })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    const deleteButtons = screen.getAllByRole('button', { name: /delete/i })
+    fireEvent.click(deleteButtons[0])
+    await waitFor(() => expect(journalApi.delete).toHaveBeenCalledWith(existingPlant.id, expect.any(String)))
+  })
+
+  it('removes the deleted entry from the list', async () => {
+    journalApi.delete.mockResolvedValueOnce({ deleted: true })
+    renderModal({ plant: plantWithJournal })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    expect(screen.getByText('Second entry')).toBeInTheDocument()
+    const deleteButtons = screen.getAllByRole('button', { name: /delete/i })
+    fireEvent.click(deleteButtons[0])
+    await waitFor(() => expect(screen.queryByText('Second entry')).not.toBeInTheDocument())
+  })
+
+  it('calls journalApi.update when editing an entry and saving', async () => {
+    journalApi.update.mockResolvedValueOnce({
+      id: 'e1', date: '2026-04-01T00:00:00Z', body: 'Updated entry', tags: ['bloom'], mood: 'thriving',
+      createdAt: '2026-04-01T00:00:00Z', updatedAt: '2026-04-21T00:00:00Z',
+    })
+    renderModal({ plant: plantWithJournal })
+    fireEvent.click(screen.getByRole('tab', { name: /journal/i }))
+    const editButtons = screen.getAllByRole('button', { name: /edit/i })
+    fireEvent.click(editButtons[editButtons.length - 1])
+    const editTextarea = screen.getByDisplayValue('First entry')
+    fireEvent.change(editTextarea, { target: { value: 'Updated entry' } })
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }))
+    await waitFor(() => expect(journalApi.update).toHaveBeenCalledWith(
+      existingPlant.id, 'e1', expect.objectContaining({ body: 'Updated entry' })
+    ))
   })
 })

@@ -191,6 +191,13 @@ export const phenologyApi = {
   delete: (id, eventId) => request(`/plants/${id}/phenology/${eventId}`, { method: 'DELETE' }),
 }
 
+export const journalApi = {
+  list: (id) => request(`/plants/${id}/journal`),
+  add: (id, data) => request(`/plants/${id}/journal`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, entryId, data) => request(`/plants/${id}/journal/${entryId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  delete: (id, entryId) => request(`/plants/${id}/journal/${entryId}`, { method: 'DELETE' }),
+}
+
 export const billingApi = {
   getSubscription: () => request('/billing/subscription'),
   createCheckoutSession: (tier, interval = 'month') => request('/billing/create-checkout-session', {
