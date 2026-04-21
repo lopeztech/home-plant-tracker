@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Row, Col, Card, Badge, Spinner, Button, ProgressBar } from 'react-bootstrap'
 import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
+import { useLayoutContext } from '../context/LayoutContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -13,6 +14,7 @@ const PATTERN_LABELS = { optimal: 'Optimal', over_watered: 'Over-watered', under
 
 export default function InsightsPage() {
   const { plants } = usePlantContext()
+  const { theme } = useLayoutContext()
   const [careScores, setCareScores] = useState(null)
   const [loading, setLoading] = useState(true)
   const [expandedPlant, setExpandedPlant] = useState(null)
@@ -179,6 +181,8 @@ export default function InsightsPage() {
                         height={180}
                         series={Object.values(patternDistribution).filter(v => v > 0)}
                         options={{
+                          chart: { background: 'transparent' },
+                          theme: { mode: theme },
                           labels: Object.keys(patternDistribution).filter(k => patternDistribution[k] > 0).map(k => PATTERN_LABELS[k]),
                           colors: Object.keys(patternDistribution).filter(k => patternDistribution[k] > 0).map(k => PATTERN_COLORS[k]),
                           legend: { position: 'bottom', fontSize: '11px' },

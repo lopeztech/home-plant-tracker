@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react'
 import { Row, Col, Card, Nav, Form, Badge } from 'react-bootstrap'
 import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
+import { useLayoutContext } from '../context/LayoutContext.jsx'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 
 const HEALTH_COLORS = { Excellent: '#10b981', Good: '#22c55e', Fair: '#f59e0b', Poor: '#ef4444' }
@@ -48,7 +49,7 @@ function heatColor(count) {
   return '#047857'
 }
 
-function OverviewTab({ plants }) {
+function OverviewTab({ plants, theme }) {
   const healthData = useMemo(() => {
     const counts = {}
     for (const p of plants) { counts[p.health || 'Unknown'] = (counts[p.health || 'Unknown'] || 0) + 1 }
@@ -69,7 +70,8 @@ function OverviewTab({ plants }) {
   const heatmapDays = useMemo(() => buildHeatmap(plants), [plants])
 
   const healthChartOpts = {
-    chart: { type: 'donut' },
+    chart: { type: 'donut', background: 'transparent' },
+    theme: { mode: theme },
     labels: healthData.map((d) => d.name),
     colors: healthData.map((d) => d.color),
     legend: { position: 'right', fontSize: '13px' },
@@ -177,7 +179,7 @@ function OverviewTab({ plants }) {
   )
 }
 
-function PerPlantTab({ plants }) {
+function PerPlantTab({ plants, theme }) {
   const [selectedId, setSelectedId] = useState(plants[0]?.id ?? '')
   const plant = plants.find((p) => p.id === selectedId) ?? plants[0]
 
@@ -192,7 +194,8 @@ function PerPlantTab({ plants }) {
   if (!plant) return <p className="text-muted">No plants yet.</p>
 
   const barOpts = {
-    chart: { type: 'bar', toolbar: { show: false } },
+    chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
+    theme: { mode: theme },
     xaxis: { categories: weeklyData.map((w) => w.week) },
     colors: ['var(--bs-primary, #10b981)'],
     plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
@@ -212,7 +215,8 @@ function PerPlantTab({ plants }) {
   }
 
   const radialOpts = {
-    chart: { type: 'radialBar' },
+    chart: { type: 'radialBar', background: 'transparent' },
+    theme: { mode: theme },
     plotOptions: { radialBar: { hollow: { size: '65%' }, dataLabels: { name: { show: true, fontSize: '12px' }, value: { show: true, fontSize: '24px', fontWeight: 700 } } } },
     labels: [score !== null ? (score >= 80 ? 'Consistent' : score >= 60 ? 'Moderate' : 'Irregular') : 'No data'],
     colors: [score !== null ? (score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444') : '#6b7280'],
@@ -308,6 +312,7 @@ function PerPlantTab({ plants }) {
 
 export default function AnalyticsPage() {
   const { plants } = usePlantContext()
+  const { theme } = useLayoutContext()
   const [tab, setTab] = useState('overview')
 
   return (
@@ -321,7 +326,7 @@ export default function AnalyticsPage() {
       </Nav>
 
       <div className="main-content">
-        {tab === 'overview' ? <OverviewTab plants={plants} /> : <PerPlantTab plants={plants} />}
+        {tab === 'overview' ? <OverviewTab plants={plants} theme={theme} /> : <PerPlantTab plants={plants} theme={theme} />}
       </div>
     </div>
   )

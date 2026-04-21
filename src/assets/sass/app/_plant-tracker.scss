@@ -50,7 +50,16 @@
   border-radius: var(--bs-border-radius);
   overflow: hidden;
   border: 1px solid var(--bs-border-color);
-  background: var(--app-content-background, #fdfdfd);
+  background: var(--floorplan-bg);
+}
+
+/* Dark-mode Leaflet map */
+[data-bs-theme="dark"] .leaflet-container {
+  background: var(--floorplan-bg);
+}
+
+[data-bs-theme="dark"] .leaflet-tile-pane {
+  filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
 }
 
 /* Plant card in list */
@@ -115,16 +124,35 @@
   }
 }
 
-/* Status colors */
-.status-overdue  { color: #ef4444; }
-.status-today    { color: #f97316; }
-.status-soon     { color: #eab308; }
-.status-good     { color: #22c55e; }
+/* ── Design tokens ───────────────────────────────────────────────────── */
+:root {
+  --color-status-overdue:  #ef4444;
+  --color-status-today:    #f97316;
+  --color-status-soon:     #eab308;
+  --color-status-good:     #22c55e;
 
-.bg-status-overdue  { background-color: #ef4444; }
-.bg-status-today    { background-color: #f97316; }
-.bg-status-soon     { background-color: #eab308; }
-.bg-status-good     { background-color: #22c55e; }
+  --color-health-excellent: #10b981;
+  --color-health-good:      #22c55e;
+  --color-health-fair:      #f59e0b;
+  --color-health-poor:      #ef4444;
+
+  --floorplan-bg: #fdfdfd;
+}
+
+[data-bs-theme="dark"] {
+  --floorplan-bg: #1e1e2e;
+}
+
+/* Status colors */
+.status-overdue  { color: var(--color-status-overdue); }
+.status-today    { color: var(--color-status-today); }
+.status-soon     { color: var(--color-status-soon); }
+.status-good     { color: var(--color-status-good); }
+
+.bg-status-overdue  { background-color: var(--color-status-overdue); }
+.bg-status-today    { background-color: var(--color-status-today); }
+.bg-status-soon     { background-color: var(--color-status-soon); }
+.bg-status-good     { background-color: var(--color-status-good); }
 
 /* Floor tabs */
 .floor-tab {

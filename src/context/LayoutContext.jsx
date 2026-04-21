@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 
 const INIT_STATE = {
   theme: 'light',
+  themeMode: 'light', // 'light' | 'dark' | 'auto'
   headerFixed: false,
   navCollapsed: false,
   navMinified: false,
@@ -17,13 +18,29 @@ const INIT_STATE = {
 
 const LS_KEY = '__PLANT_TRACKER_LAYOUT__'
 
+function getOsTheme() {
+  try {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  } catch {
+    return 'light'
+  }
+}
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(LS_KEY)
-    return raw ? { ...INIT_STATE, ...JSON.parse(raw) } : INIT_STATE
+    if (!raw) return INIT_STATE
+    const saved = { ...INIT_STATE, ...JSON.parse(raw) }
+    // Back-compat: if themeMode not stored, derive from theme
+    if (!saved.themeMode) saved.themeMode = saved.theme
+    return saved
   } catch {
     return INIT_STATE
   }
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-bs-theme', theme)
 }
 
 const LayoutContext = createContext(undefined)
@@ -59,10 +76,17 @@ export function LayoutProvider({ children }) {
     persist((prev) => ({ ...prev, [key]: value }))
   }, [persist])
 
-  const changeTheme = useCallback((theme) => {
-    document.documentElement.setAttribute('data-bs-theme', theme)
-    persist((prev) => ({ ...prev, theme }))
+  // changeThemeMode: 'light' | 'dark' | 'auto'
+  const changeThemeMode = useCallback((mode) => {
+    const resolved = mode === 'auto' ? getOsTheme() : mode
+    applyTheme(resolved)
+    persist((prev) => ({ ...prev, themeMode: mode, theme: resolved }))
   }, [persist])
+
+  // Legacy alias kept so existing callers (e.g. old Settings toggle) still work
+  const changeTheme = useCallback((theme) => {
+    changeThemeMode(theme)
+  }, [changeThemeMode])
 
   const changeThemeStyle = useCallback((themeId) => {
     const el = document.getElementById('app-theme')
@@ -98,7 +122,12 @@ export function LayoutProvider({ children }) {
 
   // Apply persisted settings on mount
   useEffect(() => {
-    document.documentElement.setAttribute('data-bs-theme', settings.theme)
+    const resolved = settings.themeMode === 'auto' ? getOsTheme() : settings.theme
+    applyTheme(resolved)
+    // Sync theme state if auto-resolved differs from persisted
+    if (resolved !== settings.theme) {
+      setSettings((prev) => ({ ...prev, theme: resolved }))
+    }
     const el = document.getElementById('app-theme')
     if (el && settings.selectedTheme !== 'default') {
       el.href = `/css/${settings.selectedTheme}.css`
@@ -110,16 +139,30 @@ export function LayoutProvider({ children }) {
     })
   }, [])
 
+  // Watch for OS theme changes when themeMode === 'auto'
+  useEffect(() => {
+    if (settings.themeMode !== 'auto') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const handler = (e) => {
+      const next = e.matches ? 'dark' : 'light'
+      applyTheme(next)
+      setSettings((prev) => ({ ...prev, theme: next }))
+    }
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
+  }, [settings.themeMode])
+
   const value = useMemo(() => ({
     ...settings,
     settings,
     changeTheme,
+    changeThemeMode,
     changeThemeStyle,
     toggleSetting,
     showBackdrop,
     hideBackdrop,
     customizer,
-  }), [settings, changeTheme, changeThemeStyle, toggleSetting, showBackdrop, hideBackdrop, customizer])
+  }), [settings, changeTheme, changeThemeMode, changeThemeStyle, toggleSetting, showBackdrop, hideBackdrop, customizer])
 
   return <LayoutContext.Provider value={value}>{children}</LayoutContext.Provider>
 }

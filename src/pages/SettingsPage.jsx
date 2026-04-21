@@ -317,20 +317,42 @@ function PropertyTab({ search }) {
 
 function PreferencesTab({ search }) {
   const { tempUnit, location, setLocation } = usePlantContext()
-  const { theme, changeTheme } = useLayoutContext()
+  const { themeMode, changeThemeMode } = useLayoutContext()
   const [locationSearch, setLocationSearch] = useState('')
   const [locationResults, setLocationResults] = useState([])
   const [locationSearching, setLocationSearching] = useState(false)
 
+  const THEME_OPTIONS = [
+    { value: 'light', label: 'Light', icon: 'sun' },
+    { value: 'dark', label: 'Dark', icon: 'moon' },
+    { value: 'auto', label: 'Auto', icon: 'monitor' },
+  ]
+
   return (
     <>
       <SettingSection id="appearance" title="Appearance" icon="sun" search={search}>
-        <div className="d-flex align-items-center justify-content-between">
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
           <span>Theme</span>
-          <Button variant="outline-default" size="sm" onClick={() => changeTheme(theme === 'dark' ? 'light' : 'dark')}>
-            <svg className="sa-icon me-1" aria-hidden="true"><use href={`/icons/sprite.svg#${theme === 'dark' ? 'sun' : 'moon'}`}></use></svg>
-            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-          </Button>
+          <div className="d-flex gap-3" role="radiogroup" aria-label="Theme mode">
+            {THEME_OPTIONS.map(({ value, label, icon }) => (
+              <Form.Check
+                key={value}
+                type="radio"
+                id={`theme-${value}`}
+                name="theme-mode"
+                label={
+                  <span className="d-flex align-items-center gap-1">
+                    <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true">
+                      <use href={`/icons/sprite.svg#${icon}`}></use>
+                    </svg>
+                    {label}
+                  </span>
+                }
+                checked={themeMode === value}
+                onChange={() => changeThemeMode(value)}
+              />
+            ))}
+          </div>
         </div>
       </SettingSection>
 
