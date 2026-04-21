@@ -9,6 +9,11 @@ vi.mock('../components/ImageAnalyser.jsx', () => ({
   default: () => <div data-testid="image-analyser" />,
 }))
 
+// Stub PlantQRTag (uses qrcode canvas, not available in jsdom).
+vi.mock('../components/PlantQRTag.jsx', () => ({
+  default: ({ plant }) => <div data-testid="plant-qr-tag" data-plant-id={plant?.id} />,
+}))
+
 // Stub react-apexcharts so the Growth tab chart renders without canvas issues.
 vi.mock('react-apexcharts', () => ({
   default: ({ series, type }) => (
@@ -77,6 +82,15 @@ vi.mock('../api/plants.js', () => ({
       updatedAt: '2026-04-21T01:00:00Z',
     }),
     delete: vi.fn().mockResolvedValue({ deleted: true }),
+  },
+  harvestApi: {
+    list: vi.fn().mockResolvedValue([]),
+    add: vi.fn().mockResolvedValue({ id: 'h1', date: '2026-04-21', quantity: 1, unit: 'kg' }),
+    delete: vi.fn().mockResolvedValue({ deleted: true }),
+  },
+  qrApi: {
+    getShortCode: vi.fn().mockResolvedValue({ shortCode: 'hp-test1', plantId: 'plant-1' }),
+    scan: vi.fn().mockResolvedValue({ plantId: 'plant-1' }),
   },
 }))
 

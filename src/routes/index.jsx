@@ -16,12 +16,14 @@ const BillingPage = lazy(() => import('../pages/BillingPage.jsx'))
 const PricingPage = lazy(() => import('../pages/PricingPage.jsx'))
 const PrivacyPage = lazy(() => import('../pages/PrivacyPage.jsx'))
 const TermsPage = lazy(() => import('../pages/TermsPage.jsx'))
+const ScanPage = lazy(() => import('../pages/ScanPage.jsx'))
 
 const mlInsightsEnabled = import.meta.env.VITE_ML_INSIGHTS_ENABLED === 'true'
 
 export const routes = [
   { path: '/privacy', element: <Suspense fallback={null}><PrivacyPage /></Suspense> },
   { path: '/terms', element: <Suspense fallback={null}><TermsPage /></Suspense> },
+  { path: '/scan/:shortCode', element: <Suspense fallback={null}><ScanPage /></Suspense> },
   {
     element: <AuthLayout />,
     children: [

@@ -3201,3 +3201,77 @@ describe('DELETE /plants/:id/harvests/:harvestId', () => {
     expect(res.status).toBe(200);
   });
 });
+
+// ── QR short-code & scan routes ───────────────────────────────────────────────
+
+describe('GET /plants/:id/short-code', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/plants/p1/short-code');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .get('/plants/missing/short-code')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns existing shortCode if present', async () => {
+    store[plantPath('p1')] = { name: 'Monstera', shortCode: 'hp-abc12' };
+    const res = await request(app)
+      .get('/plants/p1/short-code')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.shortCode).toBe('hp-abc12');
+    expect(res.body.plantId).toBe('p1');
+  });
+
+  it('generates and persists a shortCode if none exists', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .get('/plants/p1/short-code')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.shortCode).toMatch(/^hp-[a-z0-9]{5}$/);
+    expect(store[plantPath('p1')].shortCode).toBe(res.body.shortCode);
+  });
+});
+
+describe('GET /scan/:shortCode', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/scan/hp-abc12');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when shortCode is not found', async () => {
+    store[plantPath('p1')] = { name: 'Fern', shortCode: 'hp-other' };
+    const res = await request(app)
+      .get('/scan/hp-notfound')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/not found/i);
+  });
+
+  it('resolves a valid shortCode to the plant', async () => {
+    store[plantPath('p1')] = { name: 'Monstera', species: 'Monstera deliciosa', shortCode: 'hp-abc12' };
+    const res = await request(app)
+      .get('/scan/hp-abc12')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plantId).toBe('p1');
+    expect(res.body.name).toBe('Monstera');
+    expect(res.body.species).toBe('Monstera deliciosa');
+  });
+});
+
+describe('POST /plants — shortCode generation', () => {
+  it('assigns a shortCode on plant creation', async () => {
+    const res = await request(app)
+      .post('/plants')
+      .send({ name: 'Tulip', species: 'Tulipa', frequencyDays: 7, lastWatered: '2026-01-01' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.shortCode).toMatch(/^hp-[a-z0-9]{5}$/);
+  });
+});

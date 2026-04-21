@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
+import PlantQRTag from './PlantQRTag.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi } from '../api/plants.js'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -1069,6 +1070,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   </>
                 )
               })()}
+              </Accordion.Body>
+            </Accordion.Item>
+            )}
+            {isEditing && (
+            <Accordion.Item eventKey="qr-tag">
+              <Accordion.Header>QR Tag</Accordion.Header>
+              <Accordion.Body>
+                <PlantQRTag plant={plant} />
               </Accordion.Body>
             </Accordion.Item>
             )}

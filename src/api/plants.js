@@ -204,6 +204,11 @@ export const harvestApi = {
   delete: (id, harvestId) => request(`/plants/${id}/harvests/${harvestId}`, { method: 'DELETE' }),
 }
 
+export const qrApi = {
+  getShortCode: (id) => request(`/plants/${id}/short-code`),
+  scan: (shortCode) => request(`/scan/${encodeURIComponent(shortCode)}`),
+}
+
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),
