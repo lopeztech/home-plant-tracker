@@ -5,6 +5,7 @@ import { analyseApi, imagesApi } from '../api/plants.js'
 import BulkPlantCard from '../components/BulkPlantCard.jsx'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import { derivePlantName } from '../utils/plantName.js'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 const CONCURRENCY = 3
 
@@ -122,7 +123,7 @@ export default function BulkUploadPage() {
         setEntries((prev) => prev.map((e) => e.id === entry.id ? {
           ...e,
           status: 'error',
-          error: `Analysis failed: ${err.message}`,
+          error: `Analysis failed — ${friendlyErrorMessage(err, { context: 'photo analysis' })}`,
         } : e))
       }
     }, CONCURRENCY)
@@ -180,7 +181,7 @@ export default function BulkUploadPage() {
       } catch (err) {
         console.error('Bulk save failed for entry', entry.id, err)
         setEntries((prev) => prev.map((e) => e.id === entry.id ? {
-          ...e, status: 'error', error: `Save failed: ${err?.message || 'unknown error'}`,
+          ...e, status: 'error', error: `Save failed — ${friendlyErrorMessage(err, { context: 'saving this plant' })}`,
         } : e))
       }
     }, CONCURRENCY)

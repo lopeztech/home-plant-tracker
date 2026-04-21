@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Button, Card, Spinner, Alert, Badge, Form, InputGroup } from 'react-bootstrap'
+import { Button, Card, Spinner, Badge, Form, InputGroup } from 'react-bootstrap'
 import { analyseApi } from '../api/plants.js'
+import ErrorAlert from './ErrorAlert.jsx'
+import { toFriendlyError } from '../utils/errorMessages.js'
 
 const ANALYSIS_STAGES = [
   'Identifying plant species...',
@@ -63,7 +65,7 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
       onAnalysisComplete(result)
       setShowSpeciesHint(false)
       setSpeciesHint('')
-    } catch (err) { setError(err.message) }
+    } catch (err) { setError(toFriendlyError(err, { context: 'photo analysis' })) }
     finally { setIsAnalysing(false) }
   }, [onAnalysisComplete])
 
@@ -116,10 +118,15 @@ export default function ImageAnalyser({ initialImage, onAnalysisComplete, onImag
       )}
 
       {error && (
-        <Alert variant="danger" className="mt-2 fs-sm py-2">
-          {error}
-          {imageFile && <Button variant="link" size="sm" className="p-0 ms-2 text-danger" onClick={handleReanalyse}>Retry</Button>}
-        </Alert>
+        <div className="mt-2">
+          <ErrorAlert
+            error={error}
+            context="photo analysis"
+            size="sm"
+            onRetry={imageFile ? handleReanalyse : undefined}
+            onDismiss={() => setError(null)}
+          />
+        </div>
       )}
 
       {analysisResult && (

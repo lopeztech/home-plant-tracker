@@ -5,6 +5,7 @@ import { useSubscription } from '../context/SubscriptionContext.jsx'
 import { billingApi } from '../api/plants.js'
 import { useToast } from '../components/Toast.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 const TIERS = [
   {
@@ -75,7 +76,7 @@ export default function PricingPage() {
       const { url } = await billingApi.createCheckoutSession(targetTier, interval === 'month' ? 'month' : 'year')
       window.location.assign(url)
     } catch (err) {
-      toast.error(err.message || 'Failed to start checkout')
+      toast.error(friendlyErrorMessage(err, { context: 'starting checkout' }))
     } finally {
       setBusy(null)
     }

@@ -7,22 +7,11 @@ import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern
 import { derivePlantName } from '../utils/plantName.js'
 import { getPlantEmoji, PLANT_EMOJI_GROUPS } from '../utils/plantEmoji.js'
 import { PlantContext } from '../context/PlantContext.jsx'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 // Max recommendation entries retained per plant. Older entries are trimmed
 // when a new one is appended so Firestore docs don't grow unbounded.
 const RECOMMENDATION_HISTORY_LIMIT = 20
-
-// Render common low-level errors as friendly text; otherwise pass through.
-function friendlyErrorMessage(err) {
-  const raw = err?.message || String(err || '')
-  if (/failed to fetch|networkerror|load failed/i.test(raw)) {
-    return "Couldn't reach the server. Check your connection and try again."
-  }
-  if (/position \d+/i.test(raw) && /object key|expected/i.test(raw)) {
-    return 'The AI gave an unexpected response. Please try again in a moment.'
-  }
-  return raw || 'Something went wrong. Please try again.'
-}
 
 function formatRecDate(iso) {
   try {

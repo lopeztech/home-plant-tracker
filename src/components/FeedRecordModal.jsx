@@ -4,6 +4,7 @@ import { recommendApi } from '../api/plants.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useToast } from './Toast.jsx'
 import { isOutdoor } from '../utils/watering.js'
+import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 export default function FeedRecordModal({ plant, show, onHide }) {
   const { floors, location, tempUnit, handleFertilisePlant } = usePlantContext()
@@ -48,7 +49,7 @@ export default function FeedRecordModal({ plant, show, onHide }) {
       }))
       toast.success('AI recommendation loaded')
     } catch (err) {
-      toast.error(err.message || 'Failed to get recommendation')
+      toast.error(friendlyErrorMessage(err, { context: 'the feeding recommendation' }))
     } finally {
       setLoadingRec(false)
     }
@@ -62,7 +63,7 @@ export default function FeedRecordModal({ plant, show, onHide }) {
       toast.success('Marked fertilised')
       onHide?.()
     } catch (err) {
-      toast.error(err.message || 'Failed to mark fertilised')
+      toast.error(friendlyErrorMessage(err, { context: 'marking fertilised' }))
     } finally {
       setSaving(false)
     }

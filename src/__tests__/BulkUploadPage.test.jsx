@@ -17,6 +17,18 @@ vi.mock('../context/PlantContext.jsx', () => ({
   }),
 }))
 
+// UpgradePrompt (rendered by BulkUploadPage) reads SubscriptionContext — stub it
+// so we don't have to spin up the real provider for unit tests.
+vi.mock('../context/SubscriptionContext.jsx', () => ({
+  useSubscription: () => ({
+    billingEnabled: false,
+    tier: 'free',
+    canAccess: () => true,
+    isAtQuotaLimit: () => false,
+    getQuotaRemaining: () => Infinity,
+  }),
+}))
+
 // Mock API
 vi.mock('../api/plants.js', () => ({
   analyseApi: {

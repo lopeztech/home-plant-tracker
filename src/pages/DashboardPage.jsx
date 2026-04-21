@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef } from 'react'
-import { Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
+import ErrorAlert from '../components/ErrorAlert.jsx'
 
 export default function DashboardPage() {
-  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading } = usePlantContext()
+  const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading, reloadPlants } = usePlantContext()
   const gnomeWaterRef = useRef(null)
 
   const hasFloors = floors.length > 0
@@ -73,14 +73,9 @@ export default function DashboardPage() {
           </UpgradePrompt>
         </div>
         {plantsError && (
-          <Alert variant="danger" className="mx-3 mt-3 mb-0" dismissible>
-            <Alert.Heading as="h6" className="mb-1">Couldn't load your plants</Alert.Heading>
-            <p className="mb-1 fs-sm">Check your connection and refresh the page. If this keeps happening, try signing out and back in.</p>
-            <details className="fs-xs text-muted">
-              <summary>Error details</summary>
-              <code>{plantsError}</code>
-            </details>
-          </Alert>
+          <div className="mx-3 mt-3">
+            <ErrorAlert error={plantsError} context="plants" onRetry={reloadPlants} />
+          </div>
         )}
         {plantsLoading ? (
           <div className="p-4">
