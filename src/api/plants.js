@@ -67,6 +67,13 @@ export const plantsApi = {
     }
     return request(`/plants/${id}/moisture`, { method: 'POST', body: JSON.stringify({ reading, note }) })
   },
+  fertilise: (id, fields = {}) => {
+    if (isOffline()) {
+      enqueueMutation({ type: 'fertilise', payload: { id, fields } })
+      throw new OfflineQueuedError('fertilise')
+    }
+    return request(`/plants/${id}/fertilise`, { method: 'POST', body: JSON.stringify(fields) })
+  },
   wateringPattern: (id) => request(`/plants/${id}/watering-pattern`),
   wateringRecommendation: (id) => request(`/plants/${id}/watering-recommendation`),
   healthPrediction: (id) => request(`/plants/${id}/health-prediction`),
@@ -110,6 +117,12 @@ export function flushOfflineMutations() {
       return request(`/plants/${payload.id}/moisture`, {
         method: 'POST',
         body: JSON.stringify({ reading: payload.reading, note: payload.note }),
+      })
+    }
+    if (type === 'fertilise') {
+      return request(`/plants/${payload.id}/fertilise`, {
+        method: 'POST',
+        body: JSON.stringify(payload.fields || {}),
       })
     }
     throw new Error(`Unknown queued mutation type: ${type}`)
@@ -157,6 +170,10 @@ export const recommendApi = {
     body: JSON.stringify({ name, species, plantedIn, isOutdoor, location, tempUnit }),
   }),
   getWatering: (params) => request('/recommend-watering', {
+    method: 'POST',
+    body: JSON.stringify(params),
+  }),
+  getFertiliser: (params) => request('/recommend-fertiliser', {
     method: 'POST',
     body: JSON.stringify(params),
   }),

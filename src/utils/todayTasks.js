@@ -1,4 +1,5 @@
 import { getWateringStatus, isOutdoor } from './watering.js'
+import { getFeedingStatus } from './feeding.js'
 
 const SNOOZE_KEY = 'plant-tracker-watering-snooze'
 
@@ -96,4 +97,46 @@ function buildReason(status, plant) {
     return `${d} day${d === 1 ? '' : 's'} overdue${noteFragment}`
   }
   return status.note || `Due today (every ${plant.frequencyDays ?? 7} days)`
+}
+
+/**
+ * Build the list of "Feed" tasks for today. Skips plants:
+ *  - Whose feeding schedule is dormant/skipped (winter, poor health, dry soil)
+ *  - That aren't yet due (daysUntil > 0)
+ *  - That have never been fed AND have no fertiliser block configured → they
+ *    just need an initial setup; we still surface them once so the user can
+ *    start a schedule.
+ */
+export function buildFeedTasks(plants, weather, now = new Date()) {
+  const tasks = []
+  for (const plant of plants || []) {
+    const status = getFeedingStatus(plant, weather, now)
+    if (status.skip) continue
+    if (status.daysUntil > 0) continue
+    tasks.push({
+      plantId: plant.id,
+      plant,
+      action: 'fertilise',
+      daysUntil: status.daysUntil,
+      reason: buildFeedReason(status, plant),
+      room: plant.room ?? '',
+    })
+  }
+  tasks.sort((a, b) => {
+    if (a.daysUntil !== b.daysUntil) return a.daysUntil - b.daysUntil
+    if (a.room !== b.room) return a.room.localeCompare(b.room)
+    return (a.plant.name || '').localeCompare(b.plant.name || '')
+  })
+  return { tasks }
+}
+
+function buildFeedReason(status, plant) {
+  const last = plant?.lastFertilised ? new Date(plant.lastFertilised) : null
+  const neverFed = !last
+  if (neverFed) return 'Never fed — start a feeding schedule'
+  if (status.daysUntil < 0) {
+    const d = Math.abs(status.daysUntil)
+    return `${d} day${d === 1 ? '' : 's'} overdue feeding (every ${status.effectiveFrequencyDays}d this ${status.season || 'season'})`
+  }
+  return `Due today — every ${status.effectiveFrequencyDays}d this ${status.season || 'season'}`
 }

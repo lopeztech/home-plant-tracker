@@ -2,8 +2,9 @@ import { useState, useMemo, useCallback } from 'react'
 import { Button, ButtonGroup, Dropdown, Alert } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useToast } from '../components/Toast.jsx'
+import FeedRecordModal from '../components/FeedRecordModal.jsx'
 import { getPlantEmoji } from '../utils/plantEmoji.js'
-import { buildWaterTasks, setSnooze, clampSnooze } from '../utils/todayTasks.js'
+import { buildWaterTasks, buildFeedTasks, setSnooze, clampSnooze } from '../utils/todayTasks.js'
 
 const SNOOZE_PRESETS = [
   { label: '1 day',   days: 1 },
@@ -15,12 +16,17 @@ export default function TodayPage() {
   const { plants, weather, floors, handleWaterPlant, handleBatchWater } = usePlantContext()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  const [feedPlant, setFeedPlant] = useState(null)
   // Snooze writes to localStorage, so we bump this to force a recompute.
   const [snoozeVersion, setSnoozeVersion] = useState(0)
 
   const { tasks, deferredByRain } = useMemo(
     () => buildWaterTasks(plants, weather, floors),
     [plants, weather, floors, snoozeVersion],
+  )
+  const { tasks: feedTasks } = useMemo(
+    () => buildFeedTasks(plants, weather),
+    [plants, weather],
   )
 
   const grouped = useMemo(() => {
@@ -94,51 +100,84 @@ export default function TodayPage() {
         </Alert>
       )}
 
-      {tasks.length === 0 ? (
+      {tasks.length === 0 && feedTasks.length === 0 ? (
         <div className="text-center py-5">
           <div style={{ fontSize: '3rem' }} aria-hidden="true">🌿</div>
           <h2 className="h4 mt-2">All caught up</h2>
-          <p className="text-muted">No plants need watering right now. Enjoy the quiet.</p>
+          <p className="text-muted">No plants need attention right now. Enjoy the quiet.</p>
         </div>
       ) : (
-        grouped.map(([room, roomTasks]) => (
-          <section key={room} className="mb-4">
-            <h2 className="h6 text-uppercase text-muted mb-2">{room}</h2>
-            <ul className="list-group">
-              {roomTasks.map((t) => (
-                <li key={t.plantId} className="list-group-item d-flex align-items-center gap-3">
-                  <span style={{ fontSize: '1.5rem' }} aria-hidden="true">{getPlantEmoji(t.plant)}</span>
-                  <div className="flex-grow-1 min-w-0">
-                    <div className="fw-500 text-truncate">{t.plant.name}</div>
-                    <div className="fs-xs text-muted">
-                      {t.daysUntil < 0 ? (
-                        <span className="text-danger fw-500">{t.reason}</span>
-                      ) : (
-                        <span>{t.reason}</span>
-                      )}
-                    </div>
-                  </div>
-                  <ButtonGroup>
-                    <Button size="sm" variant="primary" onClick={() => onComplete(t.plantId)} disabled={busy}>
-                      Water
-                    </Button>
-                    <Dropdown as={ButtonGroup}>
-                      <Dropdown.Toggle size="sm" variant="outline-secondary" aria-label="Snooze options" disabled={busy} />
-                      <Dropdown.Menu align="end">
-                        {SNOOZE_PRESETS.map((p) => (
-                          <Dropdown.Item key={p.days} onClick={() => onSnooze(t.plant, p.days)}>
-                            Snooze {p.label}
-                          </Dropdown.Item>
-                        ))}
-                      </Dropdown.Menu>
-                    </Dropdown>
-                  </ButtonGroup>
-                </li>
+        <>
+          {tasks.length > 0 && (
+            <div className="mb-4">
+              <h2 className="h5 mb-3">Water</h2>
+              {grouped.map(([room, roomTasks]) => (
+                <section key={room} className="mb-3">
+                  <h3 className="h6 text-uppercase text-muted mb-2">{room}</h3>
+                  <ul className="list-group">
+                    {roomTasks.map((t) => (
+                      <li key={t.plantId} className="list-group-item d-flex align-items-center gap-3">
+                        <span style={{ fontSize: '1.5rem' }} aria-hidden="true">{getPlantEmoji(t.plant)}</span>
+                        <div className="flex-grow-1 min-w-0">
+                          <div className="fw-500 text-truncate">{t.plant.name}</div>
+                          <div className="fs-xs text-muted">
+                            {t.daysUntil < 0 ? (
+                              <span className="text-danger fw-500">{t.reason}</span>
+                            ) : (
+                              <span>{t.reason}</span>
+                            )}
+                          </div>
+                        </div>
+                        <ButtonGroup>
+                          <Button size="sm" variant="primary" onClick={() => onComplete(t.plantId)} disabled={busy}>
+                            Water
+                          </Button>
+                          <Dropdown as={ButtonGroup}>
+                            <Dropdown.Toggle size="sm" variant="outline-secondary" aria-label="Snooze options" disabled={busy} />
+                            <Dropdown.Menu align="end">
+                              {SNOOZE_PRESETS.map((p) => (
+                                <Dropdown.Item key={p.days} onClick={() => onSnooze(t.plant, p.days)}>
+                                  Snooze {p.label}
+                                </Dropdown.Item>
+                              ))}
+                            </Dropdown.Menu>
+                          </Dropdown>
+                        </ButtonGroup>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
-          </section>
-        ))
+            </div>
+          )}
+
+          {feedTasks.length > 0 && (
+            <section className="mb-4">
+              <h2 className="h5 mb-3">Fertilise</h2>
+              <ul className="list-group">
+                {feedTasks.map((t) => (
+                  <li key={t.plantId} className="list-group-item d-flex align-items-center gap-3">
+                    <span style={{ fontSize: '1.5rem' }} aria-hidden="true">{getPlantEmoji(t.plant)}</span>
+                    <div className="flex-grow-1 min-w-0">
+                      <div className="fw-500 text-truncate">{t.plant.name}</div>
+                      <div className="fs-xs text-muted">
+                        {t.daysUntil < 0
+                          ? <span className="text-warning fw-500">{t.reason}</span>
+                          : <span>{t.reason}</span>}
+                      </div>
+                    </div>
+                    <Button size="sm" variant="primary" onClick={() => setFeedPlant(t.plant)} disabled={busy}>
+                      Feed
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
+
+      <FeedRecordModal plant={feedPlant} show={!!feedPlant} onHide={() => setFeedPlant(null)} />
     </div>
   )
 }

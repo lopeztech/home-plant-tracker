@@ -188,6 +188,51 @@ export function PlantProvider({ children }) {
     }
   }, [isGuest])
 
+  const handleFertilisePlant = useCallback(async (plantId, fields = {}) => {
+    if (isGuest) {
+      const now = new Date().toISOString()
+      const entry = {
+        date: now,
+        productName: fields.productName || null,
+        npk: fields.npk || null,
+        dilution: fields.dilution || null,
+        amount: fields.amount || null,
+        notes: fields.notes || '',
+      }
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? {
+        ...p,
+        lastFertilised: now,
+        fertiliserLog: [...(p.fertiliserLog || []), entry],
+        fertiliser: { ...(p.fertiliser || {}), ...fields },
+      } : p)))
+      return
+    }
+    try {
+      const updated = await plantsApi.fertilise(plantId, fields)
+      setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
+    } catch (err) {
+      if (err instanceof OfflineQueuedError) {
+        const now = new Date().toISOString()
+        const entry = {
+          date: now,
+          productName: fields.productName || null,
+          npk: fields.npk || null,
+          dilution: fields.dilution || null,
+          amount: fields.amount || null,
+          notes: fields.notes || '',
+        }
+        setPlants((prev) => prev.map((p) => (p.id === plantId ? {
+          ...p,
+          lastFertilised: now,
+          fertiliserLog: [...(p.fertiliserLog || []), entry],
+          fertiliser: { ...(p.fertiliser || {}), ...fields },
+        } : p)))
+        return
+      }
+      throw err
+    }
+  }, [isGuest])
+
   const handleMoisturePlant = useCallback(async (plantId, reading, note) => {
     if (isGuest) {
       const now = new Date().toISOString()
@@ -351,6 +396,7 @@ export function PlantProvider({ children }) {
     isGuest,
     isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
+    handleFertilisePlant,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,
@@ -359,6 +405,7 @@ export function PlantProvider({ children }) {
     weather, locationDenied, location, setLocation, tempUnit, overdueCount, isAnalysingFloorplan, isGuest,
     isOnline, pendingSyncCount,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
+    handleFertilisePlant,
     handleDeletePlant, handleBulkCreatePlants,
     handleSaveFloors, handleFloorRoomsChange, handleFloorplanUpload,
     updatePlantsLocally,

@@ -2183,3 +2183,117 @@ describe('POST /analyse-with-hint', () => {
     expect(res.body.error).toBe('Gemini unavailable');
   });
 });
+
+// ── POST /plants/:id/fertilise ───────────────────────────────────────────────
+
+describe('POST /plants/:id/fertilise', () => {
+  it('returns 404 for a non-existent plant', async () => {
+    const res = await request(app).post('/plants/missing/fertilise').set('Authorization', authHeader()).send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('appends to an existing fertiliserLog and updates lastFertilised', async () => {
+    store[plantPath('p1')] = {
+      name: 'Monstera',
+      fertiliserLog: [{ date: '2026-01-01T00:00:00.000Z', productName: 'Old feed' }],
+    };
+    const res = await request(app).post('/plants/p1/fertilise').set('Authorization', authHeader()).send({
+      productName: 'Balanced liquid houseplant food',
+      npk: '10-10-10',
+      dilution: '5ml per 1L',
+      amount: '250ml',
+      notes: 'weekly feed',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.fertiliserLog).toHaveLength(2);
+    expect(res.body.fertiliserLog[1].productName).toBe('Balanced liquid houseplant food');
+    expect(res.body.fertiliserLog[1].dilution).toBe('5ml per 1L');
+    expect(res.body.fertiliserLog[1].notes).toBe('weekly feed');
+    expect(res.body.lastFertilised).toBeTruthy();
+  });
+
+  it('remembers product + dilution on the plant.fertiliser block for quick repeat', async () => {
+    store[plantPath('p1')] = { name: 'Tomato' };
+    const res = await request(app).post('/plants/p1/fertilise').set('Authorization', authHeader()).send({
+      productName: 'Tomato feed', npk: '4-4-8', dilution: '10ml per 1L',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.fertiliser).toEqual(expect.objectContaining({
+      productName: 'Tomato feed', npk: '4-4-8', dilution: '10ml per 1L',
+    }));
+  });
+
+  it('creates a fertiliserLog from scratch and accepts minimal payload', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/fertilise').set('Authorization', authHeader()).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.fertiliserLog).toHaveLength(1);
+    expect(res.body.fertiliserLog[0].productName).toBeNull();
+    expect(res.body.lastFertilised).toBeTruthy();
+  });
+
+  it('signs imageUrl in the response when plant has an image', async () => {
+    store[plantPath('p1')] = { name: 'Fern', imageUrl: 'plants/fern.jpg' };
+    storageSignedUrlFn = async () => ['https://signed.url/fern-fed.jpg'];
+    const res = await request(app).post('/plants/p1/fertilise').set('Authorization', authHeader()).send({});
+    expect(res.body.imageUrl).toBe('https://signed.url/fern-fed.jpg');
+  });
+});
+
+// ── POST /recommend-fertiliser ───────────────────────────────────────────────
+
+describe('POST /recommend-fertiliser', () => {
+  const payload = {
+    productName: 'Balanced liquid houseplant food',
+    npk: '10-10-10',
+    dilution: '5ml per 1L water',
+    amount: '250-500ml per pot',
+    frequencyDays: 14,
+    season: 'Feed in spring and summer; hold off in winter.',
+    signs: 'Pale new leaves = hungry. Brown tips/salt crust = overfed.',
+    summary: 'Feed every fortnight in the growing season at half strength.',
+  };
+
+  it('returns 400 when name is missing', async () => {
+    const res = await request(app).post('/recommend-fertiliser').send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('returns structured fertiliser recommendations', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(payload) } });
+    const res = await request(app).post('/recommend-fertiliser').send({
+      name: 'Monstera', species: 'Monstera deliciosa', plantedIn: 'pot', isOutdoor: false,
+      potSize: 'medium', soilType: 'well-draining', health: 'Good', season: 'spring',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.productName).toBe('Balanced liquid houseplant food');
+    expect(res.body.npk).toBe('10-10-10');
+    expect(res.body.frequencyDays).toBe(14);
+    expect(res.body.dilution).toBeTruthy();
+    expect(res.body.amount).toBeTruthy();
+    expect(res.body.signs).toBeTruthy();
+    expect(res.body.summary).toBeTruthy();
+  });
+
+  it('threads location and hemisphere context into the prompt and bans USDA', async () => {
+    let capturedPrompt = null;
+    geminiGenerateFn = async (req) => {
+      capturedPrompt = req.contents[0].parts[0].text;
+      return { response: { text: () => JSON.stringify(payload) } };
+    };
+    await request(app).post('/recommend-fertiliser').send({
+      name: 'Lemon tree', species: 'Citrus limon',
+      location: { name: 'Sydney', country: 'Australia' },
+      tempUnit: 'C',
+    });
+    expect(capturedPrompt).toMatch(/Sydney, Australia/);
+    expect(capturedPrompt).toMatch(/USDA/); // "Do not use USDA hardiness zones" instruction
+  });
+
+  it('returns 500 when Gemini throws', async () => {
+    geminiGenerateFn = async () => { throw new Error('Gemini down'); };
+    const res = await request(app).post('/recommend-fertiliser').send({ name: 'Rose' });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe('Gemini down');
+  });
+});

@@ -2,8 +2,17 @@ import { useState, useMemo } from 'react'
 import { Button, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus } from '../utils/watering.js'
+import { getFeedingStatus } from '../utils/feeding.js'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+
+function eventBadgeColor(type) {
+  if (type === 'watered') return 'info'
+  if (type === 'due') return 'warning'
+  if (type === 'fertilised') return 'success'
+  if (type === 'feed-due') return 'primary'
+  return 'secondary'
+}
 
 export default function CalendarPage() {
   const { plants, weather, floors } = usePlantContext()
@@ -25,6 +34,7 @@ export default function CalendarPage() {
 
   const dayMap = useMemo(() => {
     const map = {}
+    const monthEnd = new Date(year, month + 1, 0)
     for (const plant of plants) {
       // Past waterings
       for (const entry of plant.wateringLog || []) {
@@ -35,7 +45,16 @@ export default function CalendarPage() {
           map[day].push({ type: 'watered', plant })
         }
       }
-      // Future due dates
+      // Past fertilisings
+      for (const entry of plant.fertiliserLog || []) {
+        const d = new Date(entry.date)
+        if (d.getMonth() === month && d.getFullYear() === year) {
+          const day = d.getDate()
+          if (!map[day]) map[day] = []
+          map[day].push({ type: 'fertilised', plant })
+        }
+      }
+      // Future watering due dates
       const status = getWateringStatus(plant, weather, floors)
       if (plant.lastWatered && plant.frequencyDays) {
         let nextDue = new Date(plant.lastWatered)
@@ -46,7 +65,21 @@ export default function CalendarPage() {
             if (!map[day]) map[day] = []
             map[day].push({ type: 'due', plant })
           }
-          if (nextDue > new Date(year, month + 1, 0)) break
+          if (nextDue > monthEnd) break
+        }
+      }
+      // Future feeding due dates (based on schedule + lastFertilised)
+      const feedStatus = getFeedingStatus(plant, weather)
+      if (!feedStatus.skip && plant.lastFertilised && feedStatus.effectiveFrequencyDays) {
+        let nextFeed = new Date(plant.lastFertilised)
+        for (let i = 0; i < 24; i++) {
+          nextFeed = new Date(nextFeed.getTime() + feedStatus.effectiveFrequencyDays * 86400000)
+          if (nextFeed.getMonth() === month && nextFeed.getFullYear() === year) {
+            const day = nextFeed.getDate()
+            if (!map[day]) map[day] = []
+            map[day].push({ type: 'feed-due', plant })
+          }
+          if (nextFeed > monthEnd) break
         }
       }
     }
@@ -90,6 +123,8 @@ export default function CalendarPage() {
                   const events = dayMap[day]
                   const hasWatered = events?.some((e) => e.type === 'watered')
                   const hasDue = events?.some((e) => e.type === 'due')
+                  const hasFertilised = events?.some((e) => e.type === 'fertilised')
+                  const hasFeedDue = events?.some((e) => e.type === 'feed-due')
                   const isSelected = selectedDay === day
 
                   return (
@@ -105,6 +140,8 @@ export default function CalendarPage() {
                         <div className="d-flex gap-1 mt-1">
                           {hasWatered && <span className="rounded-circle bg-info d-inline-block" style={{ width: 5, height: 5 }} />}
                           {hasDue && <span className="rounded-circle bg-warning d-inline-block" style={{ width: 5, height: 5 }} />}
+                          {hasFertilised && <span className="rounded-circle bg-success d-inline-block" style={{ width: 5, height: 5 }} />}
+                          {hasFeedDue && <span className="rounded-circle bg-primary d-inline-block" style={{ width: 5, height: 5 }} />}
                         </div>
                       )}
                     </button>
@@ -113,12 +150,18 @@ export default function CalendarPage() {
               </div>
 
               {/* Legend */}
-              <div className="d-flex gap-3 mt-3 fs-xs text-muted">
+              <div className="d-flex flex-wrap gap-3 mt-3 fs-xs text-muted">
                 <span className="d-flex align-items-center gap-1">
                   <span className="rounded-circle bg-info d-inline-block" style={{ width: 6, height: 6 }} /> Watered
                 </span>
                 <span className="d-flex align-items-center gap-1">
-                  <span className="rounded-circle bg-warning d-inline-block" style={{ width: 6, height: 6 }} /> Due
+                  <span className="rounded-circle bg-warning d-inline-block" style={{ width: 6, height: 6 }} /> Water due
+                </span>
+                <span className="d-flex align-items-center gap-1">
+                  <span className="rounded-circle bg-success d-inline-block" style={{ width: 6, height: 6 }} /> Fertilised
+                </span>
+                <span className="d-flex align-items-center gap-1">
+                  <span className="rounded-circle bg-primary d-inline-block" style={{ width: 6, height: 6 }} /> Feed due
                 </span>
               </div>
 
@@ -132,7 +175,7 @@ export default function CalendarPage() {
                     <ul className="list-unstyled mb-0">
                       {selectedEvents.map((evt, i) => (
                         <li key={i} className="d-flex align-items-center gap-2 mb-1 fs-sm">
-                          <Badge bg={evt.type === 'watered' ? 'info' : 'warning'} className="fs-nano">{evt.type}</Badge>
+                          <Badge bg={eventBadgeColor(evt.type)} className="fs-nano">{evt.type.replace('-', ' ')}</Badge>
                           <span>{evt.plant.name}</span>
                         </li>
                       ))}

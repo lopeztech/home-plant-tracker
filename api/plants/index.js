@@ -1115,6 +1115,121 @@ app.post('/plants/:id/moisture', requireUser, async (req, res) => {
   }
 });
 
+// ── Fertiliser log ───────────────────────────────────────────────────────────
+
+app.post('/plants/:id/fertilise', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { productName, npk, dilution, amount, notes } = req.body || {};
+    const now = new Date().toISOString();
+    const existing = doc.data();
+
+    const entry = {
+      date: now,
+      productName: productName || null,
+      npk: npk || null,
+      dilution: dilution || null,
+      amount: amount || null,
+      notes: notes || '',
+    };
+    const fertiliserLog = [...(existing.fertiliserLog || []), entry];
+
+    // Remember the product/dilution for quick-repeat next time so the user
+    // doesn't have to retype. Only update the fertiliser block if meaningful
+    // fields were supplied.
+    const fertiliser = { ...(existing.fertiliser || {}) };
+    if (productName) fertiliser.productName = productName;
+    if (npk) fertiliser.npk = npk;
+    if (dilution) fertiliser.dilution = dilution;
+
+    await ref.set({
+      lastFertilised: now,
+      fertiliserLog,
+      fertiliser,
+      updatedAt: now,
+    }, { merge: true });
+
+    const updated = await ref.get();
+    const data = { id: updated.id, ...updated.data() };
+    await signPlantData(data);
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Fertiliser recommendation (Gemini, structured) ───────────────────────────
+
+const FERTILISER_RECOMMEND_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    productName:    { type: SchemaType.STRING },
+    npk:            { type: SchemaType.STRING },
+    dilution:       { type: SchemaType.STRING },
+    amount:         { type: SchemaType.STRING },
+    frequencyDays:  { type: SchemaType.INTEGER },
+    season:         { type: SchemaType.STRING },
+    signs:          { type: SchemaType.STRING },
+    summary:        { type: SchemaType.STRING },
+  },
+  required: ['productName', 'npk', 'dilution', 'amount', 'frequencyDays', 'season', 'signs', 'summary'],
+};
+
+const FERTILISER_RECOMMEND_PROMPT = (name, species, { plantedIn, isOutdoor, potSize, soilType, health, season, maturity, location, tempUnit } = {}) => {
+  const details = [];
+  if (plantedIn) details.push(`planted in: ${plantedIn === 'ground' ? 'the ground' : plantedIn === 'garden-bed' ? 'a garden bed' : 'a pot'}`);
+  if (isOutdoor !== undefined) details.push(`growing: ${isOutdoor ? 'outdoors' : 'indoors'}`);
+  const loc = formatLocation(location);
+  if (loc) details.push(`location: ${loc}`);
+  if (potSize) details.push(`pot size: ${potSize}`);
+  if (soilType) details.push(`soil: ${soilType}`);
+  if (health) details.push(`current health: ${health}`);
+  if (maturity) details.push(`maturity: ${maturity}`);
+  if (season) details.push(`current season: ${season}`);
+  const unit = tempSymbol(tempUnit);
+  const ctx = details.length ? `\nPlant details: ${details.join(', ')}.` : '';
+  return `You are a plant fertilising expert. Provide a specific, safe feeding regimen for: ${name}${species ? ` (${species})` : ''}.${ctx}
+Rules:
+- productName: a concrete product category (e.g. "Balanced liquid houseplant food", "Tomato & vegetable feed", "Seaweed extract")
+- npk: NPK ratio most appropriate (e.g. "10-10-10", "3-1-2", "5-10-10")
+- dilution: exact mixing ratio (e.g. "5ml per 1L water", "1 tsp per 4L")
+- amount: how much solution to apply (e.g. "250-500ml per pot", "light soaking of root zone")
+- frequencyDays: integer interval in days between feedings for the CURRENT season
+- season: which seasons to feed in — be explicit for the user's hemisphere from the location context, and call out dormancy. Do not use USDA hardiness zones.
+- signs: two short sentences — signs of under-feeding AND signs of over-feeding (leaf burn, salt crust)
+- summary: one sentence overall recommendation
+- Express all temperatures in ${unit}. Favour dilute, frequent feeds over concentrated doses — over-feeding harms plants faster than under-feeding.`;
+};
+
+app.post('/recommend-fertiliser', async (req, res) => {
+  try {
+    const { name, species, plantedIn, isOutdoor, potSize, soilType, health, season, maturity, location, tempUnit } = req.body || {};
+    if (!name) return res.status(400).json({ error: 'name is required' });
+
+    const result = await geminiWithRetry({
+      contents: [{
+        role: 'user',
+        parts: [{ text: FERTILISER_RECOMMEND_PROMPT(name, species, { plantedIn, isOutdoor, potSize, soilType, health, season, maturity, location, tempUnit }) }],
+      }],
+      generationConfig: {
+        maxOutputTokens: 2048,
+        temperature: 0.3,
+        responseMimeType: 'application/json',
+        responseSchema: FERTILISER_RECOMMEND_SCHEMA,
+      },
+    });
+
+    assertNotTruncated(result, '/recommend-fertiliser');
+    const parsed = parseGeminiJson(result.response.text());
+    res.status(200).json(parsed);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 // ── Plant diagnostic photo analysis ──────────────────────────────────────────
 
 const DIAGNOSTIC_PROMPT = `Analyse this photo of a plant issue and respond ONLY with valid JSON:
