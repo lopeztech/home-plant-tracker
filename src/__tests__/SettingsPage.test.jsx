@@ -19,7 +19,11 @@ vi.mock('../context/PlantContext.jsx', () => ({
 }))
 
 vi.mock('../context/LayoutContext.jsx', () => ({
-  useLayoutContext: () => ({ theme: 'light', changeTheme: changeThemeMock }),
+  useLayoutContext: () => ({ theme: 'light', themeMode: 'light', changeTheme: changeThemeMock, changeThemeMode: changeThemeMock }),
+}))
+
+vi.mock('../context/HelpContext.jsx', () => ({
+  useHelp: () => ({ open: vi.fn(), close: vi.fn(), isOpen: false, articleId: null }),
 }))
 
 // LeafletFloorplan touches canvas APIs not available in jsdom

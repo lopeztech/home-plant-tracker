@@ -3,6 +3,7 @@ import { Link, useParams, Navigate } from 'react-router'
 import { Button, Form, Table, Badge, Nav, InputGroup, FormControl } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
+import HelpTooltip from '../components/HelpTooltip.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
 
@@ -189,18 +190,19 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
   )
 }
 
-function SettingSection({ id, title, icon, search, children }) {
+function SettingSection({ id, title, icon, search, helpArticle, children }) {
   const visible = !search || title.toLowerCase().includes(search.toLowerCase())
   if (!visible) return null
   return (
     <div id={`settings-section-${id}`} className="mb-4">
       <div className="panel panel-icon">
         <div className="panel-hdr">
-          <span>
+          <span className="d-flex align-items-center gap-1">
             {icon && (
               <svg className="sa-icon me-2" aria-hidden="true"><use href={`/icons/sprite.svg#${icon}`}></use></svg>
             )}
             {title}
+            {helpArticle && <HelpTooltip articleId={helpArticle} label={`Help: ${title}`} />}
           </span>
         </div>
         <div className="panel-container"><div className="panel-content">
@@ -297,7 +299,7 @@ function PropertyTab({ search }) {
         </div>
       </SettingSection>
 
-      <SettingSection id="floorplan" title="Floorplan" icon="map" search={search}>
+      <SettingSection id="floorplan" title="Floorplan" icon="map" search={search} helpArticle="floorplan-ai">
         <Button
           variant="outline-primary"
           className="w-100"
@@ -359,7 +361,10 @@ function PreferencesTab({ search }) {
       {tempUnit && (
         <SettingSection id="units" title="Units" icon="thermometer" search={search}>
           <div className="d-flex align-items-center justify-content-between">
-            <span>Temperature</span>
+            <span className="d-flex align-items-center gap-1">
+              Temperature
+              <HelpTooltip articleId="temperature-units" label="What does temperature unit affect?" />
+            </span>
             <Button variant="outline-default" size="sm" onClick={tempUnit.toggle}>
               <svg className="sa-icon me-1" aria-hidden="true"><use href="/icons/sprite.svg#thermometer"></use></svg>
               {tempUnit.unit === 'celsius' ? '°C → °F' : '°F → °C'}

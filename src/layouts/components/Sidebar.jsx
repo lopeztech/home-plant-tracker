@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import { usePlantContext } from '../../context/PlantContext.jsx'
+import { useHelp } from '../../context/HelpContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
 import WeatherStrip from '../../components/WeatherStrip.jsx'
 import OfflineIndicator from '../../components/OfflineIndicator.jsx'
@@ -13,6 +14,7 @@ export default function Sidebar() {
   const { user, logout } = useAuth()
   const { navMinified, toggleSetting } = useLayoutContext()
   const { weather, location, plants, floors } = usePlantContext()
+  const { open: openHelp } = useHelp()
   const navigate = useNavigate()
 
   const todayCount = useMemo(
@@ -63,6 +65,14 @@ export default function Sidebar() {
           <SidebarMenu items={menuItems} badges={{ today: todayCount }} />
           {/* Sign out — below Settings */}
           <ul className="nav-menu d-flex flex-column">
+            <li>
+              <button type="button" onClick={() => openHelp()} className="nav-link-btn text-start w-100 bg-transparent border-0">
+                <svg className="sa-icon" aria-hidden="true">
+                  <use href="/icons/sprite.svg#help-circle"></use>
+                </svg>
+                <span className="nav-link-text">Help</span>
+              </button>
+            </li>
             <li>
               <button type="button" onClick={logout} className="nav-link-btn text-start w-100 bg-transparent border-0">
                 <svg className="sa-icon" aria-hidden="true">

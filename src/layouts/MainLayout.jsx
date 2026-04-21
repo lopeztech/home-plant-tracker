@@ -2,12 +2,14 @@ import { Suspense } from 'react'
 import { Outlet, Navigate } from 'react-router'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
+import { HelpProvider } from '../context/HelpContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
 import Onboarding from '../components/Onboarding.jsx'
 import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import OfflineBanner from '../components/OfflineBanner.jsx'
+import HelpDrawer from '../components/HelpDrawer.jsx'
 import { SkeletonRect, SkeletonText } from '../components/Skeleton.jsx'
 
 function PageSkeleton() {
@@ -39,35 +41,38 @@ export default function MainLayout() {
 
   return (
     <PlantProvider>
-      <div className="app-wrap set-header-fixed">
-        <Topbar />
-        <Sidebar />
-        <main className="app-body">
-          <div className="app-content">
-            <OfflineBanner />
-            <div className="px-3 pt-3">
-              <WeatherAlertBanner />
+      <HelpProvider>
+        <div className="app-wrap set-header-fixed">
+          <Topbar />
+          <Sidebar />
+          <main className="app-body">
+            <div className="app-content">
+              <OfflineBanner />
+              <div className="px-3 pt-3">
+                <WeatherAlertBanner />
+              </div>
+              <ErrorBoundary context="this page">
+                <Suspense fallback={<PageSkeleton />}>
+                  <Outlet />
+                </Suspense>
+              </ErrorBoundary>
             </div>
-            <ErrorBoundary context="this page">
-              <Suspense fallback={<PageSkeleton />}>
-                <Outlet />
-              </Suspense>
-            </ErrorBoundary>
-          </div>
-          {isGuest && (
-            <div className="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 text-center py-2 mb-0 rounded-0 fs-sm">
-              You are browsing in guest mode with sample data. Changes are not saved.{' '}
-              <button className="btn btn-link btn-sm p-0 text-success" onClick={logout}>Sign in</button>
-            </div>
-          )}
-          <footer className="app-footer">
-            <div className="app-footer-content flex-grow-1">
-              Plant Tracker &copy; {new Date().getFullYear()}
-            </div>
-          </footer>
-        </main>
-        <Onboarding />
-      </div>
+            {isGuest && (
+              <div className="alert alert-success bg-success bg-opacity-10 border-success border-opacity-25 text-center py-2 mb-0 rounded-0 fs-sm">
+                You are browsing in guest mode with sample data. Changes are not saved.{' '}
+                <button className="btn btn-link btn-sm p-0 text-success" onClick={logout}>Sign in</button>
+              </div>
+            )}
+            <footer className="app-footer">
+              <div className="app-footer-content flex-grow-1">
+                Plant Tracker &copy; {new Date().getFullYear()}
+              </div>
+            </footer>
+          </main>
+          <Onboarding />
+          <HelpDrawer />
+        </div>
+      </HelpProvider>
     </PlantProvider>
   )
 }

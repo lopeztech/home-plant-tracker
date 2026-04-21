@@ -4,6 +4,7 @@ import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
+import HelpTooltip from '../components/HelpTooltip.jsx'
 
 const HEALTH_COLORS = { Excellent: '#10b981', Good: '#22c55e', Fair: '#f59e0b', Poor: '#ef4444' }
 const HEALTH_ORDER = ['Excellent', 'Good', 'Fair', 'Poor']
@@ -93,7 +94,10 @@ function OverviewTab({ plants, theme }) {
       <Row className="mb-4">
         <Col md={6}>
           <div className="panel panel-icon">
-            <div className="panel-hdr"><span>Health Distribution</span></div>
+            <div className="panel-hdr">
+              <span>Health Distribution</span>
+              <HelpTooltip articleId="analytics" label="Explain health distribution chart" className="ms-2" />
+            </div>
             <div className="panel-container"><div className="panel-content">
               {plants.length === 0 ? <p className="text-muted">No plants yet.</p> : (
                 <>
@@ -148,7 +152,10 @@ function OverviewTab({ plants, theme }) {
 
       {/* Heatmap */}
       <div className="panel panel-icon mb-4">
-        <div className="panel-hdr"><span>Watering Activity — Last 12 Weeks</span></div>
+        <div className="panel-hdr">
+          <span>Watering Activity — Last 12 Weeks</span>
+          <HelpTooltip articleId="analytics" label="Explain watering heatmap" className="ms-2" />
+        </div>
         <div className="panel-container"><div className="panel-content">
           <div className="d-flex gap-1 flex-wrap" role="img" aria-label="Watering activity heatmap, last 12 weeks">
             {heatmapDays.map((day) => (
@@ -247,7 +254,10 @@ function PerPlantTab({ plants, theme }) {
       <Row className="mb-4">
         <Col md={6}>
           <div className="panel panel-icon">
-            <div className="panel-hdr"><span>Consistency Score</span></div>
+            <div className="panel-hdr">
+              <span>Consistency Score</span>
+              <HelpTooltip articleId="analytics" label="What is the consistency score?" className="ms-2" />
+            </div>
             <div className="panel-container"><div className="panel-content text-center">
               {score === null ? <p className="text-muted fs-sm py-3">Need at least 2 watering events.</p> : (
                 <>
