@@ -9,7 +9,7 @@ import EmptyState from '../components/EmptyState.jsx'
 function dayLabel(dateStr, index) {
   if (index === 0) return 'Today'
   if (index === 1) return 'Tomorrow'
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('en', { weekday: 'long' })
+  return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(new Date(dateStr + 'T12:00:00'))
 }
 
 export default function ForecastPage() {

@@ -11,6 +11,7 @@ import { getPlantEmoji, PLANT_EMOJI_GROUPS } from '../utils/plantEmoji.js'
 import { PlantContext } from '../context/PlantContext.jsx'
 import { POT_SIZES, formatLength } from '../utils/units.js'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
+import { formatDate, formatTime } from '../utils/format.js'
 
 // Max recommendation entries retained per plant. Older entries are trimmed
 // when a new one is appended so Firestore docs don't grow unbounded.
@@ -18,8 +19,7 @@ const RECOMMENDATION_HISTORY_LIMIT = 20
 
 function formatRecDate(iso) {
   try {
-    const d = new Date(iso)
-    return `${d.toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}`
+    return `${formatDate(iso, { day: 'numeric', month: 'short', year: 'numeric' })} · ${formatTime(iso)}`
   } catch { return iso }
 }
 
@@ -1115,7 +1115,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                             <div className="position-absolute bottom-0 start-0 end-0 px-2 py-1" style={{ background: 'rgba(0,0,0,0.6)' }}>
                               <div className="d-flex align-items-center justify-content-between">
                                 <small className="text-white" style={{ fontSize: '0.6rem' }}>
-                                  {new Date(photo.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}
+                                  {formatDate(photo.date, { day: 'numeric', month: 'short' })}
                                 </small>
                                 <Badge bg={photo.type === 'diagnostic' ? 'warning' : 'success'} style={{ fontSize: '0.5rem' }}>
                                   {photo.type === 'diagnostic' ? 'Diagnostic' : 'Growth'}
@@ -1383,8 +1383,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                           <div key={i} className="d-flex align-items-center gap-2 mb-1 fs-xs text-muted">
                             <span className="rounded-circle d-inline-block" style={{ width: 8, height: 8, background: d.color }} />
                             <span><strong>{entry.reading}/10</strong></span>
-                            <span>{new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short' })}</span>
-                            <span>{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+                            <span>{formatDate(entry.date, { day: 'numeric', month: 'short' })}</span>
+                            <span>{formatTime(entry.date)}</span>
                             {entry.note && <span>— {entry.note}</span>}
                           </div>
                         )
@@ -1413,8 +1413,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                         {paged.map((entry, i) => (
                           <div key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm text-muted">
                             <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                            {new Date(entry.date).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' })}
-                            <span className="text-muted">{new Date(entry.date).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</span>
+                            {formatDate(entry.date, { day: 'numeric', month: 'short', year: 'numeric' })}
+                            <span className="text-muted">{formatTime(entry.date)}</span>
                             {entry.note && <span>— {entry.note}</span>}
                           </div>
                         ))}

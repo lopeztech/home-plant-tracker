@@ -16,10 +16,10 @@ export default function WeatherStrip({ weather, location, onLocationClick }) {
     whiteSpace: 'nowrap',
   }
 
-  const weekdayShort = (day) => new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'short' })
+  const weekdayShort = (day) => new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(new Date(day.date + 'T12:00:00'))
   const dayLabel = (day) => weekdayShort(day).slice(0, 2)
   const dayTitle = (day, i) => {
-    const full = new Date(day.date + 'T12:00:00').toLocaleDateString('en', { weekday: 'long' })
+    const full = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(new Date(day.date + 'T12:00:00'))
     const prefix = i === 0 ? 'Tomorrow' : full
     const rain = day.precipitation >= 2 ? ` · ${day.precipitation.toFixed(0)}mm` : ''
     return `${prefix} · ${day.maxTemp}°/${day.minTemp}°${rain}`

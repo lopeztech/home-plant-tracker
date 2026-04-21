@@ -5,6 +5,7 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import HelpTooltip from '../components/HelpTooltip.jsx'
+import { formatDate } from '../utils/format.js'
 
 const HEALTH_COLORS = { Excellent: '#10b981', Good: '#22c55e', Fair: '#f59e0b', Poor: '#ef4444' }
 const HEALTH_ORDER = ['Excellent', 'Good', 'Fair', 'Poor']
@@ -28,7 +29,7 @@ function getWateringByWeek(plant, weeks = 12) {
     const weekStart = new Date(now.getTime() - (weeks - 1 - i) * 7 * 86400000)
     const weekEnd = new Date(weekStart.getTime() + 7 * 86400000)
     const count = (plant.wateringLog || []).filter((e) => { const d = new Date(e.date); return d >= weekStart && d < weekEnd }).length
-    return { week: weekStart.toLocaleDateString('en', { month: 'short', day: 'numeric' }), count }
+    return { week: formatDate(weekStart, { month: 'short', day: 'numeric' }), count }
   })
 }
 
