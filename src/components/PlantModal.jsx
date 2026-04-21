@@ -228,6 +228,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     plantedIn: null,
     emoji: null,
     category: null,
+    isUnderCover: false,
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -348,6 +349,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         plantedIn: plant.plantedIn || null,
         emoji: plant.emoji || null,
         category: plant.category || null,
+        isUnderCover: plant.isUnderCover ?? false,
       })
     }
   }, [plant, activeFloorId])
@@ -437,6 +439,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       plantedIn: form.plantedIn,
       emoji: form.emoji || null,
       category: form.category || null,
+      isUnderCover: form.isUnderCover ?? false,
     })
     setIsDirty(false)
     setIsSaving(false)
@@ -935,6 +938,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                     </Form.Group>
                   </Col>
                 </Row>
+                {isOutdoor({ room: form.room, floor: form.floor }, floors) && (
+                  <Form.Group className="mb-3">
+                    <Form.Check
+                      type="checkbox"
+                      id="is-under-cover"
+                      label={<>Under cover <span className="text-muted fs-xs">(patio, porch, greenhouse — reduces effective rainfall)</span></>}
+                      checked={!!form.isUnderCover}
+                      onChange={e => update('isUnderCover', e.target.checked)}
+                    />
+                  </Form.Group>
+                )}
                 <Form.Group className="mb-3">
                   <Form.Label>Plant Category</Form.Label>
                   <Form.Select value={form.category || ''} onChange={(e) => update('category', e.target.value || null)}>
