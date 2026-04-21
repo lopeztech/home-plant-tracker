@@ -5,6 +5,7 @@ import PlantModal from '../components/PlantModal.jsx'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import ErrorAlert from '../components/ErrorAlert.jsx'
 import EmptyState from '../components/EmptyState.jsx'
+import { SkeletonRect, SkeletonPlantCard } from '../components/Skeleton.jsx'
 
 export default function DashboardPage() {
   const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading, reloadPlants, isGuest } = usePlantContext()
@@ -79,13 +80,15 @@ export default function DashboardPage() {
           </div>
         )}
         {plantsLoading ? (
-          <div className="p-4">
+          <div className="p-4" aria-label="Loading dashboard" aria-busy="true">
+            <div className="panel panel-icon mb-3">
+              <div className="panel-container"><div className="panel-content p-0">
+                <SkeletonRect height={320} style={{ borderRadius: 0 }} />
+              </div></div>
+            </div>
             <div className="panel panel-icon">
-              <div className="panel-container"><div className="panel-content text-center py-5">
-                <div className="spinner-border text-primary mb-3" role="status">
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-                <p className="text-muted mb-0">Loading your plants and floorplan...</p>
+              <div className="panel-container"><div className="panel-content p-0">
+                {Array.from({ length: 5 }, (_, i) => <SkeletonPlantCard key={i} />)}
               </div></div>
             </div>
           </div>

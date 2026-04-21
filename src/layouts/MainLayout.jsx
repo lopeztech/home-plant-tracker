@@ -8,8 +8,20 @@ import Onboarding from '../components/Onboarding.jsx'
 import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import OfflineBanner from '../components/OfflineBanner.jsx'
+import { SkeletonRect, SkeletonText } from '../components/Skeleton.jsx'
 
-function Loader() {
+function PageSkeleton() {
+  return (
+    <div className="p-4" aria-label="Loading page" aria-busy="true">
+      <SkeletonRect height={28} width="40%" style={{ marginBottom: 24, borderRadius: 6 }} />
+      <SkeletonRect height={160} style={{ marginBottom: 16, borderRadius: 8 }} />
+      <SkeletonText lines={3} style={{ marginBottom: 16 }} />
+      <SkeletonRect height={120} style={{ borderRadius: 8 }} />
+    </div>
+  )
+}
+
+function AuthLoader() {
   return (
     <div className="d-flex align-items-center justify-content-center" style={{ height: '100%' }}>
       <div className="spinner-border text-primary" role="status">
@@ -22,7 +34,7 @@ function Loader() {
 export default function MainLayout() {
   const { isAuthenticated, isLoading, isGuest, logout } = useAuth()
 
-  if (isLoading) return <Loader />
+  if (isLoading) return <AuthLoader />
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
   return (
@@ -37,7 +49,7 @@ export default function MainLayout() {
               <WeatherAlertBanner />
             </div>
             <ErrorBoundary context="this page">
-              <Suspense fallback={<Loader />}>
+              <Suspense fallback={<PageSkeleton />}>
                 <Outlet />
               </Suspense>
             </ErrorBoundary>

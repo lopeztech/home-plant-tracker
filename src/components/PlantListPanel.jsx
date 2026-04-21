@@ -8,6 +8,7 @@ import { fanOut } from '../utils/concurrency.js'
 import PlantIcon from './PlantIcon.jsx'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
 import EmptyState from './EmptyState.jsx'
+import { SkeletonPlantCard } from './Skeleton.jsx'
 
 const RECOMMENDATION_HISTORY_LIMIT = 20
 const BATCH_CONCURRENCY = 3
@@ -354,8 +355,8 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
           {/* Plant list */}
           <div style={{ maxHeight: 500, overflowY: 'auto' }}>
             {plantsLoading ? (
-              <div className="text-center py-5">
-                <div className="spinner-border spinner-border-sm text-primary" />
+              <div aria-label="Loading plants" aria-busy="true">
+                {Array.from({ length: 4 }, (_, i) => <SkeletonPlantCard key={i} />)}
               </div>
             ) : filteredPlants.length === 0 ? (
               plants.length === 0 ? (

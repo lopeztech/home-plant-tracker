@@ -5,6 +5,7 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import EmptyState from '../components/EmptyState.jsx'
+import { SkeletonCard, SkeletonRect } from '../components/Skeleton.jsx'
 
 const GRADE_COLORS = { A: '#10b981', B: '#22c55e', C: '#f59e0b', D: '#ef4444', F: '#991b1b' }
 const PATTERN_COLORS = { optimal: '#10b981', over_watered: '#3b82f6', under_watered: '#ef4444', inconsistent: '#f59e0b', insufficient_data: '#9ca3af' }
@@ -120,7 +121,17 @@ export default function InsightsPage() {
       </UpgradePrompt>
 
       {loading ? (
-        <div className="text-center p-5"><Spinner animation="border" /></div>
+        <div aria-label="Loading insights" aria-busy="true">
+          <Row className="mb-4">
+            {[1, 2, 3].map((k) => (
+              <Col md={4} key={k} className="mb-3">
+                <SkeletonCard height={120} />
+              </Col>
+            ))}
+          </Row>
+          <SkeletonCard height={240} className="mb-4" />
+          <SkeletonRect height={180} style={{ borderRadius: 8 }} />
+        </div>
       ) : (
         <>
           {/* Collection Overview */}

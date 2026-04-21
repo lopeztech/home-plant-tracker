@@ -180,3 +180,13 @@
     background-color: var(--app-nav-item-hover-bg);
   }
 }
+
+/* Skeleton loader shimmer animation */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+[data-bs-theme="dark"] {
+  --skeleton-color: rgba(255, 255, 255, 0.1);
+}
