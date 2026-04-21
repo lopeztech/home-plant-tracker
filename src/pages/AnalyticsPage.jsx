@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Row, Col, Card, Nav, Form, Badge } from 'react-bootstrap'
+import { Row, Col, Nav, Form, Badge } from 'react-bootstrap'
 import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
@@ -50,12 +50,35 @@ function heatColor(count) {
   return '#047857'
 }
 
+function incidentStats(plants) {
+  const typeCounts = {}
+  let totalResolved = 0
+  let totalResolutionDays = 0
+  for (const p of plants) {
+    for (const inc of (p.incidents || [])) {
+      const key = `${inc.category}:${inc.specificType}`
+      typeCounts[key] = (typeCounts[key] || { category: inc.category, type: inc.specificType, count: 0 })
+      typeCounts[key].count++
+      if (inc.resolvedAt && inc.firstObservedAt) {
+        const days = Math.round((new Date(inc.resolvedAt) - new Date(inc.firstObservedAt)) / 86400000)
+        if (days >= 0) { totalResolved++; totalResolutionDays += days }
+      }
+    }
+  }
+  const topTypes = Object.values(typeCounts).sort((a, b) => b.count - a.count).slice(0, 5)
+  const avgResolutionDays = totalResolved > 0 ? Math.round(totalResolutionDays / totalResolved) : null
+  const activeIncidents = plants.flatMap(p => (p.incidents || []).filter(i => !i.resolvedAt))
+  return { topTypes, avgResolutionDays, activeCount: activeIncidents.length }
+}
+
 function OverviewTab({ plants, theme }) {
   const healthData = useMemo(() => {
     const counts = {}
     for (const p of plants) { counts[p.health || 'Unknown'] = (counts[p.health || 'Unknown'] || 0) + 1 }
     return HEALTH_ORDER.filter((h) => counts[h]).map((h) => ({ name: h, value: counts[h], color: HEALTH_COLORS[h] }))
   }, [plants])
+
+  const pestStats = useMemo(() => incidentStats(plants), [plants])
 
   const atRisk = useMemo(() => {
     const now = Date.now()
@@ -180,6 +203,39 @@ function OverviewTab({ plants, theme }) {
               ))}
             </tbody>
           </table>
+        </div></div>
+      </div>
+
+      {/* Pest & Disease */}
+      <div className="panel panel-icon">
+        <div className="panel-hdr"><span>Pest &amp; Disease</span></div>
+        <div className="panel-container"><div className="panel-content">
+          <Row>
+            <Col xs={6} md={3} className="mb-3 text-center">
+              <div className="fs-3 fw-700 text-danger">{pestStats.activeCount}</div>
+              <div className="fs-xs text-muted">Active incidents</div>
+            </Col>
+            <Col xs={6} md={3} className="mb-3 text-center">
+              <div className="fs-3 fw-700">{pestStats.avgResolutionDays !== null ? `${pestStats.avgResolutionDays}d` : '—'}</div>
+              <div className="fs-xs text-muted">Avg. resolution time</div>
+            </Col>
+            <Col md={6} className="mb-3">
+              <div className="fs-xs fw-600 text-muted mb-2">Most common issues</div>
+              {pestStats.topTypes.length === 0
+                ? <p className="text-muted fs-sm mb-0">No incidents logged yet.</p>
+                : pestStats.topTypes.map(t => (
+                  <div key={`${t.category}:${t.type}`} className="d-flex align-items-center gap-2 mb-1">
+                    <Badge bg={t.category === 'pest' ? 'danger' : t.category === 'disease' ? 'warning' : 'secondary'}
+                      text={t.category === 'disease' ? 'dark' : undefined} className="fs-xs text-capitalize">
+                      {t.category}
+                    </Badge>
+                    <span className="fs-sm">{t.type}</span>
+                    <span className="ms-auto fs-xs text-muted">{t.count}×</span>
+                  </div>
+                ))
+              }
+            </Col>
+          </Row>
         </div></div>
       </div>
     </div>

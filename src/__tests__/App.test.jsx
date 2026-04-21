@@ -32,6 +32,7 @@ vi.mock('../api/plants.js', () => ({
     createCheckoutSession: vi.fn(),
     createPortalSession:   vi.fn(),
   },
+  outbreakApi: { list: vi.fn().mockResolvedValue([]) },
 }))
 
 vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {

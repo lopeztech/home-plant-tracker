@@ -3275,3 +3275,287 @@ describe('POST /plants — shortCode generation', () => {
     expect(res.body.shortCode).toMatch(/^hp-[a-z0-9]{5}$/);
   });
 });
+
+// ── Incident log ──────────────────────────────────────────────────────────────
+
+describe('GET /plants/:id/incidents', () => {
+  beforeEach(clearStore);
+
+  it('returns empty array when no incidents', async () => {
+    store[plantPath('p1')] = { species: 'Basil' };
+    const res = await request(app).get('/plants/p1/incidents').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('returns incidents sorted newest first', async () => {
+    const incidents = [
+      { id: 'i1', category: 'pest', specificType: 'Aphids', firstObservedAt: '2026-01-01T00:00:00.000Z', resolvedAt: null, treatments: [], createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'i2', category: 'disease', specificType: 'Powdery mildew', firstObservedAt: '2026-02-01T00:00:00.000Z', resolvedAt: null, treatments: [], createdAt: '2026-02-01T00:00:00.000Z', updatedAt: '2026-02-01T00:00:00.000Z' },
+    ];
+    store[plantPath('p1')] = { species: 'Basil', incidents };
+    const res = await request(app).get('/plants/p1/incidents').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body[0].id).toBe('i2');
+    expect(res.body[1].id).toBe('i1');
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app).get('/plants/nope/incidents').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /plants/:id/incidents', () => {
+  beforeEach(clearStore);
+
+  it('creates an incident with valid fields', async () => {
+    store[plantPath('p1')] = { species: 'Tomato', room: 'Greenhouse' };
+    const res = await request(app).post('/plants/p1/incidents')
+      .send({ category: 'pest', specificType: 'Spider mites', severity: 3, firstObservedAt: '2026-04-01T00:00:00.000Z' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeTruthy();
+    expect(res.body.category).toBe('pest');
+    expect(res.body.specificType).toBe('Spider mites');
+    expect(res.body.severity).toBe(3);
+    expect(res.body.outbreakId).toBeNull();
+    expect(store[plantPath('p1')].incidents).toHaveLength(1);
+  });
+
+  it('rejects invalid category', async () => {
+    store[plantPath('p1')] = { species: 'Tomato' };
+    const res = await request(app).post('/plants/p1/incidents')
+      .send({ category: 'alien', specificType: 'Something' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects missing specificType', async () => {
+    store[plantPath('p1')] = { species: 'Tomato' };
+    const res = await request(app).post('/plants/p1/incidents')
+      .send({ category: 'pest' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects out-of-range severity', async () => {
+    store[plantPath('p1')] = { species: 'Tomato' };
+    const res = await request(app).post('/plants/p1/incidents')
+      .send({ category: 'pest', specificType: 'Aphids', severity: 6 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+
+  it('auto-groups outbreak when same room / same type within 14 days', async () => {
+    const existingIncident = {
+      id: 'i-existing', category: 'pest', specificType: 'Spider mites',
+      firstObservedAt: new Date(Date.now() - 5 * 86400000).toISOString(),
+      resolvedAt: null, treatments: [], outbreakId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    store[plantPath('p1')] = { species: 'Tomato', room: 'Greenhouse', incidents: [existingIncident] };
+    store[plantPath('p2')] = { species: 'Basil', room: 'Greenhouse' };
+
+    const res = await request(app).post('/plants/p2/incidents')
+      .send({ category: 'pest', specificType: 'Spider mites', severity: 2 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.outbreakId).toBeTruthy();
+    // The existing incident on p1 should also have been updated with the outbreakId
+    const p1Incidents = store[plantPath('p1')].incidents;
+    expect(p1Incidents[0].outbreakId).toBe(res.body.outbreakId);
+  });
+
+  it('does not group outbreak across different rooms', async () => {
+    const existingIncident = {
+      id: 'i-existing', category: 'pest', specificType: 'Aphids',
+      firstObservedAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+      resolvedAt: null, treatments: [], outbreakId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    store[plantPath('p1')] = { species: 'Rose', room: 'Garden', incidents: [existingIncident] };
+    store[plantPath('p2')] = { species: 'Fern', room: 'Kitchen' };
+
+    const res = await request(app).post('/plants/p2/incidents')
+      .send({ category: 'pest', specificType: 'Aphids', severity: 1 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.outbreakId).toBeNull();
+  });
+
+  it('does not group outbreak if existing incident is outside 14-day window', async () => {
+    const existingIncident = {
+      id: 'i-old', category: 'pest', specificType: 'Fungus gnats',
+      firstObservedAt: new Date(Date.now() - 20 * 86400000).toISOString(),
+      resolvedAt: null, treatments: [], outbreakId: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    };
+    store[plantPath('p1')] = { species: 'Orchid', room: 'Bathroom', incidents: [existingIncident] };
+    store[plantPath('p2')] = { species: 'Fern', room: 'Bathroom' };
+
+    const res = await request(app).post('/plants/p2/incidents')
+      .send({ category: 'pest', specificType: 'Fungus gnats' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.outbreakId).toBeNull();
+  });
+});
+
+describe('PUT /plants/:id/incidents/:incidentId', () => {
+  beforeEach(clearStore);
+
+  it('updates severity and notes on an incident', async () => {
+    const inc = { id: 'i1', category: 'pest', specificType: 'Aphids', severity: 2, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-01T00:00:00.000Z', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z' };
+    store[plantPath('p1')] = { species: 'Rosemary', incidents: [inc] };
+    const res = await request(app).put('/plants/p1/incidents/i1')
+      .send({ severity: 4, notes: 'Getting worse' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.severity).toBe(4);
+    expect(res.body.notes).toBe('Getting worse');
+  });
+
+  it('returns 404 for unknown incident', async () => {
+    store[plantPath('p1')] = { species: 'Basil', incidents: [] };
+    const res = await request(app).put('/plants/p1/incidents/nope')
+      .send({ severity: 3 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /plants/:id/incidents/:incidentId/treatments', () => {
+  beforeEach(clearStore);
+
+  it('adds a treatment to an incident', async () => {
+    const inc = { id: 'i1', category: 'disease', specificType: 'Powdery mildew', severity: 3, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-01T00:00:00.000Z', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z' };
+    store[plantPath('p1')] = { species: 'Squash', incidents: [inc] };
+    const res = await request(app).post('/plants/p1/incidents/i1/treatments')
+      .send({ treatment: 'Neem oil spray', outcome: 'Reduced spread' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.treatment).toBe('Neem oil spray');
+    expect(res.body.outcome).toBe('Reduced spread');
+    expect(store[plantPath('p1')].incidents[0].treatments).toHaveLength(1);
+  });
+
+  it('rejects missing treatment text', async () => {
+    store[plantPath('p1')] = { species: 'Squash', incidents: [{ id: 'i1', category: 'pest', specificType: 'Aphids', treatments: [], resolvedAt: null }] };
+    const res = await request(app).post('/plants/p1/incidents/i1/treatments')
+      .send({})
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /plants/:id/incidents/:incidentId/resolve', () => {
+  beforeEach(clearStore);
+
+  it('sets resolvedAt on the incident', async () => {
+    const inc = { id: 'i1', category: 'pest', specificType: 'Aphids', resolvedAt: null, treatments: [], firstObservedAt: '2026-04-01T00:00:00.000Z', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z' };
+    store[plantPath('p1')] = { species: 'Basil', incidents: [inc] };
+    const res = await request(app).post('/plants/p1/incidents/i1/resolve')
+      .send({})
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.resolvedAt).toBeTruthy();
+    expect(store[plantPath('p1')].incidents[0].resolvedAt).toBeTruthy();
+  });
+});
+
+describe('DELETE /plants/:id/incidents/:incidentId', () => {
+  beforeEach(clearStore);
+
+  it('removes incident from the array', async () => {
+    const inc = { id: 'i1', category: 'pest', specificType: 'Mealybugs', resolvedAt: null, treatments: [], firstObservedAt: '2026-04-01T00:00:00.000Z', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z' };
+    store[plantPath('p1')] = { species: 'Cactus', incidents: [inc] };
+    const res = await request(app).delete('/plants/p1/incidents/i1').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(store[plantPath('p1')].incidents).toHaveLength(0);
+  });
+});
+
+describe('GET /outbreaks', () => {
+  beforeEach(clearStore);
+
+  it('returns empty array when no outbreaks', async () => {
+    store[plantPath('p1')] = { species: 'Basil', incidents: [] };
+    const res = await request(app).get('/outbreaks').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('groups linked incidents by outbreakId', async () => {
+    const obId = 'ob-test-123';
+    store[plantPath('p1')] = { name: 'Tomato', species: 'Tomato', room: 'Greenhouse', incidents: [
+      { id: 'i1', category: 'pest', specificType: 'Spider mites', severity: 3, outbreakId: obId, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-10T00:00:00.000Z', createdAt: '2026-04-10T00:00:00.000Z', updatedAt: '2026-04-10T00:00:00.000Z' },
+    ]};
+    store[plantPath('p2')] = { name: 'Basil', species: 'Basil', room: 'Greenhouse', incidents: [
+      { id: 'i2', category: 'pest', specificType: 'Spider mites', severity: 4, outbreakId: obId, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-12T00:00:00.000Z', createdAt: '2026-04-12T00:00:00.000Z', updatedAt: '2026-04-12T00:00:00.000Z' },
+    ]};
+    const res = await request(app).get('/outbreaks').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    expect(res.body[0].outbreakId).toBe(obId);
+    expect(res.body[0].plants).toHaveLength(2);
+    expect(res.body[0].maxSeverity).toBe(4);
+  });
+
+  it('excludes resolved incidents from outbreaks', async () => {
+    const obId = 'ob-resolved';
+    store[plantPath('p1')] = { name: 'Fern', species: 'Fern', room: 'Hall', incidents: [
+      { id: 'i1', category: 'disease', specificType: 'Root rot', outbreakId: obId, resolvedAt: '2026-04-15T00:00:00.000Z', treatments: [], firstObservedAt: '2026-04-01T00:00:00.000Z', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-15T00:00:00.000Z' },
+    ]};
+    const res = await request(app).get('/outbreaks').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+});
+
+describe('POST /outbreaks/:outbreakId/resolve', () => {
+  beforeEach(clearStore);
+
+  it('resolves all open incidents in the outbreak across plants', async () => {
+    const obId = 'ob-multi';
+    store[plantPath('p1')] = { species: 'Mint', room: 'Kitchen', incidents: [
+      { id: 'i1', category: 'pest', specificType: 'Whitefly', outbreakId: obId, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-10T00:00:00.000Z', createdAt: '2026-04-10T00:00:00.000Z', updatedAt: '2026-04-10T00:00:00.000Z' },
+    ]};
+    store[plantPath('p2')] = { species: 'Chives', room: 'Kitchen', incidents: [
+      { id: 'i2', category: 'pest', specificType: 'Whitefly', outbreakId: obId, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-11T00:00:00.000Z', createdAt: '2026-04-11T00:00:00.000Z', updatedAt: '2026-04-11T00:00:00.000Z' },
+    ]};
+    const res = await request(app).post(`/outbreaks/${obId}/resolve`)
+      .send({})
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.resolved).toBe(2);
+    expect(store[plantPath('p1')].incidents[0].resolvedAt).toBeTruthy();
+    expect(store[plantPath('p2')].incidents[0].resolvedAt).toBeTruthy();
+  });
+});
+
+describe('POST /outbreaks/:outbreakId/treat', () => {
+  beforeEach(clearStore);
+
+  it('adds treatment to all open incidents in the outbreak', async () => {
+    const obId = 'ob-treat';
+    store[plantPath('p1')] = { species: 'Pepper', room: 'Garden', incidents: [
+      { id: 'i1', category: 'pest', specificType: 'Aphids', outbreakId: obId, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-10T00:00:00.000Z', createdAt: '2026-04-10T00:00:00.000Z', updatedAt: '2026-04-10T00:00:00.000Z' },
+    ]};
+    store[plantPath('p2')] = { species: 'Cucumber', room: 'Garden', incidents: [
+      { id: 'i2', category: 'pest', specificType: 'Aphids', outbreakId: obId, resolvedAt: null, treatments: [], firstObservedAt: '2026-04-11T00:00:00.000Z', createdAt: '2026-04-11T00:00:00.000Z', updatedAt: '2026-04-11T00:00:00.000Z' },
+    ]};
+    const res = await request(app).post(`/outbreaks/${obId}/treat`)
+      .send({ treatment: 'Insecticidal soap' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(2);
+    expect(res.body.treatment.treatment).toBe('Insecticidal soap');
+    expect(store[plantPath('p1')].incidents[0].treatments).toHaveLength(1);
+    expect(store[plantPath('p2')].incidents[0].treatments).toHaveLength(1);
+  });
+
+  it('rejects missing treatment text', async () => {
+    const res = await request(app).post('/outbreaks/ob-x/treat')
+      .send({})
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+  });
+});
