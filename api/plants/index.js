@@ -1412,6 +1412,110 @@ app.delete('/plants/:id/phenology/:eventId', requireUser, async (req, res) => {
   }
 });
 
+// ── Plant journal ─────────────────────────────────────────────────────────────
+
+const JOURNAL_MOOD_VALUES = new Set(['thriving', 'ok', 'struggling', 'dying']);
+const JOURNAL_TAG_VALUES  = new Set(['pest', 'disease', 'bloom', 'new-growth', 'repot', 'propagate', 'relocate', 'experiment', 'other']);
+
+app.get('/plants/:id/journal', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const entries = (doc.data().journalEntries || []).sort((a, b) => new Date(b.date) - new Date(a.date));
+    res.status(200).json(entries);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/journal', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { body, tags, mood, date } = req.body || {};
+    if (!body || !String(body).trim()) {
+      return res.status(400).json({ error: 'body is required' });
+    }
+    const invalidTags = (tags || []).filter(t => !JOURNAL_TAG_VALUES.has(t));
+    if (invalidTags.length) {
+      return res.status(400).json({ error: `Invalid tags: ${invalidTags.join(', ')}` });
+    }
+    if (mood && !JOURNAL_MOOD_VALUES.has(mood)) {
+      return res.status(400).json({ error: `mood must be one of: ${[...JOURNAL_MOOD_VALUES].join(', ')}` });
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const entry = {
+      id,
+      date: date || now,
+      body: String(body).trim(),
+      tags: tags || [],
+      mood: mood || null,
+      createdAt: now,
+    };
+    const existing = doc.data();
+    const journalEntries = [...(existing.journalEntries || []), entry];
+    await ref.set({ journalEntries, updatedAt: now }, { merge: true });
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/plants/:id/journal/:entryId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { body, tags, mood } = req.body || {};
+    if (body !== undefined && !String(body).trim()) {
+      return res.status(400).json({ error: 'body cannot be empty' });
+    }
+    const invalidTags = (tags || []).filter(t => !JOURNAL_TAG_VALUES.has(t));
+    if (invalidTags.length) return res.status(400).json({ error: `Invalid tags: ${invalidTags.join(', ')}` });
+    if (mood && !JOURNAL_MOOD_VALUES.has(mood)) {
+      return res.status(400).json({ error: `mood must be one of: ${[...JOURNAL_MOOD_VALUES].join(', ')}` });
+    }
+
+    const existing = doc.data();
+    const journalEntries = (existing.journalEntries || []).map(e => {
+      if (e.id !== req.params.entryId) return e;
+      return {
+        ...e,
+        ...(body !== undefined ? { body: String(body).trim() } : {}),
+        ...(tags !== undefined ? { tags } : {}),
+        ...(mood !== undefined ? { mood } : {}),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    const now = new Date().toISOString();
+    await ref.set({ journalEntries, updatedAt: now }, { merge: true });
+    const updated = journalEntries.find(e => e.id === req.params.entryId);
+    if (!updated) return res.status(404).json({ error: 'Journal entry not found' });
+    res.status(200).json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/journal/:entryId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const existing = doc.data();
+    const journalEntries = (existing.journalEntries || []).filter(e => e.id !== req.params.entryId);
+    await ref.set({ journalEntries, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Fertiliser recommendation (Gemini, structured) ───────────────────────────
 
 const FERTILISER_RECOMMEND_SCHEMA = {

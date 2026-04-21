@@ -120,6 +120,7 @@ beforeAll(() => {
     'jsonrepair': {
       jsonrepair: function(s) { return jsonrepairFn(s); },
     },
+    'express-rate-limit': () => (_req, _res, next) => next(),
   });
 });
 
@@ -2385,6 +2386,7 @@ describe('POST /recommend-fertiliser', () => {
   });
 });
 
+
 // ── Growth measurements ───────────────────────────────────────────────────────
 
 describe('GET /plants/:id/measurements', () => {
@@ -2446,7 +2448,6 @@ describe('POST /plants/:id/measurements', () => {
     expect(res.body.notes).toBe('looking good');
     expect(res.body.id).toBeDefined();
     expect(res.body.date).toBeDefined();
-    // confirm saved to store
     expect(store[plantPath('p1')].measurements).toHaveLength(1);
     expect(store[plantPath('p1')].measurements[0].height_cm).toBe(45);
   });
@@ -2643,5 +2644,240 @@ describe('DELETE /plants/:id/phenology/:eventId', () => {
     expect(res.body).toEqual({ deleted: true });
     expect(store[plantPath('p1')].phenologyEvents).toHaveLength(1);
     expect(store[plantPath('p1')].phenologyEvents[0].id).toBe('ev2');
+  });
+});
+
+// ── GET /plants/:id/journal ───────────────────────────────────────────────────
+
+describe('GET /plants/:id/journal', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/plants/p1/journal');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when plant does not exist', async () => {
+    const res = await request(app)
+      .get('/plants/missing/journal')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns empty array when no journal entries exist', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .get('/plants/p1/journal')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('returns journal entries sorted newest-first', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      journalEntries: [
+        { id: 'e1', date: '2026-01-01T00:00:00Z', body: 'First', tags: [], mood: null, createdAt: '2026-01-01T00:00:00Z' },
+        { id: 'e2', date: '2026-03-01T00:00:00Z', body: 'Third', tags: [], mood: null, createdAt: '2026-03-01T00:00:00Z' },
+        { id: 'e3', date: '2026-02-01T00:00:00Z', body: 'Second', tags: [], mood: null, createdAt: '2026-02-01T00:00:00Z' },
+      ],
+    };
+    const res = await request(app)
+      .get('/plants/p1/journal')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.map(e => e.id)).toEqual(['e2', 'e3', 'e1']);
+  });
+});
+
+// ── POST /plants/:id/journal ──────────────────────────────────────────────────
+
+describe('POST /plants/:id/journal', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).post('/plants/p1/journal').send({ body: 'note' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when plant does not exist', async () => {
+    const res = await request(app)
+      .post('/plants/missing/journal')
+      .set('Authorization', authHeader())
+      .send({ body: 'note' });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when body is missing', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .post('/plants/p1/journal')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/body is required/i);
+  });
+
+  it('returns 400 when body is empty string', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .post('/plants/p1/journal')
+      .set('Authorization', authHeader())
+      .send({ body: '   ' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid tags', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .post('/plants/p1/journal')
+      .set('Authorization', authHeader())
+      .send({ body: 'note', tags: ['notavalidtag'] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid tags/i);
+  });
+
+  it('returns 400 for invalid mood', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .post('/plants/p1/journal')
+      .set('Authorization', authHeader())
+      .send({ body: 'note', mood: 'ecstatic' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/mood must be one of/i);
+  });
+
+  it('creates a journal entry and returns 201', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .post('/plants/p1/journal')
+      .set('Authorization', authHeader())
+      .send({ body: 'New shoot appeared', mood: 'thriving', tags: ['new-growth'] });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeDefined();
+    expect(res.body.body).toBe('New shoot appeared');
+    expect(res.body.mood).toBe('thriving');
+    expect(res.body.tags).toEqual(['new-growth']);
+    expect(res.body.date).toBeDefined();
+    expect(res.body.createdAt).toBeDefined();
+  });
+
+  it('persists the entry in Firestore', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    await request(app)
+      .post('/plants/p1/journal')
+      .set('Authorization', authHeader())
+      .send({ body: 'Persisted note', tags: [] });
+    const saved = store[plantPath('p1')];
+    expect(saved.journalEntries).toHaveLength(1);
+    expect(saved.journalEntries[0].body).toBe('Persisted note');
+  });
+
+  it('defaults mood to null and tags to [] when omitted', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app)
+      .post('/plants/p1/journal')
+      .set('Authorization', authHeader())
+      .send({ body: 'Simple note' });
+    expect(res.status).toBe(201);
+    expect(res.body.mood).toBeNull();
+    expect(res.body.tags).toEqual([]);
+  });
+});
+
+// ── PUT /plants/:id/journal/:entryId ─────────────────────────────────────────
+
+describe('PUT /plants/:id/journal/:entryId', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).put('/plants/p1/journal/e1').send({ body: 'updated' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when plant does not exist', async () => {
+    const res = await request(app)
+      .put('/plants/missing/journal/e1')
+      .set('Authorization', authHeader())
+      .send({ body: 'updated' });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when entry does not exist', async () => {
+    store[plantPath('p1')] = { name: 'Fern', journalEntries: [] };
+    const res = await request(app)
+      .put('/plants/p1/journal/nonexistent')
+      .set('Authorization', authHeader())
+      .send({ body: 'updated' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatch(/journal entry not found/i);
+  });
+
+  it('returns 400 when body is set to empty string', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      journalEntries: [{ id: 'e1', date: '2026-01-01T00:00:00Z', body: 'Original', tags: [], mood: null, createdAt: '2026-01-01T00:00:00Z' }],
+    };
+    const res = await request(app)
+      .put('/plants/p1/journal/e1')
+      .set('Authorization', authHeader())
+      .send({ body: '   ' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/body cannot be empty/i);
+  });
+
+  it('returns 400 for invalid tags', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      journalEntries: [{ id: 'e1', date: '2026-01-01T00:00:00Z', body: 'Original', tags: [], mood: null, createdAt: '2026-01-01T00:00:00Z' }],
+    };
+    const res = await request(app)
+      .put('/plants/p1/journal/e1')
+      .set('Authorization', authHeader())
+      .send({ tags: ['badtag'] });
+    expect(res.status).toBe(400);
+  });
+
+  it('updates the entry body and returns 200', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      journalEntries: [{ id: 'e1', date: '2026-01-01T00:00:00Z', body: 'Original', tags: [], mood: null, createdAt: '2026-01-01T00:00:00Z' }],
+    };
+    const res = await request(app)
+      .put('/plants/p1/journal/e1')
+      .set('Authorization', authHeader())
+      .send({ body: 'Updated body', mood: 'ok', tags: ['bloom'] });
+    expect(res.status).toBe(200);
+    expect(res.body.body).toBe('Updated body');
+    expect(res.body.mood).toBe('ok');
+    expect(res.body.tags).toEqual(['bloom']);
+    expect(res.body.updatedAt).toBeDefined();
+  });
+});
+
+// ── DELETE /plants/:id/journal/:entryId ──────────────────────────────────────
+
+describe('DELETE /plants/:id/journal/:entryId', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).delete('/plants/p1/journal/e1');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 when plant does not exist', async () => {
+    const res = await request(app)
+      .delete('/plants/missing/journal/e1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('deletes the entry and returns { deleted: true }', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      journalEntries: [
+        { id: 'e1', body: 'Keep', date: '2026-01-01T00:00:00Z', tags: [], mood: null, createdAt: '2026-01-01T00:00:00Z' },
+        { id: 'e2', body: 'Remove', date: '2026-02-01T00:00:00Z', tags: [], mood: null, createdAt: '2026-02-01T00:00:00Z' },
+      ],
+    };
+    const res = await request(app)
+      .delete('/plants/p1/journal/e2')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ deleted: true });
+    expect(store[plantPath('p1')].journalEntries).toHaveLength(1);
+    expect(store[plantPath('p1')].journalEntries[0].id).toBe('e1');
   });
 });
