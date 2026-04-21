@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Mocks ────────────────────────────────────────────────────────────────────
@@ -176,21 +176,35 @@ describe('FloorplanPanel', () => {
 
     expect(screen.getAllByTestId('leaflet-stub').length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getByRole('button', { name: /3D/ }))
+    const desktopGroup = screen.getByRole('group', { name: /view mode/i })
+    fireEvent.click(within(desktopGroup).getByRole('button', { name: /3D/ }))
 
     // 3D view replaces the main 2D map while lazily loading
-    expect(screen.queryByRole('button', { name: /2D/ })).toBeInTheDocument()
+    expect(within(desktopGroup).getByRole('button', { name: /2D/ })).toBeInTheDocument()
   })
 
   it('clicking the List button updates the view search param', () => {
     render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
 
-    fireEvent.click(screen.getByRole('button', { name: /^List$/ }))
+    const desktopGroup = screen.getByRole('group', { name: /view mode/i })
+    fireEvent.click(within(desktopGroup).getByRole('button', { name: /^List$/ }))
 
     expect(setSearchParamsMock).toHaveBeenCalled()
     const updater = setSearchParamsMock.mock.calls[0][0]
     const next = updater(new URLSearchParams())
     expect(next.get('view')).toBe('list')
+  })
+
+  it('renders a mobile dropdown counterpart of the view-mode switcher', () => {
+    render(<FloorplanPanel onPlantClick={vi.fn()} onFloorplanClick={vi.fn()} />)
+
+    // The dropdown toggle's accessible name reflects the active mode and
+    // exists alongside the desktop button group; CSS hides one or the other
+    // based on viewport width so both queries succeed in jsdom.
+    expect(
+      screen.getByRole('button', { name: /view mode: 2D/i }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /view mode/i })).toBeInTheDocument()
   })
 
   it('renders PlantListPanel when the view search param is list', () => {

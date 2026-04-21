@@ -1,6 +1,6 @@
 import { useMemo, useState, useCallback, lazy, Suspense, useRef } from 'react'
 import { useSearchParams } from 'react-router'
-import { Nav, Spinner, ButtonGroup, Button } from 'react-bootstrap'
+import { Nav, Spinner, ButtonGroup, Button, Dropdown } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
@@ -14,6 +14,13 @@ const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 const FloorplanGame = lazy(() => import('./FloorplanGame.jsx'))
 
 const VIEW_MODES = ['2d', '3d', 'game', 'list']
+
+const VIEW_MODE_META = {
+  '2d':   { label: '2D',   icon: 'grid' },
+  '3d':   { label: '3D',   icon: 'box' },
+  game:   { label: 'Game', icon: 'zap' },
+  list:   { label: 'List', icon: 'list' },
+}
 
 export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPlant, gnomeWaterRef, fullWidth = false }) {
   const {
@@ -140,7 +147,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
       fullWidth={fullWidth}
     >
       {/* Floor tabs + view toggle */}
-      <div className="d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
+      <div className="floorplan-toolbar d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
         <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
           {visibleFloors.map((f) => (
             <Nav.Item key={f.id}>
@@ -151,7 +158,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
               >
                 <span className="d-inline-flex align-items-center gap-1">
                   {f.type === 'outdoor' && (
-                    <svg className="sa-icon sa-thin" style={{ width: 12, height: 12 }}>
+                    <svg className="sa-icon sa-thin" style={{ width: 12, height: 12 }} aria-hidden="true">
                       <use href="/icons/sprite.svg#sun"></use>
                     </svg>
                   )}
@@ -161,31 +168,60 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
             </Nav.Item>
           ))}
         </Nav>
-        <div className="d-flex gap-2 flex-shrink-0">
+        <div className="d-flex gap-2 flex-shrink-0 align-items-center">
           {viewMode !== 'list' && plantsOnFloor.length > 0 && activeFloor?.rooms?.length > 0 && (
             <Button variant="outline-secondary" size="sm" onClick={handleReorganise} title="Evenly space plants within their rooms">
-              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#grid"></use></svg>
               Reorganise
             </Button>
           )}
-          <ButtonGroup size="sm">
-            <Button variant={viewMode === '2d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('2d')} title="2D View">
-              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#grid"></use></svg>
-              2D
-            </Button>
-            <Button variant={viewMode === '3d' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('3d')} title="3D View">
-              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#box"></use></svg>
-              3D
-            </Button>
-            <Button variant={viewMode === 'game' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('game')} title="Game View — walk a pixel gardener around your house">
-              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#zap"></use></svg>
-              Game
-            </Button>
-            <Button variant={viewMode === 'list' ? 'primary' : 'outline-secondary'} onClick={() => setViewMode('list')} title="List View">
-              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#list"></use></svg>
-              List
-            </Button>
+
+          {/* Desktop ≥ sm: full button group */}
+          <ButtonGroup size="sm" className="d-none d-sm-inline-flex" role="group" aria-label="View mode">
+            {VIEW_MODES.map((mode) => (
+              <Button
+                key={mode}
+                variant={viewMode === mode ? 'primary' : 'outline-secondary'}
+                onClick={() => setViewMode(mode)}
+                title={`${VIEW_MODE_META[mode].label} View`}
+                aria-pressed={viewMode === mode}
+              >
+                <svg className="sa-icon me-1" style={{ width: 14, height: 14 }} aria-hidden="true">
+                  <use href={`/icons/sprite.svg#${VIEW_MODE_META[mode].icon}`}></use>
+                </svg>
+                {VIEW_MODE_META[mode].label}
+              </Button>
+            ))}
           </ButtonGroup>
+
+          {/* Mobile < sm: collapse into a dropdown to free horizontal space */}
+          <Dropdown className="d-sm-none" align="end">
+            <Dropdown.Toggle
+              size="sm"
+              variant="outline-secondary"
+              id="view-mode-dropdown"
+              aria-label={`View mode: ${VIEW_MODE_META[viewMode].label}`}
+            >
+              <svg className="sa-icon me-1" style={{ width: 14, height: 14 }} aria-hidden="true">
+                <use href={`/icons/sprite.svg#${VIEW_MODE_META[viewMode].icon}`}></use>
+              </svg>
+              {VIEW_MODE_META[viewMode].label}
+            </Dropdown.Toggle>
+            <Dropdown.Menu>
+              {VIEW_MODES.map((mode) => (
+                <Dropdown.Item
+                  key={mode}
+                  active={viewMode === mode}
+                  onClick={() => setViewMode(mode)}
+                >
+                  <svg className="sa-icon me-2" style={{ width: 14, height: 14 }} aria-hidden="true">
+                    <use href={`/icons/sprite.svg#${VIEW_MODE_META[mode].icon}`}></use>
+                  </svg>
+                  {VIEW_MODE_META[mode].label}
+                </Dropdown.Item>
+              ))}
+            </Dropdown.Menu>
+          </Dropdown>
         </div>
       </div>
 

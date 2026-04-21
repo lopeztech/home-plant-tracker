@@ -145,7 +145,8 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                           size="sm"
                           value={room.area || 'frontyard'}
                           onChange={(e) => updateRoom(i, { area: e.target.value })}
-                          style={{ width: 120, fontSize: '0.7rem' }}
+                          className="settings-fixed-w-120"
+                          style={{ fontSize: '0.7rem' }}
                           title="Yard area"
                         >
                           {YARD_AREAS.map((a) => (
@@ -240,7 +241,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <div className="panel-container"><div className="panel-content p-0">
-                <Table hover responsive className="mb-0">
+                <Table hover responsive className="mb-0 settings-floors-table">
                   <thead>
                     <tr>
                       <th style={{ width: 50 }}>Visible</th>
@@ -267,7 +268,7 @@ export default function SettingsPage() {
                 <div className="d-flex gap-2 p-3 border-top">
                   <Form.Control size="sm" placeholder="Zone name (e.g. Loft)" value={newName}
                     onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddFloor()} />
-                  <Form.Select size="sm" value={newType} onChange={(e) => setNewType(e.target.value)} style={{ width: 120 }}>
+                  <Form.Select size="sm" value={newType} onChange={(e) => setNewType(e.target.value)} className="settings-fixed-w-120">
                     <option value="indoor">Indoor</option>
                     <option value="outdoor">Outdoor</option>
                   </Form.Select>
