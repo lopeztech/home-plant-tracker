@@ -1307,6 +1307,111 @@ app.post('/plants/:id/fertilise', requireUser, async (req, res) => {
   }
 });
 
+// ── Growth measurements ───────────────────────────────────────────────────────
+
+app.get('/plants/:id/measurements', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    res.status(200).json(doc.data().measurements || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/measurements', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { height_cm, width_cm, leafCount, stemCount, notes } = req.body || {};
+    const payload = {};
+    if (height_cm != null && height_cm !== '') payload.height_cm = Number(height_cm);
+    if (width_cm  != null && width_cm  !== '') payload.width_cm  = Number(width_cm);
+    if (leafCount  != null && leafCount  !== '') payload.leafCount  = Number(leafCount);
+    if (stemCount  != null && stemCount  !== '') payload.stemCount  = Number(stemCount);
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ error: 'At least one of height_cm, width_cm, leafCount, or stemCount is required' });
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const entry = { id, date: now, notes: notes || '', ...payload };
+    const existing = doc.data();
+    const measurements = [...(existing.measurements || []), entry];
+    await ref.set({ measurements, updatedAt: now }, { merge: true });
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/measurements/:measurementId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const existing = doc.data();
+    const measurements = (existing.measurements || []).filter(m => m.id !== req.params.measurementId);
+    await ref.set({ measurements, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Phenology events ──────────────────────────────────────────────────────────
+
+const PHENOLOGY_EVENTS = new Set(['first-leaf', 'first-bud', 'first-bloom', 'first-fruit', 'leaf-drop', 'dormancy', 'new-growth', 'other']);
+
+app.get('/plants/:id/phenology', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    res.status(200).json(doc.data().phenologyEvents || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/phenology', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { event, notes, date } = req.body || {};
+    if (!event || !PHENOLOGY_EVENTS.has(event)) {
+      return res.status(400).json({ error: `event must be one of: ${[...PHENOLOGY_EVENTS].join(', ')}` });
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const entry = { id, date: date || now, event, notes: notes || '' };
+    const existing = doc.data();
+    const phenologyEvents = [...(existing.phenologyEvents || []), entry];
+    await ref.set({ phenologyEvents, updatedAt: now }, { merge: true });
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/phenology/:eventId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const existing = doc.data();
+    const phenologyEvents = (existing.phenologyEvents || []).filter(e => e.id !== req.params.eventId);
+    await ref.set({ phenologyEvents, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Fertiliser recommendation (Gemini, structured) ───────────────────────────
 
 const FERTILISER_RECOMMEND_SCHEMA = {
