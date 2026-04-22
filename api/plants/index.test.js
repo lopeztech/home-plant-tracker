@@ -757,6 +757,93 @@ describe('POST /plants/:id/water', () => {
     const res = await request(app).post('/plants/p1/water').set('Authorization', authHeader());
     expect(res.body.imageUrl).toBe('https://signed.url/fern-water.jpg');
   });
+
+  it('stores rich metadata fields when provided', async () => {
+    store[plantPath('p1')] = { name: 'Monstera', wateringLog: [] };
+    const res = await request(app).post('/plants/p1/water').set('Authorization', authHeader())
+      .send({ volumeMl: 350, method: 'top', soilBefore: 'dry', drainedCleanly: true });
+    expect(res.status).toBe(200);
+    const entry = res.body.wateringLog[0];
+    expect(entry.volumeMl).toBe(350);
+    expect(entry.method).toBe('top');
+    expect(entry.soilBefore).toBe('dry');
+    expect(entry.drainedCleanly).toBe(true);
+    expect(entry.amount).toBe('350ml');
+  });
+
+  it('returns 400 for invalid method value', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/water').set('Authorization', authHeader())
+      .send({ method: 'bucket' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('method');
+  });
+
+  it('returns 400 for invalid soilBefore value', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/water').set('Authorization', authHeader())
+      .send({ soilBefore: 'unknown' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('soilBefore');
+  });
+
+  it('accepts legacy shape (amount + method) without error', async () => {
+    store[plantPath('p1')] = { name: 'Fern' };
+    const res = await request(app).post('/plants/p1/water').set('Authorization', authHeader())
+      .send({ amount: '250ml', method: 'top' });
+    expect(res.status).toBe(200);
+    expect(res.body.wateringLog[0].amount).toBe('250ml');
+  });
+});
+
+// ── GET /plants/:id/waterings ────────────────────────────────────────────────
+
+describe('GET /plants/:id/waterings', () => {
+  it('returns 404 for non-existent plant', async () => {
+    const res = await request(app).get('/plants/missing/waterings').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns waterings sorted newest first', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z', volumeMl: 100, method: 'top' },
+        { date: '2026-01-10T00:00:00.000Z', volumeMl: 200, method: 'bottom' },
+      ],
+    };
+    const res = await request(app).get('/plants/p1/waterings').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.waterings).toHaveLength(2);
+    expect(res.body.waterings[0].date).toBe('2026-01-10T00:00:00.000Z');
+    expect(res.body.total).toBe(2);
+  });
+
+  it('returns empty waterings for plant with no log', async () => {
+    store[plantPath('p1')] = { name: 'Cactus' };
+    const res = await request(app).get('/plants/p1/waterings').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.waterings).toHaveLength(0);
+    expect(res.body.total).toBe(0);
+  });
+
+  it('respects limit query parameter', async () => {
+    store[plantPath('p1')] = {
+      name: 'Fern',
+      wateringLog: Array.from({ length: 10 }, (_, i) => ({
+        date: new Date(2026, 0, i + 1).toISOString(), volumeMl: 100,
+      })),
+    };
+    const res = await request(app).get('/plants/p1/waterings?limit=3').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.waterings).toHaveLength(3);
+    expect(res.body.total).toBe(10);
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/plants/p1/waterings');
+    expect(res.status).toBe(401);
+  });
 });
 
 // ── POST /plants/:id/moisture ─────────────────────────────────────────────────

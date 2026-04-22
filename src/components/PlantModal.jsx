@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } 
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import PlantQRTag from './PlantQRTag.jsx'
+import WateringSheet from './WateringSheet.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, incidentApi } from '../api/plants.js'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -282,6 +283,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   })
   const [isSaving, setIsSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [showWateringSheet, setShowWateringSheet] = useState(false)
   const careHistoryInitial = plant?.careRecommendationHistory || []
   const wateringHistoryInitial = plant?.wateringRecommendationHistory || []
   const [careHistory, setCareHistory] = useState(careHistoryInitial)
@@ -791,6 +793,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   }, [form, plant, floors, wateringStatus, wateringHistory, persistHistory, ctxLocation, ctxTempUnit, weather])
 
   return (
+    <>
     <Modal show onHide={handleClose} size="lg" centered scrollable>
       <Modal.Header closeButton className="border-bottom">
         <Modal.Title className="d-flex align-items-center gap-2 fs-6">
@@ -1233,9 +1236,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               {wateringRecLoading ? 'Loading...' : wateringRec ? 'Refresh Watering Recommendation' : 'Get Watering Recommendation'}
             </Button>
             {onWater && (
-              <Button variant="outline-info" size="sm" onClick={() => onWater(plant.id)}>
+              <Button variant="outline-info" size="sm" onClick={() => setShowWateringSheet(true)}>
                 <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
-                Mark as Watered
+                Log Watering
               </Button>
             )}
             {wateringRec && wateringHistory.length > 0 && (() => {
@@ -2147,5 +2150,15 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         )}
       </Modal.Footer>
     </Modal>
+
+    {plant && showWateringSheet && (
+      <WateringSheet
+        plant={plant}
+        show={showWateringSheet}
+        onHide={() => setShowWateringSheet(false)}
+        onLog={onWater}
+      />
+    )}
+  </>
   )
 }

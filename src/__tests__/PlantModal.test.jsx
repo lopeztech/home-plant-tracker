@@ -394,24 +394,24 @@ describe('PlantModal', () => {
     expect(screen.queryByRole('button', { name: /watered/i })).not.toBeInTheDocument()
   })
 
-  it('shows Watered button on the Watering tab when onWater is provided', () => {
+  it('shows Log Watering button on the Watering tab when onWater is provided', () => {
     renderModal({ plant: existingPlant, onWater: vi.fn() })
     fireEvent.click(screen.getByText('Watering'))
-    expect(screen.getByRole('button', { name: /watered/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /log watering/i })).toBeInTheDocument()
   })
 
-  it('does not show Watered button on the Watering tab when onWater is not provided', () => {
+  it('does not show Log Watering button on the Watering tab when onWater is not provided', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Watering'))
-    expect(screen.queryByRole('button', { name: /watered/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /log watering/i })).not.toBeInTheDocument()
   })
 
-  it('calls onWater with the plant id when Watered is clicked', () => {
+  it('opens WateringSheet when Log Watering is clicked', () => {
     const onWater = vi.fn()
     renderModal({ plant: existingPlant, onWater })
     fireEvent.click(screen.getByText('Watering'))
-    fireEvent.click(screen.getByRole('button', { name: /watered/i }))
-    expect(onWater).toHaveBeenCalledWith('plant-1')
+    fireEvent.click(screen.getByRole('button', { name: /log watering/i }))
+    expect(screen.getByText(/Water Fern/i)).toBeInTheDocument()
   })
 
   it('shows watering history on the Watering tab when plant has a wateringLog', () => {
