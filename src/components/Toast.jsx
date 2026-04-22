@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react'
 import { ToastContainer } from 'react-bootstrap'
+import { motion } from 'framer-motion'
+import { DURATION, EASE } from '../motion/tokens.js'
 
 const ToastContext = createContext(null)
 
@@ -69,7 +71,14 @@ export function ToastProvider({ children }) {
       {children}
       <ToastContainer position="top-end" className="p-3" style={{ zIndex: 9999 }}>
         {toasts.map((t) => (
-          <ToastItem key={t.id} toast={t} onDismiss={dismiss} />
+          <motion.div
+            key={t.id}
+            initial={{ opacity: 0, x: 32, y: -8 }}
+            animate={{ opacity: 1, x: 0, y: 0 }}
+            transition={{ duration: DURATION.normal, ease: EASE.out }}
+          >
+            <ToastItem toast={t} onDismiss={dismiss} />
+          </motion.div>
         ))}
       </ToastContainer>
     </ToastContext.Provider>

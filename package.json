@@ -19,6 +19,7 @@
     "apexcharts": "^5.10.6",
     "bootstrap": "^5.3.8",
     "clsx": "^2.1.1",
+    "framer-motion": "^12.38.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.8.0",
     "qrcode": "^1.5.4",

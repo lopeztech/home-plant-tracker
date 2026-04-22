@@ -1,4 +1,6 @@
 import React from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { DURATION, EASE } from '../motion/tokens.js'
 
 /**
  * Consistent wrapper for all charts in the app.
@@ -37,13 +39,39 @@ export default function ChartFrame({
       </div>
       <div className="panel-container">
         <div className="panel-content">
-          {loading ? (
-            <ChartSkeleton />
-          ) : empty ? (
-            <ChartEmptyState text={emptyText} />
-          ) : (
-            children
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {loading ? (
+              <motion.div
+                key="skeleton"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: DURATION.fast, ease: EASE.out }}
+              >
+                <ChartSkeleton />
+              </motion.div>
+            ) : empty ? (
+              <motion.div
+                key="empty"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: DURATION.fast, ease: EASE.out }}
+              >
+                <ChartEmptyState text={emptyText} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="content"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: DURATION.fast, ease: EASE.out }}
+              >
+                {children}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>
