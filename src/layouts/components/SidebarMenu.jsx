@@ -1,6 +1,8 @@
 import { NavLink } from 'react-router'
+import { useTranslation } from 'react-i18next'
 
 export default function SidebarMenu({ items, badges = {} }) {
+  const { t } = useTranslation('common')
   return (
     <ul className="nav-menu d-flex flex-column">
       {items.map((item) => {
@@ -22,7 +24,7 @@ export default function SidebarMenu({ items, badges = {} }) {
                   <use href={item.icon}></use>
                 </svg>
               )}
-              <span className="nav-link-text">{item.label}</span>
+              <span className="nav-link-text">{t(`nav.${item.key}`, item.label)}</span>
               {badge > 0 && (
                 <span className="badge bg-primary rounded-pill ms-auto" aria-label={`${badge} pending`}>{badge}</span>
               )}

@@ -8,6 +8,9 @@ import HelpTooltip from '../components/HelpTooltip.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
 import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
+import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
+import { useTranslation } from 'react-i18next'
+import i18n from '../i18n/index.js'
 import { accountApi, exportApi } from '../api/plants.js'
 
 const TABS = [
@@ -323,6 +326,7 @@ function PropertyTab({ search }) {
 function PreferencesTab({ search }) {
   const { tempUnit, unitSystem, location, setLocation, timezone, setTimezone } = usePlantContext()
   const { themeMode, changeThemeMode } = useLayoutContext()
+  const { t } = useTranslation('settings')
   const [locationSearch, setLocationSearch] = useState('')
   const [locationResults, setLocationResults] = useState([])
   const [locationSearching, setLocationSearching] = useState(false)
@@ -461,8 +465,8 @@ function PreferencesTab({ search }) {
       <SettingSection id="timezone" title="Timezone" icon="clock" search={search}>
         <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
           <div>
-            <div className="fw-500 fs-sm">Timezone</div>
-            <div className="text-muted fs-xs">Used for overdue badges, calendar days, and watering schedules</div>
+            <div className="fw-500 fs-sm">{t('timezone.label', 'Timezone')}</div>
+            <div className="text-muted fs-xs">{t('timezone.description', 'Used for overdue badges, calendar days, and watering schedules')}</div>
           </div>
           <Form.Select
             size="sm"
@@ -477,6 +481,28 @@ function PreferencesTab({ search }) {
                   <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
                 ))}
               </optgroup>
+            ))}
+          </Form.Select>
+        </div>
+      </SettingSection>
+
+      <SettingSection id="language" title="Language" icon="globe" search={search}>
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div>
+            <div className="fw-500 fs-sm">{t('language.label', 'Language')}</div>
+            <div className="text-muted fs-xs">{t('language.description', 'Sets the UI language. Content from AI may still be in English.')}</div>
+          </div>
+          <Form.Select
+            size="sm"
+            value={i18n.language?.split('-')[0] || 'en'}
+            onChange={(e) => i18n.changeLanguage(e.target.value)}
+            style={{ maxWidth: 200 }}
+            aria-label="Select language"
+          >
+            {SUPPORTED_LANGUAGES.map((lang) => (
+              <option key={lang.code} value={lang.code}>
+                {lang.nativeName}
+              </option>
             ))}
           </Form.Select>
         </div>

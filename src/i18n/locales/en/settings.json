@@ -1,0 +1,39 @@
+{
+  "tabs": {
+    "property": "Property",
+    "preferences": "Preferences",
+    "data": "Data & export",
+    "advanced": "Advanced"
+  },
+  "sections": {
+    "appearance": "Appearance",
+    "units": "Units",
+    "location": "Location",
+    "timezone": "Timezone",
+    "language": "Language"
+  },
+  "language": {
+    "label": "Language",
+    "description": "Sets the UI language. Content from AI may still be in English.",
+    "helpTranslate": "Help translate"
+  },
+  "timezone": {
+    "label": "Timezone",
+    "description": "Used for overdue badges, calendar days, and watering schedules"
+  },
+  "appearance": {
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "auto": "Auto"
+  },
+  "units": {
+    "temperature": "Temperature",
+    "measurements": "Measurements"
+  },
+  "location": {
+    "searchPlaceholder": "Search city...",
+    "searchButton": "Search",
+    "resetGps": "Reset to GPS"
+  }
+}

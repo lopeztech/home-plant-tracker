@@ -1,0 +1,23 @@
+{
+  "title": "Jardín",
+  "floorplan": {
+    "noFloorplan": "Sin plano todavía",
+    "uploadPrompt": "Sube un plano en Ajustes para empezar a colocar tus plantas.",
+    "uploading": "Subiendo plano...",
+    "analysing": "Analizando plano..."
+  },
+  "plantList": {
+    "title": "Plantas",
+    "searchPlaceholder": "Buscar plantas...",
+    "empty": "Sin plantas todavía",
+    "emptyHint": "Añade tu primera planta haciendo clic en el plano.",
+    "loadMore": "Cargar más plantas",
+    "loading": "Cargando más plantas..."
+  },
+  "view": {
+    "2d": "2D",
+    "3d": "3D",
+    "game": "Juego",
+    "list": "Lista"
+  }
+}

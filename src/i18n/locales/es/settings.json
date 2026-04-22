@@ -1,0 +1,39 @@
+{
+  "tabs": {
+    "property": "Propiedad",
+    "preferences": "Preferencias",
+    "data": "Datos y exportación",
+    "advanced": "Avanzado"
+  },
+  "sections": {
+    "appearance": "Apariencia",
+    "units": "Unidades",
+    "location": "Ubicación",
+    "timezone": "Zona horaria",
+    "language": "Idioma"
+  },
+  "language": {
+    "label": "Idioma",
+    "description": "Establece el idioma de la interfaz. El contenido de la IA puede estar en inglés.",
+    "helpTranslate": "Ayudar a traducir"
+  },
+  "timezone": {
+    "label": "Zona horaria",
+    "description": "Se usa para las notificaciones de retraso, los días del calendario y los horarios de riego"
+  },
+  "appearance": {
+    "theme": "Tema",
+    "light": "Claro",
+    "dark": "Oscuro",
+    "auto": "Automático"
+  },
+  "units": {
+    "temperature": "Temperatura",
+    "measurements": "Medidas"
+  },
+  "location": {
+    "searchPlaceholder": "Buscar ciudad...",
+    "searchButton": "Buscar",
+    "resetGps": "Restablecer GPS"
+  }
+}

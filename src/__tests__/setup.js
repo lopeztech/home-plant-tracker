@@ -1,5 +1,8 @@
 import { vi } from 'vitest'
 import '@testing-library/jest-dom'
+// Initialise i18next synchronously with English translations so component
+// tests that call useTranslation() receive real English strings.
+import '../i18n/index.js'
 
 // jsdom doesn't implement pointer capture APIs used by PlantMarker drag logic
 Element.prototype.setPointerCapture = vi.fn()

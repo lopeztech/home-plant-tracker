@@ -1,0 +1,15 @@
+{
+  "title": "Analítica",
+  "sections": {
+    "healthDistribution": "Distribución de salud",
+    "wateringHeatmap": "Mapa de calor de riego",
+    "careConsistency": "Consistencia de cuidados",
+    "wateringPatterns": "Patrones de riego"
+  },
+  "labels": {
+    "plants": "Plantas",
+    "waterings": "Riegos",
+    "consistencyScore": "Puntuación de consistencia",
+    "noData": "Sin datos todavía"
+  }
+}

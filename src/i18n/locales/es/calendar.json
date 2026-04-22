@@ -1,0 +1,20 @@
+{
+  "title": "Calendario de cuidados",
+  "weekdays": {
+    "mon": "Lun",
+    "tue": "Mar",
+    "wed": "Mié",
+    "thu": "Jue",
+    "fri": "Vie",
+    "sat": "Sáb",
+    "sun": "Dom"
+  },
+  "events": {
+    "watered": "Regada",
+    "fertilised": "Fertilizada",
+    "due": "Pendiente",
+    "feedDue": "Fertilización pendiente"
+  },
+  "empty": "Sin plantas para programar",
+  "emptyHint": "Añade plantas para ver tu calendario de cuidados aquí."
+}

@@ -1,0 +1,17 @@
+{
+  "generic": "Something went wrong. Please try again.",
+  "network": "Network error. Check your connection and try again.",
+  "notFound": "Not found.",
+  "unauthorized": "You are not authorised to do that.",
+  "loadPlants": "Failed to load plants.",
+  "savePlant": "Failed to save plant.",
+  "deletePlant": "Failed to delete plant.",
+  "waterPlant": "Failed to record watering.",
+  "uploadImage": "Failed to upload image.",
+  "loadFloors": "Failed to load floors.",
+  "saveFloors": "Failed to save floors.",
+  "analysePlant": "Failed to analyse plant photo.",
+  "analyseFloorplan": "Failed to analyse floorplan.",
+  "offlineQueued": "You are offline. This action will be retried when you reconnect.",
+  "quotaExceeded": "You have reached your plan's limit. Upgrade to continue."
+}
