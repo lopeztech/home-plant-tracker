@@ -1,0 +1,36 @@
+[
+  {
+    "version": "1.4.0",
+    "date": "2026-04-22",
+    "entries": [
+      { "type": "new", "text": "Replayable feature tours — access any tour from the sidebar or Help menu" },
+      { "type": "new", "text": "\"What's new\" panel shows release highlights automatically after each update" },
+      { "type": "new", "text": "Cursor-based pagination for large plant collections (up to 200 plants per page)" },
+      { "type": "new", "text": "Virtualised plant list with react-window for collections over 40 plants" },
+      { "type": "new", "text": "Storybook design system catalogue — run npm run storybook" },
+      { "type": "new", "text": "Motion tokens and Framer Motion micro-interactions throughout the UI" }
+    ]
+  },
+  {
+    "version": "1.3.0",
+    "date": "2026-04-10",
+    "entries": [
+      { "type": "new", "text": "Outbreak detection and bulk treatment for pest and disease incidents" },
+      { "type": "new", "text": "Bulk plant import from photos using Gemini AI species identification" },
+      { "type": "new", "text": "QR code tags — generate and scan plant labels for instant access" },
+      { "type": "improved", "text": "Analytics: watering heatmap, care consistency score, and health distribution charts" },
+      { "type": "improved", "text": "Seasonal care adjustments powered by Gemini recommendations" }
+    ]
+  },
+  {
+    "version": "1.2.0",
+    "date": "2026-03-20",
+    "entries": [
+      { "type": "new", "text": "Propagation tracker — log cuttings, seedlings, and divisions" },
+      { "type": "new", "text": "Harvest log for edible plants and herbs" },
+      { "type": "new", "text": "Phenology events — record flowering, fruiting, and seasonal milestones" },
+      { "type": "improved", "text": "Offline support — mutations are queued and replayed when back online" },
+      { "type": "fixed", "text": "Watering pattern anomaly detection now ignores plants watered early" }
+    ]
+  }
+]

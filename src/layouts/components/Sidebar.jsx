@@ -1,9 +1,10 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuth } from '../../contexts/AuthContext.jsx'
 import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import { usePlantContext } from '../../context/PlantContext.jsx'
 import { useHelp } from '../../context/HelpContext.jsx'
+import { useTour, TOURS } from '../../context/TourContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
 import WeatherStrip from '../../components/WeatherStrip.jsx'
 import OfflineIndicator from '../../components/OfflineIndicator.jsx'
@@ -15,6 +16,8 @@ export default function Sidebar() {
   const { navMinified, toggleSetting } = useLayoutContext()
   const { weather, location, plants, floors } = usePlantContext()
   const { open: openHelp } = useHelp()
+  const { startTour, openWhatsNew } = useTour()
+  const [tourMenuOpen, setTourMenuOpen] = useState(false)
   const navigate = useNavigate()
 
   const todayCount = useMemo(
@@ -27,7 +30,7 @@ export default function Sidebar() {
   }
 
   return (
-    <aside className="app-sidebar d-flex flex-column">
+    <aside className="app-sidebar d-flex flex-column" data-tour="sidebar">
       {/* Weather strip above everything */}
       <WeatherStrip weather={weather} location={location} onLocationClick={() => navigate('/settings')} />
 
@@ -65,6 +68,46 @@ export default function Sidebar() {
           <SidebarMenu items={menuItems} badges={{ today: todayCount }} />
           {/* Sign out — below Settings */}
           <ul className="nav-menu d-flex flex-column">
+            <li>
+              <button type="button" onClick={openWhatsNew} className="nav-link-btn text-start w-100 bg-transparent border-0">
+                <svg className="sa-icon" aria-hidden="true">
+                  <use href="/icons/sprite.svg#sparkles"></use>
+                </svg>
+                <span className="nav-link-text">What&apos;s new</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                onClick={() => setTourMenuOpen((o) => !o)}
+                className="nav-link-btn text-start w-100 bg-transparent border-0"
+                aria-expanded={tourMenuOpen}
+              >
+                <svg className="sa-icon" aria-hidden="true">
+                  <use href="/icons/sprite.svg#compass"></use>
+                </svg>
+                <span className="nav-link-text">Take a tour</span>
+                <svg className="sa-icon ms-auto" style={{ width: 12, height: 12, transform: tourMenuOpen ? 'rotate(180deg)' : undefined }} aria-hidden="true">
+                  <use href="/icons/sprite.svg#chevron-down"></use>
+                </svg>
+              </button>
+              {tourMenuOpen && (
+                <ul className="list-unstyled ps-4 mb-1">
+                  {TOURS.map((tour) => (
+                    <li key={tour.id}>
+                      <button
+                        type="button"
+                        onClick={() => { startTour(tour.id); setTourMenuOpen(false) }}
+                        className="btn btn-link btn-sm text-start w-100 p-0 py-1 text-white-50 text-decoration-none"
+                        style={{ fontSize: '0.8rem' }}
+                      >
+                        {tour.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
             <li>
               <button type="button" onClick={() => openHelp()} className="nav-link-btn text-start w-100 bg-transparent border-0">
                 <svg className="sa-icon" aria-hidden="true">

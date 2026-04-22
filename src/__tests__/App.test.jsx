@@ -64,6 +64,12 @@ vi.mock('react-apexcharts', () => ({
   default: () => <div data-testid="apex-chart" />,
 }))
 
+// react-joyride uses DOM APIs not available in jsdom
+vi.mock('react-joyride', () => ({
+  default: () => null,
+  STATUS: { FINISHED: 'finished', SKIPPED: 'skipped' },
+}))
+
 // Leaflet is not available in jsdom
 vi.mock('../components/LeafletFloorplan.jsx', () => ({
   default: () => <div data-testid="leaflet-floorplan" />,

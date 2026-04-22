@@ -11,7 +11,7 @@ export default function SidebarMenu({ items, badges = {} }) {
         }
         const badge = badges[item.key]
         return (
-          <li key={item.key}>
+          <li key={item.key} data-tour={`nav-${item.key}`}>
             <NavLink
               to={item.url}
               end={item.url === '/'}
