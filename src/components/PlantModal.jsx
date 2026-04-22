@@ -156,50 +156,104 @@ function GrowthUpload({ plantId, onComplete }) {
   )
 }
 
-function DiagnosticUpload({ plantId, onComplete }) {
+const SEVERITY_VARIANT = { severe: 'danger', moderate: 'warning', mild: 'info' }
+const URGENCY_VARIANT  = { today: 'danger', 'this-week': 'warning', ongoing: 'secondary' }
+
+function DiagnosticUpload({ plantId, plant, onComplete }) {
   const [uploading, setUploading] = useState(false)
-  const [result, setResult] = useState(null)
-  const [error, setError] = useState(null)
+  const [result, setResult]       = useState(null)
+  const [error, setError]         = useState(null)
+  const [checkedSteps, setCheckedSteps] = useState({})
   const fileRef = useRef(null)
+
+  const isEdible = plant?.category === 'edible'
+  const contextTags = [
+    ...(isEdible ? ['edible'] : []),
+    ...(plant?.plantedIn === 'ground' || plant?.plantedIn === 'garden-bed' ? ['outdoor'] : []),
+  ]
 
   const handleFile = async (file) => {
     if (!file?.type.startsWith('image/')) return
-    setUploading(true); setError(null); setResult(null)
+    setUploading(true); setError(null); setResult(null); setCheckedSteps({})
     try {
-      const data = await plantsApi.diagnostic(plantId, file)
+      const data = await plantsApi.diagnostic(plantId, file, { contextTags })
       setResult(data)
       onComplete?.(data)
     } catch (err) { setError(err.message) }
     finally { setUploading(false) }
   }
 
+  const toggleStep = (i) => setCheckedSteps(prev => ({ ...prev, [i]: !prev[i] }))
+
+  const analysis = result?.analysis
+  const topDiagnosis = analysis?.diagnoses?.[0]
+
   return (
     <div>
       <Button variant="outline-warning" size="sm" onClick={() => fileRef.current?.click()} disabled={uploading}>
         {uploading ? <Spinner size="sm" className="me-1" /> : <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#search"></use></svg>}
-        {uploading ? 'Analysing...' : 'Diagnose Issue'}
+        {uploading ? 'Analysing…' : 'Diagnose Issue'}
       </Button>
       <input ref={fileRef} type="file" accept="image/*" capture="environment" className="d-none"
         onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); e.target.value = '' }} />
 
       {error && <p className="text-danger fs-xs mt-2">{error}</p>}
 
-      {result?.analysis && (
-        <div className="mt-2 p-2 rounded border bg-body-tertiary">
-          <div className="d-flex align-items-center gap-2 mb-1">
-            <Badge bg={result.analysis.severity === 'severe' ? 'danger' : result.analysis.severity === 'moderate' ? 'warning' : 'info'}>
-              {result.analysis.severity}
-            </Badge>
-            <strong className="fs-sm">{result.analysis.issue}</strong>
+      {analysis && (
+        <div className="mt-2 rounded border bg-body-tertiary">
+          {/* Diagnoses list */}
+          <div className="p-2 border-bottom">
+            <p className="fw-semibold fs-xs text-muted mb-1 text-uppercase">Diagnoses</p>
+            {analysis.diagnoses?.map((dx, i) => (
+              <div key={i} className="d-flex align-items-start gap-2 mb-1">
+                <Badge bg={SEVERITY_VARIANT[dx.severity] || 'secondary'} className="mt-1 flex-shrink-0">{dx.severity}</Badge>
+                <div>
+                  <span className="fs-sm fw-semibold">{dx.name}</span>
+                  <span className="fs-xs text-muted ms-1">({Math.round(dx.confidence * 100)}% confidence)</span>
+                  {dx.evidence?.length > 0 && (
+                    <div className="d-flex flex-wrap gap-1 mt-1">
+                      {dx.evidence.map((e, j) => <Badge key={j} bg="light" text="dark" className="fw-normal">{e}</Badge>)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
-          <p className="fs-xs text-muted mb-1"><strong>Cause:</strong> {result.analysis.cause}</p>
-          <p className="fs-xs text-muted mb-1"><strong>Treatment:</strong> {result.analysis.treatment}</p>
-          {result.analysis.preventionTips?.length > 0 && (
-            <ul className="list-unstyled mb-0">
-              {result.analysis.preventionTips.map((tip, i) => (
-                <li key={i} className="fs-xs text-muted">• {tip}</li>
+
+          {/* Treatment checklist */}
+          {analysis.treatments?.length > 0 && (
+            <div className="p-2 border-bottom">
+              <p className="fw-semibold fs-xs text-muted mb-1 text-uppercase">Treatment plan</p>
+              {analysis.treatments.map((t, i) => (
+                <div key={i} className="d-flex align-items-start gap-2 mb-1">
+                  <Form.Check type="checkbox" id={`treatment-${plantId}-${i}`} checked={!!checkedSteps[i]}
+                    onChange={() => toggleStep(i)} className="flex-shrink-0 mt-1" />
+                  <div className={checkedSteps[i] ? 'text-decoration-line-through text-muted' : ''}>
+                    <span className="fs-xs">{t.action}</span>
+                    <div className="d-flex gap-1 mt-1">
+                      <Badge bg={URGENCY_VARIANT[t.urgency] || 'secondary'} className="fw-normal">{t.urgency}</Badge>
+                      {isEdible && <Badge bg={t.safeForEdibles ? 'success' : 'danger'} className="fw-normal">{t.safeForEdibles ? 'food-safe' : 'not edible-safe'}</Badge>}
+                    </div>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
+          )}
+
+          {/* Preventive care */}
+          {analysis.preventiveCare?.length > 0 && (
+            <div className="p-2 border-bottom">
+              <p className="fw-semibold fs-xs text-muted mb-1 text-uppercase">Preventive care</p>
+              {analysis.preventiveCare.map((tip, i) => <p key={i} className="fs-xs text-muted mb-0">• {tip}</p>)}
+            </div>
+          )}
+
+          {/* Escalation */}
+          {analysis.escalation?.consultExpert && (
+            <div className="p-2">
+              <Badge bg="danger" className="me-1">Expert advice recommended</Badge>
+              {analysis.escalation.urgentFlags?.map((f, i) => <span key={i} className="fs-xs text-danger ms-1">{f}</span>)}
+            </div>
           )}
         </div>
       )}
@@ -1077,9 +1131,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   if (result?.maturity) update('maturity', result.maturity)
                   if (result?.health) update('health', result.health)
                 }} />
-                <DiagnosticUpload plantId={plant.id} onComplete={(result) => {
-                  if (result?.analysis?.severity === 'severe') update('health', 'Poor')
-                  else if (result?.analysis?.severity === 'moderate') update('health', 'Fair')
+                <DiagnosticUpload plantId={plant.id} plant={plant} onComplete={(result) => {
+                  const topSeverity = result?.analysis?.diagnoses?.[0]?.severity
+                  if (topSeverity === 'severe') update('health', 'Poor')
+                  else if (topSeverity === 'moderate') update('health', 'Fair')
                 }} />
               </div>
 

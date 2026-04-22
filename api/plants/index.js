@@ -1989,30 +1989,94 @@ app.post('/recommend-fertiliser', async (req, res) => {
 
 // ── Plant diagnostic photo analysis ──────────────────────────────────────────
 
-const DIAGNOSTIC_PROMPT = `Analyse this photo of a plant issue and respond ONLY with valid JSON:
+const DIAGNOSE_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    diagnoses: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          name:       { type: SchemaType.STRING },
+          confidence: { type: SchemaType.NUMBER },
+          category:   { type: SchemaType.STRING },
+          evidence:   { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+          severity:   { type: SchemaType.STRING },
+        },
+        required: ['name', 'confidence', 'category', 'evidence', 'severity'],
+      },
+    },
+    treatments: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          step:            { type: SchemaType.INTEGER },
+          action:          { type: SchemaType.STRING },
+          urgency:         { type: SchemaType.STRING },
+          safeForEdibles:  { type: SchemaType.BOOLEAN },
+          productExamples: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+        },
+        required: ['step', 'action', 'urgency', 'safeForEdibles'],
+      },
+    },
+    preventiveCare: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+    escalation: {
+      type: SchemaType.OBJECT,
+      properties: {
+        consultExpert: { type: SchemaType.BOOLEAN },
+        urgentFlags:   { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      },
+      required: ['consultExpert', 'urgentFlags'],
+    },
+  },
+  required: ['diagnoses', 'treatments', 'preventiveCare', 'escalation'],
+};
+
+function buildDiagnosticPrompt({ symptoms = [], contextTags = [], isEdible = false } = {}) {
+  const edibleRule = isEdible
+    ? '- This plant is EDIBLE. Every treatment MUST be food-safe and organic. Set safeForEdibles=true only for treatments that are safe to use on edible plants. Prefer neem oil, insecticidal soap, copper fungicide, diatomaceous earth, or physical removal over synthetic pesticides.'
+    : '';
+  const symptomCtx = symptoms.length ? `Reported symptoms: ${symptoms.join(', ')}.` : '';
+  const tagCtx = contextTags.length ? `Context: ${contextTags.join(', ')}.` : '';
+
+  return `Analyse this plant photo for pests, diseases, nutrient deficiencies, or environmental stress.
+${symptomCtx}
+${tagCtx}
+
+Return valid JSON matching this schema:
 {
-  "issue": "Brief description of the problem",
-  "severity": "mild|moderate|severe",
-  "cause": "Most likely cause",
-  "treatment": "Recommended treatment in 1-2 sentences",
-  "preventionTips": ["tip 1", "tip 2"]
+  "diagnoses": [
+    { "name": "Spider mites", "confidence": 0.82, "category": "pest", "evidence": ["stippled leaves", "fine webbing"], "severity": "moderate" }
+  ],
+  "treatments": [
+    { "step": 1, "action": "Rinse foliage with water", "urgency": "today", "safeForEdibles": true, "productExamples": [] }
+  ],
+  "preventiveCare": ["Increase humidity to 50%+"],
+  "escalation": { "consultExpert": false, "urgentFlags": [] }
 }
 Rules:
-- Look for signs of disease, pests, nutrient deficiency, overwatering, underwatering, sunburn, etc.
-- severity must be exactly one of: mild, moderate, severe
-- preventionTips should have 2 items
+- diagnoses: rank by confidence descending; confidence is 0.0–1.0; category must be one of: pest, disease, deficiency, environmental
+- severity must be one of: mild, moderate, severe
+- treatments: numbered steps in recommended order; urgency must be one of: today, this-week, ongoing
+- escalation.consultExpert: true when top confidence < 0.5 or severity is severe and cause is unclear
+${edibleRule}
 - Respond with JSON only, no markdown or extra text`;
+}
 
-app.post('/plants/:id/diagnostic', requireUser, async (req, res) => {
+app.post('/plants/:id/diagnostic', requireUser, checkQuota('ai_analyses', countAiAnalysesForReq), async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
-    const { imageBase64, mimeType } = req.body;
+    const { imageBase64, mimeType, symptoms, contextTags } = req.body;
     if (!imageBase64 || !mimeType) {
       return res.status(400).json({ error: 'imageBase64 and mimeType are required' });
     }
+
+    const plantData = doc.data();
+    const isEdible = (contextTags || []).includes('edible') || (plantData.category === 'edible');
 
     // Upload diagnostic image to GCS
     const ext = mimeType.split('/')[1] || 'jpg';
@@ -2022,35 +2086,55 @@ app.post('/plants/:id/diagnostic', requireUser, async (req, res) => {
     await file.save(buffer, { contentType: mimeType, resumable: false });
     const publicUrl = `https://storage.googleapis.com/${IMAGES_BUCKET}/${filename}`;
 
-    // Analyse with Gemini
+    // Analyse with Gemini using structured schema
     let analysis = null;
     try {
+      const prompt = buildDiagnosticPrompt({ symptoms, contextTags, isEdible });
       const result = await geminiWithRetry({
         contents: [{
           role: 'user',
           parts: [
             { inlineData: { mimeType, data: imageBase64 } },
-            { text: DIAGNOSTIC_PROMPT },
+            { text: prompt },
           ],
         }],
-        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+          responseSchema: DIAGNOSE_SCHEMA,
+          maxOutputTokens: 2048,
+        },
       });
       analysis = parseGeminiJson(result.response.text());
     } catch (err) {
-      console.error('Diagnostic analysis failed:', err.message);
+      log.warn('Diagnostic analysis failed', { error: err.message });
     }
 
-    // Append to photoLog
-    const existing = doc.data();
-    const photoLog = [...(existing.photoLog || [])];
-    const entry = { url: publicUrl, date: new Date().toISOString(), type: 'diagnostic', analysis };
-    photoLog.push(entry);
+    // Persist diagnosis to dedicated subcollection for tracking
+    const diagnosisId = crypto.randomUUID();
+    const diagnosisRef = userPlants(req.userId).doc(req.params.id)
+      .collection('diagnoses').doc(diagnosisId);
+    const diagnosisEntry = {
+      id: diagnosisId,
+      imageUrl: publicUrl,
+      analysis,
+      symptoms: symptoms || [],
+      contextTags: contextTags || [],
+      createdAt: new Date().toISOString(),
+    };
+    await diagnosisRef.set(diagnosisEntry);
 
+    // Also append to photoLog for timeline display
+    const photoLog = [...(plantData.photoLog || [])];
+    const photoEntry = { url: publicUrl, date: new Date().toISOString(), type: 'diagnostic', analysis, diagnosisId };
+    photoLog.push(photoEntry);
     await ref.set({ photoLog, updatedAt: new Date().toISOString() }, { merge: true });
 
-    res.status(200).json(entry);
+    try { await billing.incrementAiAnalyses(db, req.userId); } catch (e) { log.warn('ai-usage increment failed', { error: e.message }); }
+
+    res.status(200).json({ ...photoEntry, diagnosisId });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(err.status || 500).json({ error: err.message });
   }
 });
 
