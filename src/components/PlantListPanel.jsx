@@ -235,7 +235,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
   }, [filteredPlants, weather, floors])
 
   return (
-    <div className="panel panel-icon">
+    <div className="panel panel-icon" data-tour="plant-list">
       <div className="panel-hdr d-flex justify-content-between align-items-center">
         <span>
           Plants

@@ -147,7 +147,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
       fullWidth={fullWidth}
     >
       {/* Floor tabs + view toggle */}
-      <div className="floorplan-toolbar d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2">
+      <div className="floorplan-toolbar d-flex align-items-center justify-content-between px-3 py-2 border-bottom flex-wrap gap-2" data-tour="floor-nav">
         <Nav variant="pills" className="gap-1 flex-nowrap overflow-auto flex-grow-1">
           {visibleFloors.map((f) => (
             <Nav.Item key={f.id}>
@@ -240,6 +240,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
       {viewMode !== 'list' && (
       <div
         className="floorplan-wrapper"
+        data-tour="floorplan-panel"
         style={{ height: fullWidth ? 'calc(100vh - 180px)' : (houseHeight || 500), minHeight: fullWidth ? 500 : undefined }}
       >
         {isAnalysingFloorplan && (

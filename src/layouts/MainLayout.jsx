@@ -5,9 +5,12 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
 import { HelpProvider } from '../context/HelpContext.jsx'
 import { CommandPaletteProvider, useCommandPalette } from '../context/CommandPaletteContext.jsx'
+import { TourProvider } from '../context/TourContext.jsx'
 import Sidebar from './components/Sidebar.jsx'
 import Topbar from './components/Topbar.jsx'
 import Onboarding from '../components/Onboarding.jsx'
+import FeatureTour from '../components/FeatureTour.jsx'
+import WhatsNewModal from '../components/WhatsNewModal.jsx'
 import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
 import OfflineBanner from '../components/OfflineBanner.jsx'
@@ -61,6 +64,7 @@ export default function MainLayout() {
   return (
     <MotionConfig reducedMotion="user">
     <PlantProvider>
+      <TourProvider>
       <HelpProvider>
         <CommandPaletteProvider>
           <GlobalKeyboardShortcuts />
@@ -107,10 +111,13 @@ export default function MainLayout() {
             </footer>
           </main>
           <Onboarding />
+          <FeatureTour />
+          <WhatsNewModal />
           <HelpDrawer />
         </div>
         </CommandPaletteProvider>
       </HelpProvider>
+      </TourProvider>
     </PlantProvider>
     </MotionConfig>
   )
