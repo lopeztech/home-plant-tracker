@@ -78,12 +78,12 @@ export const plantsApi = {
   wateringRecommendation: (id) => request(`/plants/${id}/watering-recommendation`),
   healthPrediction: (id) => request(`/plants/${id}/health-prediction`),
   anomaly: (id) => request(`/plants/${id}/anomaly`),
-  diagnostic: async (id, file) => {
+  diagnostic: async (id, file, { symptoms = [], contextTags = [] } = {}) => {
     const base64 = await fileToBase64(file)
     const [, data] = base64.split(',')
     return request(`/plants/${id}/diagnostic`, {
       method: 'POST',
-      body: JSON.stringify({ imageBase64: data, mimeType: file.type }),
+      body: JSON.stringify({ imageBase64: data, mimeType: file.type, symptoms, contextTags }),
     })
   },
   deletePhoto: (id, url) => request(`/plants/${id}/photos`, { method: 'DELETE', body: JSON.stringify({ url }) }),

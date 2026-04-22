@@ -2030,6 +2030,18 @@ describe('gcsPath — via DELETE /plants/:id', () => {
 
 // ── POST /plants/:id/diagnostic ─────────────────────────────────────────────
 
+const MOCK_DIAGNOSIS = {
+  diagnoses: [
+    { name: 'Spider mites', confidence: 0.85, category: 'pest', evidence: ['stippled leaves', 'fine webbing'], severity: 'moderate' },
+  ],
+  treatments: [
+    { step: 1, action: 'Rinse foliage with water', urgency: 'today', safeForEdibles: true, productExamples: [] },
+    { step: 2, action: 'Apply insecticidal soap', urgency: 'this-week', safeForEdibles: true, productExamples: ['Safer Brand Insect Killing Soap'] },
+  ],
+  preventiveCare: ['Increase humidity to 50%+', 'Inspect plants weekly'],
+  escalation: { consultExpert: false, urgentFlags: [] },
+};
+
 describe('POST /plants/:id/diagnostic', () => {
   it('returns 404 for non-existent plant', async () => {
     const res = await request(app)
@@ -2052,6 +2064,80 @@ describe('POST /plants/:id/diagnostic', () => {
       .post('/plants/p1/diagnostic').set('Authorization', authHeader())
       .send({ imageBase64: 'abc' });
     expect(res.status).toBe(400);
+  });
+
+  it('returns structured diagnosis with diagnoses, treatments, preventiveCare, and escalation', async () => {
+    store[plantPath('p1')] = { name: 'Monstera', createdAt: '2026-01-01T00:00:00.000Z' };
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(MOCK_DIAGNOSIS) } });
+
+    const res = await request(app)
+      .post('/plants/p1/diagnostic').set('Authorization', authHeader())
+      .send({ imageBase64: 'aGVsbG8=', mimeType: 'image/jpeg' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.analysis.diagnoses).toHaveLength(1);
+    expect(res.body.analysis.diagnoses[0].name).toBe('Spider mites');
+    expect(res.body.analysis.diagnoses[0].confidence).toBe(0.85);
+    expect(res.body.analysis.treatments).toHaveLength(2);
+    expect(res.body.analysis.preventiveCare).toHaveLength(2);
+    expect(res.body.analysis.escalation.consultExpert).toBe(false);
+    expect(res.body.diagnosisId).toBeTruthy();
+    expect(res.body.type).toBe('diagnostic');
+  });
+
+  it('persists diagnosis entry to the diagnoses subcollection', async () => {
+    store[plantPath('p1')] = { name: 'Monstera', createdAt: '2026-01-01T00:00:00.000Z' };
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(MOCK_DIAGNOSIS) } });
+
+    const res = await request(app)
+      .post('/plants/p1/diagnostic').set('Authorization', authHeader())
+      .send({ imageBase64: 'aGVsbG8=', mimeType: 'image/jpeg' });
+
+    expect(res.status).toBe(200);
+    const diagnosisId = res.body.diagnosisId;
+    const diagnosisKey = Object.keys(store).find(k => k.includes('/diagnoses/'));
+    expect(diagnosisKey).toBeTruthy();
+    const savedDiagnosis = store[diagnosisKey];
+    expect(savedDiagnosis.id).toBe(diagnosisId);
+    expect(savedDiagnosis.analysis.diagnoses[0].name).toBe('Spider mites');
+  });
+
+  it('appends to photoLog with diagnosisId', async () => {
+    store[plantPath('p1')] = { name: 'Fern', photoLog: [], createdAt: '2026-01-01T00:00:00.000Z' };
+    geminiGenerateFn = async () => ({ response: { text: () => JSON.stringify(MOCK_DIAGNOSIS) } });
+
+    await request(app)
+      .post('/plants/p1/diagnostic').set('Authorization', authHeader())
+      .send({ imageBase64: 'aGVsbG8=', mimeType: 'image/jpeg' });
+
+    const saved = store[plantPath('p1')];
+    expect(saved.photoLog).toHaveLength(1);
+    expect(saved.photoLog[0].type).toBe('diagnostic');
+    expect(saved.photoLog[0].diagnosisId).toBeTruthy();
+  });
+
+  it('propagates contextTags and treats edible-tagged plant with food-safe rule', async () => {
+    store[plantPath('p1')] = { name: 'Basil', category: 'edible', createdAt: '2026-01-01T00:00:00.000Z' };
+    let capturedContents;
+    geminiGenerateFn = async (params) => {
+      capturedContents = params.contents;
+      return { response: { text: () => JSON.stringify(MOCK_DIAGNOSIS) } };
+    };
+
+    await request(app)
+      .post('/plants/p1/diagnostic').set('Authorization', authHeader())
+      .send({ imageBase64: 'aGVsbG8=', mimeType: 'image/jpeg', contextTags: ['edible'] });
+
+    const promptText = capturedContents[0].parts[1].text;
+    expect(promptText).toContain('EDIBLE');
+    expect(promptText).toContain('food-safe');
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app)
+      .post('/plants/p1/diagnostic')
+      .send({ imageBase64: 'abc', mimeType: 'image/jpeg' });
+    expect(res.status).toBe(401);
   });
 });
 
