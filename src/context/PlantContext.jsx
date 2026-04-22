@@ -175,21 +175,21 @@ export function PlantProvider({ children }) {
     }
   }, [activeFloorId, isGuest])
 
-  const handleWaterPlant = useCallback(async (plantId) => {
+  const handleWaterPlant = useCallback(async (plantId, metadata = {}) => {
     if (isGuest) {
       const now = new Date().toISOString()
-      const entry = { date: now, note: '' }
+      const entry = { date: now, note: metadata.note || '', volumeMl: metadata.volumeMl || null, method: metadata.method || null, soilBefore: metadata.soilBefore || null }
       const updater = (p) => ({ ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] })
       setPlants((prev) => prev.map((p) => (p.id === plantId ? updater(p) : p)))
       return
     }
     try {
-      const updated = await plantsApi.water(plantId)
+      const updated = await plantsApi.water(plantId, metadata)
       setPlants((prev) => prev.map((p) => (p.id === plantId ? updated : p)))
     } catch (err) {
       if (err instanceof OfflineQueuedError) {
         const now = new Date().toISOString()
-        const entry = { date: now, note: '' }
+        const entry = { date: now, note: metadata.note || '', volumeMl: metadata.volumeMl || null, method: metadata.method || null, soilBefore: metadata.soilBefore || null }
         setPlants((prev) => prev.map((p) => (p.id === plantId
           ? { ...p, lastWatered: now, wateringLog: [...(p.wateringLog || []), entry] }
           : p)))

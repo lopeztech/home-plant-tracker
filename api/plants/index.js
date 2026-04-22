@@ -1241,6 +1241,9 @@ app.get('/scan/:shortCode', requireUser, async (req, res) => {
   }
 });
 
+const WATERING_METHODS  = ['top', 'bottom', 'mist', 'soak', 'drip', 'irrigation', 'rain'];
+const SOIL_BEFORE_OPTS  = ['dry', 'moist', 'wet', 'soggy'];
+
 app.post('/plants/:id/water', requireUser, async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);
@@ -1249,8 +1252,32 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
 
     const now = new Date().toISOString();
     const existing = doc.data();
-    const { amount, method } = req.body || {};
-    const wateringLog = [...(existing.wateringLog || []), { date: now, note: '', amount: amount || null, method: method || null }];
+    const {
+      amount, method,           // legacy fields — preserved for backward compatibility
+      volumeMl, soilBefore, drainedCleanly, fertiliserMixed, note,
+    } = req.body || {};
+
+    const wateringMethod = method || null;
+    if (wateringMethod && !WATERING_METHODS.includes(wateringMethod)) {
+      return res.status(400).json({ error: `method must be one of: ${WATERING_METHODS.join(', ')}` });
+    }
+    if (soilBefore && !SOIL_BEFORE_OPTS.includes(soilBefore)) {
+      return res.status(400).json({ error: `soilBefore must be one of: ${SOIL_BEFORE_OPTS.join(', ')}` });
+    }
+
+    const entry = {
+      date: now,
+      note: note || '',
+      // Legacy field kept for ML pipelines that still read wateringLog[].amount
+      amount: amount || (volumeMl != null ? String(volumeMl) + 'ml' : null),
+      method: wateringMethod,
+      volumeMl: volumeMl != null ? Number(volumeMl) : null,
+      soilBefore: soilBefore || null,
+      drainedCleanly: drainedCleanly != null ? Boolean(drainedCleanly) : null,
+      fertiliserMixed: fertiliserMixed || null,
+    };
+
+    const wateringLog = [...(existing.wateringLog || []), entry];
 
     // Invalidate ML caches on new watering event
     const mlCache = { ...(existing.mlCache || {}) };
@@ -1263,6 +1290,26 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
     const data = { id: updated.id, ...updated.data() };
     await signPlantData(data);
     res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Watering history ─────────────────────────────────────────────────────────
+
+app.get('/plants/:id/waterings', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const plant = doc.data();
+    const limit  = Math.min(Number(req.query.limit) || 50, 200);
+    const waterings = [...(plant.wateringLog || [])]
+      .sort((a, b) => new Date(b.date) - new Date(a.date))
+      .slice(0, limit);
+
+    res.status(200).json({ waterings, total: (plant.wateringLog || []).length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

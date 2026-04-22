@@ -53,13 +53,14 @@ export const plantsApi = {
   create: (data) => request('/plants', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/plants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/plants/${id}`, { method: 'DELETE' }),
-  water: (id) => {
+  water: (id, metadata = {}) => {
     if (isOffline()) {
-      enqueueMutation({ type: 'water', payload: { id } })
+      enqueueMutation({ type: 'water', payload: { id, metadata } })
       throw new OfflineQueuedError('water')
     }
-    return request(`/plants/${id}/water`, { method: 'POST' })
+    return request(`/plants/${id}/water`, { method: 'POST', body: JSON.stringify(metadata) })
   },
+  waterings: (id, limit = 50) => request(`/plants/${id}/waterings?limit=${limit}`),
   moisture: (id, reading, note) => {
     if (isOffline()) {
       enqueueMutation({ type: 'moisture', payload: { id, reading, note } })
@@ -111,7 +112,7 @@ export function flushOfflineMutations() {
   return flushQueue(async (item) => {
     const { type, payload } = item
     if (type === 'water') {
-      return request(`/plants/${payload.id}/water`, { method: 'POST' })
+      return request(`/plants/${payload.id}/water`, { method: 'POST', body: JSON.stringify(payload.metadata || {}) })
     }
     if (type === 'moisture') {
       return request(`/plants/${payload.id}/moisture`, {
