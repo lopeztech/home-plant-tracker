@@ -1,6 +1,10 @@
 import { vi } from 'vitest'
 import '@testing-library/jest-dom'
 
+// Build-time globals injected by Vite — stub for jsdom test environment
+globalThis.__APP_VERSION__ = 'test'
+globalThis.__BUILD_TIME__ = '2024-01-01T00:00:00.000Z'
+
 // jsdom doesn't implement pointer capture APIs used by PlantMarker drag logic
 Element.prototype.setPointerCapture = vi.fn()
 Element.prototype.releasePointerCapture = vi.fn()

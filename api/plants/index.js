@@ -931,6 +931,52 @@ app.put('/config/floorplan', requireUser, async (req, res) => {
   }
 });
 
+// ── Branding config ───────────────────────────────────────────────────────────
+
+const BRANDING_DEFAULTS = {
+  businessName: '',
+  primaryColor: '#2d5a1b',
+  contactPhone: '',
+  contactEmail: '',
+  contactWebsite: '',
+  logoUrl: null,
+};
+
+app.get('/config/branding', requireUser, async (req, res) => {
+  try {
+    const doc = await userConfig(req.userId).doc('branding').get();
+    const data = doc.exists ? { ...BRANDING_DEFAULTS, ...doc.data() } : { ...BRANDING_DEFAULTS };
+    if (data.logoUrl) data.logoUrl = await signReadUrl(data.logoUrl);
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/config/branding', requireUser, async (req, res) => {
+  try {
+    const { businessName, primaryColor, contactPhone, contactEmail, contactWebsite, logoUrl } = req.body;
+    if (primaryColor && !/^#[0-9a-fA-F]{6}$/.test(primaryColor)) {
+      return res.status(400).json({ error: 'primaryColor must be a valid hex colour (e.g. #2d5a1b)' });
+    }
+    const payload = {
+      businessName: businessName || '',
+      primaryColor: primaryColor || '#2d5a1b',
+      contactPhone: contactPhone || '',
+      contactEmail: contactEmail || '',
+      contactWebsite: contactWebsite || '',
+      logoUrl: logoUrl || null,
+      updatedAt: new Date().toISOString(),
+    };
+    await userConfig(req.userId).doc('branding').set(payload, { merge: true });
+    const result = { ...payload };
+    if (result.logoUrl) result.logoUrl = await signReadUrl(result.logoUrl);
+    res.status(200).json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Plants CRUD ───────────────────────────────────────────────────────────────
 
 app.get('/plants', requireUser, async (req, res) => {

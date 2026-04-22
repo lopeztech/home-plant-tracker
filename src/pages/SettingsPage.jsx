@@ -1,9 +1,10 @@
-import { useState, useCallback, useRef } from 'react'
-import { Button, Form, Table, Badge } from 'react-bootstrap'
+import { useState, useCallback, useRef, useEffect } from 'react'
+import { Button, Form, Table, Badge, Spinner } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
+import { brandingApi, imagesApi } from '../api/plants.js'
 
 
 
@@ -179,6 +180,188 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
         </tr>
       )}
     </>
+  )
+}
+
+function BrandingSection() {
+  const [branding, setBranding] = useState({
+    businessName: '', primaryColor: '#2d5a1b',
+    contactPhone: '', contactEmail: '', contactWebsite: '', logoUrl: null,
+  })
+  const [loading, setLoading] = useState(true)
+  const [saving, setBrandingSaving] = useState(false)
+  const [saved, setBrandingSaved] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const logoInputRef = useRef(null)
+
+  useEffect(() => {
+    brandingApi.get()
+      .then((data) => setBranding(data))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  const handleChange = (field, value) => setBranding((prev) => ({ ...prev, [field]: value }))
+
+  const handleLogoUpload = async (file) => {
+    if (!file) return
+    setLogoUploading(true)
+    try {
+      const url = await imagesApi.upload(file, 'branding')
+      setBranding((prev) => ({ ...prev, logoUrl: url }))
+    } catch { /* ignore */ }
+    setLogoUploading(false)
+  }
+
+  const handleSave = async () => {
+    setBrandingSaving(true)
+    try {
+      const result = await brandingApi.save(branding)
+      setBranding(result)
+      setBrandingSaved(true)
+      setTimeout(() => setBrandingSaved(false), 2000)
+    } catch { /* ignore */ }
+    setBrandingSaving(false)
+  }
+
+  if (loading) return <div className="p-3"><Spinner size="sm" /></div>
+
+  return (
+    <div className="panel panel-icon mb-4">
+      <div className="panel-hdr">
+        <span>
+          <svg className="sa-icon me-2"><use href="/icons/sprite.svg#tag"></use></svg>
+          Branding
+        </span>
+      </div>
+      <div className="panel-container"><div className="panel-content">
+        <p className="text-muted fs-sm mb-3">
+          Customise your business identity for client-facing reports and portals.
+        </p>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Business name</Form.Label>
+          <Form.Control
+            value={branding.businessName}
+            onChange={(e) => handleChange('businessName', e.target.value)}
+            placeholder="e.g. Green Thumb Gardens"
+            aria-label="Business name"
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Brand colour</Form.Label>
+          <div className="d-flex align-items-center gap-2">
+            <Form.Control
+              type="color"
+              value={branding.primaryColor}
+              onChange={(e) => handleChange('primaryColor', e.target.value)}
+              style={{ width: 48, height: 38, padding: 2 }}
+              aria-label="Brand colour picker"
+            />
+            <Form.Control
+              value={branding.primaryColor}
+              onChange={(e) => handleChange('primaryColor', e.target.value)}
+              placeholder="#2d5a1b"
+              pattern="^#[0-9a-fA-F]{6}$"
+              maxLength={7}
+              aria-label="Brand colour hex code"
+              style={{ maxWidth: 120 }}
+            />
+          </div>
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Logo</Form.Label>
+          <div className="d-flex align-items-center gap-3">
+            {branding.logoUrl && (
+              <img
+                src={branding.logoUrl}
+                alt="Business logo"
+                style={{ maxHeight: 60, maxWidth: 200, objectFit: 'contain', borderRadius: 4 }}
+              />
+            )}
+            <Button
+              variant="outline-primary"
+              size="sm"
+              onClick={() => logoInputRef.current?.click()}
+              disabled={logoUploading}
+              aria-label="Upload logo"
+            >
+              {logoUploading ? <Spinner size="sm" /> : (
+                <>
+                  <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}>
+                    <use href="/icons/sprite.svg#upload"></use>
+                  </svg>
+                  {branding.logoUrl ? 'Replace logo' : 'Upload logo'}
+                </>
+              )}
+            </Button>
+            {branding.logoUrl && (
+              <Button
+                variant="link"
+                size="sm"
+                className="text-danger p-0"
+                onClick={() => handleChange('logoUrl', null)}
+                aria-label="Remove logo"
+              >
+                Remove
+              </Button>
+            )}
+          </div>
+          <small className="text-muted d-block mt-1">PNG, SVG or JPEG, max 2 MB. Displayed in reports and client portals.</small>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/svg+xml"
+            className="d-none"
+            onChange={(e) => { handleLogoUpload(e.target.files?.[0]); e.target.value = '' }}
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Contact phone</Form.Label>
+          <Form.Control
+            type="tel"
+            value={branding.contactPhone}
+            onChange={(e) => handleChange('contactPhone', e.target.value)}
+            placeholder="+1 555 000 1234"
+            aria-label="Contact phone"
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Contact email</Form.Label>
+          <Form.Control
+            type="email"
+            value={branding.contactEmail}
+            onChange={(e) => handleChange('contactEmail', e.target.value)}
+            placeholder="hello@example.com"
+            aria-label="Contact email"
+          />
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label>Website</Form.Label>
+          <Form.Control
+            type="url"
+            value={branding.contactWebsite}
+            onChange={(e) => handleChange('contactWebsite', e.target.value)}
+            placeholder="https://example.com"
+            aria-label="Contact website"
+          />
+        </Form.Group>
+
+        <Button
+          variant={saved ? 'success' : 'primary'}
+          onClick={handleSave}
+          disabled={saving}
+          aria-label="Save branding settings"
+        >
+          {saving ? <Spinner size="sm" /> : saved ? 'Saved!' : 'Save Branding'}
+        </Button>
+      </div></div>
+    </div>
   )
 }
 
@@ -396,6 +579,9 @@ export default function SettingsPage() {
             </div>
 
           </div>
+
+          {/* Branding */}
+          <BrandingSection />
 
         </div>
 

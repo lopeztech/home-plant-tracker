@@ -135,3 +135,8 @@ export const imagesApi = {
     return publicUrl
   },
 }
+
+export const brandingApi = {
+  get: () => request('/config/branding'),
+  save: (data) => request('/config/branding', { method: 'PUT', body: JSON.stringify(data) }),
+}

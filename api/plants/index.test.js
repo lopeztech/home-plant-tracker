@@ -1294,6 +1294,72 @@ describe('PUT /config/floorplan', () => {
   });
 });
 
+// ── GET /config/branding ──────────────────────────────────────────────────────
+
+const brandingPath = () => `users/${USER_SUB}/config/branding`;
+
+describe('GET /config/branding', () => {
+  it('returns defaults when no branding config exists', async () => {
+    const res = await request(app).get('/config/branding').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.businessName).toBe('');
+    expect(res.body.primaryColor).toBe('#2d5a1b');
+    expect(res.body.logoUrl).toBeNull();
+  });
+
+  it('returns saved branding config', async () => {
+    store[brandingPath()] = { businessName: 'Green Thumb', primaryColor: '#006400', contactEmail: 'hi@gt.com', contactPhone: '', contactWebsite: '', logoUrl: null };
+    const res = await request(app).get('/config/branding').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.businessName).toBe('Green Thumb');
+    expect(res.body.primaryColor).toBe('#006400');
+  });
+
+  it('signs logoUrl when present', async () => {
+    store[brandingPath()] = { businessName: 'Acme', primaryColor: '#2d5a1b', logoUrl: 'branding/logo.png', contactPhone: '', contactEmail: '', contactWebsite: '' };
+    storageSignedUrlFn = async () => ['https://signed.url/logo.png'];
+    const res = await request(app).get('/config/branding').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.logoUrl).toBe('https://signed.url/logo.png');
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/config/branding');
+    expect(res.status).toBe(401);
+  });
+});
+
+// ── PUT /config/branding ──────────────────────────────────────────────────────
+
+describe('PUT /config/branding', () => {
+  it('saves and returns branding config', async () => {
+    const payload = { businessName: 'Leaf & Co', primaryColor: '#3a7d44', contactPhone: '555-1234', contactEmail: 'leaf@co.com', contactWebsite: 'https://leaf.co', logoUrl: null };
+    const res = await request(app).put('/config/branding').set('Authorization', authHeader()).send(payload);
+    expect(res.status).toBe(200);
+    expect(res.body.businessName).toBe('Leaf & Co');
+    expect(res.body.primaryColor).toBe('#3a7d44');
+  });
+
+  it('persists branding to Firestore', async () => {
+    await request(app).put('/config/branding').set('Authorization', authHeader())
+      .send({ businessName: 'Sprout', primaryColor: '#2d5a1b', contactPhone: '', contactEmail: '', contactWebsite: '', logoUrl: null });
+    expect(store[brandingPath()].businessName).toBe('Sprout');
+    expect(store[brandingPath()].updatedAt).toBeTruthy();
+  });
+
+  it('rejects invalid primaryColor', async () => {
+    const res = await request(app).put('/config/branding').set('Authorization', authHeader())
+      .send({ primaryColor: 'not-a-color' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/hex/i);
+  });
+
+  it('returns 401 without auth', async () => {
+    const res = await request(app).put('/config/branding').send({ businessName: 'Test' });
+    expect(res.status).toBe(401);
+  });
+});
+
 // ── ML export endpoint ───────────────────────────────────────────────────────
 
 describe('GET /ml/export', () => {
