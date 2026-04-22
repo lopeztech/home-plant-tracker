@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import HelpTooltip from '../components/HelpTooltip.jsx'
 import LeafletFloorplan from '../components/LeafletFloorplan.jsx'
 import { YARD_AREAS } from '../utils/watering.js'
+import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { accountApi, exportApi } from '../api/plants.js'
 
 const TABS = [
@@ -320,7 +321,7 @@ function PropertyTab({ search }) {
 }
 
 function PreferencesTab({ search }) {
-  const { tempUnit, unitSystem, location, setLocation } = usePlantContext()
+  const { tempUnit, unitSystem, location, setLocation, timezone, setTimezone } = usePlantContext()
   const { themeMode, changeThemeMode } = useLayoutContext()
   const [locationSearch, setLocationSearch] = useState('')
   const [locationResults, setLocationResults] = useState([])
@@ -455,6 +456,30 @@ function PreferencesTab({ search }) {
             ))}
           </div>
         )}
+      </SettingSection>
+
+      <SettingSection id="timezone" title="Timezone" icon="clock" search={search}>
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+          <div>
+            <div className="fw-500 fs-sm">Timezone</div>
+            <div className="text-muted fs-xs">Used for overdue badges, calendar days, and watering schedules</div>
+          </div>
+          <Form.Select
+            size="sm"
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            style={{ maxWidth: 260 }}
+            aria-label="Select timezone"
+          >
+            {TIMEZONE_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.zones.map((tz) => (
+                  <option key={tz} value={tz}>{tz.replace(/_/g, ' ')}</option>
+                ))}
+              </optgroup>
+            ))}
+          </Form.Select>
+        </div>
       </SettingSection>
     </>
   )

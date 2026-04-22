@@ -5,6 +5,7 @@ import { subscribe as subscribeOfflineQueue, size as offlineQueueSize } from '..
 import { useWeather } from '../hooks/useWeather.js'
 import { useTempUnit } from '../hooks/useTempUnit.js'
 import { useUnitSystem } from '../hooks/useUnitSystem.js'
+import { useTimezone } from '../hooks/useTimezone.js'
 import { getWateringStatus, isOutdoor } from '../utils/watering.js'
 import { GUEST_PLANTS, GUEST_FLOORS } from '../data/guestData.js'
 import { toFriendlyError } from '../utils/errorMessages.js'
@@ -23,6 +24,7 @@ export function PlantProvider({ children }) {
   const { isAuthenticated, isGuest, logout } = useAuth()
   const tempUnit = useTempUnit()
   const unitSystem = useUnitSystem()
+  const { timezone, setTimezone } = useTimezone()
   const { weather, locationDenied, location, setLocation } = useWeather(tempUnit.unit)
 
   const [plants, setPlants] = useState([])
@@ -40,8 +42,8 @@ export function PlantProvider({ children }) {
   const [isOnline, setIsOnline] = useState(() => typeof navigator === 'undefined' || navigator.onLine !== false)
 
   const overdueCount = useMemo(
-    () => plants.filter((p) => getWateringStatus(p, weather, floors).daysUntil < 0).length,
-    [plants, weather, floors],
+    () => plants.filter((p) => getWateringStatus(p, weather, floors, timezone).daysUntil < 0).length,
+    [plants, weather, floors, timezone],
   )
 
   // Track offline queue size so the UI can show a pending-sync badge.
@@ -432,6 +434,7 @@ export function PlantProvider({ children }) {
     plantsHasMore, plantsLoadingMore, loadMorePlants,
     floors, activeFloorId, setActiveFloorId,
     weather, locationDenied, location, setLocation, tempUnit, unitSystem,
+    timezone, setTimezone,
     overdueCount, isAnalysingFloorplan,
     isGuest,
     isOnline, pendingSyncCount,
@@ -442,7 +445,7 @@ export function PlantProvider({ children }) {
     updatePlantsLocally,
   }), [
     plants, plantsLoading, plantsError, reloadPlants, floors, activeFloorId,
-    weather, locationDenied, location, setLocation, tempUnit, unitSystem, overdueCount, isAnalysingFloorplan, isGuest,
+    weather, locationDenied, location, setLocation, tempUnit, unitSystem, timezone, setTimezone, overdueCount, isAnalysingFloorplan, isGuest,
     isOnline, pendingSyncCount,
     plantsHasMore, plantsLoadingMore, loadMorePlants,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Button, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
-import { getWateringStatus } from '../utils/watering.js'
+import { getWateringStatus, localDateStr } from '../utils/watering.js'
 import { getFeedingStatus } from '../utils/feeding.js'
 import EmptyState from '../components/EmptyState.jsx'
 
@@ -16,76 +16,79 @@ function eventBadgeColor(type) {
 }
 
 export default function CalendarPage() {
-  const { plants, weather, floors } = usePlantContext()
+  const { plants, weather, floors, timezone } = usePlantContext()
   const [monthOffset, setMonthOffset] = useState(0)
   const [selectedDay, setSelectedDay] = useState(null)
 
-  const now = new Date()
-  const viewDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1)
-  const year = viewDate.getFullYear()
-  const month = viewDate.getMonth()
+  // Use the user's timezone for "today" and date boundary calculations
+  const todayStr = localDateStr(new Date(), timezone)
+  const [todayYear, todayMonth1, todayDay] = todayStr.split('-').map(Number)
+  const todayMonth = todayMonth1 - 1
+
+  const viewYear  = monthOffset === 0 ? todayYear  : (() => { const d = new Date(todayYear, todayMonth + monthOffset, 1); return d.getFullYear() })()
+  const viewMonth = monthOffset === 0 ? todayMonth : (() => { const d = new Date(todayYear, todayMonth + monthOffset, 1); return d.getMonth() })()
+  const year  = viewYear
+  const month = viewMonth
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDay = (new Date(year, month, 1).getDay() + 6) % 7
-  const monthName = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(viewDate)
+  const monthName = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(new Date(year, month, 1))
 
-  const isToday = (day) => {
-    const t = new Date()
-    return day === t.getDate() && month === t.getMonth() && year === t.getFullYear()
-  }
+  const isToday = (day) => day === todayDay && month === todayMonth && year === todayYear
 
   const dayMap = useMemo(() => {
     const map = {}
-    const monthEnd = new Date(year, month + 1, 0)
+    const monthEndTs = new Date(year, month + 1, 0).getTime()
     for (const plant of plants) {
-      // Past waterings
+      // Past waterings — place on the day they occurred in the user's timezone
       for (const entry of plant.wateringLog || []) {
-        const d = new Date(entry.date)
-        if (d.getMonth() === month && d.getFullYear() === year) {
-          const day = d.getDate()
-          if (!map[day]) map[day] = []
-          map[day].push({ type: 'watered', plant })
+        const ds = localDateStr(new Date(entry.date), timezone)
+        const [eY, eM1, eD] = ds.split('-').map(Number)
+        if (eM1 - 1 === month && eY === year) {
+          if (!map[eD]) map[eD] = []
+          map[eD].push({ type: 'watered', plant })
         }
       }
       // Past fertilisings
       for (const entry of plant.fertiliserLog || []) {
-        const d = new Date(entry.date)
-        if (d.getMonth() === month && d.getFullYear() === year) {
-          const day = d.getDate()
-          if (!map[day]) map[day] = []
-          map[day].push({ type: 'fertilised', plant })
+        const ds = localDateStr(new Date(entry.date), timezone)
+        const [eY, eM1, eD] = ds.split('-').map(Number)
+        if (eM1 - 1 === month && eY === year) {
+          if (!map[eD]) map[eD] = []
+          map[eD].push({ type: 'fertilised', plant })
         }
       }
       // Future watering due dates
-      const status = getWateringStatus(plant, weather, floors)
       if (plant.lastWatered && plant.frequencyDays) {
         let nextDue = new Date(plant.lastWatered)
         for (let i = 0; i < 60; i++) {
           nextDue = new Date(nextDue.getTime() + plant.frequencyDays * 86400000)
-          if (nextDue.getMonth() === month && nextDue.getFullYear() === year) {
-            const day = nextDue.getDate()
-            if (!map[day]) map[day] = []
-            map[day].push({ type: 'due', plant })
+          const ds = localDateStr(nextDue, timezone)
+          const [eY, eM1, eD] = ds.split('-').map(Number)
+          if (eM1 - 1 === month && eY === year) {
+            if (!map[eD]) map[eD] = []
+            map[eD].push({ type: 'due', plant })
           }
-          if (nextDue > monthEnd) break
+          if (nextDue.getTime() > monthEndTs) break
         }
       }
-      // Future feeding due dates (based on schedule + lastFertilised)
+      // Future feeding due dates
       const feedStatus = getFeedingStatus(plant, weather)
       if (!feedStatus.skip && plant.lastFertilised && feedStatus.effectiveFrequencyDays) {
         let nextFeed = new Date(plant.lastFertilised)
         for (let i = 0; i < 24; i++) {
           nextFeed = new Date(nextFeed.getTime() + feedStatus.effectiveFrequencyDays * 86400000)
-          if (nextFeed.getMonth() === month && nextFeed.getFullYear() === year) {
-            const day = nextFeed.getDate()
-            if (!map[day]) map[day] = []
-            map[day].push({ type: 'feed-due', plant })
+          const ds = localDateStr(nextFeed, timezone)
+          const [eY, eM1, eD] = ds.split('-').map(Number)
+          if (eM1 - 1 === month && eY === year) {
+            if (!map[eD]) map[eD] = []
+            map[eD].push({ type: 'feed-due', plant })
           }
-          if (nextFeed > monthEnd) break
+          if (nextFeed.getTime() > monthEndTs) break
         }
       }
     }
     return map
-  }, [plants, weather, floors, month, year])
+  }, [plants, weather, floors, month, year, timezone])
 
   const selectedEvents = selectedDay ? dayMap[selectedDay] || [] : []
 
