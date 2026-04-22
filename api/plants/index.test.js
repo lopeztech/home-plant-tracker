@@ -44,9 +44,11 @@ function makeCollRef(prefix) {
         .map(([k, v]) => ({ id: k.slice(pfx.length), data: () => v }));
       return { docs: entries };
     },
-    orderBy: (field, dir) => ({
-      get: async () => {
-        dir = dir || 'asc';
+    orderBy: (field, dir) => {
+      let _limit = null;
+      let _startAfter = null;
+      const _dir = dir || 'asc';
+      function execGet() {
         const pfx = `${prefix}/`;
         const entries = Object.entries(store)
           .filter(([k]) => k.startsWith(pfx) && !k.slice(pfx.length).includes('/'))
@@ -55,11 +57,23 @@ function makeCollRef(prefix) {
           const av = a.data()[field] != null ? a.data()[field] : '';
           const bv = b.data()[field] != null ? b.data()[field] : '';
           const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-          return dir === 'desc' ? -cmp : cmp;
+          return _dir === 'desc' ? -cmp : cmp;
         });
-        return { docs: entries.map(e => ({ id: e.id, data: e.data })) };
-      },
-    }),
+        let result = entries;
+        if (_startAfter !== null) {
+          const idx = result.findIndex(e => e.data()[field] === _startAfter);
+          result = idx >= 0 ? result.slice(idx + 1) : result;
+        }
+        if (_limit !== null) result = result.slice(0, _limit);
+        return Promise.resolve({ docs: result.map(e => ({ id: e.id, data: e.data })) });
+      }
+      const chain = {
+        get: () => execGet(),
+        limit(n) { _limit = n; return this; },
+        startAfter(val) { _startAfter = val; return this; },
+      };
+      return chain;
+    },
   };
 }
 
@@ -603,6 +617,51 @@ describe('GET /plants', () => {
     storageSignedUrlFn = async () => ['https://signed.url/fern.jpg'];
     const res = await request(app).get('/plants').set('Authorization', authHeader());
     expect(res.body[0].imageUrl).toBe('https://signed.url/fern.jpg');
+  });
+
+  it('returns paginated response when limit param is provided', async () => {
+    store[plantPath('a')] = { name: 'A', createdAt: '2026-03-01T00:00:00.000Z' };
+    store[plantPath('b')] = { name: 'B', createdAt: '2026-02-01T00:00:00.000Z' };
+    store[plantPath('c')] = { name: 'C', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app).get('/plants?limit=2').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plants).toHaveLength(2);
+    expect(res.body.hasMore).toBe(true);
+    expect(res.body.nextCursor).toBe('2026-02-01T00:00:00.000Z');
+    expect(res.body.plants[0].name).toBe('A');
+    expect(res.body.plants[1].name).toBe('B');
+  });
+
+  it('returns hasMore=false when all plants fit within limit', async () => {
+    store[plantPath('x')] = { name: 'X', createdAt: '2026-02-01T00:00:00.000Z' };
+    store[plantPath('y')] = { name: 'Y', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app).get('/plants?limit=10').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plants).toHaveLength(2);
+    expect(res.body.hasMore).toBe(false);
+    expect(res.body.nextCursor).toBeNull();
+  });
+
+  it('uses after cursor to return next page', async () => {
+    store[plantPath('a')] = { name: 'A', createdAt: '2026-03-01T00:00:00.000Z' };
+    store[plantPath('b')] = { name: 'B', createdAt: '2026-02-01T00:00:00.000Z' };
+    store[plantPath('c')] = { name: 'C', createdAt: '2026-01-01T00:00:00.000Z' };
+    const res = await request(app)
+      .get('/plants?limit=2&after=2026-02-01T00:00:00.000Z')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plants).toHaveLength(1);
+    expect(res.body.plants[0].name).toBe('C');
+    expect(res.body.hasMore).toBe(false);
+  });
+
+  it('caps limit at 200', async () => {
+    for (let i = 0; i < 5; i++) {
+      store[plantPath(`p${i}`)] = { name: `P${i}`, createdAt: `2026-01-0${i + 1}T00:00:00.000Z` };
+    }
+    const res = await request(app).get('/plants?limit=999').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plants).toHaveLength(5);
   });
 });
 

@@ -1,4 +1,5 @@
-import { useMemo, useState, useCallback } from 'react'
+import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { FixedSizeList } from 'react-window'
 import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner, ProgressBar } from 'react-bootstrap'
 import { motion } from 'framer-motion'
 import { usePlantContext } from '../context/PlantContext.jsx'
@@ -83,9 +84,14 @@ function PlantCard({ plant, onClick, onWater, weather, floors, index = 0 }) {
   )
 }
 
+const ITEM_HEIGHT = 76
+const VIRTUALISE_THRESHOLD = 40
+const LIST_HEIGHT = 500
+
 export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef }) {
   const plantCtx = usePlantContext()
-  const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading } = plantCtx
+  const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading,
+    plantsHasMore, plantsLoadingMore, loadMorePlants } = plantCtx
   const location = plantCtx.location || null
   const tempUnitCode = plantCtx.tempUnit?.unit || null
   const [searchTerm, setSearchTerm] = useState('')
@@ -362,7 +368,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
           )}
 
           {/* Plant list */}
-          <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+          <div>
             {plantsLoading ? (
               <div aria-label="Loading plants" aria-busy="true">
                 {Array.from({ length: 4 }, (_, i) => <SkeletonPlantCard key={i} />)}
@@ -380,8 +386,31 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
               ) : (
                 <div className="text-center py-4 text-muted fs-sm">No plants match your search.</div>
               )
+            ) : filteredPlants.length > VIRTUALISE_THRESHOLD ? (
+              /* Virtualised rendering for large collections */
+              <FixedSizeList
+                height={LIST_HEIGHT}
+                itemCount={filteredPlants.length}
+                itemSize={ITEM_HEIGHT}
+                width="100%"
+                itemData={{ plants: filteredPlants, onPlantClick, handleWaterPlant, weather, floors }}
+              >
+                {({ index, style, data }) => (
+                  <div style={style}>
+                    <PlantCard
+                      plant={data.plants[index]}
+                      index={index}
+                      onClick={data.onPlantClick}
+                      onWater={data.handleWaterPlant}
+                      weather={data.weather}
+                      floors={data.floors}
+                    />
+                  </div>
+                )}
+              </FixedSizeList>
             ) : (
-              <div>
+              /* Grouped rendering for small collections */
+              <div style={{ maxHeight: LIST_HEIGHT, overflowY: 'auto' }}>
                 {(() => {
                   const grouped = {}
                   filteredPlants.forEach((p) => {
@@ -424,6 +453,24 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
                     </div>
                   ))
                 })()}
+              </div>
+            )}
+
+            {/* Load more for paginated collections */}
+            {plantsHasMore && !searchTerm && !roomFilter && (
+              <div className="px-3 py-2 border-top">
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  className="w-100"
+                  disabled={plantsLoadingMore}
+                  onClick={loadMorePlants}
+                >
+                  {plantsLoadingMore
+                    ? <><span className="spinner-border spinner-border-sm me-1" />Loading more plants…</>
+                    : <><svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#chevron-down"></use></svg>Load more plants</>
+                  }
+                </Button>
               </div>
             )}
           </div>

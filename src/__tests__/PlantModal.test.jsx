@@ -53,17 +53,17 @@ vi.mock('../api/plants.js', () => ({
     }),
   },
   measurementsApi: {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }),
     add: vi.fn().mockResolvedValue({ id: 'new-m', date: '2026-04-21T00:00:00.000Z', height_cm: 45, notes: '' }),
     delete: vi.fn().mockResolvedValue({ deleted: true }),
   },
   phenologyApi: {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }),
     add: vi.fn().mockResolvedValue({ id: 'new-ev', date: '2026-04-21', event: 'first-bloom', notes: '' }),
     delete: vi.fn().mockResolvedValue({ deleted: true }),
   },
   journalApi: {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }),
     add: vi.fn().mockResolvedValue({
       id: 'entry-1',
       date: '2026-04-21T00:00:00Z',
@@ -84,7 +84,7 @@ vi.mock('../api/plants.js', () => ({
     delete: vi.fn().mockResolvedValue({ deleted: true }),
   },
   harvestApi: {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }),
     add: vi.fn().mockResolvedValue({ id: 'h1', date: '2026-04-21', quantity: 1, unit: 'kg' }),
     delete: vi.fn().mockResolvedValue({ deleted: true }),
   },
@@ -93,7 +93,7 @@ vi.mock('../api/plants.js', () => ({
     scan: vi.fn().mockResolvedValue({ plantId: 'plant-1' }),
   },
   incidentApi: {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }),
     add: vi.fn().mockResolvedValue({ id: 'inc1', category: 'pest', specificType: 'Aphids', severity: 2, firstObservedAt: '2026-04-21T00:00:00.000Z', resolvedAt: null, treatments: [] }),
     update: vi.fn().mockResolvedValue({}),
     addTreatment: vi.fn().mockResolvedValue({ id: 't1', treatment: 'Neem oil', appliedAt: '2026-04-21T00:00:00.000Z' }),

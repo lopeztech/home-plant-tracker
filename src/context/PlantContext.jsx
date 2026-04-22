@@ -28,6 +28,11 @@ export function PlantProvider({ children }) {
   const [plants, setPlants] = useState([])
   const [plantsLoading, setPlantsLoading] = useState(false)
   const [plantsError, setPlantsError] = useState(null)
+  const [plantsHasMore, setPlantsHasMore] = useState(false)
+  const [plantsNextCursor, setPlantsNextCursor] = useState(null)
+  const [plantsLoadingMore, setPlantsLoadingMore] = useState(false)
+
+  const PAGE_SIZE = 50
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
   const [activeFloorId, setActiveFloorId] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
@@ -51,7 +56,9 @@ export function PlantProvider({ children }) {
       if (isGuest) return
       flushOfflineMutations()
         .then(({ flushed }) => {
-          if (flushed > 0) plantsApi.list().then(setPlants).catch(() => {})
+          if (flushed > 0) plantsApi.list({ limit: PAGE_SIZE }).then(({ plants: p, hasMore, nextCursor }) => {
+            setPlants(p); setPlantsHasMore(hasMore); setPlantsNextCursor(nextCursor)
+          }).catch(() => {})
         })
         .catch(() => {})
     }
@@ -106,8 +113,12 @@ export function PlantProvider({ children }) {
     setPlantsLoading(true)
     setPlantsError(null)
 
-    const loadPlants = plantsApi.list()
-      .then(setPlants)
+    const loadPlants = plantsApi.list({ limit: PAGE_SIZE })
+      .then(({ plants: loaded, hasMore, nextCursor }) => {
+        setPlants(loaded)
+        setPlantsHasMore(hasMore)
+        setPlantsNextCursor(nextCursor)
+      })
       .catch((err) => {
         const friendly = toFriendlyError(err, { context: 'plants' })
         if (friendly.kind === 'auth') {
@@ -131,12 +142,29 @@ export function PlantProvider({ children }) {
     // Flush any offline mutations accumulated while the app was closed.
     flushOfflineMutations()
       .then(({ flushed }) => {
-        if (flushed > 0) plantsApi.list().then(setPlants).catch(() => {})
+        if (flushed > 0) plantsApi.list({ limit: PAGE_SIZE }).then(({ plants: p, hasMore, nextCursor }) => {
+          setPlants(p); setPlantsHasMore(hasMore); setPlantsNextCursor(nextCursor)
+        }).catch(() => {})
       })
       .catch(() => {})
 
     return Promise.all([loadPlants, loadFloors]).finally(() => setPlantsLoading(false))
   }, [isAuthenticated, isGuest])
+
+  const loadMorePlants = useCallback(async () => {
+    if (!plantsHasMore || plantsLoadingMore || !plantsNextCursor) return
+    setPlantsLoadingMore(true)
+    try {
+      const { plants: more, hasMore, nextCursor } = await plantsApi.list({ limit: PAGE_SIZE, after: plantsNextCursor })
+      setPlants((prev) => [...prev, ...more])
+      setPlantsHasMore(hasMore)
+      setPlantsNextCursor(nextCursor)
+    } catch {
+      // silently ignore load-more errors; existing plants stay visible
+    } finally {
+      setPlantsLoadingMore(false)
+    }
+  }, [plantsHasMore, plantsLoadingMore, plantsNextCursor])
 
   useEffect(() => {
     if (!isAuthenticated) return
@@ -401,6 +429,7 @@ export function PlantProvider({ children }) {
 
   const value = useMemo(() => ({
     plants, plantsLoading, plantsError, reloadPlants,
+    plantsHasMore, plantsLoadingMore, loadMorePlants,
     floors, activeFloorId, setActiveFloorId,
     weather, locationDenied, location, setLocation, tempUnit, unitSystem,
     overdueCount, isAnalysingFloorplan,
@@ -415,6 +444,7 @@ export function PlantProvider({ children }) {
     plants, plantsLoading, plantsError, reloadPlants, floors, activeFloorId,
     weather, locationDenied, location, setLocation, tempUnit, unitSystem, overdueCount, isAnalysingFloorplan, isGuest,
     isOnline, pendingSyncCount,
+    plantsHasMore, plantsLoadingMore, loadMorePlants,
     handleSavePlant, handleWaterPlant, handleMoisturePlant, handleBatchWater,
     handleFertilisePlant,
     handleDeletePlant, handleBulkCreatePlants,

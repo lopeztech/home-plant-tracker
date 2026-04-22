@@ -1085,17 +1085,36 @@ app.put('/config/floorplan', requireUser, async (req, res) => {
 
 app.get('/plants', requireUser, async (req, res) => {
   try {
-    const snapshot = await userPlants(req.userId)
-      .orderBy('createdAt', 'desc')
-      .get();
+    // Cursor-based pagination: ?limit=N&after=<createdAt ISO cursor>
+    // When limit or after params are provided the response is paginated:
+    //   { plants: [...], nextCursor: string|null, hasMore: boolean }
+    // Without params the legacy flat array is returned for backward compat.
+    const rawLimit = req.query.limit !== undefined ? Number(req.query.limit) : null;
+    const after    = req.query.after || null;
+    const paginated = rawLimit !== null || after !== null;
+    const limit = rawLimit ? Math.min(rawLimit, 200) : 200;
+
+    let query = userPlants(req.userId).orderBy('createdAt', 'desc').limit(limit + 1);
+    if (after) query = query.startAfter(after);
+
+    const snapshot = await query.get();
+    const hasMore = snapshot.docs.length > limit;
+    const docs = hasMore ? snapshot.docs.slice(0, limit) : snapshot.docs;
+    const nextCursor = hasMore ? docs[docs.length - 1].data().createdAt : null;
+
     const plants = await Promise.all(
-      snapshot.docs.map(async (doc) => {
+      docs.map(async (doc) => {
         const data = { id: doc.id, ...doc.data() };
         await signPlantData(data);
         return data;
       })
     );
-    res.status(200).json(plants);
+
+    if (paginated) {
+      res.status(200).json({ plants, nextCursor, hasMore });
+    } else {
+      res.status(200).json(plants);
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
