@@ -1,6 +1,21 @@
 // Plants in these room names are treated as outdoor for weather-aware watering
 export const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace', 'Verandah', 'Veranda', 'Deck', 'Courtyard'])
 
+/**
+ * Returns "YYYY-MM-DD" for the given date in the specified IANA timezone.
+ * Falls back to local date if the timezone is invalid.
+ */
+export function localDateStr(date, timezone) {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(
+      date instanceof Date ? date : new Date(date),
+    )
+  } catch {
+    const d = date instanceof Date ? date : new Date(date)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+}
+
 // Yard areas for outdoor zones — rendered around the house
 export const YARD_AREAS = [
   { id: 'frontyard', label: 'Front Yard' },
@@ -142,7 +157,8 @@ export function getPlantAttributeMultiplier(plant) {
  * @param {Array}       floors  - array of floor objects from floorsApi
  * @returns {{ daysUntil: number, color: string, label: string, note: string|null, skippedRain: boolean, season: string|null, seasonNote: string|null }}
  */
-export function getWateringStatus(plant, weather = null, floors = []) {
+export function getWateringStatus(plant, weather = null, floors = [], timezone = null) {
+  const tz = timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC')
   const outdoor   = isOutdoor(plant, floors)
   const temp      = weather?.current?.temp ?? null
   const tempC     = temp !== null ? toC(temp, weather?.unit) : null
@@ -228,7 +244,10 @@ export function getWateringStatus(plant, weather = null, floors = []) {
 
   const last      = new Date(plant.lastWatered)
   const next      = new Date(last.getTime() + effective * 86400000)
-  const daysUntil = Math.ceil((next - new Date()) / 86400000)
+  // Compare as day strings in the user's timezone so the boundary doesn't shift with UTC offset
+  const todayStr  = localDateStr(new Date(), tz)
+  const nextStr   = localDateStr(next, tz)
+  const daysUntil = Math.round((new Date(nextStr) - new Date(todayStr)) / 86400000)
 
   // Note priority: heat > moisture meter > dry air > rain forecast > seasonal
   let note = heatNote(tempC)

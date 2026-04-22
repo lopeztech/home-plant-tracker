@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay, computeRainCredit } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay, computeRainCredit, localDateStr } from '../utils/watering.js'
 
 function makePlant(overrides = {}) {
   return {
@@ -948,5 +948,50 @@ describe('computeRainCredit', () => {
   it('clamps rainSkipMultiplier to [0, 1]', () => {
     const result = computeRainCredit({ frequencyDays: 7, rainSkipMultiplier: 2 }, { recentMm: 20 })
     expect(result.advanceByDays).toBe(7) // clamped to 1.0 × 7
+  })
+})
+
+// ── localDateStr ─────────────────────────────────────────────────────────────
+
+describe('localDateStr', () => {
+  it('returns YYYY-MM-DD string for UTC', () => {
+    const d = new Date('2026-04-22T12:00:00Z')
+    expect(localDateStr(d, 'UTC')).toBe('2026-04-22')
+  })
+
+  it('returns correct date for UTC+9 (Tokyo) when time is just past midnight UTC', () => {
+    // 2026-04-22T00:30:00Z is still April 22 in UTC and April 22 in Tokyo (+9)
+    const d = new Date('2026-04-22T00:30:00Z')
+    expect(localDateStr(d, 'Asia/Tokyo')).toBe('2026-04-22')
+  })
+
+  it('returns next day for UTC+14 timezone', () => {
+    // 2026-04-22T23:00:00Z is April 23 in UTC+14
+    const d = new Date('2026-04-22T23:00:00Z')
+    expect(localDateStr(d, 'Pacific/Kiritimati')).toBe('2026-04-23')
+  })
+
+  it('accepts ISO string in place of Date object', () => {
+    expect(localDateStr('2026-06-15T10:00:00Z', 'UTC')).toBe('2026-06-15')
+  })
+})
+
+// ── getWateringStatus timezone ───────────────────────────────────────────────
+
+describe('getWateringStatus timezone', () => {
+  it('accepts a timezone parameter without throwing', () => {
+    const plant = makePlant({ lastWatered: new Date(Date.now() - 3 * 86400000).toISOString(), frequencyDays: 7 })
+    expect(() => getWateringStatus(plant, null, [], 'America/New_York')).not.toThrow()
+  })
+
+  it('daysUntil is an integer (no fractional days from TZ offset)', () => {
+    const plant = makePlant({ lastWatered: new Date(Date.now() - 3 * 86400000).toISOString(), frequencyDays: 7 })
+    const { daysUntil } = getWateringStatus(plant, null, [], 'Europe/London')
+    expect(Number.isInteger(daysUntil)).toBe(true)
+  })
+
+  it('defaults gracefully when timezone is null', () => {
+    const plant = makePlant()
+    expect(() => getWateringStatus(plant, null, [], null)).not.toThrow()
   })
 })
