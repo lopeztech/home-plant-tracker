@@ -7,7 +7,7 @@ import { MemoryRouter } from 'react-router'
 
 vi.mock('../api/plants.js', () => ({
   plantsApi: {
-    list:   vi.fn().mockResolvedValue([]),
+    list:   vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }),
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock('../api/plants.js', () => ({
     createCheckoutSession: vi.fn(),
     createPortalSession:   vi.fn(),
   },
-  outbreakApi: { list: vi.fn().mockResolvedValue([]) },
+  outbreakApi: { list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }) },
 }))
 
 vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {
@@ -107,7 +107,7 @@ describe('App', () => {
     vi.clearAllMocks()
     // Skip onboarding modal so dashboard content is visible
     localStorage.setItem('plant-tracker-onboarded', '1')
-    plantsApi.list.mockResolvedValue([])
+    plantsApi.list.mockResolvedValue({ plants: [], hasMore: false, nextCursor: null })
     floorsApi.get.mockResolvedValue({ floors: [{ id: 'ground', name: 'Ground Floor', order: 0, type: 'interior' }] })
     useAuth.mockReturnValue({
       isAuthenticated: true,
@@ -149,7 +149,7 @@ describe('App', () => {
   })
 
   it('displays plants in the list after loading', async () => {
-    plantsApi.list.mockResolvedValue([samplePlant])
+    plantsApi.list.mockResolvedValue({ plants: [samplePlant], hasMore: false, nextCursor: null })
     renderApp('/plants')
     await waitFor(() => expect(screen.getByText('Fern')).toBeInTheDocument())
   })

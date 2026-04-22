@@ -49,7 +49,13 @@ async function request(path, options = {}) {
 }
 
 export const plantsApi = {
-  list: () => request('/plants'),
+  list: ({ limit, after } = {}) => {
+    const params = new URLSearchParams()
+    if (limit != null) params.set('limit', limit)
+    if (after != null) params.set('after', after)
+    const qs = params.toString()
+    return request(`/plants${qs ? `?${qs}` : ''}`)
+  },
   create: (data) => request('/plants', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/plants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   delete: (id) => request(`/plants/${id}`, { method: 'DELETE' }),

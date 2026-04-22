@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../api/plants.js', () => ({
   propagationApi: {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }),
     create: vi.fn(),
     update: vi.fn(),
     promote: vi.fn(),

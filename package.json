@@ -30,6 +30,7 @@
     "react-bootstrap": "^2.10.10",
     "react-dom": "^18.3.1",
     "react-router": "^7.14.0",
+    "react-window": "^2.2.7",
     "sass": "^1.99.0",
     "simplebar-react": "^3.3.2",
     "three": "^0.170.0"

@@ -1,0 +1,1 @@
+import{o as e}from"./components-rPwW_dGF.js";export{e as createCopyToClipboardFunction};
