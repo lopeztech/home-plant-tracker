@@ -1,0 +1,52 @@
+{
+  "nav": {
+    "today": "اليوم",
+    "dashboard": "الحديقة",
+    "propagation": "التكاثر",
+    "analytics": "التحليلات",
+    "calendar": "تقويم العناية",
+    "forecast": "التوقعات",
+    "insights": "رؤى",
+    "bulk-upload": "الرفع الجماعي",
+    "settings": "الإعدادات",
+    "billing": "الفواتير"
+  },
+  "actions": {
+    "save": "حفظ",
+    "cancel": "إلغاء",
+    "delete": "حذف",
+    "edit": "تعديل",
+    "add": "إضافة",
+    "search": "بحث",
+    "next": "التالي",
+    "back": "رجوع",
+    "done": "تم",
+    "skip": "تخطي",
+    "close": "إغلاق",
+    "loading": "جارٍ التحميل...",
+    "confirm": "تأكيد",
+    "upload": "رفع",
+    "download": "تنزيل",
+    "reset": "إعادة تعيين",
+    "submit": "إرسال"
+  },
+  "sidebar": {
+    "whatsNew": "ما الجديد",
+    "takeATour": "جولة تعريفية",
+    "help": "مساعدة",
+    "signOut": "تسجيل الخروج"
+  },
+  "status": {
+    "overdue": "متأخر {{count}} يوم",
+    "dueToday": "مستحق اليوم",
+    "tomorrow": "غداً",
+    "inDays": "{{count}} أيام",
+    "rainToday": "مطر اليوم"
+  },
+  "health": {
+    "good": "جيد",
+    "fair": "مقبول",
+    "poor": "ضعيف",
+    "unknown": "غير معروف"
+  }
+}

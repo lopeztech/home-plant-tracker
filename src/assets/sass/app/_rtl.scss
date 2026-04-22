@@ -6,4 +6,81 @@
 [dir="rtl"] {
 	--direction: rtl;
 	direction: var(--direction);
+
+	// Sidebar: border swaps sides
+	.app-sidebar {
+		border-right: 0;
+		border-left: 1px solid var(--app-layout-border-color);
+	}
+
+	// Header: left margin flips to right for sidebar offset
+	.app-header {
+		margin-left: 0;
+		margin-right: var(--app-nav-full, 0px);
+
+		// Logo margin flips
+		.app-logo {
+			margin-right: 0;
+			margin-left: 2rem;
+		}
+	}
+
+	// Right-side content panel: border flips
+	.content-wrapper-right {
+		border-left: 0;
+		border-right: 1px solid var(--app-layout-border-color);
+	}
+
+	// Off-canvas drawer slides in from the left in RTL
+	.app-drawer {
+		right: auto;
+		left: 0;
+		border-left: 0;
+		border-right: 1px solid var(--app-layout-border-color);
+		transform: translate3d(calc(-1 * var(--drawer-width)), 0, 0);
+
+		&.open {
+			transform: translate3d(0, 0, 0);
+		}
+	}
+
+	// Collapse icon mirrors horizontally
+	.collapse-icon svg,
+	.set-nav-minified:not(.set-nav-collapsed) .collapse-icon svg {
+		transform: scaleX(-1);
+	}
+
+	// Mobile sidebar slides in from the right in RTL
+	@media only screen and (max-width: 991.98px) {
+		.app-sidebar {
+			transform: translate3d(var(--menu-width), 0, 0);
+		}
+
+		.app-mobile-menu-open .app-sidebar {
+			transform: translate3d(0, 0, 0);
+		}
+	}
+
+	// Directional chevron icons mirror automatically via RTL direction,
+	// but explicit transform overrides need reversal
+	.sa-icon[data-mirror] {
+		transform: scaleX(-1);
+	}
+
+	// Nav badge: auto margin stays on the start side in RTL
+	.nav-menu .badge {
+		margin-right: auto;
+		margin-left: 0;
+	}
+
+	// Floorplan toolbar flows right-to-left
+	[data-tour="floor-nav"] {
+		flex-direction: row-reverse;
+	}
+
+	// ApexCharts: legend & axis tick alignment
+	.apexcharts-legend {
+		right: auto !important;
+		left: 0 !important;
+	}
 }

@@ -1,4 +1,5 @@
 import { Suspense, useEffect } from 'react'
+import { useRtl } from '../hooks/useRtl.js'
 import { Outlet, Navigate, useLocation } from 'react-router'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext.jsx'
@@ -57,6 +58,7 @@ function AuthLoader() {
 export default function MainLayout() {
   const { isAuthenticated, isLoading, isGuest, logout } = useAuth()
   const location = useLocation()
+  useRtl()
 
   if (isLoading) return <AuthLoader />
   if (!isAuthenticated) return <Navigate to="/login" replace />

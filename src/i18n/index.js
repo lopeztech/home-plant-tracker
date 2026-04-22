@@ -38,6 +38,10 @@ import ptOnboarding from './locales/pt/onboarding.json'
 import jaCommon     from './locales/ja/common.json'
 import jaOnboarding from './locales/ja/onboarding.json'
 
+// Arabic (RTL)
+import arCommon     from './locales/ar/common.json'
+import arOnboarding from './locales/ar/onboarding.json'
+
 export const SUPPORTED_LANGUAGES = [
   { code: 'en', name: 'English',    nativeName: 'English' },
   { code: 'es', name: 'Spanish',    nativeName: 'Español' },
@@ -45,6 +49,7 @@ export const SUPPORTED_LANGUAGES = [
   { code: 'de', name: 'German',     nativeName: 'Deutsch' },
   { code: 'pt', name: 'Portuguese', nativeName: 'Português' },
   { code: 'ja', name: 'Japanese',   nativeName: '日本語' },
+  { code: 'ar', name: 'Arabic',     nativeName: 'العربية', rtl: true },
 ]
 
 const NS = ['common', 'onboarding', 'settings', 'errors', 'dashboard', 'plantModal', 'analytics', 'calendar']
@@ -61,6 +66,7 @@ if (!i18n.isInitialized) {
         de: { common: deCommon, onboarding: deOnboarding },
         pt: { common: ptCommon, onboarding: ptOnboarding },
         ja: { common: jaCommon, onboarding: jaOnboarding },
+        ar: { common: arCommon, onboarding: arOnboarding },
       },
       ns: NS,
       defaultNS: 'common',
