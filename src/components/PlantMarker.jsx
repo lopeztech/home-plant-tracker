@@ -1,4 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { Move } from 'lucide-react'
 import { getMoistureDisplay } from '../utils/watering.js'
 
@@ -118,7 +119,7 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
   ].filter(Boolean).join(' ')
 
   return (
-    <div
+    <motion.div
       role="button"
       aria-label={`${plant.name}${plant.species ? ` (${plant.species})` : ''} — ${label}`}
       tabIndex={0}
@@ -135,6 +136,11 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(plant) } }}
       onMouseEnter={() => { if (!isDragging) setShowTooltip(true) }}
       onMouseLeave={() => setShowTooltip(false)}
+      animate={isOverdue ? { scale: [1, 1.12, 1] } : { scale: 1 }}
+      transition={isOverdue
+        ? { duration: 1.8, repeat: Infinity, ease: 'easeInOut' }
+        : { duration: 0.2 }
+      }
     >
       <div
         style={{
@@ -213,6 +219,6 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
             })()}
         </div>
       )}
-    </div>
+    </motion.div>
   )
 }

@@ -1,5 +1,6 @@
 import { useMemo, useState, useCallback } from 'react'
 import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner, ProgressBar } from 'react-bootstrap'
+import { motion } from 'framer-motion'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi, recommendApi } from '../api/plants.js'
 import { getWateringStatus, urgencyColor, OUTDOOR_ROOMS, getSeason, isOutdoor } from '../utils/watering.js'
@@ -9,9 +10,12 @@ import PlantIcon from './PlantIcon.jsx'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
 import EmptyState from './EmptyState.jsx'
 import { SkeletonPlantCard } from './Skeleton.jsx'
+import { DURATION, EASE, STAGGER_DELAY } from '../motion/tokens.js'
 
 const RECOMMENDATION_HISTORY_LIMIT = 20
 const BATCH_CONCURRENCY = 3
+
+const MotionListGroupItem = motion.create(ListGroup.Item)
 
 function UrgencyIcon({ days, skippedRain }) {
   if (skippedRain) return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#cloud-rain"></use></svg>
@@ -21,16 +25,21 @@ function UrgencyIcon({ days, skippedRain }) {
   return <svg className="sa-icon status-good" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#check-circle"></use></svg>
 }
 
-function PlantCard({ plant, onClick, onWater, weather, floors }) {
+function PlantCard({ plant, onClick, onWater, weather, floors, index = 0 }) {
   const status = getWateringStatus(plant, weather, floors)
   const { daysUntil, color, label, skippedRain } = status
 
   return (
-    <ListGroup.Item
+    <MotionListGroupItem
       action
       onClick={() => onClick(plant)}
       className="plant-card d-flex align-items-center gap-3 py-2 px-3"
       style={{ borderLeftColor: color }}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: DURATION.normal, ease: EASE.out, delay: Math.min(index * STAGGER_DELAY, 0.32) }}
+      whileHover={{ y: -2 }}
+      whileTap={{ scale: 0.98 }}
     >
       <div
         className="plant-avatar"
@@ -70,7 +79,7 @@ function PlantCard({ plant, onClick, onWater, weather, floors }) {
           <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#droplet"></use></svg>
         </button>
       )}
-    </ListGroup.Item>
+    </MotionListGroupItem>
   )
 }
 
@@ -381,6 +390,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
                     grouped[room].push(p)
                   })
                   const roomNames = Object.keys(grouped).sort()
+                  let cardIndex = 0
                   return roomNames.map((room) => (
                     <div key={room}>
                       {roomNames.length > 1 && (
@@ -403,6 +413,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
                           <PlantCard
                             key={plant.id}
                             plant={plant}
+                            index={cardIndex++}
                             onClick={onPlantClick}
                             onWater={handleWaterPlant}
                             weather={weather}

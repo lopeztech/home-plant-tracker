@@ -218,3 +218,41 @@
 [data-bs-theme="dark"] {
   --skeleton-color: rgba(255, 255, 255, 0.1);
 }
+
+/* ── Motion / micro-interactions ────────────────────────────────────────── */
+
+/* Modal: scale-up on open (supplements Bootstrap's opacity fade) */
+@keyframes modal-scale-in {
+  from { transform: scale(0.96); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.modal.show .modal-content {
+  animation: modal-scale-in 0.2s ease-out both;
+}
+
+/* Plant card hover lift (CSS fallback for browsers without JS motion) */
+.plant-card {
+  transition: box-shadow 0.15s ease-out;
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  }
+}
+
+/* Respect prefers-reduced-motion: disable all non-essential animations */
+@media (prefers-reduced-motion: reduce) {
+  .modal.show .modal-content {
+    animation: none;
+  }
+
+  .plant-card {
+    transition: none;
+  }
+
+  /* Framer Motion handles its own reducedMotion via MotionConfig,
+     but belt-and-suspenders: flatten any CSS @keyframes on motion elements */
+  [data-motion-component] {
+    animation: none !important;
+    transition: none !important;
+  }
+}

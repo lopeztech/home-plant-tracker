@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from 'react'
-import { Outlet, Navigate } from 'react-router'
+import { Outlet, Navigate, useLocation } from 'react-router'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
 import { HelpProvider } from '../context/HelpContext.jsx'
@@ -52,11 +53,13 @@ function AuthLoader() {
 
 export default function MainLayout() {
   const { isAuthenticated, isLoading, isGuest, logout } = useAuth()
+  const location = useLocation()
 
   if (isLoading) return <AuthLoader />
   if (!isAuthenticated) return <Navigate to="/login" replace />
 
   return (
+    <MotionConfig reducedMotion="user">
     <PlantProvider>
       <HelpProvider>
         <CommandPaletteProvider>
@@ -72,9 +75,19 @@ export default function MainLayout() {
                 <WeatherAlertBanner />
               </div>
               <ErrorBoundary context="this page">
-                <Suspense fallback={<PageSkeleton />}>
-                  <Outlet />
-                </Suspense>
+                <AnimatePresence mode="wait" initial={false}>
+                  <motion.div
+                    key={location.pathname}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.15 }}
+                  >
+                    <Suspense fallback={<PageSkeleton />}>
+                      <Outlet />
+                    </Suspense>
+                  </motion.div>
+                </AnimatePresence>
               </ErrorBoundary>
             </div>
             {isGuest && (
@@ -99,5 +112,6 @@ export default function MainLayout() {
         </CommandPaletteProvider>
       </HelpProvider>
     </PlantProvider>
+    </MotionConfig>
   )
 }
