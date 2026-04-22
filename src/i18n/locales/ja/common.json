@@ -1,0 +1,52 @@
+{
+  "nav": {
+    "today": "今日",
+    "dashboard": "庭園",
+    "propagation": "増殖",
+    "analytics": "分析",
+    "calendar": "ケアカレンダー",
+    "forecast": "予報",
+    "insights": "インサイト",
+    "bulk-upload": "一括アップロード",
+    "settings": "設定",
+    "billing": "請求"
+  },
+  "actions": {
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "edit": "編集",
+    "add": "追加",
+    "search": "検索",
+    "next": "次へ",
+    "back": "戻る",
+    "done": "完了",
+    "skip": "スキップ",
+    "close": "閉じる",
+    "loading": "読み込み中...",
+    "confirm": "確認",
+    "upload": "アップロード",
+    "download": "ダウンロード",
+    "reset": "リセット",
+    "submit": "送信"
+  },
+  "sidebar": {
+    "whatsNew": "新着情報",
+    "takeATour": "ツアーを開始",
+    "help": "ヘルプ",
+    "signOut": "サインアウト"
+  },
+  "status": {
+    "overdue": "{{count}}日超過",
+    "dueToday": "本日期限",
+    "tomorrow": "明日",
+    "inDays": "{{count}}日後",
+    "rainToday": "今日は雨"
+  },
+  "health": {
+    "good": "良好",
+    "fair": "普通",
+    "poor": "不良",
+    "unknown": "不明"
+  }
+}

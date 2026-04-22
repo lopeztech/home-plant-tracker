@@ -1,0 +1,23 @@
+{
+  "title": "Garden",
+  "floorplan": {
+    "noFloorplan": "No floorplan yet",
+    "uploadPrompt": "Upload a floorplan in Settings to start placing your plants.",
+    "uploading": "Uploading floorplan...",
+    "analysing": "Analysing floorplan..."
+  },
+  "plantList": {
+    "title": "Plants",
+    "searchPlaceholder": "Search plants...",
+    "empty": "No plants yet",
+    "emptyHint": "Add your first plant by clicking on the floorplan.",
+    "loadMore": "Load more plants",
+    "loading": "Loading more plants..."
+  },
+  "view": {
+    "2d": "2D",
+    "3d": "3D",
+    "game": "Game",
+    "list": "List"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "step1": {
+    "title": "Sube un plano",
+    "description": "Ve a Ajustes y sube una foto de tu plano. Gemini AI identificará las habitaciones automáticamente."
+  },
+  "step2": {
+    "title": "Añade tus plantas",
+    "description": "Haz clic en cualquier lugar del plano para colocar una planta. Toma una foto para identificar la especie automáticamente."
+  },
+  "step3": {
+    "title": "Registra el riego",
+    "description": "Marca las plantas como regadas para crear tu horario de cuidados. Recibe recordatorios cuando las plantas necesiten atención."
+  },
+  "skipTour": "Omitir tour",
+  "getStarted": "Empezar"
+}

@@ -1,29 +1,25 @@
 import { useState, useEffect } from 'react'
 import { Modal, Button, ProgressBar } from 'react-bootstrap'
+import { useTranslation } from 'react-i18next'
 
 const LS_KEY = 'plant-tracker-onboarded'
 
-const STEPS = [
-  {
-    icon: '/icons/sprite.svg#upload',
-    title: 'Upload a Floorplan',
-    description: 'Go to Settings and upload a photo of your floor plan. Gemini AI will identify rooms automatically.',
-  },
-  {
-    icon: '/icons/sprite.svg#plus',
-    title: 'Add Your Plants',
-    description: 'Click anywhere on the floorplan to place a plant. Take a photo to auto-identify the species.',
-  },
-  {
-    icon: '/icons/sprite.svg#droplet',
-    title: 'Track Watering',
-    description: 'Mark plants as watered to build your care schedule. Get reminders when plants need attention.',
-  },
+const STEP_ICONS = [
+  '/icons/sprite.svg#upload',
+  '/icons/sprite.svg#plus',
+  '/icons/sprite.svg#droplet',
 ]
 
 export default function Onboarding() {
+  const { t } = useTranslation('onboarding')
   const [step, setStep] = useState(0)
   const [show, setShow] = useState(false)
+
+  const STEPS = [
+    { icon: STEP_ICONS[0], title: t('step1.title'), description: t('step1.description') },
+    { icon: STEP_ICONS[1], title: t('step2.title'), description: t('step2.description') },
+    { icon: STEP_ICONS[2], title: t('step3.title'), description: t('step3.description') },
+  ]
 
   useEffect(() => {
     if (!localStorage.getItem(LS_KEY)) setShow(true)
@@ -58,7 +54,7 @@ export default function Onboarding() {
               <use href={current.icon}></use>
             </svg>
           </div>
-          <button className="btn btn-sm text-muted p-0" onClick={dismiss} aria-label="Skip">
+          <button className="btn btn-sm text-muted p-0" onClick={dismiss} aria-label={t('skipTour')}>
             <svg className="sa-icon"><use href="/icons/sprite.svg#x"></use></svg>
           </button>
         </div>
@@ -68,15 +64,15 @@ export default function Onboarding() {
       </Modal.Body>
       <Modal.Footer className="border-top-0 d-flex justify-content-between">
         <button className="btn btn-link btn-sm text-muted p-0" onClick={dismiss}>
-          Skip tour
+          {t('skipTour')}
         </button>
         <Button variant="primary" size="sm" onClick={next}>
           {step < STEPS.length - 1 ? (
             <>
-              Next
+              {t('common:actions.next')}
               <svg className="sa-icon ms-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#chevron-right"></use></svg>
             </>
-          ) : 'Get started'}
+          ) : t('getStarted')}
         </Button>
       </Modal.Footer>
     </Modal>

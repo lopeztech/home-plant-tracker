@@ -1,0 +1,20 @@
+{
+  "title": "Care Calendar",
+  "weekdays": {
+    "mon": "Mon",
+    "tue": "Tue",
+    "wed": "Wed",
+    "thu": "Thu",
+    "fri": "Fri",
+    "sat": "Sat",
+    "sun": "Sun"
+  },
+  "events": {
+    "watered": "Watered",
+    "fertilised": "Fertilised",
+    "due": "Due",
+    "feedDue": "Feed due"
+  },
+  "empty": "No plants to schedule",
+  "emptyHint": "Add plants to see your care schedule here."
+}

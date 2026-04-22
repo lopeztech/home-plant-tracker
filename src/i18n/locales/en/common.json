@@ -1,0 +1,52 @@
+{
+  "nav": {
+    "today": "Today",
+    "dashboard": "Garden",
+    "propagation": "Propagation",
+    "analytics": "Analytics",
+    "calendar": "Care Calendar",
+    "forecast": "Forecast",
+    "insights": "Insights",
+    "bulk-upload": "Bulk Upload",
+    "settings": "Settings",
+    "billing": "Billing"
+  },
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "search": "Search",
+    "next": "Next",
+    "back": "Back",
+    "done": "Done",
+    "skip": "Skip",
+    "close": "Close",
+    "loading": "Loading...",
+    "confirm": "Confirm",
+    "upload": "Upload",
+    "download": "Download",
+    "reset": "Reset",
+    "submit": "Submit"
+  },
+  "sidebar": {
+    "whatsNew": "What's new",
+    "takeATour": "Take a tour",
+    "help": "Help",
+    "signOut": "Sign Out"
+  },
+  "status": {
+    "overdue": "{{count}}d overdue",
+    "dueToday": "Due today",
+    "tomorrow": "Tomorrow",
+    "inDays": "{{count}}d",
+    "rainToday": "Rain today"
+  },
+  "health": {
+    "good": "Good",
+    "fair": "Fair",
+    "poor": "Poor",
+    "unknown": "Unknown"
+  }
+}

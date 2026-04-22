@@ -1,0 +1,15 @@
+{
+  "title": "Analytics",
+  "sections": {
+    "healthDistribution": "Health Distribution",
+    "wateringHeatmap": "Watering Heatmap",
+    "careConsistency": "Care Consistency",
+    "wateringPatterns": "Watering Patterns"
+  },
+  "labels": {
+    "plants": "Plants",
+    "waterings": "Waterings",
+    "consistencyScore": "Consistency score",
+    "noData": "No data yet"
+  }
+}

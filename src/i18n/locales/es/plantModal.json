@@ -1,0 +1,32 @@
+{
+  "tabs": {
+    "plant": "Planta",
+    "care": "Cuidados",
+    "growth": "Crecimiento",
+    "history": "Historial",
+    "journal": "Diario",
+    "diagnostic": "Diagnóstico"
+  },
+  "fields": {
+    "name": "Nombre",
+    "species": "Especie",
+    "room": "Habitación",
+    "floor": "Piso",
+    "health": "Salud",
+    "lastWatered": "Último riego",
+    "wateringFrequency": "Frecuencia de riego",
+    "notes": "Notas"
+  },
+  "actions": {
+    "water": "Marcar como regada",
+    "watered": "Regada",
+    "analyse": "Identificar especie",
+    "delete": "Eliminar planta",
+    "deleteConfirm": "¿Seguro que quieres eliminar esta planta?",
+    "uploadPhoto": "Subir foto"
+  },
+  "frequency": {
+    "days_one": "cada día",
+    "days_other": "cada {{count}} días"
+  }
+}

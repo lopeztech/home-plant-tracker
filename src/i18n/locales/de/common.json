@@ -1,0 +1,52 @@
+{
+  "nav": {
+    "today": "Heute",
+    "dashboard": "Garten",
+    "propagation": "Vermehrung",
+    "analytics": "Analysen",
+    "calendar": "Pflegekalender",
+    "forecast": "Vorhersage",
+    "insights": "Einblicke",
+    "bulk-upload": "Massenimport",
+    "settings": "Einstellungen",
+    "billing": "Abrechnung"
+  },
+  "actions": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "search": "Suchen",
+    "next": "Weiter",
+    "back": "Zurück",
+    "done": "Fertig",
+    "skip": "Überspringen",
+    "close": "Schließen",
+    "loading": "Laden...",
+    "confirm": "Bestätigen",
+    "upload": "Hochladen",
+    "download": "Herunterladen",
+    "reset": "Zurücksetzen",
+    "submit": "Absenden"
+  },
+  "sidebar": {
+    "whatsNew": "Neuigkeiten",
+    "takeATour": "Tour starten",
+    "help": "Hilfe",
+    "signOut": "Abmelden"
+  },
+  "status": {
+    "overdue": "{{count}}T überfällig",
+    "dueToday": "Heute fällig",
+    "tomorrow": "Morgen",
+    "inDays": "{{count}}T",
+    "rainToday": "Regen heute"
+  },
+  "health": {
+    "good": "Gut",
+    "fair": "Mäßig",
+    "poor": "Schlecht",
+    "unknown": "Unbekannt"
+  }
+}
