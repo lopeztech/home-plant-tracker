@@ -1,4 +1,29 @@
-# Design System — Typography Scale
+# Design System
+
+## Storybook
+
+The living component catalogue runs at `http://localhost:6006` via:
+
+```bash
+npm run storybook
+```
+
+A static build is produced by `npm run build-storybook` (outputs to `storybook-static/`).
+
+Stories are colocated with components (`src/components/*.stories.jsx`) and in `src/stories/` for cross-cutting token docs.
+
+| Story group | What it covers |
+|---|---|
+| **Design Tokens / Overview** | Typography scale, colour palettes (9 themes), spacing, motion tokens, z-index layers |
+| **Primitives / Bootstrap Components** | Button variants, Badge, Panel pattern, Form controls, Alerts |
+| **Primitives / EmptyState** | All icon + action variants |
+| **Primitives / Skeleton** | All skeleton loading variants |
+| **Composites / SeasonBadge** | Spring / Summer / Autumn / Winter + light variant |
+| **Primitives / ErrorAlert** | All error kinds (offline, transient, auth, quota, input) |
+
+---
+
+## Typography Scale
 
 ## Type Scale
 
