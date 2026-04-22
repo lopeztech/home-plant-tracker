@@ -5,9 +5,12 @@ import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
 import HelpTooltip from '../components/HelpTooltip.jsx'
+import ChartFrame from '../components/ChartFrame.jsx'
 import { formatDate } from '../utils/format.js'
+import { HEALTH_COLORS as CB_HEALTH, getApexTheme, getApexAxisDefaults, heatmapColor, OKABE_ITO } from '../charts/theme.js'
 
-const HEALTH_COLORS = { Excellent: '#10b981', Good: '#22c55e', Fair: '#f59e0b', Poor: '#ef4444' }
+// Color-blind safe health palette (Okabe-Ito based).
+const HEALTH_COLORS = CB_HEALTH
 const HEALTH_ORDER = ['Excellent', 'Good', 'Fair', 'Poor']
 const HEALTH_VALUE = { Excellent: 4, Good: 3, Fair: 2, Poor: 1 }
 
@@ -44,11 +47,9 @@ function buildHeatmap(plants) {
   })
 }
 
+// Use color-blind safe sequential palette from charts/theme for the heatmap.
 function heatColor(count) {
-  if (count === 0) return 'var(--bs-tertiary-bg)'
-  if (count === 1) return 'var(--bs-success)'
-  if (count === 2) return '#059669'
-  return '#047857'
+  return heatmapColor(count, 3)
 }
 
 function incidentStats(plants) {
@@ -94,14 +95,19 @@ function OverviewTab({ plants, theme }) {
 
   const heatmapDays = useMemo(() => buildHeatmap(plants), [plants])
 
+  const axisDefaults = getApexAxisDefaults(theme)
   const healthChartOpts = {
     chart: { type: 'donut', background: 'transparent' },
-    theme: { mode: theme },
+    theme: getApexTheme(theme),
     labels: healthData.map((d) => d.name),
     colors: healthData.map((d) => d.color),
-    legend: { position: 'right', fontSize: '13px' },
+    legend: { position: 'right', fontSize: '13px', ...axisDefaults.legend },
     plotOptions: { pie: { donut: { size: '65%' } } },
     dataLabels: { enabled: false },
+    tooltip: {
+      ...axisDefaults.tooltip,
+      y: { formatter: (val, { seriesIndex, w }) => `${val} plant${val !== 1 ? 's' : ''} (${Math.round((val / plants.length) * 100)}%)` },
+    },
     responsive: [
       {
         breakpoint: 480,
@@ -117,28 +123,25 @@ function OverviewTab({ plants, theme }) {
     <div>
       <Row className="mb-4">
         <Col md={6}>
-          <div className="panel panel-icon">
-            <div className="panel-hdr">
-              <span>Health Distribution</span>
-              <HelpTooltip articleId="analytics" label="Explain health distribution chart" className="ms-2" />
-            </div>
-            <div className="panel-container"><div className="panel-content">
-              {plants.length === 0 ? <p className="text-muted">No plants yet.</p> : (
-                <>
-                  <Chart options={healthChartOpts} series={healthData.map((d) => d.value)} type="donut" height={200} />
-                  <table className="visually-hidden">
-                    <caption>Health distribution of tracked plants</caption>
-                    <thead><tr><th scope="col">Health</th><th scope="col">Plants</th></tr></thead>
-                    <tbody>
-                      {healthData.map((d) => (
-                        <tr key={d.name}><td>{d.name}</td><td>{d.value}</td></tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </>
-              )}
-            </div></div>
-          </div>
+          <ChartFrame
+            title="Health Distribution"
+            unit="plants"
+            empty={plants.length === 0}
+            help={<HelpTooltip articleId="analytics" label="Explain health distribution chart" />}
+          >
+            <>
+              <Chart options={healthChartOpts} series={healthData.map((d) => d.value)} type="donut" height={200} />
+              <table className="visually-hidden">
+                <caption>Health distribution of tracked plants</caption>
+                <thead><tr><th scope="col">Health</th><th scope="col">Plants</th></tr></thead>
+                <tbody>
+                  {healthData.map((d) => (
+                    <tr key={d.name}><td>{d.name}</td><td>{d.value}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          </ChartFrame>
         </Col>
         <Col md={6}>
           <div className="panel panel-icon">
@@ -175,12 +178,13 @@ function OverviewTab({ plants, theme }) {
       </Row>
 
       {/* Heatmap */}
-      <div className="panel panel-icon mb-4">
-        <div className="panel-hdr">
-          <span>Watering Activity — Last 12 Weeks</span>
-          <HelpTooltip articleId="analytics" label="Explain watering heatmap" className="ms-2" />
-        </div>
-        <div className="panel-container"><div className="panel-content">
+      <ChartFrame
+        title="Watering Activity — Last 12 Weeks"
+        className="mb-4"
+        empty={plants.length === 0}
+        help={<HelpTooltip articleId="analytics" label="Explain watering heatmap" />}
+      >
+        <>
           <div className="d-flex gap-1 flex-wrap" role="img" aria-label="Watering activity heatmap, last 12 weeks">
             {heatmapDays.map((day) => (
               <div
@@ -191,9 +195,9 @@ function OverviewTab({ plants, theme }) {
             ))}
           </div>
           <div className="d-flex align-items-center gap-1 mt-2 tx-muted">
-            <span>Less</span>
+            <span className="fs-xs">Less</span>
             {[0, 1, 2, 3].map((n) => <div key={n} style={{ width: 12, height: 12, borderRadius: 2, background: heatColor(n) }} />)}
-            <span>More</span>
+            <span className="fs-xs">More</span>
           </div>
           <table className="visually-hidden">
             <caption>Days where at least one plant was watered, last 12 weeks</caption>
@@ -204,13 +208,12 @@ function OverviewTab({ plants, theme }) {
               ))}
             </tbody>
           </table>
-        </div></div>
-      </div>
+        </>
+      </ChartFrame>
 
       {/* Pest & Disease */}
-      <div className="panel panel-icon">
-        <div className="panel-hdr"><span>Pest &amp; Disease</span></div>
-        <div className="panel-container"><div className="panel-content">
+      <ChartFrame title="Pest &amp; Disease" empty={plants.length === 0}>
+        <>
           <Row>
             <Col xs={6} md={3} className="mb-3 text-center">
               <div className="fs-3 fw-600 text-danger">{pestStats.activeCount}</div>
@@ -237,8 +240,8 @@ function OverviewTab({ plants, theme }) {
               }
             </Col>
           </Row>
-        </div></div>
-      </div>
+        </>
+      </ChartFrame>
     </div>
   )
 }
@@ -257,15 +260,19 @@ function PerPlantTab({ plants, theme }) {
 
   if (!plant) return <p className="text-muted">No plants yet.</p>
 
+  const axisDefaults = getApexAxisDefaults(theme)
   const barOpts = {
     chart: { type: 'bar', toolbar: { show: false }, background: 'transparent' },
-    theme: { mode: theme },
-    xaxis: { categories: weeklyData.map((w) => w.week) },
-    colors: ['var(--bs-primary, #10b981)'],
+    theme: getApexTheme(theme),
+    xaxis: { categories: weeklyData.map((w) => w.week), ...axisDefaults.xaxis },
+    yaxis: { ...axisDefaults.yaxis, title: { text: 'waterings', style: { color: axisDefaults.yaxis.labels.style.colors } } },
+    colors: [OKABE_ITO[1]],
     plotOptions: { bar: { borderRadius: 3, columnWidth: '60%' } },
     dataLabels: { enabled: false },
+    grid: axisDefaults.grid,
+    tooltip: { ...axisDefaults.tooltip, y: { formatter: (val) => `${val} watering${val !== 1 ? 's' : ''}` } },
     annotations: plant.frequencyDays ? {
-      yaxis: [{ y: +(7 / plant.frequencyDays).toFixed(2), borderColor: '#f59e0b', strokeDashArray: 4, label: { text: 'Target', style: { color: '#f59e0b', background: 'transparent' } } }]
+      yaxis: [{ y: +(7 / plant.frequencyDays).toFixed(2), borderColor: '#E69F00', strokeDashArray: 4, label: { text: 'Target', style: { color: '#E69F00', background: 'transparent' } } }]
     } : {},
     responsive: [
       {
@@ -280,10 +287,10 @@ function PerPlantTab({ plants, theme }) {
 
   const radialOpts = {
     chart: { type: 'radialBar', background: 'transparent' },
-    theme: { mode: theme },
+    theme: getApexTheme(theme),
     plotOptions: { radialBar: { hollow: { size: '65%' }, dataLabels: { name: { show: true, fontSize: '12px' }, value: { show: true, fontSize: '24px', fontWeight: 700 } } } },
     labels: [score !== null ? (score >= 80 ? 'Consistent' : score >= 60 ? 'Moderate' : 'Irregular') : 'No data'],
-    colors: [score !== null ? (score >= 80 ? '#10b981' : score >= 60 ? '#f59e0b' : '#ef4444') : '#6b7280'],
+    colors: [score !== null ? (score >= 80 ? '#009E73' : score >= 60 ? '#E69F00' : '#D55E00') : '#6b7280'],
     responsive: [
       {
         breakpoint: 480,
@@ -310,69 +317,61 @@ function PerPlantTab({ plants, theme }) {
 
       <Row className="mb-4">
         <Col md={6}>
-          <div className="panel panel-icon">
-            <div className="panel-hdr">
-              <span>Consistency Score</span>
-              <HelpTooltip articleId="analytics" label="What is the consistency score?" className="ms-2" />
-            </div>
-            <div className="panel-container"><div className="panel-content text-center">
-              {score === null ? <p className="text-muted fs-sm py-3">Need at least 2 watering events.</p> : (
-                <>
-                  <Chart options={radialOpts} series={[score]} type="radialBar" height={200} />
-                  <p className="visually-hidden">
-                    Consistency score {score} out of 100 — {radialOpts.labels[0]}.
-                  </p>
-                </>
-              )}
-            </div></div>
-          </div>
+          <ChartFrame
+            title="Consistency Score"
+            empty={score === null}
+            emptyText="Need at least 2 watering events to compute score."
+            help={<HelpTooltip articleId="analytics" label="What is the consistency score?" />}
+          >
+            <>
+              <div className="text-center">
+                <Chart options={radialOpts} series={[score]} type="radialBar" height={200} />
+              </div>
+              <p className="visually-hidden">
+                Consistency score {score} out of 100 — {radialOpts.labels[0]}.
+              </p>
+            </>
+          </ChartFrame>
         </Col>
         <Col md={6}>
-          <div className="panel panel-icon">
-            <div className="panel-hdr"><span>Last Watered</span></div>
-            <div className="panel-container"><div className="panel-content">
-              {daysSinceLast === null ? <p className="text-muted fs-sm">No watering recorded.</p> : (
-                <>
-                  <div className="d-flex align-items-baseline gap-1 mb-3">
-                    <span className="display-6 fw-bold">{daysSinceLast}</span>
-                    <span className="text-muted">days ago</span>
-                  </div>
-                  {plant.frequencyDays && (
-                    <p className="fs-xs text-muted">
-                      Recommended every <strong>{plant.frequencyDays}d</strong>
-                      {daysSinceLast > plant.frequencyDays
-                        ? <span className="text-danger ms-1">· {daysSinceLast - plant.frequencyDays}d overdue</span>
-                        : <span className="text-success ms-1">· {plant.frequencyDays - daysSinceLast}d remaining</span>}
-                    </p>
-                  )}
-                </>
+          <ChartFrame title="Last Watered" unit="days" empty={daysSinceLast === null} emptyText="No watering recorded yet.">
+            <>
+              <div className="d-flex align-items-baseline gap-1 mb-3">
+                <span className="display-6 fw-bold">{daysSinceLast}</span>
+                <span className="text-muted">days ago</span>
+              </div>
+              {plant.frequencyDays && (
+                <p className="fs-xs text-muted">
+                  Recommended every <strong>{plant.frequencyDays}d</strong>
+                  {daysSinceLast > plant.frequencyDays
+                    ? <span className="text-danger ms-1">· {daysSinceLast - plant.frequencyDays}d overdue</span>
+                    : <span className="text-success ms-1">· {plant.frequencyDays - daysSinceLast}d remaining</span>}
+                </p>
               )}
-            </div></div>
-          </div>
+            </>
+          </ChartFrame>
         </Col>
       </Row>
 
-      <div className="panel panel-icon">
-        <div className="panel-hdr"><span>Watering Timeline — Last 12 Weeks</span></div>
-        <div className="panel-container"><div className="panel-content">
-          {weeklyData.every((w) => w.count === 0) ? (
-            <p className="text-muted fs-sm">No watering events in the last 12 weeks.</p>
-          ) : (
-            <>
-              <Chart options={barOpts} series={[{ name: 'Waterings', data: weeklyData.map((w) => w.count) }]} type="bar" height={200} />
-              <table className="visually-hidden">
-                <caption>Weekly watering count, last 12 weeks</caption>
-                <thead><tr><th scope="col">Week starting</th><th scope="col">Waterings</th></tr></thead>
-                <tbody>
-                  {weeklyData.map((w) => (
-                    <tr key={w.week}><td>{w.week}</td><td>{w.count}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </div></div>
-      </div>
+      <ChartFrame
+        title="Watering Timeline — Last 12 Weeks"
+        unit="waterings"
+        empty={weeklyData.every((w) => w.count === 0)}
+        emptyText="No watering events in the last 12 weeks."
+      >
+        <>
+          <Chart options={barOpts} series={[{ name: 'Waterings', data: weeklyData.map((w) => w.count) }]} type="bar" height={200} />
+          <table className="visually-hidden">
+            <caption>Weekly watering count, last 12 weeks</caption>
+            <thead><tr><th scope="col">Week starting</th><th scope="col">Waterings</th></tr></thead>
+            <tbody>
+              {weeklyData.map((w) => (
+                <tr key={w.week}><td>{w.week}</td><td>{w.count}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      </ChartFrame>
     </div>
   )
 }
