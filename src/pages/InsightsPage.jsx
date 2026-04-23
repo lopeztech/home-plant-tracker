@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Row, Col, Card, Badge, Spinner, Button, ProgressBar } from 'react-bootstrap'
+import { Row, Col, Card, Badge, Spinner, Button, Alert, ProgressBar } from 'react-bootstrap'
 import Chart from 'react-apexcharts'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
@@ -12,6 +12,25 @@ const GRADE_COLORS = { A: '#10b981', B: '#22c55e', C: '#f59e0b', D: '#ef4444', F
 const PATTERN_COLORS = { optimal: '#10b981', over_watered: '#3b82f6', under_watered: '#ef4444', inconsistent: '#f59e0b', insufficient_data: '#9ca3af' }
 const PATTERN_LABELS = { optimal: 'Optimal', over_watered: 'Over-watered', under_watered: 'Under-watered', inconsistent: 'Inconsistent', insufficient_data: 'No Data' }
 
+const CLUSTER_ICONS = {
+  thirsty_tropicals: '🌿',
+  forgiving_foliage: '🍃',
+  drought_tolerant: '🌵',
+  seasonal_bloomers: '🌸',
+}
+
+function AnomalyBadge({ anomaly }) {
+  if (!anomaly) return null
+  if (!anomaly.isAnomaly) {
+    return <Badge bg="success" className="ms-2">Normal</Badge>
+  }
+  return (
+    <Badge bg="danger" className="ms-2" title={`Score: ${anomaly.score}`}>
+      ⚠ Anomaly
+    </Badge>
+  )
+}
+
 export default function InsightsPage() {
   const { plants } = usePlantContext()
   const { theme } = useLayoutContext()
@@ -20,7 +39,6 @@ export default function InsightsPage() {
   const [expandedPlant, setExpandedPlant] = useState(null)
   const [plantDetails, setPlantDetails] = useState({})
 
-  // Fetch aggregate care scores
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -34,39 +52,41 @@ export default function InsightsPage() {
     return () => { cancelled = true }
   }, [plants])
 
-  // Lazy-load individual plant ML details on expand
-  const loadPlantDetails = useCallback(async (plantId) => {
+  const loadPlantDetails = useCallback(async (plantId, species) => {
     if (plantDetails[plantId]) return
     try {
-      const [pattern, prediction, anomaly, recommendation] = await Promise.all([
+      const [pattern, prediction, anomaly, recommendation, seasonal, cluster] = await Promise.all([
         plantsApi.wateringPattern(plantId).catch(() => null),
         plantsApi.healthPrediction(plantId).catch(() => null),
         plantsApi.anomaly(plantId).catch(() => null),
         plantsApi.wateringRecommendation(plantId).catch(() => null),
+        plantsApi.seasonalAdjustment(plantId).catch(() => null),
+        species ? plantsApi.speciesCluster(species).catch(() => null) : Promise.resolve(null),
       ])
-      setPlantDetails(prev => ({ ...prev, [plantId]: { pattern, prediction, anomaly, recommendation } }))
+      setPlantDetails(prev => ({
+        ...prev,
+        [plantId]: { pattern, prediction, anomaly, recommendation, seasonal, cluster },
+      }))
     } catch { /* ignore */ }
   }, [plantDetails])
 
-  const handleExpand = useCallback((plantId) => {
+  const handleExpand = useCallback((score) => {
+    const plantId = score.plantId
     setExpandedPlant(prev => prev === plantId ? null : plantId)
-    loadPlantDetails(plantId)
+    loadPlantDetails(plantId, score.species)
   }, [loadPlantDetails])
 
-  // Collection overview stats
   const overview = useMemo(() => {
     if (!careScores || careScores.length === 0) return null
     const avgScore = Math.round(careScores.reduce((s, c) => s + c.score, 0) / careScores.length)
     const atRisk = careScores.filter(c => c.score < 60)
-    return { avgScore, atRisk, total: careScores.length }
-  }, [careScores])
+    const anomalyCount = Object.values(plantDetails).filter(d => d?.anomaly?.isAnomaly).length
+    return { avgScore, atRisk, total: careScores.length, anomalyCount }
+  }, [careScores, plantDetails])
 
-  // Watering pattern distribution for donut chart
   const patternDistribution = useMemo(() => {
     if (!careScores) return null
-    // Group by patterns from loaded details, or show placeholder
     const counts = { optimal: 0, over_watered: 0, under_watered: 0, inconsistent: 0, insufficient_data: 0 }
-    // Use grades as proxy: A/B likely optimal, C inconsistent, D/F problematic
     for (const score of careScores) {
       if (score.grade === 'A' || score.grade === 'B') counts.optimal++
       else if (score.grade === 'C') counts.inconsistent++
@@ -75,7 +95,14 @@ export default function InsightsPage() {
     return counts
   }, [careScores])
 
-  // Minimum data check
+  // Collect anomaly alerts across all loaded plant details
+  const anomalyAlerts = useMemo(() => {
+    if (!careScores) return []
+    return careScores
+      .filter(s => plantDetails[s.plantId]?.anomaly?.isAnomaly)
+      .map(s => ({ ...s, anomaly: plantDetails[s.plantId].anomaly }))
+  }, [careScores, plantDetails])
+
   const insufficientData = plants.length < 3 || (plants.reduce((sum, p) => sum + (p.wateringLog || []).length, 0) < 10)
 
   if (insufficientData) {
@@ -95,9 +122,7 @@ export default function InsightsPage() {
               icon="bar-chart-2"
               title="Not enough data yet"
               description={descParts.length > 0 ? `${descParts.join(' and ')} to unlock health predictions.` : 'Insights will appear as you log more plant care history.'}
-              actions={[
-                { label: 'Go to dashboard', icon: 'home', href: '/' },
-              ]}
+              actions={[{ label: 'Go to dashboard', icon: 'home', href: '/' }]}
             />
             <div className="px-4 pb-4" style={{ maxWidth: 340, margin: '0 auto' }}>
               <ProgressBar
@@ -122,6 +147,21 @@ export default function InsightsPage() {
         Full ML Insights are a Home Pro feature. Free-tier users see basic per-plant care scores but not aggregate predictions, anomaly detection, or watering-pattern analysis.
       </UpgradePrompt>
 
+      {/* Anomaly alerts — rendered once plants are expanded and anomaly data is loaded */}
+      {anomalyAlerts.length > 0 && (
+        <Alert variant="danger" className="mb-4" data-testid="anomaly-alert-banner">
+          <strong>⚠ Watering anomalies detected</strong> in {anomalyAlerts.length} plant{anomalyAlerts.length !== 1 ? 's' : ''}:
+          {anomalyAlerts.map(a => (
+            <div key={a.plantId} className="mt-1 ms-2">
+              <strong>{a.name}</strong>
+              {(a.anomaly.flags || []).map((f, i) => (
+                <span key={i} className="text-danger d-block ms-2 small">• {f}</span>
+              ))}
+            </div>
+          ))}
+        </Alert>
+      )}
+
       {loading ? (
         <div aria-label="Loading insights" aria-busy="true">
           <Row className="mb-4">
@@ -136,7 +176,6 @@ export default function InsightsPage() {
         </div>
       ) : (
         <>
-          {/* Collection Overview */}
           {overview && (
             <Row className="mb-4">
               <Col md={4}>
@@ -196,15 +235,14 @@ export default function InsightsPage() {
             </Row>
           )}
 
-          {/* Per-Plant Scores */}
           <h5 className="mb-3">Plant Scores</h5>
           {careScores && careScores.map(score => (
             <Card key={score.plantId} className="mb-2">
               <Card.Body
                 className="d-flex align-items-center justify-content-between"
                 style={{ cursor: 'pointer' }}
-                onClick={() => handleExpand(score.plantId)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleExpand(score.plantId) } }}
+                onClick={() => handleExpand(score)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleExpand(score) } }}
                 role="button"
                 tabIndex={0}
                 aria-expanded={expandedPlant === score.plantId}
@@ -219,6 +257,10 @@ export default function InsightsPage() {
                   <div>
                     <strong>{score.name}</strong>
                     {score.species && <small className="text-muted ms-2">{score.species}</small>}
+                    {/* Show anomaly badge if data already loaded */}
+                    {plantDetails[score.plantId]?.anomaly && (
+                      <AnomalyBadge anomaly={plantDetails[score.plantId].anomaly} />
+                    )}
                   </div>
                 </div>
                 <div className="d-flex align-items-center gap-3">
@@ -234,60 +276,140 @@ export default function InsightsPage() {
                   {!plantDetails[score.plantId] ? (
                     <div className="text-center p-3"><Spinner size="sm" /></div>
                   ) : (
-                    <Row>
-                      <Col md={3}>
-                        <h6>Dimensions</h6>
-                        {score.dimensions && (
-                          <ul className="list-unstyled small">
-                            <li>Consistency: {score.dimensions.consistency}</li>
-                            <li>Timing: {score.dimensions.timing}</li>
-                            <li>Health: {score.dimensions.healthOutcome}</li>
-                            <li>Responsiveness: {score.dimensions.responsiveness}</li>
-                          </ul>
-                        )}
-                      </Col>
-                      <Col md={3}>
-                        <h6>Watering Pattern</h6>
-                        {plantDetails[score.plantId].pattern ? (
-                          <>
-                            <Badge style={{ backgroundColor: PATTERN_COLORS[plantDetails[score.plantId].pattern.pattern] }}>
-                              {PATTERN_LABELS[plantDetails[score.plantId].pattern.pattern] || plantDetails[score.plantId].pattern.pattern}
-                            </Badge>
-                            <ul className="list-unstyled small mt-2">
-                              {(plantDetails[score.plantId].pattern.contributingFactors || []).map((f, i) => <li key={i}>{f}</li>)}
-                            </ul>
-                          </>
-                        ) : <small className="text-muted">Unavailable</small>}
-                      </Col>
-                      <Col md={3}>
-                        <h6>Health Prediction</h6>
-                        {plantDetails[score.plantId].prediction ? (
-                          <>
-                            <p className="mb-1">
-                              In 2 weeks: <strong>{plantDetails[score.plantId].prediction.predictedHealth}</strong>
-                              {' '}({plantDetails[score.plantId].prediction.trend})
-                            </p>
+                    <>
+                      {/* Row 1: Care dimensions */}
+                      <Row className="mb-3">
+                        <Col md={3}>
+                          <h6>Score Dimensions</h6>
+                          {score.dimensions && (
                             <ul className="list-unstyled small">
-                              {(plantDetails[score.plantId].prediction.keyRisks || []).map((r, i) => <li key={i}>{r}</li>)}
+                              <li>Consistency: <strong>{score.dimensions.consistency}</strong></li>
+                              <li>Timing: <strong>{score.dimensions.timing}</strong></li>
+                              <li>Health: <strong>{score.dimensions.healthOutcome}</strong></li>
+                              <li>Responsiveness: <strong>{score.dimensions.responsiveness}</strong></li>
                             </ul>
-                          </>
-                        ) : <small className="text-muted">Unavailable</small>}
-                      </Col>
-                      <Col md={3}>
-                        <h6>Recommendation</h6>
-                        {plantDetails[score.plantId].recommendation ? (
-                          <>
-                            <p className="mb-1">
-                              Every <strong>{plantDetails[score.plantId].recommendation.recommendedFrequencyDays}</strong> days
-                              {plantDetails[score.plantId].recommendation.confidenceInterval &&
-                                ` (${plantDetails[score.plantId].recommendation.confidenceInterval[0]}-${plantDetails[score.plantId].recommendation.confidenceInterval[1]})`
-                              }
-                            </p>
-                            <small className="text-muted">{plantDetails[score.plantId].recommendation.basis}</small>
-                          </>
-                        ) : <small className="text-muted">Unavailable</small>}
-                      </Col>
-                    </Row>
+                          )}
+                        </Col>
+                        <Col md={3}>
+                          <h6>Watering Pattern</h6>
+                          {plantDetails[score.plantId].pattern ? (
+                            <>
+                              <Badge style={{ backgroundColor: PATTERN_COLORS[plantDetails[score.plantId].pattern.pattern] }}>
+                                {PATTERN_LABELS[plantDetails[score.plantId].pattern.pattern] || plantDetails[score.plantId].pattern.pattern}
+                              </Badge>
+                              <ul className="list-unstyled small mt-2">
+                                {(plantDetails[score.plantId].pattern.contributingFactors || []).map((f, i) => <li key={i}>{f}</li>)}
+                              </ul>
+                            </>
+                          ) : <small className="text-muted">Unavailable</small>}
+                        </Col>
+                        <Col md={3}>
+                          <h6>Health Prediction</h6>
+                          {plantDetails[score.plantId].prediction ? (
+                            <>
+                              <p className="mb-1">
+                                In 2 weeks: <strong>{plantDetails[score.plantId].prediction.predictedHealth}</strong>
+                                {' '}({plantDetails[score.plantId].prediction.trend})
+                              </p>
+                              <ul className="list-unstyled small">
+                                {(plantDetails[score.plantId].prediction.keyRisks || []).map((r, i) => <li key={i}>{r}</li>)}
+                              </ul>
+                            </>
+                          ) : <small className="text-muted">Unavailable</small>}
+                        </Col>
+                        <Col md={3}>
+                          <h6>Recommendation</h6>
+                          {plantDetails[score.plantId].recommendation ? (
+                            <>
+                              <p className="mb-1">
+                                Every <strong>{plantDetails[score.plantId].recommendation.recommendedFrequencyDays}</strong> days
+                                {plantDetails[score.plantId].recommendation.confidenceInterval &&
+                                  ` (${plantDetails[score.plantId].recommendation.confidenceInterval[0]}-${plantDetails[score.plantId].recommendation.confidenceInterval[1]})`
+                                }
+                              </p>
+                              <small className="text-muted">{plantDetails[score.plantId].recommendation.basis}</small>
+                            </>
+                          ) : <small className="text-muted">Unavailable</small>}
+                        </Col>
+                      </Row>
+
+                      {/* Row 2: Anomaly, Seasonal, Cluster */}
+                      <Row className="pt-2 border-top">
+                        <Col md={4} data-testid="anomaly-section">
+                          <h6>Anomaly Detection</h6>
+                          {plantDetails[score.plantId].anomaly ? (
+                            <>
+                              <div className="d-flex align-items-center gap-2 mb-1">
+                                {plantDetails[score.plantId].anomaly.isAnomaly ? (
+                                  <Badge bg="danger">⚠ Anomaly detected</Badge>
+                                ) : (
+                                  <Badge bg="success">Normal behaviour</Badge>
+                                )}
+                                <small className="text-muted">score: {plantDetails[score.plantId].anomaly.score}</small>
+                              </div>
+                              {(plantDetails[score.plantId].anomaly.flags || []).map((f, i) => (
+                                <div key={i} className="small text-danger">• {f}</div>
+                              ))}
+                              {(!plantDetails[score.plantId].anomaly.flags?.length && !plantDetails[score.plantId].anomaly.isAnomaly) && (
+                                <small className="text-muted">No unusual watering patterns detected.</small>
+                              )}
+                            </>
+                          ) : <small className="text-muted">Unavailable</small>}
+                        </Col>
+
+                        <Col md={4} data-testid="seasonal-section">
+                          <h6>Seasonal Adjustment</h6>
+                          {plantDetails[score.plantId].seasonal ? (
+                            <>
+                              <p className="mb-1">
+                                <Badge bg="secondary" className="me-1 text-capitalize">{plantDetails[score.plantId].seasonal.season}</Badge>
+                                {plantDetails[score.plantId].seasonal.multiplier && (
+                                  <span className="small">
+                                    ×{plantDetails[score.plantId].seasonal.multiplier.toFixed(2)} multiplier
+                                  </span>
+                                )}
+                              </p>
+                              {plantDetails[score.plantId].seasonal.adjustedFrequencyDays && (
+                                <p className="mb-1 small">
+                                  Adjusted: every <strong>{plantDetails[score.plantId].seasonal.adjustedFrequencyDays}</strong> days
+                                </p>
+                              )}
+                              {plantDetails[score.plantId].seasonal.note && (
+                                <small className="text-muted">{plantDetails[score.plantId].seasonal.note}</small>
+                              )}
+                            </>
+                          ) : <small className="text-muted">Unavailable</small>}
+                        </Col>
+
+                        <Col md={4} data-testid="cluster-section">
+                          <h6>Species Cluster</h6>
+                          {plantDetails[score.plantId].cluster && plantDetails[score.plantId].cluster.clusterId ? (
+                            <>
+                              <div className="mb-1">
+                                <span className="me-1">{CLUSTER_ICONS[plantDetails[score.plantId].cluster.clusterId] || '🌱'}</span>
+                                <strong>{plantDetails[score.plantId].cluster.clusterLabel}</strong>
+                              </div>
+                              {plantDetails[score.plantId].cluster.clusterCareProfile && (
+                                <ul className="list-unstyled small">
+                                  <li>Avg frequency: every {plantDetails[score.plantId].cluster.clusterCareProfile.avgFrequency} days</li>
+                                  <li>Drought tolerance: {plantDetails[score.plantId].cluster.clusterCareProfile.droughtTolerance}</li>
+                                  <li>Humidity need: {plantDetails[score.plantId].cluster.clusterCareProfile.humidityNeed}</li>
+                                </ul>
+                              )}
+                              {(plantDetails[score.plantId].cluster.similarSpecies || []).length > 0 && (
+                                <small className="text-muted">
+                                  Similar: {plantDetails[score.plantId].cluster.similarSpecies.slice(0, 3).join(', ')}
+                                </small>
+                              )}
+                            </>
+                          ) : (
+                            <small className="text-muted">
+                              {score.species ? 'No cluster match for this species.' : 'Add a species to see cluster info.'}
+                            </small>
+                          )}
+                        </Col>
+                      </Row>
+                    </>
                   )}
                 </Card.Footer>
               )}
