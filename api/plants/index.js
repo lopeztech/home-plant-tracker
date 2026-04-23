@@ -3730,7 +3730,7 @@ async function requireApiKey(req, res, next) {
     // Update lastUsedAt asynchronously — do not block request
     apiKeyHashesRef().doc(hash).set({ lastUsedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
     next();
-  } catch (err) {
+  } catch {
     res.status(500).json({ error: 'API key lookup failed' });
   }
 }
