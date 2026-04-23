@@ -36,6 +36,16 @@ vi.mock('../api/plants.js', () => ({
     exportData: vi.fn().mockResolvedValue({ plants: [], floors: [], exportedAt: '2024-01-01', userId: 'u1' }),
     deleteAccount: vi.fn().mockResolvedValue(null),
   },
+  exportApi: {
+    downloadPlants: vi.fn().mockResolvedValue(undefined),
+    downloadWateringHistory: vi.fn().mockResolvedValue(undefined),
+    downloadCareSchedule: vi.fn().mockResolvedValue(undefined),
+  },
+  apiKeysApi: {
+    list: vi.fn().mockResolvedValue({ keys: [] }),
+    create: vi.fn(),
+    revoke: vi.fn(),
+  },
 }))
 
 // LeafletFloorplan touches canvas APIs not available in jsdom
@@ -44,7 +54,7 @@ vi.mock('../components/LeafletFloorplan.jsx', () => ({
 }))
 
 import SettingsPage from '../pages/SettingsPage.jsx'
-import { accountApi } from '../api/plants.js'
+import { accountApi, apiKeysApi } from '../api/plants.js'
 
 function renderAt(path) {
   return render(
@@ -192,5 +202,92 @@ describe('SettingsPage Data tab', () => {
     fireEvent.click(screen.getByRole('button', { name: /cancel/i }))
     expect(screen.queryByPlaceholderText(/Type DELETE to confirm/i)).toBeNull()
     expect(screen.getByRole('button', { name: /delete my account/i })).toBeInTheDocument()
+  })
+})
+
+describe('SettingsPage API Keys tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    apiKeysApi.list.mockResolvedValue({ keys: [] })
+  })
+
+  it('shows the API Keys tab in navigation', () => {
+    renderAt('/settings/api-keys')
+    expect(screen.getByText('API Keys')).toBeInTheDocument()
+  })
+
+  it('renders the Public REST API section', async () => {
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByText(/Public REST API/)).toBeInTheDocument())
+  })
+
+  it('shows no-keys message when list is empty', async () => {
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('no-keys-message')).toBeInTheDocument())
+    expect(screen.getByText(/No API keys yet/)).toBeInTheDocument()
+  })
+
+  it('displays existing active keys in table', async () => {
+    apiKeysApi.list.mockResolvedValue({
+      keys: [
+        { id: 'k1', name: 'Home Assistant', key: 'pt_live_hass...', prefix: 'pt_live_hass', createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null, revokedAt: null },
+      ],
+    })
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('api-keys-table')).toBeInTheDocument())
+    expect(screen.getByText('Home Assistant')).toBeInTheDocument()
+    expect(screen.getByText('pt_live_hass...')).toBeInTheDocument()
+  })
+
+  it('shows create key button and name input', async () => {
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('create-key-btn')).toBeInTheDocument())
+    expect(screen.getByTestId('new-key-name-input')).toBeInTheDocument()
+  })
+
+  it('create key button is disabled when name input is empty', async () => {
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('create-key-btn')).toBeDisabled())
+  })
+
+  it('calls apiKeysApi.create with the entered name', async () => {
+    apiKeysApi.create.mockResolvedValue({ id: 'new-k', key: 'pt_live_newkeyxxx', name: 'My App', prefix: 'pt_live_newk', createdAt: '2026-04-23T00:00:00Z' })
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('new-key-name-input')).toBeInTheDocument())
+    fireEvent.change(screen.getByTestId('new-key-name-input'), { target: { value: 'My App' } })
+    fireEvent.click(screen.getByTestId('create-key-btn'))
+    await waitFor(() => expect(apiKeysApi.create).toHaveBeenCalledWith('My App'))
+  })
+
+  it('shows the new plaintext key banner after creation', async () => {
+    apiKeysApi.create.mockResolvedValue({ id: 'new-k', key: 'pt_live_secret123', name: 'My App', prefix: 'pt_live_secr', createdAt: '2026-04-23T00:00:00Z' })
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('new-key-name-input')).toBeInTheDocument())
+    fireEvent.change(screen.getByTestId('new-key-name-input'), { target: { value: 'My App' } })
+    fireEvent.click(screen.getByTestId('create-key-btn'))
+    await waitFor(() => expect(screen.getByTestId('new-key-banner')).toBeInTheDocument())
+    expect(screen.getByTestId('new-key-value')).toHaveTextContent('pt_live_secret123')
+  })
+
+  it('shows revoke button for each key and calls apiKeysApi.revoke', async () => {
+    apiKeysApi.list.mockResolvedValue({
+      keys: [{ id: 'k1', name: 'HA', key: 'pt_live_ha...', prefix: 'pt_live_ha', createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null }],
+    })
+    apiKeysApi.revoke.mockResolvedValue({ revoked: true })
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('revoke-key-k1')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('revoke-key-k1'))
+    await waitFor(() => expect(apiKeysApi.revoke).toHaveBeenCalledWith('k1'))
+  })
+
+  it('removes key from list after successful revoke', async () => {
+    apiKeysApi.list.mockResolvedValue({
+      keys: [{ id: 'k1', name: 'HA', key: 'pt_live_ha...', prefix: 'pt_live_ha', createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null }],
+    })
+    apiKeysApi.revoke.mockResolvedValue({ revoked: true })
+    renderAt('/settings/api-keys')
+    await waitFor(() => expect(screen.getByTestId('revoke-key-k1')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('revoke-key-k1'))
+    await waitFor(() => expect(screen.queryByTestId('revoke-key-k1')).not.toBeInTheDocument())
   })
 })

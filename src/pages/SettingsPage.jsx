@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from 'react'
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react'
 import { Link, useParams, Navigate } from 'react-router'
 import { Button, Form, Table, Badge, Nav, InputGroup, FormControl } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
@@ -11,12 +11,13 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi } from '../api/plants.js'
+import { accountApi, exportApi, apiKeysApi } from '../api/plants.js'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
   { id: 'preferences', label: 'Preferences', icon: 'sliders', tags: 'theme dark mode light temperature celsius fahrenheit metric imperial units location city weather' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
+  { id: 'api-keys', label: 'API Keys', icon: 'key', tags: 'api keys rest integration home assistant automation developer' },
   { id: 'advanced', label: 'Advanced', icon: 'tool', tags: 'reset onboarding developer version advanced' },
 ]
 
@@ -650,6 +651,160 @@ function DataTab({ search }) {
   )
 }
 
+function ApiKeysTab({ search }) {
+  const [keys, setKeys] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [creating, setCreating] = useState(false)
+  const [newKeyName, setNewKeyName] = useState('')
+  const [newKeyValue, setNewKeyValue] = useState(null)
+  const [revoking, setRevoking] = useState(null)
+
+  const loadKeys = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { keys: list } = await apiKeysApi.list()
+      setKeys(list)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadKeys() }, [loadKeys])
+
+  const handleCreate = async () => {
+    if (!newKeyName.trim()) return
+    setCreating(true)
+    setError(null)
+    try {
+      const result = await apiKeysApi.create(newKeyName.trim())
+      setNewKeyValue(result.key)
+      setNewKeyName('')
+      await loadKeys()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const handleRevoke = async (id) => {
+    setRevoking(id)
+    setError(null)
+    try {
+      await apiKeysApi.revoke(id)
+      setKeys((prev) => prev.filter((k) => k.id !== id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  return (
+    <>
+      <SettingSection id="api-keys-intro" title="Public REST API" icon="key" search={search}>
+        <p className="text-muted fs-sm mb-3">
+          Use API keys to integrate your plant data with external tools — Home Assistant, custom dashboards, and smart irrigation systems.
+          API keys are available on <strong>Home Pro</strong> and <strong>Landscaper Pro</strong> plans. Each key is shown <strong>once</strong> at creation.
+        </p>
+        <div className="alert alert-info py-2 fs-sm mb-0">
+          <strong>Base URL:</strong> <code>{import.meta.env.VITE_API_BASE_URL || 'https://api.plants.lopezcloud.dev'}/api/v1</code>
+          {' · '}
+          Pass the key as <code>x-plant-api-key: pt_live_...</code>
+        </div>
+      </SettingSection>
+
+      <SettingSection id="api-keys-manage" title="Your API Keys" icon="shield" search={search}>
+        {error && <div className="alert alert-danger py-2 mb-3" data-testid="api-key-error">{error}</div>}
+
+        {newKeyValue && (
+          <div className="alert alert-success mb-3" data-testid="new-key-banner">
+            <strong>Copy your new API key — it won&apos;t be shown again:</strong>
+            <div className="d-flex align-items-center gap-2 mt-2">
+              <code className="flex-grow-1 text-break" data-testid="new-key-value">{newKeyValue}</code>
+              <Button size="sm" variant="outline-success" onClick={() => { navigator.clipboard?.writeText(newKeyValue); }}>
+                Copy
+              </Button>
+            </div>
+            <Button size="sm" variant="link" className="p-0 mt-1 text-muted" onClick={() => setNewKeyValue(null)}>Dismiss</Button>
+          </div>
+        )}
+
+        {loading ? (
+          <p className="text-muted fs-sm">Loading…</p>
+        ) : keys.length === 0 ? (
+          <p className="text-muted fs-sm mb-3" data-testid="no-keys-message">No API keys yet. Create one below.</p>
+        ) : (
+          <Table size="sm" className="mb-3" data-testid="api-keys-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Key</th>
+                <th>Created</th>
+                <th>Last used</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map((k) => (
+                <tr key={k.id}>
+                  <td>{k.name}</td>
+                  <td><code>{k.key}</code></td>
+                  <td className="text-muted fs-xs">{new Date(k.createdAt).toLocaleDateString()}</td>
+                  <td className="text-muted fs-xs">{k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleDateString() : 'Never'}</td>
+                  <td>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleRevoke(k.id)}
+                      disabled={revoking === k.id}
+                      data-testid={`revoke-key-${k.id}`}
+                    >
+                      {revoking === k.id ? 'Revoking…' : 'Revoke'}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+
+        {keys.length < 3 && (
+          <div className="d-flex gap-2 align-items-end">
+            <Form.Group controlId="new-key-name" className="flex-grow-1">
+              <Form.Label className="fs-sm fw-500 mb-1">New key name</Form.Label>
+              <Form.Control
+                size="sm"
+                placeholder="e.g. Home Assistant"
+                value={newKeyName}
+                onChange={(e) => setNewKeyName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
+                maxLength={64}
+                data-testid="new-key-name-input"
+              />
+            </Form.Group>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={handleCreate}
+              disabled={creating || !newKeyName.trim()}
+              data-testid="create-key-btn"
+            >
+              {creating ? 'Creating…' : 'Create key'}
+            </Button>
+          </div>
+        )}
+        {keys.length >= 3 && (
+          <p className="text-muted fs-xs mb-0">Maximum of 3 active API keys reached. Revoke one to create a new key.</p>
+        )}
+      </SettingSection>
+    </>
+  )
+}
+
 function AdvancedTab({ search }) {
   return (
     <SettingSection id="version" title="About" icon="info" search={search}>
@@ -730,6 +885,7 @@ export default function SettingsPage() {
         {tab === 'property' && <PropertyTab search={search} />}
         {tab === 'preferences' && <PreferencesTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
+        {tab === 'api-keys' && <ApiKeysTab search={search} />}
         {tab === 'advanced' && <AdvancedTab search={search} />}
       </div>
     </div>
