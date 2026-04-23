@@ -11,13 +11,14 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, apiKeysApi } from '../api/plants.js'
+import { accountApi, exportApi, apiKeysApi, brandingApi, imagesApi } from '../api/plants.js'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
   { id: 'preferences', label: 'Preferences', icon: 'sliders', tags: 'theme dark mode light temperature celsius fahrenheit metric imperial units location city weather' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'api-keys', label: 'API Keys', icon: 'key', tags: 'api keys rest integration home assistant automation developer' },
+  { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
   { id: 'advanced', label: 'Advanced', icon: 'tool', tags: 'reset onboarding developer version advanced' },
 ]
 
@@ -805,6 +806,177 @@ function ApiKeysTab({ search }) {
   )
 }
 
+function BrandingTab({ search }) {
+  const [form, setForm] = useState({ businessName: '', brandColour: '#3a7d44', contactPhone: '', contactEmail: '', contactWebsite: '' })
+  const [logoUrl, setLogoUrl] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const logoInputRef = useRef(null)
+
+  useEffect(() => {
+    brandingApi.get().then((data) => {
+      setForm({
+        businessName: data.businessName || '',
+        brandColour: data.brandColour || '#3a7d44',
+        contactPhone: data.contactPhone || '',
+        contactEmail: data.contactEmail || '',
+        contactWebsite: data.contactWebsite || '',
+      })
+      if (data.logoUrl) setLogoUrl(data.logoUrl)
+    }).catch(() => {})
+  }, [])
+
+  const handleLogoUpload = async (file) => {
+    if (!file) return
+    setUploadingLogo(true)
+    setError(null)
+    try {
+      const url = await imagesApi.upload(file, 'branding')
+      setLogoUrl(url)
+      await brandingApi.save({ logoUrl: url })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setUploadingLogo(false)
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      await brandingApi.save(form)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <SettingSection id="branding-identity" title="Business Identity" icon="star" search={search}>
+        <Form.Group className="mb-3">
+          <Form.Label className="fs-sm fw-semibold">Business name</Form.Label>
+          <Form.Control
+            data-testid="branding-business-name"
+            value={form.businessName}
+            onChange={(e) => setForm((f) => ({ ...f, businessName: e.target.value }))}
+            placeholder="e.g. Green Thumb Landscaping"
+            maxLength={100}
+          />
+          <Form.Text className="text-muted">Shown in PDF report headers and client-facing views.</Form.Text>
+        </Form.Group>
+
+        <Form.Group className="mb-3">
+          <Form.Label className="fs-sm fw-semibold">Primary brand colour</Form.Label>
+          <div className="d-flex align-items-center gap-2">
+            <Form.Control
+              data-testid="branding-colour-picker"
+              type="color"
+              value={form.brandColour}
+              onChange={(e) => setForm((f) => ({ ...f, brandColour: e.target.value }))}
+              style={{ width: 48, height: 38, padding: 2, cursor: 'pointer' }}
+            />
+            <Form.Control
+              data-testid="branding-colour-hex"
+              value={form.brandColour}
+              onChange={(e) => setForm((f) => ({ ...f, brandColour: e.target.value }))}
+              placeholder="#3a7d44"
+              style={{ maxWidth: 120 }}
+            />
+          </div>
+          <Form.Text className="text-muted">Applied to report headers and accent elements.</Form.Text>
+        </Form.Group>
+      </SettingSection>
+
+      <SettingSection id="branding-logo" title="Logo" icon="image" search={search}>
+        {logoUrl && (
+          <div className="mb-3">
+            <img
+              data-testid="branding-logo-preview"
+              src={logoUrl}
+              alt="Business logo"
+              style={{ maxWidth: 200, maxHeight: 60, objectFit: 'contain', borderRadius: 4 }}
+            />
+          </div>
+        )}
+        <div className="d-flex align-items-center gap-2">
+          <Button
+            data-testid="branding-upload-logo-btn"
+            variant="outline-secondary"
+            size="sm"
+            onClick={() => logoInputRef.current?.click()}
+            disabled={uploadingLogo}
+          >
+            {uploadingLogo ? 'Uploading…' : logoUrl ? 'Replace logo' : 'Upload logo'}
+          </Button>
+          <span className="text-muted fs-xs">PNG, SVG or JPEG · max 2 MB · displayed at up to 200×60 px</span>
+        </div>
+        <input
+          ref={logoInputRef}
+          type="file"
+          accept="image/png,image/svg+xml,image/jpeg"
+          style={{ display: 'none' }}
+          data-testid="branding-logo-input"
+          onChange={(e) => handleLogoUpload(e.target.files?.[0])}
+        />
+      </SettingSection>
+
+      <SettingSection id="branding-contact" title="Contact Info" icon="phone" search={search}>
+        <Form.Text className="text-muted d-block mb-3">Shown in PDF report footers and client-facing views.</Form.Text>
+        <Form.Group className="mb-3">
+          <Form.Label className="fs-sm fw-semibold">Phone</Form.Label>
+          <Form.Control
+            data-testid="branding-contact-phone"
+            value={form.contactPhone}
+            onChange={(e) => setForm((f) => ({ ...f, contactPhone: e.target.value }))}
+            placeholder="+1 555 123 4567"
+            maxLength={50}
+          />
+        </Form.Group>
+        <Form.Group className="mb-3">
+          <Form.Label className="fs-sm fw-semibold">Email</Form.Label>
+          <Form.Control
+            data-testid="branding-contact-email"
+            type="email"
+            value={form.contactEmail}
+            onChange={(e) => setForm((f) => ({ ...f, contactEmail: e.target.value }))}
+            placeholder="hello@greenthumb.com"
+            maxLength={254}
+          />
+        </Form.Group>
+        <Form.Group className="mb-3">
+          <Form.Label className="fs-sm fw-semibold">Website</Form.Label>
+          <Form.Control
+            data-testid="branding-contact-website"
+            type="url"
+            value={form.contactWebsite}
+            onChange={(e) => setForm((f) => ({ ...f, contactWebsite: e.target.value }))}
+            placeholder="https://greenthumb.com"
+            maxLength={2048}
+          />
+        </Form.Group>
+
+        {error && <p className="text-danger fs-sm mb-2">{error}</p>}
+        <Button
+          data-testid="branding-save-btn"
+          variant="primary"
+          size="sm"
+          onClick={handleSave}
+          disabled={saving}
+        >
+          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save branding'}
+        </Button>
+      </SettingSection>
+    </>
+  )
+}
+
 function AdvancedTab({ search }) {
   return (
     <SettingSection id="version" title="About" icon="info" search={search}>
@@ -886,6 +1058,7 @@ export default function SettingsPage() {
         {tab === 'preferences' && <PreferencesTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
         {tab === 'api-keys' && <ApiKeysTab search={search} />}
+        {tab === 'branding' && <BrandingTab search={search} />}
         {tab === 'advanced' && <AdvancedTab search={search} />}
       </div>
     </div>

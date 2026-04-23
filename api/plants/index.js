@@ -1081,6 +1081,46 @@ app.put('/config/floorplan', requireUser, async (req, res) => {
   }
 });
 
+// ── Branding config ───────────────────────────────────────────────────────────
+
+app.get('/config/branding', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const doc = await userConfig(req.userId).doc('branding').get();
+    const data = doc.exists ? doc.data() : {};
+    if (data.logoUrl) {
+      try { data.logoUrl = await signReadUrl(data.logoUrl); } catch { /* serve raw URL on signing failure */ }
+    }
+    res.status(200).json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const HEX_COLOUR_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+app.put('/config/branding', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const { businessName, logoUrl, brandColour, contactPhone, contactEmail, contactWebsite } = req.body || {};
+    if (brandColour != null && !HEX_COLOUR_RE.test(brandColour)) {
+      return res.status(400).json({ error: 'brandColour must be a valid hex colour (e.g. #3a7d44)' });
+    }
+    const update = { updatedAt: new Date().toISOString() };
+    if (businessName !== undefined) update.businessName = String(businessName).trim().slice(0, 100);
+    if (logoUrl !== undefined) update.logoUrl = logoUrl;
+    if (brandColour !== undefined) update.brandColour = brandColour;
+    if (contactPhone !== undefined) update.contactPhone = String(contactPhone).trim().slice(0, 50);
+    if (contactEmail !== undefined) update.contactEmail = String(contactEmail).trim().slice(0, 254);
+    if (contactWebsite !== undefined) update.contactWebsite = String(contactWebsite).trim().slice(0, 2048);
+    await userConfig(req.userId).doc('branding').set(update, { merge: true });
+    if (update.logoUrl) {
+      try { update.logoUrl = await signReadUrl(update.logoUrl); } catch { /* serve raw on failure */ }
+    }
+    res.status(200).json(update);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Plants CRUD ───────────────────────────────────────────────────────────────
 
 app.get('/plants', requireUser, async (req, res) => {

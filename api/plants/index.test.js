@@ -587,6 +587,88 @@ describe('PUT /config/floors', () => {
   });
 });
 
+// ── GET /config/branding ──────────────────────────────────────────────────────
+
+const brandingPath = () => `users/${USER_SUB}/config/branding`;
+
+describe('GET /config/branding', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/config/branding');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns empty object when no branding is saved', async () => {
+    const res = await request(app).get('/config/branding').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({});
+  });
+
+  it('returns saved branding fields', async () => {
+    store[brandingPath()] = { businessName: 'Green Thumb', brandColour: '#3a7d44', updatedAt: '2026-01-01T00:00:00Z' };
+    const res = await request(app).get('/config/branding').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.businessName).toBe('Green Thumb');
+    expect(res.body.brandColour).toBe('#3a7d44');
+  });
+});
+
+// ── PUT /config/branding ──────────────────────────────────────────────────────
+
+describe('PUT /config/branding', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).put('/config/branding').send({ businessName: 'Test' });
+    expect(res.status).toBe(401);
+  });
+
+  it('saves branding and returns the updated fields', async () => {
+    const res = await request(app)
+      .put('/config/branding')
+      .set('Authorization', authHeader())
+      .send({ businessName: 'Leaf & Co', brandColour: '#4a8c55', contactPhone: '+1 555 0001', contactEmail: 'hi@leaf.co', contactWebsite: 'https://leaf.co' });
+    expect(res.status).toBe(200);
+    expect(res.body.businessName).toBe('Leaf & Co');
+    expect(res.body.brandColour).toBe('#4a8c55');
+    expect(res.body.contactEmail).toBe('hi@leaf.co');
+  });
+
+  it('persists branding to Firestore', async () => {
+    await request(app)
+      .put('/config/branding')
+      .set('Authorization', authHeader())
+      .send({ businessName: 'Verdure Ltd' });
+    expect(store[brandingPath()].businessName).toBe('Verdure Ltd');
+    expect(store[brandingPath()].updatedAt).toBeTruthy();
+  });
+
+  it('returns 400 for an invalid brandColour', async () => {
+    const res = await request(app)
+      .put('/config/branding')
+      .set('Authorization', authHeader())
+      .send({ brandColour: 'not-a-colour' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/hex colour/i);
+  });
+
+  it('accepts a 3-digit hex colour', async () => {
+    const res = await request(app)
+      .put('/config/branding')
+      .set('Authorization', authHeader())
+      .send({ brandColour: '#abc' });
+    expect(res.status).toBe(200);
+    expect(res.body.brandColour).toBe('#abc');
+  });
+
+  it('allows partial updates without overwriting omitted fields', async () => {
+    store[brandingPath()] = { businessName: 'Original', brandColour: '#111111', updatedAt: '2026-01-01T00:00:00Z' };
+    await request(app)
+      .put('/config/branding')
+      .set('Authorization', authHeader())
+      .send({ contactPhone: '+44 7700 900000' });
+    expect(store[brandingPath()].businessName).toBe('Original');
+    expect(store[brandingPath()].contactPhone).toBe('+44 7700 900000');
+  });
+});
+
 // ── GET /plants ───────────────────────────────────────────────────────────────
 
 describe('GET /plants', () => {
