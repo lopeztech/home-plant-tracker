@@ -337,6 +337,11 @@ export const importApi = {
   },
 }
 
+export const brandingApi = {
+  get: () => request('/config/branding'),
+  save: (data) => request('/config/branding', { method: 'PUT', body: JSON.stringify(data) }),
+}
+
 export const apiKeysApi = {
   async list() {
     return request('/api-keys')

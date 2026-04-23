@@ -46,6 +46,13 @@ vi.mock('../api/plants.js', () => ({
     create: vi.fn(),
     revoke: vi.fn(),
   },
+  brandingApi: {
+    get: vi.fn().mockResolvedValue({}),
+    save: vi.fn().mockResolvedValue({}),
+  },
+  imagesApi: {
+    upload: vi.fn().mockResolvedValue('https://storage.example.com/branding/logo.png'),
+  },
 }))
 
 // LeafletFloorplan touches canvas APIs not available in jsdom
@@ -54,7 +61,7 @@ vi.mock('../components/LeafletFloorplan.jsx', () => ({
 }))
 
 import SettingsPage from '../pages/SettingsPage.jsx'
-import { accountApi, apiKeysApi } from '../api/plants.js'
+import { accountApi, apiKeysApi, brandingApi, imagesApi } from '../api/plants.js'
 
 function renderAt(path) {
   return render(
@@ -289,5 +296,74 @@ describe('SettingsPage API Keys tab', () => {
     await waitFor(() => expect(screen.getByTestId('revoke-key-k1')).toBeInTheDocument())
     fireEvent.click(screen.getByTestId('revoke-key-k1'))
     await waitFor(() => expect(screen.queryByTestId('revoke-key-k1')).not.toBeInTheDocument())
+  })
+})
+
+describe('SettingsPage Branding tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    brandingApi.get.mockResolvedValue({})
+    brandingApi.save.mockResolvedValue({})
+  })
+
+  it('shows the Branding tab in navigation', () => {
+    renderAt('/settings/branding')
+    expect(screen.getAllByText('Branding').length).toBeGreaterThan(0)
+  })
+
+  it('renders business identity section', async () => {
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByText(/Business Identity/i)).toBeInTheDocument())
+  })
+
+  it('renders logo upload section', async () => {
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByTestId('branding-upload-logo-btn')).toBeInTheDocument())
+  })
+
+  it('renders contact info section', async () => {
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByTestId('branding-contact-phone')).toBeInTheDocument())
+    expect(screen.getByTestId('branding-contact-email')).toBeInTheDocument()
+    expect(screen.getByTestId('branding-contact-website')).toBeInTheDocument()
+  })
+
+  it('loads existing branding data on mount', async () => {
+    brandingApi.get.mockResolvedValue({
+      businessName: 'Green Thumb Landscaping',
+      brandColour: '#4a8c55',
+      contactEmail: 'hi@greenthumb.com',
+    })
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByTestId('branding-business-name')).toHaveValue('Green Thumb Landscaping'))
+    expect(screen.getByTestId('branding-colour-hex')).toHaveValue('#4a8c55')
+    expect(screen.getByTestId('branding-contact-email')).toHaveValue('hi@greenthumb.com')
+  })
+
+  it('calls brandingApi.save with form data on save', async () => {
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByTestId('branding-business-name')).toBeInTheDocument())
+    fireEvent.change(screen.getByTestId('branding-business-name'), { target: { value: 'Leaf & Co' } })
+    fireEvent.change(screen.getByTestId('branding-contact-phone'), { target: { value: '+1 555 0001' } })
+    fireEvent.click(screen.getByTestId('branding-save-btn'))
+    await waitFor(() => expect(brandingApi.save).toHaveBeenCalledWith(
+      expect.objectContaining({ businessName: 'Leaf & Co', contactPhone: '+1 555 0001' })
+    ))
+  })
+
+  it('shows logo preview when branding has a logoUrl', async () => {
+    brandingApi.get.mockResolvedValue({ logoUrl: 'https://storage.example.com/branding/logo.png' })
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByTestId('branding-logo-preview')).toBeInTheDocument())
+    expect(screen.getByTestId('branding-logo-preview')).toHaveAttribute('src', 'https://storage.example.com/branding/logo.png')
+  })
+
+  it('calls imagesApi.upload and brandingApi.save on logo file selection', async () => {
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByTestId('branding-logo-input')).toBeInTheDocument())
+    const file = new File(['logo'], 'logo.png', { type: 'image/png' })
+    fireEvent.change(screen.getByTestId('branding-logo-input'), { target: { files: [file] } })
+    await waitFor(() => expect(imagesApi.upload).toHaveBeenCalledWith(file, 'branding'))
+    await waitFor(() => expect(brandingApi.save).toHaveBeenCalledWith({ logoUrl: 'https://storage.example.com/branding/logo.png' }))
   })
 })
