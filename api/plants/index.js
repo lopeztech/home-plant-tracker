@@ -3524,4 +3524,166 @@ td{padding:5px 8px;border-bottom:1px solid #e5e5e5}@media print{body{margin:0}}<
   }
 });
 
+// ── CSV / XLSX bulk plant import ─────────────────────────────────────────────
+
+const IMPORT_COLUMN_MAP = {
+  name: ['name', 'plant name', 'plant'],
+  species: ['species', 'type', 'plant type', 'scientific name'],
+  room: ['room', 'location', 'area'],
+  floor: ['floor', 'level'],
+  health: ['health', 'health status', 'condition'],
+  frequencyDays: ['frequencydays', 'frequency days', 'frequency', 'water every', 'watering frequency'],
+  potSize: ['potsize', 'pot size', 'pot'],
+  soilType: ['soiltype', 'soil type', 'soil'],
+  notes: ['notes', 'note', 'comments', 'description'],
+};
+
+const VALID_HEALTH_VALUES = new Set(['Excellent', 'Good', 'Fair', 'Poor']);
+
+function fuzzyMapHeaders(headers) {
+  const map = {};
+  for (const header of headers) {
+    const normalised = header.toLowerCase().trim();
+    for (const [field, aliases] of Object.entries(IMPORT_COLUMN_MAP)) {
+      if (aliases.includes(normalised) && !(field in map)) {
+        map[field] = header;
+        break;
+      }
+    }
+  }
+  return map;
+}
+
+function validateAndMapRow(rawRow, headerMap, rowIndex) {
+  const errors = [];
+  const plant = {};
+
+  const name = rawRow[headerMap.name];
+  if (!name || !String(name).trim()) {
+    return { plant: null, error: { row: rowIndex + 1, reason: 'Missing required field: name' } };
+  }
+  plant.name = String(name).trim();
+
+  if (headerMap.species && rawRow[headerMap.species]) {
+    plant.species = String(rawRow[headerMap.species]).trim();
+  }
+  if (headerMap.room && rawRow[headerMap.room]) {
+    plant.room = String(rawRow[headerMap.room]).trim();
+  }
+  if (headerMap.floor && rawRow[headerMap.floor]) {
+    plant.floor = String(rawRow[headerMap.floor]).trim();
+  }
+  if (headerMap.health && rawRow[headerMap.health]) {
+    const health = String(rawRow[headerMap.health]).trim();
+    const normalised = health.charAt(0).toUpperCase() + health.slice(1).toLowerCase();
+    if (!VALID_HEALTH_VALUES.has(normalised)) {
+      errors.push({ row: rowIndex + 1, reason: `Invalid health value "${health}" — must be Excellent, Good, Fair, or Poor` });
+    } else {
+      plant.health = normalised;
+    }
+  }
+  if (headerMap.frequencyDays && rawRow[headerMap.frequencyDays]) {
+    const freq = parseInt(rawRow[headerMap.frequencyDays], 10);
+    if (isNaN(freq) || freq < 1 || freq > 365) {
+      errors.push({ row: rowIndex + 1, reason: `Invalid frequencyDays "${rawRow[headerMap.frequencyDays]}" — must be 1–365` });
+    } else {
+      plant.frequencyDays = freq;
+    }
+  }
+  if (headerMap.potSize && rawRow[headerMap.potSize]) {
+    plant.potSize = String(rawRow[headerMap.potSize]).trim();
+  }
+  if (headerMap.soilType && rawRow[headerMap.soilType]) {
+    plant.soilType = String(rawRow[headerMap.soilType]).trim();
+  }
+  if (headerMap.notes && rawRow[headerMap.notes]) {
+    plant.notes = String(rawRow[headerMap.notes]).trim();
+  }
+
+  if (errors.length > 0) return { plant: null, error: errors[0] };
+  return { plant, error: null };
+}
+
+function parseImportFile(fileBase64, fileName) {
+  const buffer = Buffer.from(fileBase64, 'base64');
+  const ext = (fileName || '').split('.').pop().toLowerCase();
+
+  if (ext === 'csv') {
+    const { parse } = require('csv-parse/sync');
+    const records = parse(buffer.toString('utf8'), {
+      columns: true,
+      skip_empty_lines: true,
+      trim: true,
+    });
+    return { headers: records.length > 0 ? Object.keys(records[0]) : [], rows: records };
+  }
+
+  if (ext === 'xlsx' || ext === 'xls') {
+    const XLSX = require('xlsx');
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+    return { headers, rows };
+  }
+
+  throw new Error('Unsupported file type — only .csv and .xlsx/.xls are accepted');
+}
+
+// POST /import/plants — bulk import from CSV or XLSX (home_pro+)
+app.post('/import/plants', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const { fileBase64, fileName } = req.body || {};
+    if (!fileBase64) return res.status(400).json({ error: 'fileBase64 is required' });
+    if (!fileName) return res.status(400).json({ error: 'fileName is required' });
+
+    let parsed;
+    try {
+      parsed = parseImportFile(fileBase64, fileName);
+    } catch (err) {
+      return res.status(400).json({ error: err.message });
+    }
+
+    const { headers, rows } = parsed;
+    if (rows.length === 0) return res.status(400).json({ error: 'File contains no data rows' });
+
+    const headerMap = fuzzyMapHeaders(headers);
+    if (!headerMap.name) {
+      return res.status(400).json({ error: 'Could not detect a "name" column — check column headers match the template' });
+    }
+
+    const now = new Date().toISOString();
+    const plantsRef = userPlants(req.userId);
+    const errors = [];
+    let imported = 0;
+    let skipped = 0;
+
+    for (let i = 0; i < rows.length; i++) {
+      const { plant, error } = validateAndMapRow(rows[i], headerMap, i);
+      if (error) {
+        errors.push(error);
+        skipped++;
+        continue;
+      }
+      const data = { ...plant, shortCode: generateShortCode(), createdAt: now, updatedAt: now };
+      await plantsRef.add(data);
+      imported++;
+    }
+
+    res.status(200).json({ imported, skipped, errors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /import/plants/template — download CSV template
+app.get('/import/plants/template', requireUser, (req, res) => {
+  const headers = ['name', 'species', 'room', 'floor', 'health', 'frequencyDays', 'potSize', 'soilType', 'notes'];
+  const example = ['Monstera', 'Monstera deliciosa', 'Living Room', 'Ground Floor', 'Good', '7', '20cm', 'Well-draining', 'Near the window'];
+  const csv = `${headers.join(',')}\n${example.join(',')}`;
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="plant-import-template.csv"');
+  res.status(200).send(csv);
+});
+
 functions.http('plantsApi', app);

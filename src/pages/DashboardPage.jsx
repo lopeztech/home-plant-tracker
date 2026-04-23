@@ -4,6 +4,7 @@ import { useLocation } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import FloorplanPanel from '../components/FloorplanPanel.jsx'
 import PlantModal from '../components/PlantModal.jsx'
+import CsvImportModal from '../components/CsvImportModal.jsx'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import ErrorAlert from '../components/ErrorAlert.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -60,6 +61,7 @@ export default function DashboardPage() {
   const [showPlantModal, setShowPlantModal] = useState(false)
   const [editingPlantId, setEditingPlantId] = useState(null)
   const [pendingPosition, setPendingPosition] = useState(null)
+  const [showImportModal, setShowImportModal] = useState(false)
 
   const editingPlant = editingPlantId ? plants.find((p) => p.id === editingPlantId) || null : null
 
@@ -186,6 +188,7 @@ export default function DashboardPage() {
             onPlantClick={handlePlantClick}
             onFloorplanClick={handleFloorplanClick}
             onAddPlant={handleAddPlant}
+            onImportPlants={() => setShowImportModal(true)}
             gnomeWaterRef={gnomeWaterRef}
             fullWidth
           />
@@ -213,6 +216,12 @@ export default function DashboardPage() {
           </div>
         )}
       </div>
+
+      <CsvImportModal
+        show={showImportModal}
+        onHide={() => setShowImportModal(false)}
+        onImported={() => { setShowImportModal(false); reloadPlants?.() }}
+      />
 
       {showPlantModal && (
         <PlantModal
