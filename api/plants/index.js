@@ -3690,6 +3690,86 @@ app.post('/import/plants', requireUser, requireTier('home_pro'), async (req, res
   }
 });
 
+// ── API key management ────────────────────────────────────────────────────────
+// Keys are stored in two places for efficient lookup:
+//   apiKeyHashes/{sha256hash}  — top-level, fast lookup by hash in requireApiKey
+//   users/{userId}/apiKeys/{docId} — user-scoped, for listing/revocation UI
+
+function userApiKeys(userId) {
+  return db.collection('users').doc(userId).collection('apiKeys');
+}
+
+function apiKeyHashesRef() {
+  return db.collection('apiKeyHashes');
+}
+
+function generateApiKey() {
+  return `pt_live_${crypto.randomBytes(24).toString('hex')}`;
+}
+
+function hashApiKey(key) {
+  return crypto.createHash('sha256').update(key).digest('hex');
+}
+
+function maskApiKey(prefix) {
+  return `${prefix}...`;
+}
+
+// Middleware: authenticate via x-plant-api-key header, resolve userId
+async function requireApiKey(req, res, next) {
+  const rawKey = req.headers['x-plant-api-key'];
+  if (!rawKey) return res.status(401).json({ error: 'Missing x-plant-api-key header' });
+
+  const hash = hashApiKey(rawKey);
+  try {
+    const hashDoc = await apiKeyHashesRef().doc(hash).get();
+    if (!hashDoc.exists || hashDoc.data().revokedAt) {
+      return res.status(401).json({ error: 'Invalid or revoked API key' });
+    }
+    req.userId = hashDoc.data().userId;
+    // Update lastUsedAt asynchronously — do not block request
+    apiKeyHashesRef().doc(hash).set({ lastUsedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+    next();
+  } catch {
+    res.status(500).json({ error: 'API key lookup failed' });
+  }
+}
+
+// Per-user public API rate limiter — 1,000 req/hour (express-rate-limit is no-op in tests)
+const publicApiLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 1000,
+  keyGenerator: (req) => req.userId || req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  validate: { trustProxy: false, xForwardedForHeader: false },
+  message: { error: 'API rate limit exceeded. Upgrade to a higher tier for more requests.' },
+});
+
+// POST /api-keys — create a new API key (max 3 active per user)
+app.post('/api-keys', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const { name = 'My API Key' } = req.body || {};
+    const keysRef = userApiKeys(req.userId);
+    const existing = await keysRef.get();
+    const active = existing.docs.filter((d) => !d.data().revokedAt);
+    if (active.length >= 3) {
+      return res.status(400).json({ error: 'Maximum of 3 active API keys allowed. Revoke an existing key first.' });
+    }
+    const plaintext = generateApiKey();
+    const keyHash = hashApiKey(plaintext);
+    const prefix = plaintext.slice(0, 12);
+    const now = new Date().toISOString();
+    const keyName = String(name).trim().slice(0, 64) || 'My API Key';
+    const docRef = await keysRef.add({ name: keyName, prefix, keyHash, revokedAt: null, createdAt: now, lastUsedAt: null });
+    // Write to top-level hash index for fast lookup
+    await apiKeyHashesRef().doc(keyHash).set({ userId: req.userId, revokedAt: null, createdAt: now });
+    res.status(201).json({ id: docRef.id, key: plaintext, name: keyName, prefix, createdAt: now });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /import/plants/template — download CSV template
 app.get('/import/plants/template', requireUser, (req, res) => {
   const headers = ['name', 'species', 'room', 'floor', 'health', 'frequencyDays', 'potSize', 'soilType', 'notes'];
@@ -3698,6 +3778,88 @@ app.get('/import/plants/template', requireUser, (req, res) => {
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="plant-import-template.csv"');
   res.status(200).send(csv);
+});
+
+// GET /api-keys — list active API keys (masked, no hash exposed)
+app.get('/api-keys', requireUser, async (req, res) => {
+  try {
+    const snap = await userApiKeys(req.userId).get();
+    const keys = snap.docs
+      .filter((d) => !d.data().revokedAt)
+      .sort((a, b) => (b.data().createdAt || '').localeCompare(a.data().createdAt || ''))
+      .map((d) => {
+        const { keyHash: _h, ...safe } = d.data();
+        return { id: d.id, ...safe, key: maskApiKey(safe.prefix) };
+      });
+    res.status(200).json({ keys });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api-keys/:id — revoke an API key
+app.delete('/api-keys/:id', requireUser, async (req, res) => {
+  try {
+    const ref = userApiKeys(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'API key not found' });
+    if (doc.data().revokedAt) return res.status(409).json({ error: 'API key already revoked' });
+    const { keyHash } = doc.data();
+    const now = new Date().toISOString();
+    await ref.set({ revokedAt: now }, { merge: true });
+    if (keyHash) await apiKeyHashesRef().doc(keyHash).set({ revokedAt: now }, { merge: true });
+    res.status(200).json({ revoked: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Public REST API v1 ────────────────────────────────────────────────────────
+// These routes accept API key auth (x-plant-api-key) and are rate-limited.
+
+app.get('/api/v1/plants', requireApiKey, publicApiLimiter, async (req, res) => {
+  try {
+    const snap = await userPlants(req.userId).orderBy('name').get();
+    const plants = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    res.status(200).json({ plants });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/v1/plants/:id', requireApiKey, publicApiLimiter, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    res.status(200).json({ id: doc.id, ...doc.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/v1/plants/:id/water', requireApiKey, publicApiLimiter, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const now = new Date().toISOString();
+    await ref.set({ lastWatered: now, updatedAt: now }, { merge: true });
+    res.status(200).json({ watered: true, lastWatered: now });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/v1/plants/:id/care-score', requireApiKey, publicApiLimiter, requireTier('home_pro'), async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const plant = { id: doc.id, ...doc.data() };
+    const score = computeCareScore(plant);
+    res.status(200).json({ id: plant.id, name: plant.name, ...score });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 functions.http('plantsApi', app);

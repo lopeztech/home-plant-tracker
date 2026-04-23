@@ -337,6 +337,21 @@ export const importApi = {
   },
 }
 
+export const apiKeysApi = {
+  async list() {
+    return request('/api-keys')
+  },
+  async create(name) {
+    return request('/api-keys', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    })
+  },
+  async revoke(id) {
+    return request(`/api-keys/${id}`, { method: 'DELETE' })
+  },
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

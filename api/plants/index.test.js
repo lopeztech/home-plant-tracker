@@ -4253,3 +4253,212 @@ describe('GET /import/plants/template', () => {
     expect(lines.length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// ── API key management ────────────────────────────────────────────────────────
+
+import { createHash, randomBytes } from 'crypto';
+
+function makeTestApiKey() {
+  const plaintext = `pt_live_${randomBytes(24).toString('hex')}`;
+  const hash = createHash('sha256').update(plaintext).digest('hex');
+  return { plaintext, hash, prefix: plaintext.slice(0, 12) };
+}
+
+const apiKeyPath = (id) => `users/${USER_SUB}/apiKeys/${id}`;
+const apiKeyHashPath = (hash) => `apiKeyHashes/${hash}`;
+
+describe('POST /api-keys', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).post('/api-keys').send({ name: 'Test' });
+    expect(res.status).toBe(401);
+  });
+
+  it('creates a new API key and returns the plaintext once', async () => {
+    const res = await request(app)
+      .post('/api-keys')
+      .set('Authorization', authHeader())
+      .send({ name: 'Home Assistant' });
+    expect(res.status).toBe(201);
+    expect(res.body.key).toMatch(/^pt_live_/);
+    expect(res.body.name).toBe('Home Assistant');
+    expect(res.body.id).toBeDefined();
+    expect(res.body.prefix).toBe(res.body.key.slice(0, 12));
+  });
+
+  it('stores the key hash in apiKeyHashes and user subcollection', async () => {
+    const res = await request(app)
+      .post('/api-keys')
+      .set('Authorization', authHeader())
+      .send({ name: 'Dashboard' });
+    expect(res.status).toBe(201);
+    const { id, key } = res.body;
+    const hash = createHash('sha256').update(key).digest('hex');
+    // hash index stored
+    expect(store[apiKeyHashPath(hash)]).toBeDefined();
+    expect(store[apiKeyHashPath(hash)].userId).toBe(USER_SUB);
+    expect(store[apiKeyHashPath(hash)].revokedAt).toBeNull();
+    // user subcollection stored
+    expect(store[apiKeyPath(id)]).toBeDefined();
+    expect(store[apiKeyPath(id)].revokedAt).toBeNull();
+  });
+
+  it('rejects when 3 active keys already exist', async () => {
+    // Pre-create 3 active keys
+    store[apiKeyPath('k1')] = { name: 'K1', prefix: 'pt_live_aaa1', keyHash: 'h1', revokedAt: null, createdAt: '2026-01-01T00:00:00Z', lastUsedAt: null };
+    store[apiKeyPath('k2')] = { name: 'K2', prefix: 'pt_live_aaa2', keyHash: 'h2', revokedAt: null, createdAt: '2026-01-02T00:00:00Z', lastUsedAt: null };
+    store[apiKeyPath('k3')] = { name: 'K3', prefix: 'pt_live_aaa3', keyHash: 'h3', revokedAt: null, createdAt: '2026-01-03T00:00:00Z', lastUsedAt: null };
+    const res = await request(app)
+      .post('/api-keys')
+      .set('Authorization', authHeader())
+      .send({ name: 'Fourth Key' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Maximum of 3/);
+  });
+
+  it('allows creating a key when previously-revoked ones exist', async () => {
+    store[apiKeyPath('k1')] = { name: 'Old', prefix: 'pt_live_bbb1', keyHash: 'hh1', revokedAt: '2026-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z', lastUsedAt: null };
+    store[apiKeyPath('k2')] = { name: 'Also Old', prefix: 'pt_live_bbb2', keyHash: 'hh2', revokedAt: '2026-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z', lastUsedAt: null };
+    store[apiKeyPath('k3')] = { name: 'Old3', prefix: 'pt_live_bbb3', keyHash: 'hh3', revokedAt: '2026-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z', lastUsedAt: null };
+    const res = await request(app)
+      .post('/api-keys')
+      .set('Authorization', authHeader())
+      .send({ name: 'Fresh Key' });
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('GET /api-keys', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/api-keys');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns empty list when no keys exist', async () => {
+    const res = await request(app).get('/api-keys').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.keys).toEqual([]);
+  });
+
+  it('lists active keys with masked values (no hash)', async () => {
+    const { hash } = makeTestApiKey();
+    store[apiKeyPath('k1')] = { name: 'Home Assistant', prefix: 'pt_live_hass', keyHash: hash, revokedAt: null, createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null };
+    store[apiKeyPath('k2')] = { name: 'Revoked', prefix: 'pt_live_rev1', keyHash: 'revoked_hash', revokedAt: '2026-04-02T00:00:00Z', createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null };
+    const res = await request(app).get('/api-keys').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.keys).toHaveLength(1);
+    expect(res.body.keys[0].name).toBe('Home Assistant');
+    expect(res.body.keys[0].key).toBe('pt_live_hass...');
+    expect(res.body.keys[0].keyHash).toBeUndefined();
+  });
+});
+
+describe('DELETE /api-keys/:id', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).delete('/api-keys/k1');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown key id', async () => {
+    const res = await request(app).delete('/api-keys/no-such-key').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 409 when key is already revoked', async () => {
+    store[apiKeyPath('k1')] = { name: 'Old', prefix: 'pt_live_xxx', keyHash: 'hhh', revokedAt: '2026-01-01T00:00:00Z', createdAt: '2026-01-01T00:00:00Z' };
+    const res = await request(app).delete('/api-keys/k1').set('Authorization', authHeader());
+    expect(res.status).toBe(409);
+  });
+
+  it('revokes an active key and marks both store entries', async () => {
+    const { hash } = makeTestApiKey();
+    store[apiKeyPath('k1')] = { name: 'Active Key', prefix: 'pt_live_act1', keyHash: hash, revokedAt: null, createdAt: '2026-04-01T00:00:00Z' };
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: null };
+    const res = await request(app).delete('/api-keys/k1').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.revoked).toBe(true);
+    expect(store[apiKeyPath('k1')].revokedAt).not.toBeNull();
+    expect(store[apiKeyHashPath(hash)].revokedAt).not.toBeNull();
+  });
+});
+
+describe('requireApiKey middleware (public API routes)', () => {
+  it('returns 401 when x-plant-api-key header is missing', async () => {
+    const res = await request(app).get('/api/v1/plants');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/Missing x-plant-api-key/);
+  });
+
+  it('returns 401 for an unknown key hash', async () => {
+    const res = await request(app).get('/api/v1/plants').set('x-plant-api-key', 'pt_live_invalid');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toMatch(/Invalid or revoked/);
+  });
+
+  it('returns 401 for a revoked key', async () => {
+    const { plaintext, hash } = makeTestApiKey();
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: '2026-04-01T00:00:00Z' };
+    const res = await request(app).get('/api/v1/plants').set('x-plant-api-key', plaintext);
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /api/v1/plants', () => {
+  it('returns plants for a valid API key', async () => {
+    const { plaintext, hash } = makeTestApiKey();
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: null };
+    store[plantPath('p1')] = { name: 'Fern', species: 'Nephrolepis' };
+    const res = await request(app).get('/api/v1/plants').set('x-plant-api-key', plaintext);
+    expect(res.status).toBe(200);
+    expect(res.body.plants).toHaveLength(1);
+    expect(res.body.plants[0].name).toBe('Fern');
+  });
+});
+
+describe('GET /api/v1/plants/:id', () => {
+  it('returns 404 for unknown plant', async () => {
+    const { plaintext, hash } = makeTestApiKey();
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: null };
+    const res = await request(app).get('/api/v1/plants/nope').set('x-plant-api-key', plaintext);
+    expect(res.status).toBe(404);
+  });
+
+  it('returns the plant data for a valid key and plant', async () => {
+    const { plaintext, hash } = makeTestApiKey();
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: null };
+    store[plantPath('p1')] = { name: 'Monstera', species: 'Monstera deliciosa', health: 'Good' };
+    const res = await request(app).get('/api/v1/plants/p1').set('x-plant-api-key', plaintext);
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Monstera');
+  });
+});
+
+describe('POST /api/v1/plants/:id/water', () => {
+  it('returns 404 for unknown plant', async () => {
+    const { plaintext, hash } = makeTestApiKey();
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: null };
+    const res = await request(app).post('/api/v1/plants/nope/water').set('x-plant-api-key', plaintext);
+    expect(res.status).toBe(404);
+  });
+
+  it('records lastWatered timestamp on the plant', async () => {
+    const { plaintext, hash } = makeTestApiKey();
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: null };
+    store[plantPath('p1')] = { name: 'Fern', lastWatered: null };
+    const res = await request(app).post('/api/v1/plants/p1/water').set('x-plant-api-key', plaintext);
+    expect(res.status).toBe(200);
+    expect(res.body.watered).toBe(true);
+    expect(res.body.lastWatered).toBeTruthy();
+    expect(store[plantPath('p1')].lastWatered).toBeTruthy();
+  });
+});
+
+describe('GET /api/v1/plants/:id/care-score', () => {
+  it('returns care score for a valid plant', async () => {
+    const { plaintext, hash } = makeTestApiKey();
+    store[apiKeyHashPath(hash)] = { userId: USER_SUB, revokedAt: null };
+    store[plantPath('p1')] = { name: 'Monstera', species: 'Monstera deliciosa', health: 'Good', frequencyDays: 7, lastWatered: new Date().toISOString() };
+    const res = await request(app).get('/api/v1/plants/p1/care-score').set('x-plant-api-key', plaintext);
+    expect(res.status).toBe(200);
+    expect(res.body.score).toBeDefined();
+  });
+});
