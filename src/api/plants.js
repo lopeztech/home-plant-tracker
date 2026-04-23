@@ -303,6 +303,40 @@ export const exportApi = {
   },
 }
 
+export const importApi = {
+  async importPlants(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = async (e) => {
+        try {
+          const base64 = e.target.result.split(',')[1]
+          const result = await request('/import/plants', {
+            method: 'POST',
+            body: JSON.stringify({ fileBase64: base64, fileName: file.name }),
+          })
+          resolve(result)
+        } catch (err) {
+          reject(err)
+        }
+      }
+      reader.onerror = () => reject(new Error('Failed to read file'))
+      reader.readAsDataURL(file)
+    })
+  },
+  downloadTemplate() {
+    const headers = ['name', 'species', 'room', 'floor', 'health', 'frequencyDays', 'potSize', 'soilType', 'notes']
+    const example = ['Monstera', 'Monstera deliciosa', 'Living Room', 'Ground Floor', 'Good', '7', '20cm', 'Well-draining', 'Near the window']
+    const csv = `${headers.join(',')}\n${example.join(',')}`
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'plant-import-template.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

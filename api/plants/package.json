@@ -20,6 +20,8 @@
     "@google-cloud/storage": "^7.19.0",
     "@google/generative-ai": "^0.24.1",
     "cors": "^2.8.5",
+    "csv-parse": "^6.2.1",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.3.2",
     "jsonrepair": "^3.13.3",

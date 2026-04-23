@@ -4036,3 +4036,220 @@ describe('GET /export/care-schedule', () => {
     expect(res.headers['content-disposition']).toMatch(/\.html/);
   });
 });
+
+// ── POST /import/plants ───────────────────────────────────────────────────────
+
+function csvToBase64(csvString) {
+  return Buffer.from(csvString).toString('base64');
+}
+
+describe('POST /import/plants', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).post('/import/plants').send({ fileBase64: 'abc', fileName: 'plants.csv' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 when fileBase64 is missing', async () => {
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileName: 'plants.csv' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/fileBase64/);
+  });
+
+  it('returns 400 when fileName is missing', async () => {
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64('name\nMonstera') });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/fileName/);
+  });
+
+  it('returns 400 for unsupported file type', async () => {
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64('name\nMonstera'), fileName: 'plants.pdf' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/Unsupported/i);
+  });
+
+  it('returns 400 when CSV has no data rows', async () => {
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64('name,species'), fileName: 'plants.csv' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/no data/i);
+  });
+
+  it('returns 400 when CSV has no detectable name column', async () => {
+    const csv = 'color,size\nGreen,Large';
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/name.*column/i);
+  });
+
+  it('imports a valid CSV and returns imported count', async () => {
+    const csv = [
+      'name,species,room,health,frequencyDays',
+      'Monstera,Monstera deliciosa,Living Room,Good,7',
+      'Fern,Nephrolepis,Bathroom,Excellent,5',
+    ].join('\n');
+
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.imported).toBe(2);
+    expect(res.body.skipped).toBe(0);
+    expect(res.body.errors).toHaveLength(0);
+
+    // Verify plants were created in Firestore
+    const userPrefix = `users/${USER_SUB}/plants/`;
+    const created = Object.entries(store)
+      .filter(([k]) => k.startsWith(userPrefix))
+      .map(([, v]) => v);
+    expect(created).toHaveLength(2);
+    expect(created.map(p => p.name)).toEqual(expect.arrayContaining(['Monstera', 'Fern']));
+  });
+
+  it('skips rows with missing name and reports errors', async () => {
+    const csv = [
+      'name,species',
+      'Monstera,Monstera deliciosa',
+      ',Sansevieria',
+      'Pothos,Epipremnum',
+    ].join('\n');
+
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.imported).toBe(2);
+    expect(res.body.skipped).toBe(1);
+    expect(res.body.errors).toHaveLength(1);
+    expect(res.body.errors[0].row).toBe(2);
+    expect(res.body.errors[0].reason).toMatch(/name/i);
+  });
+
+  it('reports error for invalid health value but imports valid rows', async () => {
+    const csv = [
+      'name,health',
+      'Monstera,Good',
+      'Fern,Amazing',
+    ].join('\n');
+
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.imported).toBe(1);
+    expect(res.body.skipped).toBe(1);
+    expect(res.body.errors[0].reason).toMatch(/health/i);
+  });
+
+  it('reports error for invalid frequencyDays', async () => {
+    const csv = [
+      'name,frequencyDays',
+      'Monstera,notanumber',
+    ].join('\n');
+
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.skipped).toBe(1);
+    expect(res.body.errors[0].reason).toMatch(/frequencyDays/i);
+  });
+
+  it('fuzzy-maps column headers to known fields', async () => {
+    const csv = [
+      'Plant Name,Type,Room,Water Every',
+      'Snake Plant,Sansevieria,Bedroom,14',
+    ].join('\n');
+
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.imported).toBe(1);
+
+    const userPrefix = `users/${USER_SUB}/plants/`;
+    const plants = Object.entries(store)
+      .filter(([k]) => k.startsWith(userPrefix))
+      .map(([, v]) => v);
+    expect(plants[0].name).toBe('Snake Plant');
+    expect(plants[0].species).toBe('Sansevieria');
+    expect(plants[0].frequencyDays).toBe(14);
+  });
+
+  it('normalises health value capitalisation', async () => {
+    const csv = [
+      'name,health',
+      'Monstera,excellent',
+      'Fern,GOOD',
+    ].join('\n');
+
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.imported).toBe(2);
+    const userPrefix = `users/${USER_SUB}/plants/`;
+    const plants = Object.entries(store)
+      .filter(([k]) => k.startsWith(userPrefix))
+      .map(([, v]) => v);
+    const healthValues = plants.map(p => p.health);
+    expect(healthValues).toEqual(expect.arrayContaining(['Excellent', 'Good']));
+  });
+
+  it('assigns shortCode and timestamps to imported plants', async () => {
+    const csv = 'name\nMonstera';
+    const res = await request(app)
+      .post('/import/plants').set('Authorization', authHeader())
+      .send({ fileBase64: csvToBase64(csv), fileName: 'plants.csv' });
+
+    expect(res.status).toBe(200);
+    const userPrefix = `users/${USER_SUB}/plants/`;
+    const plant = Object.values(
+      Object.fromEntries(Object.entries(store).filter(([k]) => k.startsWith(userPrefix)))
+    )[0];
+    expect(plant.shortCode).toBeTruthy();
+    expect(plant.createdAt).toBeTruthy();
+    expect(plant.updatedAt).toBeTruthy();
+  });
+});
+
+// ── GET /import/plants/template ───────────────────────────────────────────────
+
+describe('GET /import/plants/template', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/import/plants/template');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns a CSV with all expected column headers', async () => {
+    const res = await request(app)
+      .get('/import/plants/template').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/csv/);
+    expect(res.headers['content-disposition']).toMatch(/attachment/);
+    const lines = res.text.split('\n');
+    const headers = lines[0].split(',');
+    expect(headers).toEqual(expect.arrayContaining(['name', 'species', 'frequencyDays', 'health']));
+  });
+
+  it('includes an example row', async () => {
+    const res = await request(app)
+      .get('/import/plants/template').set('Authorization', authHeader());
+    const lines = res.text.split('\n').filter(Boolean);
+    expect(lines.length).toBeGreaterThanOrEqual(2);
+  });
+});

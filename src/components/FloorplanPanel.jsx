@@ -22,7 +22,7 @@ const VIEW_MODE_META = {
   list:   { label: 'List', icon: 'list' },
 }
 
-export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPlant, gnomeWaterRef, fullWidth = false }) {
+export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPlant, onImportPlants, gnomeWaterRef, fullWidth = false }) {
   const {
     plants, floors, activeFloorId, setActiveFloorId,
     weather, handleFloorRoomsChange,
@@ -231,6 +231,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
           <PlantListPanel
             onPlantClick={onPlantClick}
             onAddPlant={onAddPlant}
+            onImportPlants={onImportPlants}
             gnomeWaterRef={gnomeWaterRef}
           />
         </div>

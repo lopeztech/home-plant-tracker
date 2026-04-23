@@ -88,7 +88,7 @@ const ITEM_HEIGHT = 76
 const VIRTUALISE_THRESHOLD = 40
 const LIST_HEIGHT = 500
 
-export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef }) {
+export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlants, gnomeWaterRef }) {
   const plantCtx = usePlantContext()
   const { plants, floors, activeFloorId, weather, handleWaterPlant, handleBatchWater, plantsLoading,
     plantsHasMore, plantsLoadingMore, loadMorePlants } = plantCtx
@@ -242,7 +242,13 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, gnomeWaterRef
           {floorPlants.length > 0 && <Badge bg="primary" className="ms-2">{floorPlants.length}</Badge>}
         </span>
         {floorPlants.length > 0 && (
-          <div className="panel-toolbar ms-auto">
+          <div className="panel-toolbar ms-auto d-flex gap-2">
+            {onImportPlants && (
+              <Button variant="outline-secondary" size="sm" onClick={onImportPlants} data-testid="import-plants-btn">
+                <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#upload"></use></svg>
+                Import
+              </Button>
+            )}
             <Button variant="primary" size="sm" className="waves-effect waves-themed" onClick={onAddPlant}>
               <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
               Add Plant
