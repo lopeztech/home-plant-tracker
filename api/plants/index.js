@@ -3604,7 +3604,7 @@ function validateAndMapRow(rawRow, headerMap, rowIndex) {
   return { plant, error: null };
 }
 
-function parseImportFile(fileBase64, fileName) {
+async function parseImportFile(fileBase64, fileName) {
   const buffer = Buffer.from(fileBase64, 'base64');
   const ext = (fileName || '').split('.').pop().toLowerCase();
 
@@ -3619,11 +3619,25 @@ function parseImportFile(fileBase64, fileName) {
   }
 
   if (ext === 'xlsx' || ext === 'xls') {
-    const XLSX = require('xlsx');
-    const wb = XLSX.read(buffer, { type: 'buffer' });
-    const ws = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
-    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+    const ExcelJS = require('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(buffer);
+    const worksheet = workbook.worksheets[0];
+    if (!worksheet) return { headers: [], rows: [] };
+    const headers = [];
+    worksheet.getRow(1).eachCell({ includeEmpty: false }, (cell) => {
+      headers.push(String(cell.value ?? '').trim());
+    });
+    const rows = [];
+    worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const rowData = {};
+      headers.forEach((header, i) => {
+        const cell = row.getCell(i + 1);
+        rowData[header] = String(cell.value ?? '').trim();
+      });
+      rows.push(rowData);
+    });
     return { headers, rows };
   }
 
@@ -3639,7 +3653,7 @@ app.post('/import/plants', requireUser, requireTier('home_pro'), async (req, res
 
     let parsed;
     try {
-      parsed = parseImportFile(fileBase64, fileName);
+      parsed = await parseImportFile(fileBase64, fileName);
     } catch (err) {
       return res.status(400).json({ error: err.message });
     }
