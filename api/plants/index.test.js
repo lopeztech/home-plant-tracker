@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -2583,6 +2583,42 @@ describe('Billing — requireTier on /plants/:id/health-prediction', () => {
     expect(res.body.requiredTier).toBe('home_pro');
     expect(res.body.currentTier).toBe('free');
     delete process.env.BILLING_ENABLED;
+  });
+});
+
+describe('Billing — requireTier on ML insight routes (#161)', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[plantPath('p1')] = { name: 'Fern', frequencyDays: 7, lastWatered: new Date().toISOString() };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  const mlRoutes = [
+    '/plants/p1/watering-pattern',
+    '/plants/p1/watering-recommendation',
+    '/plants/p1/seasonal-adjustment',
+    '/plants/p1/anomaly',
+  ];
+
+  for (const path of mlRoutes) {
+    it(`GET ${path} 403s free-tier with upgrade_required`, async () => {
+      const res = await request(app).get(path).set('Authorization', authHeader());
+      expect(res.status).toBe(403);
+      expect(res.body.error).toBe('upgrade_required');
+      expect(res.body.requiredTier).toBe('home_pro');
+    });
+
+    it(`GET ${path} allows a home_pro user past the gate`, async () => {
+      store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+      const res = await request(app).get(path).set('Authorization', authHeader());
+      expect(res.status).not.toBe(403);
+    });
+  }
+
+  it('no-ops the gate entirely when BILLING_ENABLED is unset', async () => {
+    delete process.env.BILLING_ENABLED;
+    const res = await request(app).get('/plants/p1/watering-pattern').set('Authorization', authHeader());
+    expect(res.status).not.toBe(403);
   });
 });
 

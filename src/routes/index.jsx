@@ -20,8 +20,6 @@ const ScanPage = lazy(() => import('../pages/ScanPage.jsx'))
 const PropagationPage = lazy(() => import('../pages/PropagationPage.jsx'))
 const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
 
-const mlInsightsEnabled = import.meta.env.VITE_ML_INSIGHTS_ENABLED === 'true'
-
 export const routes = [
   { path: '/privacy', element: <Suspense fallback={null}><PrivacyPage /></Suspense> },
   { path: '/terms', element: <Suspense fallback={null}><TermsPage /></Suspense> },
@@ -43,7 +41,7 @@ export const routes = [
       { path: 'analytics', element: <AnalyticsPage /> },
       { path: 'calendar', element: <CalendarPage /> },
       { path: 'forecast', element: <ForecastPage /> },
-      ...(mlInsightsEnabled ? [{ path: 'insights', element: <InsightsPage /> }] : []),
+      { path: 'insights', element: <InsightsPage /> },
       { path: 'bulk-upload', element: <BulkUploadPage /> },
       { path: 'settings', element: <Navigate to="/settings/property" replace /> },
       { path: 'settings/billing', element: <BillingPage /> },

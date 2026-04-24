@@ -2447,7 +2447,7 @@ function isCacheValid(cache, key) {
   return age < ML_CACHE_TTL_MS;
 }
 
-app.get('/plants/:id/watering-pattern', requireUser, async (req, res) => {
+app.get('/plants/:id/watering-pattern', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
@@ -2503,7 +2503,7 @@ app.get('/plants/:id/watering-pattern', requireUser, async (req, res) => {
 
 const RECOMMENDATION_CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
-app.get('/plants/:id/watering-recommendation', requireUser, async (req, res) => {
+app.get('/plants/:id/watering-recommendation', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
@@ -2773,7 +2773,7 @@ function computeSeasonalAdjustment(plant, hemisphere) {
   };
 }
 
-app.get('/plants/:id/seasonal-adjustment', requireUser, async (req, res) => {
+app.get('/plants/:id/seasonal-adjustment', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
@@ -3206,7 +3206,7 @@ app.post('/ml/anomaly-scan', async (req, res) => {
 });
 
 // User-facing anomaly status
-app.get('/plants/:id/anomaly', requireUser, async (req, res) => {
+app.get('/plants/:id/anomaly', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
     const doc = await userPlants(req.userId).doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
