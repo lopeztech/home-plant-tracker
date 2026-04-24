@@ -116,7 +116,7 @@ export default function InsightsPage() {
     return (
       <div className="content-wrapper">
         <h1 className="subheader-title mb-4">ML Insights</h1>
-        <div className="panel panel-icon">
+        <div className="panel panel-icon mb-4">
           <div className="panel-container"><div className="panel-content">
             <EmptyState
               icon="bar-chart-2"
@@ -135,13 +135,53 @@ export default function InsightsPage() {
             </div>
           </div></div>
         </div>
+
+        {/* Preview of what Insights will show once data is available */}
+        <p className="text-muted fs-sm mb-3 fw-500">Preview — this is what your insights dashboard will look like:</p>
+        <div style={{ opacity: 0.35, pointerEvents: 'none', userSelect: 'none' }} aria-hidden="true">
+          <Row className="mb-4">
+            {[
+              { label: 'Collection Health', value: '82', sub: '5 plants' },
+              { label: 'At Risk', value: '1 plant', sub: 'needs attention' },
+              { label: 'Watering Pattern', value: 'Optimal', sub: '4 of 5 on track' },
+            ].map((card) => (
+              <Col md={4} key={card.label} className="mb-3">
+                <Card className="h-100">
+                  <Card.Body className="text-center">
+                    <h6 className="text-muted mb-2">{card.label}</h6>
+                    <div className="display-4 fw-bold text-success">{card.value}</div>
+                    <small className="text-muted">{card.sub}</small>
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+          <Card className="mb-3">
+            <Card.Body className="d-flex align-items-center justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <Badge style={{ backgroundColor: GRADE_COLORS['A'], fontSize: '1.1rem', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>A</Badge>
+                <div><strong>Monstera deliciosa</strong><small className="text-muted ms-2">Monstera</small></div>
+              </div>
+              <span className="fw-bold">91</span>
+            </Card.Body>
+          </Card>
+          <Card>
+            <Card.Body className="d-flex align-items-center justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <Badge style={{ backgroundColor: GRADE_COLORS['B'], fontSize: '1.1rem', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>B</Badge>
+                <div><strong>Snake Plant</strong><small className="text-muted ms-2">Sansevieria</small></div>
+              </div>
+              <span className="fw-bold">74</span>
+            </Card.Body>
+          </Card>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="p-4">
-      <h2 className="mb-4">ML Insights</h2>
+    <div className="content-wrapper">
+      <h1 className="subheader-title mb-4">ML Insights</h1>
 
       <UpgradePrompt id="insights-lock" feature="home_pro" variant="warning">
         Full ML Insights are a Home Pro feature. Free-tier users see basic per-plant care scores but not aggregate predictions, anomaly detection, or watering-pattern analysis.

@@ -1,10 +1,17 @@
 /* ── Plant Tracker app-specific styles ────────────────────────────────── */
 
 /* Topbar is hidden on desktop (d-md-none), so collapse its reserved
-   grid row to avoid blank whitespace above the sidebar/content. */
+   grid row to avoid blank whitespace above the sidebar/content.
+   Use a definite height (100vh) so 1fr resolves correctly and the sidebar
+   always fills the full viewport height. */
 @media (min-width: 768px) {
   .app-wrap {
+    height: 100vh;
     grid-template-rows: 0 1fr;
+  }
+
+  .app-body {
+    overflow-y: auto;
   }
 }
 
@@ -23,6 +30,17 @@
 
 .set-nav-dark .app-sidebar .nav-menu li a:hover,
 .set-nav-dark .app-sidebar .nav-menu li.active a {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Mirror dark-nav colours on sidebar <button> items (Sign Out, Help, etc.)
+   so they look identical to the NavLink items above them. */
+.set-nav-dark .app-sidebar .nav-menu li .nav-link-btn {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+
+.set-nav-dark .app-sidebar .nav-menu li .nav-link-btn:hover {
   color: #fff !important;
   background: rgba(255, 255, 255, 0.1) !important;
 }

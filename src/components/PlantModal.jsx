@@ -841,7 +841,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
   return (
     <>
-    <Modal show onHide={handleClose} size="lg" centered scrollable>
+    <Modal show onHide={handleClose} size="xl" centered scrollable>
       <Modal.Header closeButton className="border-bottom">
         <Modal.Title className="d-flex align-items-center gap-2 fs-6">
           <svg className="sa-icon text-primary"><use href="/icons/sprite.svg#feather"></use></svg>

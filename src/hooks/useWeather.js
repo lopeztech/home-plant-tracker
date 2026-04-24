@@ -182,7 +182,14 @@ export function useWeather(tempUnit = 'celsius') {
       () => {
         if (!cancelled) {
           setLocationDenied(true)
-          setLoading(false)
+          // Fall back to the manually-saved location from Settings so the
+          // Forecast page loads even when browser geolocation is denied.
+          const saved = loadSavedLocation()
+          if (saved?.lat != null && saved?.lon != null) {
+            fetchWeather(saved.lat, saved.lon)
+          } else {
+            setLoading(false)
+          }
         }
       },
       { timeout: 8000 }
