@@ -169,6 +169,32 @@ export const analyseApi = {
       body: JSON.stringify({ imageBase64: data, mimeType: file.type }),
     })
   },
+  async identify(files) {
+    const images = await Promise.all(
+      files.slice(0, 3).map(async (file) => {
+        const base64 = await fileToBase64(file)
+        const [, data] = base64.split(',')
+        return { imageBase64: data, mimeType: file.type }
+      }),
+    )
+    return request('/plants/identify', { method: 'POST', body: JSON.stringify({ images }) })
+  },
+}
+
+export const dormancyApi = {
+  enter: (plantId, notes) =>
+    request(`/plants/${plantId}/dormancy/enter`, { method: 'POST', body: JSON.stringify({ notes }) }),
+  exit: (plantId, notes) =>
+    request(`/plants/${plantId}/dormancy/exit`, { method: 'POST', body: JSON.stringify({ notes }) }),
+}
+
+export const portalApi = {
+  generate: (label) =>
+    request('/portal/generate', { method: 'POST', body: JSON.stringify({ label }) }),
+  getData: (token) =>
+    fetch(`${import.meta.env.VITE_API_BASE_URL}/portal/${encodeURIComponent(token)}`, {
+      headers: { 'x-api-key': import.meta.env.VITE_API_KEY || '' },
+    }).then((r) => r.json()),
 }
 
 export const recommendApi = {

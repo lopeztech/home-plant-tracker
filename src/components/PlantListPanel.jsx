@@ -1,6 +1,6 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { FixedSizeList } from 'react-window'
-import { Button, FormControl, InputGroup, Badge, ListGroup, Form, Spinner, ProgressBar } from 'react-bootstrap'
+import { Button, Badge, ListGroup, Spinner, ProgressBar, ButtonGroup } from 'react-bootstrap'
 import { motion } from 'framer-motion'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { plantsApi, recommendApi } from '../api/plants.js'
@@ -12,6 +12,20 @@ import { friendlyErrorMessage } from '../utils/errorMessages.js'
 import EmptyState from './EmptyState.jsx'
 import { SkeletonPlantCard } from './Skeleton.jsx'
 import { DURATION, EASE, STAGGER_DELAY } from '../motion/tokens.js'
+import FilterBar from './FilterBar.jsx'
+
+const VIEW_STORAGE_KEY = 'plantListViewMode'
+
+function useViewMode() {
+  const [viewMode, setViewModeState] = useState(() => {
+    try { return localStorage.getItem(VIEW_STORAGE_KEY) || 'card' } catch { return 'card' }
+  })
+  const setViewMode = useCallback((mode) => {
+    setViewModeState(mode)
+    try { localStorage.setItem(VIEW_STORAGE_KEY, mode) } catch {}
+  }, [])
+  return [viewMode, setViewMode]
+}
 
 const RECOMMENDATION_HISTORY_LIMIT = 20
 const BATCH_CONCURRENCY = 3
@@ -84,6 +98,42 @@ function PlantCard({ plant, onClick, onWater, weather, floors, index = 0 }) {
   )
 }
 
+function PlantListRow({ plant, onClick, onWater, weather, floors, index = 0 }) {
+  const status = getWateringStatus(plant, weather, floors)
+  const { daysUntil, color, label, skippedRain, dormant } = status
+  return (
+    <div
+      className="d-flex align-items-center gap-2 px-3 py-2 border-bottom plant-list-row"
+      style={{ cursor: 'pointer', borderLeft: `3px solid ${color}` }}
+      onClick={() => onClick(plant)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onClick(plant)}
+    >
+      <PlantIcon plant={plant} size={28} color={color} />
+      <span className="fw-500 text-truncate flex-grow-1" style={{ minWidth: 0 }}>{plant.name}</span>
+      {plant.species && <small className="text-muted text-truncate d-none d-md-block" style={{ maxWidth: 140 }}>{plant.species}</small>}
+      {plant.room && <small className="text-muted text-truncate d-none d-lg-block" style={{ maxWidth: 120 }}>{plant.room}</small>}
+      {plant.health && (
+        <Badge bg={plant.health === 'Excellent' || plant.health === 'Good' ? 'success' : plant.health === 'Fair' ? 'warning' : 'danger'} className="fs-nano">
+          {plant.health}
+        </Badge>
+      )}
+      <small className="fw-500 flex-shrink-0" style={{ color }}>{dormant ? '💤' : label}</small>
+      {onWater && !dormant && (
+        <button
+          type="button"
+          className="flex-shrink-0 p-1 text-muted btn-plant-water"
+          onClick={(e) => { e.stopPropagation(); onWater(plant.id) }}
+          aria-label={`Water ${plant.name}`}
+        >
+          <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet" /></svg>
+        </button>
+      )}
+    </div>
+  )
+}
+
 const ITEM_HEIGHT = 76
 const VIRTUALISE_THRESHOLD = 40
 const LIST_HEIGHT = 500
@@ -94,8 +144,10 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlant
     plantsHasMore, plantsLoadingMore, loadMorePlants } = plantCtx
   const location = plantCtx.location || null
   const tempUnitCode = plantCtx.tempUnit?.unit || null
-  const [searchTerm, setSearchTerm] = useState('')
-  const [roomFilter, setRoomFilter] = useState(null)
+  const [viewMode, setViewMode] = useViewMode()
+  const [filters, setFilters] = useState({ search: '', room: '', health: '', overdue: false })
+  const searchTerm = filters.search
+  const roomFilter = filters.room || null
   const [gnomeActive, setGnomeActive] = useState(false)
   const [recalculating, setRecalculating] = useState(false)
   const [recalcResult, setRecalcResult] = useState(null)
@@ -218,13 +270,18 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlant
 
   const filteredPlants = useMemo(() => {
     let result = sortedPlants
-    if (roomFilter) result = result.filter((p) => p.room === roomFilter)
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase()
+    if (filters.room) result = result.filter((p) => p.room === filters.room)
+    if (filters.search.trim()) {
+      const q = filters.search.toLowerCase()
       result = result.filter((p) => p.name?.toLowerCase().includes(q) || p.species?.toLowerCase().includes(q))
     }
+    if (filters.health) result = result.filter((p) => p.health === filters.health)
+    if (filters.overdue) result = result.filter((p) => {
+      const s = getWateringStatus(p, weather, floors)
+      return !s.dormant && s.daysUntil < 0
+    })
     return result
-  }, [sortedPlants, roomFilter, searchTerm])
+  }, [sortedPlants, filters, weather, floors])
 
   const counts = useMemo(() => {
     const overdue = filteredPlants.filter((p) => getWateringStatus(p, weather, floors).daysUntil < 0).length
@@ -242,7 +299,26 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlant
           {floorPlants.length > 0 && <Badge bg="primary" className="ms-2">{floorPlants.length}</Badge>}
         </span>
         {floorPlants.length > 0 && (
-          <div className="panel-toolbar ms-auto d-flex gap-2">
+          <div className="panel-toolbar ms-auto d-flex gap-2 align-items-center">
+            {/* View mode toggle */}
+            <ButtonGroup size="sm" aria-label="View mode">
+              <Button
+                variant={viewMode === 'card' ? 'primary' : 'outline-secondary'}
+                onClick={() => setViewMode('card')}
+                title="Card view"
+                aria-pressed={viewMode === 'card'}
+              >
+                <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#grid" /></svg>
+              </Button>
+              <Button
+                variant={viewMode === 'list' ? 'primary' : 'outline-secondary'}
+                onClick={() => setViewMode('list')}
+                title="List view"
+                aria-pressed={viewMode === 'list'}
+              >
+                <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#list" /></svg>
+              </Button>
+            </ButtonGroup>
             {onImportPlants && (
               <Button variant="outline-secondary" size="sm" onClick={onImportPlants} data-testid="import-plants-btn">
                 <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#upload"></use></svg>
@@ -344,32 +420,15 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlant
             </div>
           )}
 
-          {/* Search + room filter */}
+          {/* Unified filter bar */}
           {floorPlants.length > 0 && (
             <div className="px-3 pb-2">
-              <InputGroup size="sm">
-                <InputGroup.Text>
-                  <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#search"></use></svg>
-                </InputGroup.Text>
-                <FormControl
-                  placeholder="Search plants..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </InputGroup>
-              {rooms.length > 1 && (
-                <Form.Select
-                  size="sm"
-                  className="mt-2"
-                  value={roomFilter || ''}
-                  onChange={(e) => setRoomFilter(e.target.value || null)}
-                >
-                  <option value="">All zones ({rooms.length})</option>
-                  {rooms.map((room) => (
-                    <option key={room} value={room}>{room}</option>
-                  ))}
-                </Form.Select>
-              )}
+              <FilterBar
+                filters={filters}
+                onChange={(patch) => setFilters((prev) => ({ ...prev, ...patch }))}
+                rooms={rooms}
+                resultCount={filteredPlants.length}
+              />
             </div>
           )}
 
@@ -392,8 +451,22 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlant
               ) : (
                 <div className="text-center py-4 text-muted fs-sm">No plants match your search.</div>
               )
+            ) : viewMode === 'list' ? (
+              /* Compact list view */
+              <div style={{ maxHeight: LIST_HEIGHT, overflowY: 'auto' }}>
+                {filteredPlants.map((plant) => (
+                  <PlantListRow
+                    key={plant.id}
+                    plant={plant}
+                    onClick={onPlantClick}
+                    onWater={handleWaterPlant}
+                    weather={weather}
+                    floors={floors}
+                  />
+                ))}
+              </div>
             ) : filteredPlants.length > VIRTUALISE_THRESHOLD ? (
-              /* Virtualised rendering for large collections */
+              /* Virtualised card rendering for large collections */
               <FixedSizeList
                 height={LIST_HEIGHT}
                 itemCount={filteredPlants.length}
@@ -415,7 +488,7 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlant
                 )}
               </FixedSizeList>
             ) : (
-              /* Grouped rendering for small collections */
+              /* Grouped card rendering for small collections */
               <div style={{ maxHeight: LIST_HEIGHT, overflowY: 'auto' }}>
                 {(() => {
                   const grouped = {}

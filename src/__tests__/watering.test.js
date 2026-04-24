@@ -995,3 +995,37 @@ describe('getWateringStatus timezone', () => {
     expect(() => getWateringStatus(plant, null, [], null)).not.toThrow()
   })
 })
+
+// ── Dormancy suppression (#307) ───────────────────────────────────────────────
+
+import { isPlantDormant } from '../utils/watering.js'
+
+describe('dormancy', () => {
+  it('isPlantDormant returns true when currentPhase is dormant', () => {
+    expect(isPlantDormant({ currentPhase: 'dormant' })).toBe(true)
+  })
+
+  it('isPlantDormant returns false for active-growth phase', () => {
+    expect(isPlantDormant({ currentPhase: 'active-growth' })).toBe(false)
+  })
+
+  it('isPlantDormant returns false when currentPhase is absent', () => {
+    expect(isPlantDormant({})).toBe(false)
+  })
+
+  it('getWateringStatus returns dormant=true and suppresses overdue for dormant plants', () => {
+    const plant = { ...makePlant({ lastWatered: new Date(Date.now() - 30 * 86400000).toISOString(), frequencyDays: 7 }), currentPhase: 'dormant' }
+    const status = getWateringStatus(plant)
+    expect(status.dormant).toBe(true)
+    expect(status.label).toBe('Dormant')
+    expect(status.daysUntil).toBeNull()
+    expect(status.color).toBe('#94a3b8')
+  })
+
+  it('getWateringStatus behaves normally for active-growth plants', () => {
+    const plant = makePlant({ lastWatered: new Date(Date.now() - 1 * 86400000).toISOString(), frequencyDays: 7 })
+    const status = getWateringStatus(plant)
+    expect(status.dormant).toBeFalsy()
+    expect(status.label).not.toBe('Dormant')
+  })
+})
