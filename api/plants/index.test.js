@@ -4645,3 +4645,121 @@ describe('GET /propagation/stats', () => {
     expect(res.body.successRateBySpecies).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Soil health log routes (#304)
+// ---------------------------------------------------------------------------
+
+describe('POST /plants/:id/soil-tests', () => {
+  beforeEach(() => {
+    store[plantPath('sp1')] = { name: 'Basil', species: 'Ocimum basilicum', health: 'Good' };
+  });
+
+  it('creates a soil test with pH', async () => {
+    const res = await request(app).post('/plants/sp1/soil-tests')
+      .set('Authorization', authHeader())
+      .send({ source: 'strip', ph: 6.5, notes: 'Spring test' });
+    expect(res.status).toBe(201);
+    expect(res.body.ph).toBe(6.5);
+    expect(res.body.source).toBe('strip');
+  });
+
+  it('returns 400 for invalid source', async () => {
+    const res = await request(app).post('/plants/sp1/soil-tests')
+      .set('Authorization', authHeader())
+      .send({ source: 'invalid' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app).post('/plants/nope/soil-tests')
+      .set('Authorization', authHeader())
+      .send({ ph: 7 });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /plants/:id/soil-tests', () => {
+  it('returns empty array when no tests exist', async () => {
+    store[plantPath('sp2')] = { name: 'Fern', health: 'Good' };
+    const res = await request(app).get('/plants/sp2/soil-tests').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(0);
+  });
+});
+
+describe('DELETE /plants/:id/soil-tests/:testId', () => {
+  it('deletes an existing soil test', async () => {
+    store[plantPath('sp3')] = { name: 'Mint', health: 'Good' };
+    const soilTestPath = `users/${USER_SUB}/plants/sp3/soilTests/t1`;
+    store[soilTestPath] = { ph: 6.0, source: 'strip', recordedAt: new Date().toISOString() };
+    const res = await request(app).delete('/plants/sp3/soil-tests/t1').set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+    expect(store[soilTestPath]).toBeUndefined();
+  });
+});
+
+describe('POST /plants/:id/amendments', () => {
+  beforeEach(() => {
+    store[plantPath('am1')] = { name: 'Rose', health: 'Good' };
+  });
+
+  it('creates an amendment', async () => {
+    const res = await request(app).post('/plants/am1/amendments')
+      .set('Authorization', authHeader())
+      .send({ kind: 'lime', qty: 20, qtyUnit: 'g', notes: 'To raise pH' });
+    expect(res.status).toBe(201);
+    expect(res.body.kind).toBe('lime');
+    expect(res.body.qty).toBe(20);
+  });
+
+  it('returns 400 for missing kind', async () => {
+    const res = await request(app).post('/plants/am1/amendments')
+      .set('Authorization', authHeader())
+      .send({ qty: 10 });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for invalid kind', async () => {
+    const res = await request(app).post('/plants/am1/amendments')
+      .set('Authorization', authHeader())
+      .send({ kind: 'magic-dust' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /plants/:id/substrate-changes', () => {
+  beforeEach(() => {
+    store[plantPath('sc1')] = { name: 'Tomato', health: 'Good' };
+  });
+
+  it('creates a substrate change', async () => {
+    const res = await request(app).post('/plants/sc1/substrate-changes')
+      .set('Authorization', authHeader())
+      .send({ newSubstrate: 'Perlite/peat mix', ratio: '50/50', reason: 'repot' });
+    expect(res.status).toBe(201);
+    expect(res.body.newSubstrate).toBe('Perlite/peat mix');
+  });
+
+  it('returns 400 when newSubstrate is missing', async () => {
+    const res = await request(app).post('/plants/sc1/substrate-changes')
+      .set('Authorization', authHeader())
+      .send({ reason: 'repot' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /plants/:id/soil-insight', () => {
+  it('returns unknown verdict when no test data exists', async () => {
+    store[plantPath('si1')] = { name: 'Cactus', species: 'Cactaceae', health: 'Good' };
+    const res = await request(app).get('/plants/si1/soil-insight').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.verdict).toBe('unknown');
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app).get('/plants/nope/soil-insight').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});

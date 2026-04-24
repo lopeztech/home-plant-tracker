@@ -3,6 +3,7 @@ import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } 
 import ImageAnalyser from './ImageAnalyser.jsx'
 import PlantQRTag from './PlantQRTag.jsx'
 import WateringSheet from './WateringSheet.jsx'
+import SoilTab from './SoilTab.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, incidentApi } from '../api/plants.js'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -533,6 +534,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       { id: 'care', label: 'Care' },
       { id: 'growth', label: 'Growth' },
       { id: 'journal', label: 'Journal' },
+      ...(isEditing ? [{ id: 'soil', label: 'Soil' }] : []),
       ...(isEdiblePlant ? [{ id: 'harvest', label: 'Harvest' }] : []),
       ...(isEditing ? [{ id: 'health', label: 'Health' }] : []),
     ],
@@ -1876,6 +1878,13 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               No journal entries yet. Start recording observations, moves, and milestones for this plant.
             </p>
           )}
+        </Modal.Body>
+      )}
+
+      {/* ── Soil tab ─────────────────────────────────────────────────────── */}
+      {isEditing && activeTab === 'soil' && (
+        <Modal.Body role="tabpanel" id="plant-tabpanel-soil" aria-labelledby="plant-tab-soil">
+          <SoilTab plantId={plant?.id} />
         </Modal.Body>
       )}
 

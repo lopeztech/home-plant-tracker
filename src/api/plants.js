@@ -242,6 +242,18 @@ export const propagationApi = {
   stats: () => request('/propagation/stats'),
 }
 
+export const soilApi = {
+  listTests: (plantId) => request(`/plants/${plantId}/soil-tests`),
+  createTest: (plantId, data) => request(`/plants/${plantId}/soil-tests`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteTest: (plantId, testId) => request(`/plants/${plantId}/soil-tests/${testId}`, { method: 'DELETE' }),
+  listAmendments: (plantId) => request(`/plants/${plantId}/amendments`),
+  createAmendment: (plantId, data) => request(`/plants/${plantId}/amendments`, { method: 'POST', body: JSON.stringify(data) }),
+  deleteAmendment: (plantId, amendmentId) => request(`/plants/${plantId}/amendments/${amendmentId}`, { method: 'DELETE' }),
+  listSubstrateChanges: (plantId) => request(`/plants/${plantId}/substrate-changes`),
+  createSubstrateChange: (plantId, data) => request(`/plants/${plantId}/substrate-changes`, { method: 'POST', body: JSON.stringify(data) }),
+  insight: (plantId) => request(`/plants/${plantId}/soil-insight`),
+}
+
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),

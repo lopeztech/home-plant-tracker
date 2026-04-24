@@ -3182,6 +3182,135 @@ app.get('/plants/:id/lineage', requireUser, async (req, res) => {
   }
 });
 
+// ── Soil health log (#304) ────────────────────────────────────────────────────
+
+function userSoilTests(userId, plantId) {
+  return userPlants(userId).doc(plantId).collection('soilTests');
+}
+function userAmendments(userId, plantId) {
+  return userPlants(userId).doc(plantId).collection('amendments');
+}
+function userSubstrateChanges(userId, plantId) {
+  return userPlants(userId).doc(plantId).collection('substrateChanges');
+}
+
+const SOIL_SOURCES = new Set(['strip', 'probe', 'lab', 'visual']);
+const AMENDMENT_KINDS = new Set(['compost', 'lime', 'sulphur', 'gypsum', 'biochar', 'fertiliser', 'other']);
+const TEXTURE_OPTIONS = new Set(['sand', 'silt', 'clay', 'loam', 'mix']);
+
+// GET /plants/:id/soil-tests
+app.get('/plants/:id/soil-tests', requireUser, async (req, res) => {
+  try {
+    const plant = await userPlants(req.userId).doc(req.params.id).get();
+    if (!plant.exists) return res.status(404).json({ error: 'Plant not found' });
+    const snap = await userSoilTests(req.userId, req.params.id).get();
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt));
+    res.status(200).json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /plants/:id/soil-tests
+app.post('/plants/:id/soil-tests', requireUser, async (req, res) => {
+  try {
+    const plant = await userPlants(req.userId).doc(req.params.id).get();
+    if (!plant.exists) return res.status(404).json({ error: 'Plant not found' });
+    const { source, ph, ec, nitrogenPpm, phosphorusPpm, potassiumPpm, organicMatterPct, texture, notes } = req.body || {};
+    if (source && !SOIL_SOURCES.has(source)) {
+      return res.status(400).json({ error: `source must be one of: ${[...SOIL_SOURCES].join(', ')}` });
+    }
+    if (texture && !TEXTURE_OPTIONS.has(texture)) {
+      return res.status(400).json({ error: `texture must be one of: ${[...TEXTURE_OPTIONS].join(', ')}` });
+    }
+    const now = new Date().toISOString();
+    const data = {
+      recordedAt: now,
+      source: source || 'visual',
+      ph: ph != null ? Number(ph) : null,
+      ec: ec != null ? Number(ec) : null,
+      nitrogenPpm: nitrogenPpm != null ? Number(nitrogenPpm) : null,
+      phosphorusPpm: phosphorusPpm != null ? Number(phosphorusPpm) : null,
+      potassiumPpm: potassiumPpm != null ? Number(potassiumPpm) : null,
+      organicMatterPct: organicMatterPct != null ? Number(organicMatterPct) : null,
+      texture: texture || null,
+      notes: notes?.trim() || null,
+      createdAt: now,
+    };
+    const ref = await userSoilTests(req.userId, req.params.id).add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /plants/:id/soil-tests/:testId
+app.delete('/plants/:id/soil-tests/:testId', requireUser, async (req, res) => {
+  try {
+    const ref = userSoilTests(req.userId, req.params.id).doc(req.params.testId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Soil test not found' });
+    await ref.delete();
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /plants/:id/amendments
+app.get('/plants/:id/amendments', requireUser, async (req, res) => {
+  try {
+    const plant = await userPlants(req.userId).doc(req.params.id).get();
+    if (!plant.exists) return res.status(404).json({ error: 'Plant not found' });
+    const snap = await userAmendments(req.userId, req.params.id).get();
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => new Date(b.appliedAt) - new Date(a.appliedAt));
+    res.status(200).json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /plants/:id/amendments
+app.post('/plants/:id/amendments', requireUser, async (req, res) => {
+  try {
+    const plant = await userPlants(req.userId).doc(req.params.id).get();
+    if (!plant.exists) return res.status(404).json({ error: 'Plant not found' });
+    const { kind, qty, qtyUnit, targetMetric, notes } = req.body || {};
+    if (!kind || !AMENDMENT_KINDS.has(kind)) {
+      return res.status(400).json({ error: `kind must be one of: ${[...AMENDMENT_KINDS].join(', ')}` });
+    }
+    const now = new Date().toISOString();
+    const data = {
+      appliedAt: now,
+      kind,
+      qty: qty != null ? Number(qty) : null,
+      qtyUnit: qtyUnit?.trim() || null,
+      targetMetric: targetMetric?.trim() || null,
+      notes: notes?.trim() || null,
+      createdAt: now,
+    };
+    const ref = await userAmendments(req.userId, req.params.id).add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /plants/:id/amendments/:amendmentId
+app.delete('/plants/:id/amendments/:amendmentId', requireUser, async (req, res) => {
+  try {
+    const ref = userAmendments(req.userId, req.params.id).doc(req.params.amendmentId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Amendment not found' });
+    await ref.delete();
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /propagation/stats — success-rate analytics by species, method, month + top mothers
 app.get('/propagation/stats', requireUser, async (req, res) => {
   try {
@@ -3256,6 +3385,87 @@ app.get('/propagation/stats', requireUser, async (req, res) => {
       successRateByMonth: Object.entries(byMonth).sort(([a], [b]) => a.localeCompare(b)).map(([month, v]) => ({ month, ...v, rate: rate(v.succeeded, v.total) })),
       topMothers,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /plants/:id/substrate-changes
+app.get('/plants/:id/substrate-changes', requireUser, async (req, res) => {
+  try {
+    const plant = await userPlants(req.userId).doc(req.params.id).get();
+    if (!plant.exists) return res.status(404).json({ error: 'Plant not found' });
+    const snap = await userSubstrateChanges(req.userId, req.params.id).get();
+    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+      .sort((a, b) => new Date(b.occurredAt) - new Date(a.occurredAt));
+    res.status(200).json(items);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /plants/:id/substrate-changes
+app.post('/plants/:id/substrate-changes', requireUser, async (req, res) => {
+  try {
+    const plant = await userPlants(req.userId).doc(req.params.id).get();
+    if (!plant.exists) return res.status(404).json({ error: 'Plant not found' });
+    const { newSubstrate, ratio, reason, notes } = req.body || {};
+    if (!newSubstrate?.trim()) return res.status(400).json({ error: 'newSubstrate is required' });
+    const now = new Date().toISOString();
+    const data = {
+      occurredAt: now,
+      newSubstrate: newSubstrate.trim(),
+      ratio: ratio?.trim() || null,
+      reason: reason?.trim() || null,
+      notes: notes?.trim() || null,
+      createdAt: now,
+    };
+    const ref = await userSubstrateChanges(req.userId, req.params.id).add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /plants/:id/soil-insight — rule-based pH/NPK verdict + Gemini rationale
+app.get('/plants/:id/soil-insight', requireUser, async (req, res) => {
+  try {
+    const plantDoc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!plantDoc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const plant = plantDoc.data();
+
+    const testsSnap = await userSoilTests(req.userId, req.params.id).get();
+    const tests = testsSnap.docs.map(d => d.data()).sort((a, b) => new Date(b.recordedAt) - new Date(a.recordedAt));
+    const latest = tests[0];
+
+    if (!latest || latest.ph == null) {
+      return res.status(200).json({ verdict: 'unknown', severity: 'none', recommendedAmendment: null, rationale: 'No soil test data available yet.' });
+    }
+
+    const ph = latest.ph;
+    let verdict = 'ideal';
+    let severity = 'none';
+    let amendmentKind = null;
+
+    // Generic pH bands (7.0 is neutral; most plants prefer 6.0–7.0)
+    if (ph < 5.5) { verdict = 'low'; severity = ph < 4.5 ? 'high' : 'medium'; amendmentKind = 'lime'; }
+    else if (ph > 7.5) { verdict = 'high'; severity = ph > 8.5 ? 'high' : 'medium'; amendmentKind = 'sulphur'; }
+
+    const recommendedAmendment = amendmentKind ? { kind: amendmentKind } : null;
+
+    // Use Gemini for a human-readable rationale if available
+    let rationale = verdict === 'ideal'
+      ? `pH ${ph} is within the healthy range for most plants.`
+      : `pH ${ph} is ${verdict === 'low' ? 'too acidic' : 'too alkaline'}${plant.species ? ` for ${plant.species}` : ''}.`;
+
+    try {
+      const prompt = `A plant${plant.species ? ` (${plant.species})` : ''} has a soil pH of ${ph}. In one sentence, explain what this means for the plant and what amendment to use. Be concise and practical.`;
+      const result = await geminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
+      const text = result.response.candidates[0].content.parts[0].text.trim();
+      if (text) rationale = text;
+    } catch { /* fallback to heuristic */ }
+
+    res.status(200).json({ verdict, severity, ph, recommendedAmendment, rationale });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
