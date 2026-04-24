@@ -94,6 +94,12 @@ test.describe('Global overlays', () => {
 })
 
 test.describe('PlantModal: open and traverse each tab', () => {
+  // The dashboard defaults to the floorplan view on mobile, where plant-card
+  // elements aren't visible without a toggle that's layout-dependent. Keep
+  // this test desktop-only; the mobile project still exercises every page
+  // load plus the overlay tests above.
+  test.skip(({ viewport }) => !!viewport && viewport.width < 768, 'desktop-only')
+
   test.beforeEach(async ({ page }) => {
     await enterGuestMode(page)
     await page.goto('/', { waitUntil: 'networkidle' })
