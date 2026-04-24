@@ -11,8 +11,12 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "test:e2e": "playwright test --config e2e/playwright.config.js",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build"
+    "build-storybook": "storybook build",
+    "preflight:fast": "(cd api/plants && npm run lint && npm audit --audit-level=high) && npm audit --audit-level=high && npm run build",
+    "preflight": "npm run preflight:fast && npm test && (cd api/plants && npm test)",
+    "install-hooks": "git config core.hooksPath .githooks && echo 'Git hooks installed: .githooks/ is now active'"
   },
   "dependencies": {
     "@react-oauth/google": "^0.13.5",
@@ -41,6 +45,7 @@
     "three": "^0.184.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@storybook/addon-essentials": "^8.6.14",
     "@storybook/react-vite": "^8.6.18",
     "@storybook/test": "^8.6.15",

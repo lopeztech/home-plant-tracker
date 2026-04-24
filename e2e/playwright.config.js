@@ -1,21 +1,35 @@
 import { defineConfig } from '@playwright/test'
 
 /**
- * Playwright E2E configuration for smoke tests against
- * the deployed staging/dev environment.
+ * Playwright E2E configuration.
  *
- * Usage:
- *   E2E_BASE_URL=https://plants.lopezcloud.dev npx playwright test
+ * Default mode: builds the frontend and runs against a local `vite preview`
+ * server (http://localhost:4173). Same bundle Firebase Hosting would serve.
+ *
+ *   npm run test:e2e
+ *
+ * Point at a deployed environment by setting E2E_BASE_URL — the webServer
+ * block auto-disables when an external URL is provided:
+ *
+ *   E2E_BASE_URL=https://plants.lopezcloud.dev npm run test:e2e
  */
+
+const PORT = 4173
+const externalBaseUrl = process.env.E2E_BASE_URL
+const baseURL = externalBaseUrl || `http://localhost:${PORT}`
+
 export default defineConfig({
   testDir: '.',
   testMatch: '**/*.spec.js',
   timeout: 60_000,
-  retries: 1,
+  retries: process.env.CI ? 1 : 0,
+  forbidOnly: !!process.env.CI,
+  reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:5173',
+    baseURL,
     screenshot: 'only-on-failure',
-    trace: 'on-first-retry',
+    trace: 'retain-on-failure',
+    video: 'retain-on-failure',
   },
   projects: [
     {
@@ -23,4 +37,13 @@ export default defineConfig({
       use: { browserName: 'chromium' },
     },
   ],
+  // Only auto-start a preview server when we're testing the local build.
+  webServer: externalBaseUrl ? undefined : {
+    command: `npm run preview -- --port ${PORT} --strictPort`,
+    url: baseURL,
+    reuseExistingServer: !process.env.CI,
+    timeout: 120_000,
+    stdout: 'ignore',
+    stderr: 'pipe',
+  },
 })
