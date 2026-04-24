@@ -64,9 +64,9 @@ vi.mock('react-apexcharts', () => ({
   default: () => <div data-testid="apex-chart" />,
 }))
 
-// react-joyride uses DOM APIs not available in jsdom
+// react-joyride v3 uses DOM APIs not available in jsdom (named export, no default)
 vi.mock('react-joyride', () => ({
-  default: () => null,
+  Joyride: () => null,
   STATUS: { FINISHED: 'finished', SKIPPED: 'skipped' },
 }))
 
