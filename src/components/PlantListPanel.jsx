@@ -1,5 +1,5 @@
 import { useMemo, useState, useCallback, useEffect } from 'react'
-import { FixedSizeList } from 'react-window'
+import { List as VirtualList } from 'react-window'
 import { Button, Badge, ListGroup, Spinner, ProgressBar, ButtonGroup } from 'react-bootstrap'
 import { motion } from 'framer-motion'
 import { usePlantContext } from '../context/PlantContext.jsx'
@@ -137,6 +137,24 @@ function PlantListRow({ plant, onClick, onWater, weather, floors, index = 0 }) {
 const ITEM_HEIGHT = 76
 const VIRTUALISE_THRESHOLD = 40
 const LIST_HEIGHT = 500
+
+// Hoisted row renderer for the react-window v2 `List`. Receives `index`/`style`
+// from the virtualiser and the rest from `rowProps` on the parent List.
+function VirtualPlantRow({ index, style, plants, onPlantClick, handleWaterPlant, weather, floors }) {
+  const plant = plants[index]
+  return (
+    <div style={style}>
+      <PlantCard
+        plant={plant}
+        index={index}
+        onClick={onPlantClick}
+        onWater={handleWaterPlant}
+        weather={weather}
+        floors={floors}
+      />
+    </div>
+  )
+}
 
 export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlants, gnomeWaterRef }) {
   const plantCtx = usePlantContext()
@@ -467,26 +485,13 @@ export default function PlantListPanel({ onPlantClick, onAddPlant, onImportPlant
               </div>
             ) : filteredPlants.length > VIRTUALISE_THRESHOLD ? (
               /* Virtualised card rendering for large collections */
-              <FixedSizeList
-                height={LIST_HEIGHT}
-                itemCount={filteredPlants.length}
-                itemSize={ITEM_HEIGHT}
-                width="100%"
-                itemData={{ plants: filteredPlants, onPlantClick, handleWaterPlant, weather, floors }}
-              >
-                {({ index, style, data }) => (
-                  <div style={style}>
-                    <PlantCard
-                      plant={data.plants[index]}
-                      index={index}
-                      onClick={data.onPlantClick}
-                      onWater={data.handleWaterPlant}
-                      weather={data.weather}
-                      floors={data.floors}
-                    />
-                  </div>
-                )}
-              </FixedSizeList>
+              <VirtualList
+                rowCount={filteredPlants.length}
+                rowHeight={ITEM_HEIGHT}
+                rowComponent={VirtualPlantRow}
+                rowProps={{ plants: filteredPlants, onPlantClick, handleWaterPlant, weather, floors }}
+                style={{ height: LIST_HEIGHT }}
+              />
             ) : (
               /* Grouped card rendering for small collections */
               <div style={{ maxHeight: LIST_HEIGHT, overflowY: 'auto' }}>
