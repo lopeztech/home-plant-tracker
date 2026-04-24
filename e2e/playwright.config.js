@@ -42,6 +42,16 @@ export default defineConfig({
       name: 'mobile-chrome',
       use: { ...devices['Pixel 7'] },
     },
+    // Cross-browser projects — surface Safari/Firefox-specific CSS and JS bugs.
+    // CI installs these with: npx playwright install --with-deps
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
   ],
   // Only auto-start a preview server when we're testing the local build.
   webServer: externalBaseUrl ? undefined : {
