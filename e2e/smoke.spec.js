@@ -44,7 +44,7 @@ test.describe('Guest mode flows', () => {
     const guestButton = page.getByRole('button', { name: /guest/i })
     if (await guestButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await guestButton.click()
-      await page.waitForURL(/^\/$|\/dashboard/i, { timeout: 10_000 })
+      await page.waitForURL(/\/today|\/$|\/dashboard/i, { timeout: 10_000 })
     }
   })
 
@@ -78,7 +78,7 @@ test.describe('Settings interactions', () => {
     const guestButton = page.getByRole('button', { name: /guest/i })
     if (await guestButton.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await guestButton.click()
-      await page.waitForURL(/^\/$|\/dashboard/i, { timeout: 10_000 })
+      await page.waitForURL(/\/today|\/$|\/dashboard/i, { timeout: 10_000 })
     }
   })
 
