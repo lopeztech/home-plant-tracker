@@ -4,7 +4,8 @@ import ImageAnalyser from './ImageAnalyser.jsx'
 import PlantQRTag from './PlantQRTag.jsx'
 import WateringSheet from './WateringSheet.jsx'
 import SoilTab from './SoilTab.jsx'
-import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, incidentApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, incidentApi, dormancyApi } from '../api/plants.js'
+import PlantIdentify from './PlantIdentify.jsx'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
 import { analyseWateringPattern, getPatternMeta } from '../utils/wateringPattern.js'
@@ -309,6 +310,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [moisturePage, setMoisturePage] = useState(1)
   const [wateringPage, setWateringPage] = useState(1)
 
+  // Dormancy state (#307)
+  const [dormancyLoading, setDormancyLoading] = useState(false)
+  const [dormancyError, setDormancyError] = useState(null)
+  const [currentPhase, setCurrentPhase] = useState(plant?.currentPhase || 'active-growth')
+
+  // Plant identify modal (#294)
+  const [showIdentify, setShowIdentify] = useState(false)
+
   // Growth tab state
   const [measurements, setMeasurements] = useState(plant?.measurements || [])
   const [phenologyEvents, setPhenologyEvents] = useState(plant?.phenologyEvents || [])
@@ -317,6 +326,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [measurementSaving, setMeasurementSaving] = useState(false)
   const [measurementError, setMeasurementError] = useState(null)
   const [phenologySaving, setPhenologySaving] = useState(false)
+  // #303 — growth-shot comparison state
+  const [compareA, setCompareA] = useState(null)
+  const [compareB, setCompareB] = useState(null)
+  const [compareSlider, setCompareSlider] = useState(50)
 
   // Journal tab state
   const [journalEntries, setJournalEntries] = useState(
@@ -540,6 +553,38 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     ],
     [isEdiblePlant, isEditing],
   )
+
+  const handleDormancyEnter = useCallback(async () => {
+    setDormancyLoading(true); setDormancyError(null)
+    try {
+      await dormancyApi.enter(plant.id)
+      setCurrentPhase('dormant')
+    } catch (err) {
+      setDormancyError(friendlyErrorMessage(err, { context: 'entering dormancy' }))
+    } finally { setDormancyLoading(false) }
+  }, [plant])
+
+  const handleDormancyExit = useCallback(async () => {
+    setDormancyLoading(true); setDormancyError(null)
+    try {
+      await dormancyApi.exit(plant.id)
+      setCurrentPhase('active-growth')
+    } catch (err) {
+      setDormancyError(friendlyErrorMessage(err, { context: 'exiting dormancy' }))
+    } finally { setDormancyLoading(false) }
+  }, [plant])
+
+  const handleIdentified = useCallback((candidate) => {
+    setForm((prev) => ({
+      ...prev,
+      name: prev.name || candidate.commonName,
+      species: candidate.scientificName,
+      frequencyDays: candidate.careDefaults?.frequencyDays ?? prev.frequencyDays,
+      soilType: candidate.careDefaults?.soilType ?? prev.soilType,
+      potSize: candidate.careDefaults?.potSize ?? prev.potSize,
+      sunExposure: candidate.careDefaults?.sunExposure ?? prev.sunExposure,
+    }))
+  }, [])
 
   const handleTabKeyDown = useCallback((e, index) => {
     if (e.key === 'ArrowRight') {
@@ -813,6 +858,20 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {!isEditing && mode === null && (
         <Modal.Body className="d-flex flex-column gap-3 py-5 px-4">
           <p className="text-muted text-center mb-2">How would you like to add it?</p>
+
+          {/* #294 — one-tap identification */}
+          <button type="button" className="card border w-100 text-start" onClick={() => { setShowIdentify(true) }}>
+            <div className="card-body d-flex align-items-center gap-3">
+              <div className="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center" style={{ width: 44, height: 44 }}>
+                <svg className="sa-icon text-success sa-icon-2x"><use href="/icons/sprite.svg#search"></use></svg>
+              </div>
+              <div>
+                <h6 className="mb-0 fw-500">Identify from photo</h6>
+                <small className="text-muted">One tap — AI identifies the species and pre-fills care defaults</small>
+              </div>
+            </div>
+          </button>
+
           <button type="button" className="card border w-100 text-start" onClick={() => setMode('photo')}>
             <div className="card-body d-flex align-items-center gap-3">
               <div className="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style={{ width: 44, height: 44 }}>
@@ -1504,6 +1563,28 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Care tab — consolidated: health, maturity, notes, photos, recommendations */}
       {isEditing && activeTab === 'care' && (
         <Modal.Body role="tabpanel" id="plant-tabpanel-care" aria-labelledby="plant-tab-care">
+          {/* #307 — Dormancy banner */}
+          {currentPhase === 'dormant' ? (
+            <div className="d-flex align-items-center gap-2 mb-3 p-3 rounded border bg-secondary bg-opacity-10">
+              <span style={{ fontSize: 20 }}>💤</span>
+              <div className="flex-grow-1">
+                <div className="fw-500">Dormant — watering suspended</div>
+                <small className="text-muted">This plant is in dormancy. Overdue alerts are suppressed.</small>
+              </div>
+              <Button size="sm" variant="outline-success" disabled={dormancyLoading} onClick={handleDormancyExit}>
+                {dormancyLoading ? <Spinner size="sm" /> : 'Exit dormancy'}
+              </Button>
+            </div>
+          ) : (
+            <div className="d-flex align-items-center justify-content-end mb-3">
+              <Button size="sm" variant="outline-secondary" disabled={dormancyLoading} onClick={handleDormancyEnter}>
+                {dormancyLoading ? <Spinner size="sm" className="me-1" /> : '💤 '}
+                Mark as dormant
+              </Button>
+            </div>
+          )}
+          {dormancyError && <p className="text-danger fs-xs mb-2">{dormancyError}</p>}
+
           {/* Health & Maturity (read-only, updated by AI) */}
           <Row className="mb-3">
             <Col md={4}>
@@ -1782,6 +1863,68 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <p className="text-muted fs-xs mb-0">No phenology events logged yet. Record milestones like first bloom, first fruit, or leaf drop.</p>
             )}
           </div>
+
+          {/* #303 — Growth-shot photo timeline */}
+          {(() => {
+            const growthPhotos = (plant?.photoLog || []).filter(
+              (p) => p.kind === 'growth-shot' || p.type === 'growth',
+            )
+            if (growthPhotos.length < 2) return null
+            return (
+              <div className="mt-4">
+                <h6 className="fw-500 mb-2">
+                  <svg className="sa-icon me-1" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#image" /></svg>
+                  Photo Timeline — Compare Growth
+                </h6>
+                {/* Thumbnail strip */}
+                <div className="d-flex gap-2 overflow-auto pb-2 mb-3">
+                  {[...growthPhotos].reverse().map((photo, i) => (
+                    <button
+                      key={photo.url + i}
+                      type="button"
+                      className={`flex-shrink-0 border rounded p-0 overflow-hidden ${compareA?.url === photo.url ? 'border-primary border-2' : compareB?.url === photo.url ? 'border-success border-2' : ''}`}
+                      style={{ width: 72, height: 72, cursor: 'pointer' }}
+                      title={photo.date ? photo.date.slice(0, 10) : 'Select'}
+                      onClick={() => {
+                        if (!compareA || compareA?.url === photo.url) setCompareA(photo)
+                        else setCompareB(photo)
+                      }}
+                    >
+                      <img src={photo.url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </button>
+                  ))}
+                </div>
+                {compareA && compareB ? (
+                  <div>
+                    <div className="text-muted fs-xs mb-2 text-center">
+                      Drag slider to compare · <button type="button" className="btn btn-link p-0 fs-xs" onClick={() => { setCompareA(null); setCompareB(null) }}>Clear</button>
+                    </div>
+                    <div className="position-relative rounded overflow-hidden border" style={{ height: 220 }}>
+                      <img src={compareA.url} alt="Before" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', width: `${compareSlider}%` }}>
+                        <img src={compareB.url} alt="After" style={{ width: `${10000 / compareSlider}%`, maxWidth: 'none', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ position: 'absolute', top: 0, bottom: 0, left: `${compareSlider}%`, width: 2, background: 'white', transform: 'translateX(-50%)' }} />
+                      <input
+                        type="range"
+                        min="5" max="95"
+                        value={compareSlider}
+                        onChange={(e) => setCompareSlider(Number(e.target.value))}
+                        style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'col-resize', height: '100%' }}
+                        aria-label="Compare slider"
+                      />
+                    </div>
+                    <div className="d-flex justify-content-between mt-1">
+                      <small className="text-muted">{compareA.date?.slice(0, 10)}</small>
+                      <small className="text-muted">{compareB.date?.slice(0, 10)}</small>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted fs-xs">Select two photos above to compare them side-by-side.</p>
+                )}
+              </div>
+            )
+          })()}
         </Modal.Body>
       )}
 
@@ -2168,6 +2311,17 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
         onLog={onWater}
       />
     )}
+
+    {/* #294 — one-tap plant identification */}
+    <PlantIdentify
+      show={showIdentify}
+      onHide={() => { setShowIdentify(false); setMode('manual') }}
+      onIdentified={(candidate) => {
+        handleIdentified(candidate)
+        setShowIdentify(false)
+        setMode('manual')
+      }}
+    />
   </>
   )
 }

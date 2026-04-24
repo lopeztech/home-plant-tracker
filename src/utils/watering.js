@@ -157,7 +157,29 @@ export function getPlantAttributeMultiplier(plant) {
  * @param {Array}       floors  - array of floor objects from floorsApi
  * @returns {{ daysUntil: number, color: string, label: string, note: string|null, skippedRain: boolean, season: string|null, seasonNote: string|null }}
  */
+/**
+ * Returns true if the plant is currently in dormancy and watering should be suppressed.
+ */
+export function isPlantDormant(plant) {
+  return plant.currentPhase === 'dormant'
+}
+
 export function getWateringStatus(plant, weather = null, floors = [], timezone = null) {
+  // Dormant plants: suppress overdue flag entirely
+  if (isPlantDormant(plant)) {
+    const season = getSeason(weather?.location?.lat ?? null)
+    return {
+      daysUntil:   null,
+      skippedRain: false,
+      note:        'Dormant — watering suspended',
+      color:       '#94a3b8',
+      label:       'Dormant',
+      season,
+      seasonNote:  null,
+      dormant:     true,
+    }
+  }
+
   const tz = timezone || (typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC')
   const outdoor   = isOutdoor(plant, floors)
   const temp      = weather?.current?.temp ?? null

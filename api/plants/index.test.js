@@ -4763,3 +4763,123 @@ describe('GET /plants/:id/soil-insight', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ── POST /plants/identify (#294) ──────────────────────────────────────────────
+
+describe('POST /plants/identify', () => {
+  it('returns candidates from Gemini', async () => {
+    geminiGenerateFn = async () => ({
+      response: {
+        text: () => JSON.stringify({
+          candidates: [{
+            commonName: 'Monstera',
+            scientificName: 'Monstera deliciosa',
+            confidence: 0.92,
+            distinguishingFeatures: ['Split leaves', 'Aerial roots'],
+            careDefaults: { frequencyDays: 7, plantedIn: 'pot', soilType: 'well-draining', potSize: 'medium', sunExposure: 'part-sun', waterMethod: 'jug', waterAmount: '300ml' },
+          }],
+        }),
+        candidates: [{ finishReason: 'STOP' }],
+      },
+    });
+
+    const res = await request(app)
+      .post('/plants/identify')
+      .send({ images: [{ imageBase64: 'abc', mimeType: 'image/jpeg' }] });
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.candidates)).toBe(true);
+    expect(res.body.candidates[0].commonName).toBe('Monstera');
+    expect(res.body.candidates[0].careDefaults.frequencyDays).toBe(7);
+  });
+
+  it('returns 400 when images array is missing', async () => {
+    const res = await request(app).post('/plants/identify').send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when more than 3 images are sent', async () => {
+    const images = Array.from({ length: 4 }, () => ({ imageBase64: 'x', mimeType: 'image/jpeg' }));
+    const res = await request(app).post('/plants/identify').send({ images });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when an image is missing mimeType', async () => {
+    const res = await request(app).post('/plants/identify').send({ images: [{ imageBase64: 'x' }] });
+    expect(res.status).toBe(400);
+  });
+});
+
+// ── POST /plants/:id/dormancy/enter & /exit (#307) ────────────────────────────
+
+describe('dormancy routes', () => {
+  it('enters dormancy and sets currentPhase', async () => {
+    store[plantPath('d1')] = { name: 'Tulip', species: 'Tulipa', health: 'Good' };
+    const res = await request(app)
+      .post('/plants/d1/dormancy/enter')
+      .set('Authorization', authHeader())
+      .send({ notes: 'Going dormant for winter' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.currentPhase).toBe('dormant');
+    expect(store[plantPath('d1')].currentPhase).toBe('dormant');
+    expect(store[plantPath('d1')].dormancyEvents).toHaveLength(1);
+    expect(store[plantPath('d1')].dormancyEvents[0].triggeredBy).toBe('user');
+  });
+
+  it('exits dormancy and sets currentPhase to active-growth', async () => {
+    store[plantPath('d2')] = {
+      name: 'Tulip',
+      currentPhase: 'dormant',
+      dormancyEvents: [{ enteredAt: '2026-01-01T00:00:00Z', exitedAt: null, triggeredBy: 'user', notes: '' }],
+    };
+    const res = await request(app)
+      .post('/plants/d2/dormancy/exit')
+      .set('Authorization', authHeader())
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.currentPhase).toBe('active-growth');
+    expect(store[plantPath('d2')].dormancyEvents[0].exitedAt).toBeTruthy();
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .post('/plants/nope/dormancy/enter')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/plants/d1/dormancy/enter').send({});
+    expect(res.status).toBe(401);
+  });
+});
+
+// ── GET /portal/:token (#170) ─────────────────────────────────────────────────
+
+describe('GET /portal/:token', () => {
+  it('returns 401 for an invalid token', async () => {
+    const res = await request(app).get('/portal/invalidtoken');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns portal data for a valid token', async () => {
+    // Generate a valid token using the same signing logic as index.js
+    const crypto = require('crypto');
+    const secret = 'portal-dev-secret';
+    const payload = JSON.stringify({ userId: USER_SUB, label: 'Test Garden', iat: Date.now() });
+    const encoded = Buffer.from(payload).toString('base64url');
+    const sig = crypto.createHmac('sha256', secret).update(encoded).digest('hex');
+    const token = `${encoded}.${sig}`;
+
+    store[`users/${USER_SUB}/config/floors`] = { floors: [] };
+    store[`users/${USER_SUB}/config/branding`] = {};
+
+    const res = await request(app).get(`/portal/${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.label).toBe('Test Garden');
+    expect(Array.isArray(res.body.plants)).toBe(true);
+  });
+});

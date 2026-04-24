@@ -886,6 +886,100 @@ app.post('/analyse-with-hint', softAuth, checkQuota('ai_analyses', countAiAnalys
   }
 });
 
+// ── Plant identification (one-tap) ───────────────────────────────────────────
+// Accepts 1–3 photos and returns ranked identification candidates with
+// careDefaults pre-populated, ready to seed a new plant document.
+
+const IDENTIFY_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    candidates: {
+      type: SchemaType.ARRAY,
+      items: {
+        type: SchemaType.OBJECT,
+        properties: {
+          commonName:             { type: SchemaType.STRING },
+          scientificName:         { type: SchemaType.STRING },
+          confidence:             { type: SchemaType.NUMBER },
+          distinguishingFeatures: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+          careDefaults: {
+            type: SchemaType.OBJECT,
+            properties: {
+              frequencyDays: { type: SchemaType.INTEGER },
+              plantedIn:     { type: SchemaType.STRING },
+              soilType:      { type: SchemaType.STRING },
+              potSize:       { type: SchemaType.STRING },
+              sunExposure:   { type: SchemaType.STRING },
+              waterMethod:   { type: SchemaType.STRING },
+              waterAmount:   { type: SchemaType.STRING },
+            },
+            required: ['frequencyDays', 'plantedIn', 'soilType'],
+          },
+        },
+        required: ['commonName', 'scientificName', 'confidence', 'distinguishingFeatures', 'careDefaults'],
+      },
+    },
+  },
+  required: ['candidates'],
+};
+
+const IDENTIFY_PROMPT = `You are a plant identification expert. Analyse the provided photo(s) and identify the plant species.
+Return ONLY valid JSON with up to 5 ranked identification candidates, ordered by confidence (highest first).
+
+Rules:
+- commonName: most widely recognised common name in English
+- scientificName: genus + species in italics-ready format (e.g. "Monstera deliciosa")
+- confidence: 0.0–1.0 probability this identification is correct
+- distinguishingFeatures: 2–4 specific visual features that support this identification (leaf shape, pattern, colour, texture)
+- careDefaults.frequencyDays: integer 1–30 (watering interval days) based on species needs
+- careDefaults.plantedIn: one of "pot" | "garden-bed" | "ground"
+- careDefaults.soilType: one of "standard" | "well-draining" | "moisture-retaining" | "succulent-mix" | "orchid-mix"
+- careDefaults.potSize: one of "small" | "medium" | "large" | "xlarge" (estimate from photo)
+- careDefaults.sunExposure: one of "full-sun" | "part-sun" | "shade"
+- careDefaults.waterMethod: one of "jug" | "spray" | "bottom-water" | "hose" | "irrigation" | "drip"
+- careDefaults.waterAmount: e.g. "200ml", "500ml", "1L"
+- If the plant is unidentifiable, return one candidate with commonName "Unknown plant", scientificName "Unknown", confidence 0.1
+- Never return more than 5 candidates
+- Respond with JSON only`;
+
+app.post('/plants/identify', softAuth, checkQuota('ai_analyses', countAiAnalysesForReq), async (req, res) => {
+  try {
+    const { images } = req.body; // [{ imageBase64, mimeType }]
+    if (!Array.isArray(images) || images.length === 0) {
+      return res.status(400).json({ error: 'images array is required (1–3 items)' });
+    }
+    if (images.length > 3) {
+      return res.status(400).json({ error: 'Maximum 3 images per identification request' });
+    }
+    for (const img of images) {
+      if (!img.imageBase64 || !img.mimeType) {
+        return res.status(400).json({ error: 'Each image must have imageBase64 and mimeType' });
+      }
+    }
+
+    const parts = images.map((img) => ({ inlineData: { mimeType: img.mimeType, data: img.imageBase64 } }));
+    parts.push({ text: IDENTIFY_PROMPT });
+
+    const result = await geminiWithRetry({
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        maxOutputTokens: 2048,
+        temperature: 0.1,
+        responseMimeType: 'application/json',
+        responseSchema: IDENTIFY_SCHEMA,
+      },
+    });
+
+    const parsed = parseGeminiJson(result.response.text());
+    if (req.userId && billing.billingEnabled()) {
+      try { await billing.incrementAiAnalyses(db, req.userId); } catch (e) { log.warn('ai-usage increment failed', { error: e.message }); }
+    }
+    res.status(200).json(parsed);
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 // ── Care recommendations via Gemini ──────────────────────────────────────────
 
 app.post('/recommend', async (req, res) => {
@@ -4237,6 +4331,136 @@ app.get('/api/v1/plants/:id/care-score', requireApiKey, publicApiLimiter, requir
     const plant = { id: doc.id, ...doc.data() };
     const score = computeCareScore(plant);
     res.status(200).json({ id: plant.id, name: plant.name, ...score });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Dormancy cycle tracking (#307) ───────────────────────────────────────────
+
+app.post('/plants/:id/dormancy/enter', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const now = new Date().toISOString();
+    const existing = doc.data();
+    const { notes } = req.body || {};
+
+    const dormancyEvents = [...(existing.dormancyEvents || []), {
+      enteredAt: now,
+      exitedAt: null,
+      triggeredBy: 'user',
+      notes: notes || '',
+    }];
+
+    await ref.set({
+      currentPhase: 'dormant',
+      dormancyEvents,
+      updatedAt: now,
+    }, { merge: true });
+
+    res.status(200).json({ currentPhase: 'dormant', enteredAt: now });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/dormancy/exit', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const now = new Date().toISOString();
+    const existing = doc.data();
+    const { notes } = req.body || {};
+
+    const dormancyEvents = [...(existing.dormancyEvents || [])];
+    // Close the most recent open event
+    const lastIdx = dormancyEvents.map((e) => !e.exitedAt).lastIndexOf(true);
+    if (lastIdx !== -1) {
+      dormancyEvents[lastIdx] = { ...dormancyEvents[lastIdx], exitedAt: now, notes: notes || dormancyEvents[lastIdx].notes };
+    }
+
+    await ref.set({
+      currentPhase: 'active-growth',
+      dormancyEvents,
+      updatedAt: now,
+    }, { merge: true });
+
+    res.status(200).json({ currentPhase: 'active-growth', exitedAt: now });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Client read-only portal (#170) ───────────────────────────────────────────
+// Landscapers share a signed token link with property owners so they can view
+// plant health without a full account.
+// Token format: base64url(payload_json).hmac_hex  — signed with PORTAL_SECRET.
+
+const PORTAL_SECRET = process.env.PORTAL_JWT_SECRET || 'portal-dev-secret';
+const PORTAL_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function signPortalToken(userId, label) {
+  const payload = JSON.stringify({ userId, label: label || 'My Garden', iat: Date.now() });
+  const encoded = Buffer.from(payload).toString('base64url');
+  const sig = crypto.createHmac('sha256', PORTAL_SECRET).update(encoded).digest('hex');
+  return `${encoded}.${sig}`;
+}
+
+function verifyPortalToken(token) {
+  const [encoded, sig] = token.split('.');
+  if (!encoded || !sig) throw new Error('malformed token');
+  const expected = crypto.createHmac('sha256', PORTAL_SECRET).update(encoded).digest('hex');
+  if (!crypto.timingSafeEqual(Buffer.from(sig, 'hex'), Buffer.from(expected, 'hex'))) {
+    throw new Error('invalid signature');
+  }
+  const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+  if (Date.now() - payload.iat > PORTAL_TTL_MS) throw new Error('token expired');
+  return payload;
+}
+
+// Generate a portal link (landscaper only)
+app.post('/portal/generate', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const { label } = req.body || {};
+    const token = signPortalToken(req.userId, label);
+    res.status(200).json({ token, portalUrl: `/portal/${token}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Public portal data endpoint — no auth cookie, just a valid signed token
+app.get('/portal/:token', async (req, res) => {
+  try {
+    let payload;
+    try {
+      payload = verifyPortalToken(req.params.token);
+    } catch {
+      return res.status(401).json({ error: 'Invalid or expired portal link' });
+    }
+
+    const { userId, label } = payload;
+    const snap = await userPlants(userId).orderBy('name').get();
+    const plants = await Promise.all(snap.docs.map(async (d) => {
+      const p = { id: d.id, ...d.data() };
+      await signPlantData(p);
+      // Omit internal fields from portal view
+      const { wateringLog, moistureLog, feedingLog, healthLog, mlCache, shortCode, ...safe } = p;
+      return safe;
+    }));
+
+    const floorsDoc = await db.collection('users').doc(userId).collection('config').doc('floors').get();
+    const floors = floorsDoc.exists ? (floorsDoc.data().floors || []) : [];
+
+    const brandingDoc = await db.collection('users').doc(userId).collection('config').doc('branding').get();
+    const branding = brandingDoc.exists ? brandingDoc.data() : null;
+
+    res.status(200).json({ label, plants, floors, branding });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
