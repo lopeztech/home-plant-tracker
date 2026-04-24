@@ -192,21 +192,50 @@
   gap: 0.25rem;
 }
 
-/* Sign-out lives in the sidebar's nav-menu but is a <button> (performs an
-   action) rather than a <NavLink>. Mirror the surrounding anchor styles so
-   it looks identical while staying keyboard- and screen-reader-correct. */
+/* Sidebar <button> items (Sign out, Help, What's new, Take a tour) live in
+   the nav-menu alongside NavLink <a>s. Mirror the full anchor layout
+   (flex row, gap, padding, icon sizing) so icons and labels align with
+   the primary nav items above them. */
 .nav-menu li > .nav-link-btn {
-  line-height: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem; //12px — matches .primary-nav li > a
+  padding: 0.5rem 0;
   padding-inline-start: calc(1.9rem + 2px);
+  line-height: 2;
+  font-size: 0.9375rem; //15px — matches .primary-nav li > a
+  font-weight: var(--app-nav-parent-fw, 600);
   border-radius: 0.625rem;
-  font-size: 0.85rem;
-  font-weight: 400;
   cursor: pointer;
-  color: inherit;
+  color: var(--app-nav-link-color);
+  text-decoration: none;
+  width: 100%;
+  background: transparent;
+  border: 0;
+
+  .sa-icon {
+    width: var(--app-nav-svgicon-size);
+    height: var(--app-nav-svgicon-size);
+    flex-shrink: 0;
+  }
 
   &:hover {
     background-color: var(--app-nav-item-hover-bg);
+    color: var(--app-nav-link-hover-color);
   }
+}
+
+/* React Router's <NavLink> applies `active` to the <a>, but Smart Admin's
+   own active styles target `li.active`. Bridge the two so the current
+   route reads as highlighted in the sidebar. */
+.app-sidebar .nav-menu li a.active {
+  color: var(--app-nav-link-active-color);
+  background-color: var(--app-nav-item-active-bg);
+}
+
+.set-nav-dark .app-sidebar .nav-menu li a.active {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.12) !important;
 }
 
 /* Skeleton loader shimmer animation */

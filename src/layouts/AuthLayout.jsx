@@ -14,7 +14,7 @@ export default function AuthLayout() {
     )
   }
 
-  if (isAuthenticated) return <Navigate to="/" replace />
+  if (isAuthenticated) return <Navigate to="/today" replace />
 
   return <Outlet />
 }
