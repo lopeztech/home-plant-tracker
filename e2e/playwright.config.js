@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test'
 
 /**
  * Playwright E2E configuration.
@@ -34,7 +34,13 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { browserName: 'chromium' },
+      use: { ...devices['Desktop Chrome'] },
+    },
+    // Mobile viewport — catches responsive regressions like the April 24
+    // sidebar-hogs-half-the-screen bug that a desktop-only run missed.
+    {
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 7'] },
     },
   ],
   // Only auto-start a preview server when we're testing the local build.
