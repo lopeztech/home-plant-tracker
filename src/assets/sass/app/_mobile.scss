@@ -2,6 +2,35 @@
    Targets ≤ 480 px (xs) and ≤ 575.98 px (below `sm`) so the app stays
    usable on 320–414 px screens. Resolves issue #220. */
 
+/* Sidebar on phones (below `md`): slide-in drawer.
+   Smart Admin's own rule kicks in at ≤ 991.98 px, but the grid layout
+   here leaves it occupying a fixed column on narrow viewports. Force
+   a drawer on phones and rely on the Topbar hamburger to toggle
+   `.app-mobile-menu-open` on <html>. */
+@media (max-width: 767.98px) {
+  .app-wrap {
+    grid-template-columns: 0 auto !important;
+    grid-template-areas: "sidebar header" "sidebar main" "sidebar main" !important;
+  }
+
+  .app-sidebar {
+    position: fixed !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(85vw, 18rem);
+    z-index: 1050;
+    transform: translate3d(-100%, 0, 0) !important;
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+    box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+  }
+
+  html.app-mobile-menu-open .app-sidebar {
+    transform: translate3d(0, 0, 0) !important;
+  }
+}
+
 /* Plant modal tabs: horizontally scroll instead of overflowing the modal,
    keep visible scroll snap points and ≥ 44 px touch targets on phones. */
 .modal .nav-tabs {
