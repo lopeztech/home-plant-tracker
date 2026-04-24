@@ -29,6 +29,7 @@ function makeCollRef(prefix) {
             : Object.assign({}, data);
         },
         delete: async () => { delete store[path]; },
+        update: async (data) => { store[path] = Object.assign({}, store[path] || {}, data); },
         collection: sub => makeCollRef(`${path}/${sub}`),
       };
     },
@@ -43,6 +44,17 @@ function makeCollRef(prefix) {
         .filter(([k]) => k.startsWith(pfx) && !k.slice(pfx.length).includes('/'))
         .map(([k, v]) => ({ id: k.slice(pfx.length), data: () => v }));
       return { docs: entries };
+    },
+    limit: (n) => {
+      return {
+        get: async () => {
+          const pfx = `${prefix}/`;
+          const entries = Object.entries(store)
+            .filter(([k]) => k.startsWith(pfx) && !k.slice(pfx.length).includes('/'))
+            .map(([k, v]) => ({ id: k.slice(pfx.length), data: () => v }));
+          return { docs: entries.slice(0, n) };
+        },
+      };
     },
     orderBy: (field, dir) => {
       let _limit = null;
@@ -135,6 +147,13 @@ beforeAll(() => {
       jsonrepair: function(s) { return jsonrepairFn(s); },
     },
     'express-rate-limit': () => (_req, _res, next) => next(),
+    'jsonwebtoken': {
+      sign: (payload) => `mockt.${Buffer.from(JSON.stringify(payload)).toString('hex')}`,
+      verify: (token) => {
+        if (!token.startsWith('mockt.')) throw new Error('invalid token');
+        return JSON.parse(Buffer.from(token.slice(6), 'hex').toString());
+      },
+    },
   });
 });
 
@@ -5044,20 +5063,116 @@ describe('GET /portal/:token', () => {
 });
 
 describe('sit-session routes', () => {
-  it('POST /sit-sessions creates a session', async () => {
+  it('POST /sit-sessions creates a session and returns shareUrl', async () => {
     const res = await request(app)
       .post('/sit-sessions')
       .set('Authorization', authHeader())
-      .send({ durationDays: 7, sitterName: 'Alice' });
-    // jwt may not be available in test env — either 201 or 503
-    expect([201, 503]).toContain(res.status);
+      .send({ durationDays: 7, sitterName: 'Alice', plantIds: ['p1'] });
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('sessionId');
+    expect(res.body).toHaveProperty('shareUrl');
+    expect(res.body.sitterName).toBe('Alice');
   });
 
   it('GET /sit-sessions returns sessions list', async () => {
     const res = await request(app)
       .get('/sit-sessions')
       .set('Authorization', authHeader());
-    expect([200]).toContain(res.status);
-    if (res.status === 200) expect(Array.isArray(res.body)).toBe(true);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('DELETE /sit-sessions/:sessionId ends the session', async () => {
+    const createRes = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7 });
+    expect(createRes.status).toBe(201);
+    const { sessionId } = createRes.body;
+    const res = await request(app)
+      .delete(`/sit-sessions/${sessionId}`)
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+  });
+
+  it('GET /sit/:token returns plants for a valid session', async () => {
+    store[plantPath('tp1')] = { name: 'Fern', frequencyDays: 7, lastWatered: '2026-03-01T00:00:00Z', photoLog: [] };
+    const createRes = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7, sitterName: 'Bob' });
+    expect(createRes.status).toBe(201);
+    const token = createRes.body.shareUrl.replace('/sit/', '');
+    const res = await request(app).get(`/sit/${token}`);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.plants)).toBe(true);
+  });
+
+  it('GET /sit/:token with specific plantIds returns only those plants', async () => {
+    store[plantPath('tp2')] = { name: 'Cactus', frequencyDays: 14, photoLog: [] };
+    const createRes = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7, plantIds: ['tp2'] });
+    expect(createRes.status).toBe(201);
+    const token = createRes.body.shareUrl.replace('/sit/', '');
+    const res = await request(app).get(`/sit/${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.plants.length).toBe(1);
+  });
+
+  it('GET /sit/:token returns 401 for an invalid token', async () => {
+    const res = await request(app).get('/sit/not-a-valid-token');
+    expect(res.status).toBe(401);
+  });
+
+  it('GET /sit/:token returns 404 for an ended session', async () => {
+    const createRes = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7 });
+    expect(createRes.status).toBe(201);
+    const { sessionId } = createRes.body;
+    const token = createRes.body.shareUrl.replace('/sit/', '');
+    // end the session
+    store[`users/${USER_SUB}/sitSessions/${sessionId}`] = { ...store[`users/${USER_SUB}/sitSessions/${sessionId}`], status: 'ended' };
+    const res = await request(app).get(`/sit/${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('POST /sit/:token/water/:plantId records a watering', async () => {
+    store[plantPath('wp1')] = { name: 'Fern', wateringLog: [], photoLog: [] };
+    const createRes = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7, sitterName: 'Carol' });
+    expect(createRes.status).toBe(201);
+    const token = createRes.body.shareUrl.replace('/sit/', '');
+    const res = await request(app).post(`/sit/${token}/water/wp1`);
+    expect(res.status).toBe(201);
+    expect(res.body).toHaveProperty('wateredAt');
+    expect(res.body.wateredBy).toBe('Carol');
+  });
+
+  it('POST /sit/:token/water/:plantId returns 403 when plant not in session', async () => {
+    const createRes = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7, plantIds: ['allowed-plant'] });
+    expect(createRes.status).toBe(201);
+    const token = createRes.body.shareUrl.replace('/sit/', '');
+    const res = await request(app).post(`/sit/${token}/water/not-in-list`);
+    expect(res.status).toBe(403);
+  });
+
+  it('POST /sit/:token/water/:plantId returns 404 for missing plant', async () => {
+    const createRes = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7 });
+    expect(createRes.status).toBe(201);
+    const token = createRes.body.shareUrl.replace('/sit/', '');
+    const res = await request(app).post(`/sit/${token}/water/nonexistent-plant`);
+    expect(res.status).toBe(404);
   });
 });

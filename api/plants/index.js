@@ -4703,7 +4703,7 @@ app.post('/sit-sessions', requireUser, async (req, res) => {
   try {
     if (!jwt) return res.status(503).json({ error: 'jwt_unavailable' });
     const { durationDays = 7, plantIds, floorId, sitterName, notes } = req.body;
-    const sessionId = `sit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const sessionId = `sit-${Date.now()}-${require('crypto').randomBytes(4).toString('hex')}`;
     const expiresAt = new Date(Date.now() + durationDays * 86400000).toISOString();
     const token = jwt.sign(
       { sessionId, userId: req.userId, plantIds: plantIds || null, floorId: floorId || null },
