@@ -100,6 +100,12 @@ vi.mock('../api/plants.js', () => ({
     resolve: vi.fn().mockResolvedValue({ id: 'inc1', resolvedAt: '2026-04-21T00:00:00.000Z' }),
     delete: vi.fn().mockResolvedValue({ deleted: true }),
   },
+  bloomsApi: {
+    list: vi.fn().mockResolvedValue([]),
+    start: vi.fn().mockResolvedValue({ id: 'bloom-1', startedAt: '2026-04-21T00:00:00.000Z', endedAt: null, colors: [], notes: null, count: null }),
+    update: vi.fn().mockResolvedValue({}),
+    end: vi.fn().mockResolvedValue({ endedAt: '2026-04-24T00:00:00.000Z' }),
+  },
 }))
 
 const floors = [
@@ -847,7 +853,7 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     expect(screen.getByRole('tablist', { name: /plant sections/i })).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth', 'Journal', 'Soil', 'Health'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth', 'Journal', 'Blooms', 'Lifecycle', 'Soil', 'Health'])
   })
 
   it('marks the active tab with aria-selected="true"', () => {
@@ -879,7 +885,7 @@ describe('PlantModal', () => {
   it('wraps to the first tab when ArrowRight is pressed on the last tab', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Health'))
-    const healthTab = screen.getAllByRole('tab')[6]
+    const healthTab = screen.getAllByRole('tab')[8]
     fireEvent.keyDown(healthTab, { key: 'ArrowRight' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
@@ -897,8 +903,8 @@ describe('PlantModal', () => {
     fireEvent.click(screen.getByText('Watering'))
     const wateringTab = screen.getAllByRole('tab')[1]
     fireEvent.keyDown(wateringTab, { key: 'End' })
-    expect(screen.getAllByRole('tab')[6]).toHaveAttribute('aria-selected', 'true')
-    fireEvent.keyDown(screen.getAllByRole('tab')[6], { key: 'Home' })
+    expect(screen.getAllByRole('tab')[8]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(screen.getAllByRole('tab')[8], { key: 'Home' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
 })

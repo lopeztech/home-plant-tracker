@@ -28,6 +28,16 @@ function getUrgencyLabel(days) {
   return `${days}d remaining`
 }
 
+function getHealthColor(health) {
+  switch (health) {
+    case 'Excellent': return '#22c55e'
+    case 'Good': return '#84cc16'
+    case 'Fair': return '#f97316'
+    case 'Poor': return '#ef4444'
+    default: return '#9ca3af'
+  }
+}
+
 export default function PlantMarker({ plant, onClick, onDragEnd, containerRef }) {
   const [showTooltip, setShowTooltip] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -47,6 +57,7 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
   const color = getUrgencyColor(days)
   const label = getUrgencyLabel(days)
   const isOverdue = days < 0
+  const healthColor = getHealthColor(plant.health)
   const initial = plant.name ? plant.name.charAt(0).toUpperCase() : '?'
   const showPhoto = plant.imageUrl && !imgError
 
@@ -121,7 +132,7 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
   return (
     <motion.div
       role="button"
-      aria-label={`${plant.name}${plant.species ? ` (${plant.species})` : ''} — ${label}`}
+      aria-label={`${plant.name}${plant.species ? ` (${plant.species})` : ''} — ${label}${plant.health ? `, health ${plant.health}` : ''}`}
       tabIndex={0}
       className={[
         'plant-marker',
@@ -155,7 +166,7 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
           color: 'white',
           fontSize: 13,
           fontWeight: 700,
-          boxShadow: `0 2px 8px ${color}80, 0 0 0 3px ${color}30`,
+          boxShadow: `0 2px 8px ${color}80, 0 0 0 3px ${healthColor}`,
           userSelect: 'none',
           overflow: 'hidden',
         }}
@@ -207,6 +218,11 @@ export default function PlantMarker({ plant, onClick, onDragEnd, containerRef })
           <div className="text-xs mt-0.5" style={{ color }}>
             {label}
           </div>
+          {plant.health && (
+            <div className="text-xs mt-0.5">
+              Health: <span style={{ color: healthColor }}>{plant.health}</span>
+            </div>
+          )}
           {plant.lastMoistureReading && plant.lastMoistureDate &&
             (Date.now() - new Date(plant.lastMoistureDate).getTime()) < 72 * 3600000 && (() => {
               const m = getMoistureDisplay(plant.lastMoistureReading)

@@ -4,6 +4,8 @@ import ImageAnalyser from './ImageAnalyser.jsx'
 import PlantQRTag from './PlantQRTag.jsx'
 import WateringSheet from './WateringSheet.jsx'
 import SoilTab from './SoilTab.jsx'
+import LifecycleTab from './LifecycleTab.jsx'
+import BloomTab from './BloomTab.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, incidentApi, dormancyApi } from '../api/plants.js'
 import PlantIdentify from './PlantIdentify.jsx'
 import Chart from 'react-apexcharts'
@@ -547,6 +549,8 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       { id: 'care', label: 'Care' },
       { id: 'growth', label: 'Growth' },
       { id: 'journal', label: 'Journal' },
+      ...(isEditing ? [{ id: 'blooms', label: 'Blooms' }] : []),
+      ...(isEditing ? [{ id: 'lifecycle', label: 'Lifecycle' }] : []),
       ...(isEditing ? [{ id: 'soil', label: 'Soil' }] : []),
       ...(isEdiblePlant ? [{ id: 'harvest', label: 'Harvest' }] : []),
       ...(isEditing ? [{ id: 'health', label: 'Health' }] : []),
@@ -2021,6 +2025,20 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               No journal entries yet. Start recording observations, moves, and milestones for this plant.
             </p>
           )}
+        </Modal.Body>
+      )}
+
+      {/* ── Blooms tab ───────────────────────────────────────────────────── */}
+      {isEditing && activeTab === 'blooms' && (
+        <Modal.Body role="tabpanel" id="plant-tabpanel-blooms" aria-labelledby="plant-tab-blooms" className="p-0">
+          <BloomTab plant={plant} onUpdated={() => { /* refresh handled by BloomTab internal state */ }} />
+        </Modal.Body>
+      )}
+
+      {/* ── Lifecycle tab ────────────────────────────────────────────────── */}
+      {isEditing && activeTab === 'lifecycle' && (
+        <Modal.Body role="tabpanel" id="plant-tabpanel-lifecycle" aria-labelledby="plant-tab-lifecycle" className="p-0">
+          <LifecycleTab plant={plant} onUpdated={() => { /* refresh handled by LifecycleTab internal state */ }} />
         </Modal.Body>
       )}
 

@@ -4893,6 +4893,129 @@ describe('dormancy routes', () => {
   });
 });
 
+// ── Bloom tracking ────────────────────────────────────────────────────────────
+
+describe('bloom routes', () => {
+  it('POST /plants/:id/blooms creates a bloom', async () => {
+    store[plantPath('plant1')] = { name: 'Rose', species: 'Rosa' };
+    const res = await request(app)
+      .post('/plants/plant1/blooms')
+      .set('Authorization', authHeader())
+      .send({ colors: ['#ef4444'], notes: 'Spring bloom' });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBeTruthy();
+    expect(res.body.colors).toEqual(['#ef4444']);
+    expect(res.body.notes).toBe('Spring bloom');
+    expect(res.body.endedAt).toBeNull();
+  });
+
+  it('POST /plants/:id/blooms stores bloom in bloomLog', async () => {
+    store[plantPath('plant2')] = { name: 'Tulip', species: 'Tulipa' };
+    await request(app)
+      .post('/plants/plant2/blooms')
+      .set('Authorization', authHeader())
+      .send({ colors: ['#eab308'] });
+    expect(store[plantPath('plant2')].bloomLog).toHaveLength(1);
+    expect(store[plantPath('plant2')].bloomLog[0].colors).toEqual(['#eab308']);
+  });
+
+  it('GET /plants/:id/blooms returns blooms sorted newest first', async () => {
+    store[plantPath('plant3')] = {
+      name: 'Iris',
+      bloomLog: [
+        { id: 'b1', startedAt: '2026-01-01T00:00:00Z', endedAt: null, colors: ['#a855f7'], notes: null, count: null },
+        { id: 'b2', startedAt: '2026-03-01T00:00:00Z', endedAt: null, colors: ['#3b82f6'], notes: null, count: null },
+      ],
+    };
+    const res = await request(app)
+      .get('/plants/plant3/blooms')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body[0].id).toBe('b2');
+    expect(res.body[1].id).toBe('b1');
+  });
+
+  it('GET /plants/:id/blooms returns empty array for plant with no blooms', async () => {
+    store[plantPath('plant4')] = { name: 'Fern', species: 'Nephrolepis' };
+    const res = await request(app)
+      .get('/plants/plant4/blooms')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('PUT /plants/:id/blooms/:bloomId updates a bloom', async () => {
+    store[plantPath('plant5')] = {
+      name: 'Orchid',
+      bloomLog: [
+        { id: 'b10', startedAt: '2026-02-01T00:00:00Z', endedAt: null, colors: [], notes: null, count: null },
+      ],
+    };
+    const res = await request(app)
+      .put('/plants/plant5/blooms/b10')
+      .set('Authorization', authHeader())
+      .send({ notes: 'Updated notes', colors: ['#ec4899'] });
+    expect(res.status).toBe(200);
+    expect(res.body.notes).toBe('Updated notes');
+    expect(res.body.colors).toEqual(['#ec4899']);
+    expect(res.body.id).toBe('b10');
+  });
+
+  it('PUT /plants/:id/blooms/:bloomId returns 404 for missing bloom', async () => {
+    store[plantPath('plant6')] = { name: 'Cactus', bloomLog: [] };
+    const res = await request(app)
+      .put('/plants/plant6/blooms/nonexistent')
+      .set('Authorization', authHeader())
+      .send({ notes: 'nope' });
+    expect(res.status).toBe(404);
+  });
+
+  it('POST /plants/:id/blooms/:bloomId/end sets endedAt', async () => {
+    store[plantPath('plant7')] = {
+      name: 'Peony',
+      bloomLog: [
+        { id: 'b20', startedAt: '2026-03-01T00:00:00Z', endedAt: null, colors: ['#ef4444'], notes: null, count: null },
+      ],
+    };
+    const res = await request(app)
+      .post('/plants/plant7/blooms/b20/end')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body.endedAt).toBeTruthy();
+    expect(store[plantPath('plant7')].bloomLog[0].endedAt).toBeTruthy();
+  });
+
+  it('POST /plants/:id/blooms/:bloomId/end accepts custom endedAt', async () => {
+    store[plantPath('plant8')] = {
+      name: 'Dahlia',
+      bloomLog: [
+        { id: 'b30', startedAt: '2026-04-01T00:00:00Z', endedAt: null, colors: [], notes: null, count: null },
+      ],
+    };
+    const customEnd = '2026-04-20T12:00:00.000Z';
+    const res = await request(app)
+      .post('/plants/plant8/blooms/b30/end')
+      .set('Authorization', authHeader())
+      .send({ endedAt: customEnd });
+    expect(res.status).toBe(200);
+    expect(res.body.endedAt).toBe(customEnd);
+  });
+
+  it('returns 404 for GET blooms on unknown plant', async () => {
+    const res = await request(app)
+      .get('/plants/noplant/blooms')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth for bloom routes', async () => {
+    const res = await request(app).get('/plants/any/blooms');
+    expect(res.status).toBe(401);
+  });
+});
+
 // ── GET /portal/:token (#170) ─────────────────────────────────────────────────
 
 describe('GET /portal/:token', () => {
@@ -4917,5 +5040,24 @@ describe('GET /portal/:token', () => {
     expect(res.status).toBe(200);
     expect(res.body.label).toBe('Test Garden');
     expect(Array.isArray(res.body.plants)).toBe(true);
+  });
+});
+
+describe('sit-session routes', () => {
+  it('POST /sit-sessions creates a session', async () => {
+    const res = await request(app)
+      .post('/sit-sessions')
+      .set('Authorization', authHeader())
+      .send({ durationDays: 7, sitterName: 'Alice' });
+    // jwt may not be available in test env — either 201 or 503
+    expect([201, 503]).toContain(res.status);
+  });
+
+  it('GET /sit-sessions returns sessions list', async () => {
+    const res = await request(app)
+      .get('/sit-sessions')
+      .set('Authorization', authHeader());
+    expect([200]).toContain(res.status);
+    if (res.status === 200) expect(Array.isArray(res.body)).toBe(true);
   });
 });

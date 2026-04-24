@@ -341,7 +341,9 @@ export default function InsightsPage() {
                         </Col>
                         <Col md={3}>
                           <h6>Watering Pattern</h6>
-                          {plantDetails[score.plantId].pattern ? (
+                          {plantDetails[score.plantId].pattern?.upgrade_required ? (
+                            <UpgradePrompt feature="ml_insights" />
+                          ) : plantDetails[score.plantId].pattern ? (
                             <>
                               <Badge style={{ backgroundColor: PATTERN_COLORS[plantDetails[score.plantId].pattern.pattern] }}>
                                 {PATTERN_LABELS[plantDetails[score.plantId].pattern.pattern] || plantDetails[score.plantId].pattern.pattern}
@@ -368,7 +370,9 @@ export default function InsightsPage() {
                         </Col>
                         <Col md={3}>
                           <h6>Recommendation</h6>
-                          {plantDetails[score.plantId].recommendation ? (
+                          {plantDetails[score.plantId].recommendation?.upgrade_required ? (
+                            <UpgradePrompt feature="ml_insights" />
+                          ) : plantDetails[score.plantId].recommendation ? (
                             <>
                               <p className="mb-1">
                                 Every <strong>{plantDetails[score.plantId].recommendation.recommendedFrequencyDays}</strong> days
@@ -386,7 +390,9 @@ export default function InsightsPage() {
                       <Row className="pt-2 border-top">
                         <Col md={4} data-testid="anomaly-section">
                           <h6>Anomaly Detection</h6>
-                          {plantDetails[score.plantId].anomaly ? (
+                          {plantDetails[score.plantId].anomaly?.upgrade_required ? (
+                            <UpgradePrompt feature="ml_insights" />
+                          ) : plantDetails[score.plantId].anomaly ? (
                             <>
                               <div className="d-flex align-items-center gap-2 mb-1">
                                 {plantDetails[score.plantId].anomaly.isAnomaly ? (
@@ -408,7 +414,9 @@ export default function InsightsPage() {
 
                         <Col md={4} data-testid="seasonal-section">
                           <h6>Seasonal Adjustment</h6>
-                          {plantDetails[score.plantId].seasonal ? (
+                          {plantDetails[score.plantId].seasonal?.upgrade_required ? (
+                            <UpgradePrompt feature="ml_insights" />
+                          ) : plantDetails[score.plantId].seasonal ? (
                             <>
                               <p className="mb-1">
                                 <Badge bg="secondary" className="me-1 text-capitalize">{plantDetails[score.plantId].seasonal.season}</Badge>

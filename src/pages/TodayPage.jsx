@@ -5,7 +5,7 @@ import { useToast } from '../components/Toast.jsx'
 import FeedRecordModal from '../components/FeedRecordModal.jsx'
 import UpgradePrompt from '../components/UpgradePrompt.jsx'
 import { getPlantEmoji } from '../utils/plantEmoji.js'
-import { buildWaterTasks, buildFeedTasks, setSnooze, clampSnooze } from '../utils/todayTasks.js'
+import { buildWaterTasks, buildFeedTasks, buildLifecycleTasks, setSnooze, clampSnooze } from '../utils/todayTasks.js'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
 const SNOOZE_PRESETS = [
@@ -29,6 +29,10 @@ export default function TodayPage() {
   const { tasks: feedTasks } = useMemo(
     () => buildFeedTasks(plants, weather),
     [plants, weather],
+  )
+  const { tasks: lifecycleTasks } = useMemo(
+    () => buildLifecycleTasks(plants),
+    [plants],
   )
 
   const grouped = useMemo(() => {
@@ -106,7 +110,7 @@ export default function TodayPage() {
         </Alert>
       )}
 
-      {tasks.length === 0 && feedTasks.length === 0 ? (
+      {tasks.length === 0 && feedTasks.length === 0 && lifecycleTasks.length === 0 ? (
         <div className="text-center py-5">
           <div style={{ fontSize: '3rem' }} aria-hidden="true">🌿</div>
           <h2 className="h4 mt-2">All caught up</h2>
@@ -175,6 +179,30 @@ export default function TodayPage() {
                     <Button size="sm" variant="primary" onClick={() => setFeedPlant(t.plant)} disabled={busy}>
                       Feed
                     </Button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {lifecycleTasks.length > 0 && (
+            <section className="mb-4">
+              <h2 className="h5 mb-3">Lifecycle</h2>
+              <ul className="list-group">
+                {lifecycleTasks.map((t) => (
+                  <li key={t.id} className="list-group-item d-flex align-items-center gap-3">
+                    <span style={{ fontSize: '1.5rem' }} aria-hidden="true">{getPlantEmoji(t.plant)}</span>
+                    <div className="flex-grow-1 min-w-0">
+                      <div className="fw-500 text-truncate">{t.plant.name}</div>
+                      <div className="fs-xs text-muted">
+                        <span className="text-warning fw-500">
+                          {t.type === 'repot' ? 'Repotting' : 'Pruning'} overdue by {t.daysOverdue} day{t.daysOverdue === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="badge bg-warning text-dark text-uppercase fs-xs">
+                      {t.type === 'repot' ? 'Repot' : 'Prune'}
+                    </span>
                   </li>
                 ))}
               </ul>

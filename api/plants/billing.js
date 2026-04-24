@@ -79,6 +79,13 @@ async function getCurrentTier(db, userId) {
   if (!billingEnabled()) return 'free';
   const sub = await readSubscription(db, userId);
   if (!sub) return 'free';
+  // Check for active trial (isTrial flag set on subscription doc)
+  if (sub.isTrial && sub.trialEnd) {
+    if (new Date(sub.trialEnd).getTime() > Date.now()) {
+      return sub.trialTier || 'home_pro';
+    }
+    // Trial expired — fall through to normal logic
+  }
   if (sub.status === 'active' || sub.status === 'trialing') {
     return sub.tier && TIERS[sub.tier] ? sub.tier : 'free';
   }

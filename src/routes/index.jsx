@@ -19,12 +19,14 @@ const TermsPage = lazy(() => import('../pages/TermsPage.jsx'))
 const ScanPage = lazy(() => import('../pages/ScanPage.jsx'))
 const PropagationPage = lazy(() => import('../pages/PropagationPage.jsx'))
 const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
+const SitPage = lazy(() => import('../pages/SitPage.jsx'))
 
 export const routes = [
   { path: '/privacy', element: <Suspense fallback={null}><PrivacyPage /></Suspense> },
   { path: '/terms', element: <Suspense fallback={null}><TermsPage /></Suspense> },
   { path: '/scan/:shortCode', element: <Suspense fallback={null}><ScanPage /></Suspense> },
   { path: '/portal/:token', element: <Suspense fallback={null}><PortalPage /></Suspense> },
+  { path: '/sit/:token', element: <Suspense fallback={null}><SitPage /></Suspense> },
   {
     element: <AuthLayout />,
     children: [
@@ -34,19 +36,19 @@ export const routes = [
   {
     element: <MainLayout />,
     children: [
-      { index: true, element: <DashboardPage /> },
-      { path: 'today', element: <TodayPage /> },
-      { path: 'propagation', element: <PropagationPage /> },
+      { index: true, element: <DashboardPage />, handle: { breadcrumb: 'Garden' } },
+      { path: 'today', element: <TodayPage />, handle: { breadcrumb: 'Today' } },
+      { path: 'propagation', element: <PropagationPage />, handle: { breadcrumb: 'Propagation' } },
       { path: 'plants', element: <Navigate to="/?view=list" replace /> },
-      { path: 'analytics', element: <AnalyticsPage /> },
-      { path: 'calendar', element: <CalendarPage /> },
-      { path: 'forecast', element: <ForecastPage /> },
-      { path: 'insights', element: <InsightsPage /> },
-      { path: 'bulk-upload', element: <BulkUploadPage /> },
+      { path: 'analytics', element: <AnalyticsPage />, handle: { breadcrumb: 'Analytics' } },
+      { path: 'calendar', element: <CalendarPage />, handle: { breadcrumb: 'Care Calendar' } },
+      { path: 'forecast', element: <ForecastPage />, handle: { breadcrumb: 'Forecast' } },
+      { path: 'insights', element: <InsightsPage />, handle: { breadcrumb: 'ML Insights' } },
+      { path: 'bulk-upload', element: <BulkUploadPage />, handle: { breadcrumb: 'Bulk Upload' } },
       { path: 'settings', element: <Navigate to="/settings/property" replace /> },
       { path: 'settings/billing', element: <BillingPage /> },
-      { path: 'settings/:tab', element: <SettingsPage /> },
-      { path: 'pricing', element: <PricingPage /> },
+      { path: 'settings/:tab', element: <SettingsPage />, handle: { breadcrumb: 'Settings' } },
+      { path: 'pricing', element: <PricingPage />, handle: { breadcrumb: 'Pricing' } },
     ],
   },
 ]

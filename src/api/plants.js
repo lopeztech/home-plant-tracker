@@ -283,6 +283,7 @@ export const soilApi = {
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),
+  startTrial: () => request('/account/trial/start', { method: 'POST' }),
 }
 
 export const billingApi = {
@@ -395,6 +396,27 @@ export const apiKeysApi = {
   async revoke(id) {
     return request(`/api-keys/${id}`, { method: 'DELETE' })
   },
+}
+
+export const lifecycleApi = {
+  getStatus: (plantId) => request(`/plants/${plantId}/lifecycle`),
+  recordRepot: (plantId, data) => request(`/plants/${plantId}/lifecycle/repot`, { method: 'POST', body: JSON.stringify(data) }),
+  recordPrune: (plantId, data) => request(`/plants/${plantId}/lifecycle/prune`, { method: 'POST', body: JSON.stringify(data) }),
+}
+
+export const bloomsApi = {
+  list: (plantId) => request(`/plants/${plantId}/blooms`),
+  start: (plantId, data) => request(`/plants/${plantId}/blooms`, { method: 'POST', body: JSON.stringify(data) }),
+  update: (plantId, bloomId, data) => request(`/plants/${plantId}/blooms/${bloomId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  end: (plantId, bloomId, data) => request(`/plants/${plantId}/blooms/${bloomId}/end`, { method: 'POST', body: JSON.stringify(data) }),
+}
+
+export const sitApi = {
+  createSession: (data) => request('/sit-sessions', { method: 'POST', body: JSON.stringify(data) }),
+  listSessions: () => request('/sit-sessions'),
+  endSession: (sessionId) => request(`/sit-sessions/${sessionId}`, { method: 'DELETE' }),
+  getSitterView: (token) => fetch(`${BASE_URL}/sit/${token}`).then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e))),
+  waterPlant: (token, plantId) => fetch(`${BASE_URL}/sit/${token}/water/${plantId}`, { method: 'POST' }).then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e))),
 }
 
 export const imagesApi = {

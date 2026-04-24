@@ -10,6 +10,8 @@ const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
+let jwt;
+try { jwt = require('jsonwebtoken'); } catch { jwt = null; }
 
 // ── Gemini API fetch patch ────────────────────────────────────────────────────
 // The Gemini API sometimes embeds generated text that contains raw control
@@ -602,12 +604,17 @@ app.get('/billing/subscription', requireUser, async (req, res) => {
       billing.readAiAnalysesUsage(db, req.userId),
       billing.readStorageUsageMb(db, req.userId),
     ]);
+    const trialDaysRemaining = sub?.isTrial && sub?.trialEnd
+      ? Math.max(0, Math.ceil((new Date(sub.trialEnd).getTime() - Date.now()) / 86400000))
+      : null;
     return res.status(200).json({
       billingEnabled: billing.billingEnabled(),
       tier,
       status:            sub?.status || (billing.billingEnabled() ? 'free' : 'free'),
       currentPeriodEnd:  sub?.currentPeriodEnd || null,
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd || false,
+      isTrial:           sub?.isTrial || false,
+      trialDaysRemaining,
       quotas: billing.TIERS[tier].quotas,
       usage: {
         plants:           plantsCount,
@@ -2449,6 +2456,12 @@ function isCacheValid(cache, key) {
 
 app.get('/plants/:id/watering-pattern', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
+    if (billing.billingEnabled()) {
+      const currentTier = await billing.getCurrentTier(db, req.userId).catch(() => 'free');
+      if (!billing.tierMeetsMinimum(currentTier, 'home_pro')) {
+        return res.status(200).json({ upgrade_required: true, tier: currentTier });
+      }
+    }
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
@@ -2505,6 +2518,12 @@ const RECOMMENDATION_CACHE_TTL_MS = 48 * 60 * 60 * 1000; // 48 hours
 
 app.get('/plants/:id/watering-recommendation', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
+    if (billing.billingEnabled()) {
+      const currentTier = await billing.getCurrentTier(db, req.userId).catch(() => 'free');
+      if (!billing.tierMeetsMinimum(currentTier, 'home_pro')) {
+        return res.status(200).json({ upgrade_required: true, tier: currentTier });
+      }
+    }
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
@@ -2775,6 +2794,12 @@ function computeSeasonalAdjustment(plant, hemisphere) {
 
 app.get('/plants/:id/seasonal-adjustment', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
+    if (billing.billingEnabled()) {
+      const currentTier = await billing.getCurrentTier(db, req.userId).catch(() => 'free');
+      if (!billing.tierMeetsMinimum(currentTier, 'home_pro')) {
+        return res.status(200).json({ upgrade_required: true, tier: currentTier });
+      }
+    }
     const ref = userPlants(req.userId).doc(req.params.id);
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
@@ -3208,6 +3233,12 @@ app.post('/ml/anomaly-scan', async (req, res) => {
 // User-facing anomaly status
 app.get('/plants/:id/anomaly', requireUser, requireTier('home_pro'), async (req, res) => {
   try {
+    if (billing.billingEnabled()) {
+      const currentTier = await billing.getCurrentTier(db, req.userId).catch(() => 'free');
+      if (!billing.tierMeetsMinimum(currentTier, 'home_pro')) {
+        return res.status(200).json({ upgrade_required: true, tier: currentTier });
+      }
+    }
     const doc = await userPlants(req.userId).doc(req.params.id).get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
@@ -3582,6 +3613,181 @@ app.delete('/plants/:id', requireUser, async (req, res) => {
   }
 });
 
+// ── Lifecycle (repotting & pruning) ────────────────────────────────────────
+
+// Default repot intervals in months by species keyword
+const REPOT_DEFAULTS = {
+  monstera: 18, pothos: 12, fern: 12, orchid: 24, cactus: 36, succulent: 36,
+  snake: 24, spider: 12, peace: 18, fiddle: 12, rubber: 18, ivy: 12,
+};
+
+function defaultRepotIntervalMonths(species) {
+  if (!species) return 18;
+  const s = species.toLowerCase();
+  for (const [key, months] of Object.entries(REPOT_DEFAULTS)) {
+    if (s.includes(key)) return months;
+  }
+  return 18;
+}
+
+app.get('/plants/:id/lifecycle', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const plant = doc.data();
+    const repotInterval = plant.repotIntervalMonths || defaultRepotIntervalMonths(plant.species);
+    const now = Date.now();
+    let repotDaysOverdue = null;
+    if (plant.lastRepotted) {
+      const nextRepot = new Date(plant.lastRepotted).getTime() + repotInterval * 30 * 86400000;
+      repotDaysOverdue = Math.ceil((now - nextRepot) / 86400000);
+    }
+    let pruneDaysOverdue = null;
+    const pruneInterval = plant.pruneIntervalMonths || 6;
+    if (plant.lastPruned) {
+      const nextPrune = new Date(plant.lastPruned).getTime() + pruneInterval * 30 * 86400000;
+      pruneDaysOverdue = Math.ceil((now - nextPrune) / 86400000);
+    }
+    res.status(200).json({
+      lastRepotted: plant.lastRepotted || null,
+      repotIntervalMonths: repotInterval,
+      repotDaysOverdue,
+      lastPruned: plant.lastPruned || null,
+      pruneIntervalMonths: pruneInterval,
+      pruneDaysOverdue,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/lifecycle/repot', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const { date, notes, newPotSize } = req.body;
+    const repottedAt = date || new Date().toISOString();
+    const update = { lastRepotted: repottedAt, updatedAt: new Date().toISOString() };
+    if (newPotSize) update.potSize = newPotSize;
+    if (req.body.repotIntervalMonths) update.repotIntervalMonths = req.body.repotIntervalMonths;
+    // Append to phenology log for history
+    const plant = doc.data();
+    const phenologyEntry = {
+      id: `repot-${Date.now()}`,
+      event: 'repotting',
+      date: repottedAt,
+      notes: notes || null,
+      newPotSize: newPotSize || null,
+    };
+    await ref.set({
+      ...update,
+      phenologyLog: [...(plant.phenologyLog || []), phenologyEntry],
+    }, { merge: true });
+    res.status(201).json({ repottedAt, notes, newPotSize });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/lifecycle/prune', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const { date, notes, pruneType } = req.body;
+    const prunedAt = date || new Date().toISOString();
+    const update = { lastPruned: prunedAt, updatedAt: new Date().toISOString() };
+    if (req.body.pruneIntervalMonths) update.pruneIntervalMonths = req.body.pruneIntervalMonths;
+    const plant = doc.data();
+    const phenologyEntry = {
+      id: `prune-${Date.now()}`,
+      event: 'pruning',
+      date: prunedAt,
+      notes: notes || null,
+      pruneType: pruneType || 'light',
+    };
+    await ref.set({
+      ...update,
+      phenologyLog: [...(plant.phenologyLog || []), phenologyEntry],
+    }, { merge: true });
+    res.status(201).json({ prunedAt, notes, pruneType });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Bloom tracking ─────────────────────────────────────────────────────────
+
+app.get('/plants/:id/blooms', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const plant = doc.data();
+    const blooms = (plant.bloomLog || []).sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+    res.status(200).json(blooms);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/blooms', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const { startedAt, colors, notes, count } = req.body;
+    const bloom = {
+      id: `bloom-${Date.now()}`,
+      startedAt: startedAt || new Date().toISOString(),
+      endedAt: null,
+      colors: colors || [],
+      notes: notes || null,
+      count: count || null,
+    };
+    const plant = doc.data();
+    await ref.set({ bloomLog: [...(plant.bloomLog || []), bloom] }, { merge: true });
+    res.status(201).json(bloom);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/plants/:id/blooms/:bloomId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const plant = doc.data();
+    const bloomLog = (plant.bloomLog || []).map((b) =>
+      b.id === req.params.bloomId ? { ...b, ...req.body, id: b.id } : b
+    );
+    await ref.set({ bloomLog }, { merge: true });
+    const updated = bloomLog.find((b) => b.id === req.params.bloomId);
+    if (!updated) return res.status(404).json({ error: 'Bloom not found' });
+    res.status(200).json(updated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/blooms/:bloomId/end', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const plant = doc.data();
+    const endedAt = req.body?.endedAt || new Date().toISOString();
+    const bloomLog = (plant.bloomLog || []).map((b) =>
+      b.id === req.params.bloomId ? { ...b, endedAt } : b
+    );
+    await ref.set({ bloomLog }, { merge: true });
+    res.status(200).json({ endedAt });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Account management ────────────────────────────────────────────────────────
 
 async function deleteSubCollection(collRef) {
@@ -3621,6 +3827,29 @@ app.delete('/account', requireUser, async (req, res) => {
     );
 
     res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/account/trial/start', requireUser, async (req, res) => {
+  try {
+    const subRef = db.collection('users').doc(req.userId).collection('subscription').doc('current');
+    const snap = await subRef.get();
+    // Only start trial for users with no subscription yet
+    if (snap.exists) {
+      return res.status(200).json({ alreadyExists: true });
+    }
+    const trialEnd = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+    await subRef.set({
+      tier: 'free',
+      isTrial: true,
+      trialTier: 'home_pro',
+      trialEnd,
+      status: 'trialing',
+      createdAt: new Date().toISOString(),
+    });
+    res.status(201).json({ isTrial: true, trialEnd, trialDaysRemaining: 7 });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -4461,6 +4690,127 @@ app.get('/portal/:token', async (req, res) => {
     const branding = brandingDoc.exists ? brandingDoc.data() : null;
 
     res.status(200).json({ label, plants, floors, branding });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Plant-sitter sessions ───────────────────────────────────────────────────
+
+const SIT_SECRET = process.env.SIT_JWT_SECRET || 'sit-secret-dev-only';
+
+app.post('/sit-sessions', requireUser, async (req, res) => {
+  try {
+    if (!jwt) return res.status(503).json({ error: 'jwt_unavailable' });
+    const { durationDays = 7, plantIds, floorId, sitterName, notes } = req.body;
+    const sessionId = `sit-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const expiresAt = new Date(Date.now() + durationDays * 86400000).toISOString();
+    const token = jwt.sign(
+      { sessionId, userId: req.userId, plantIds: plantIds || null, floorId: floorId || null },
+      SIT_SECRET,
+      { expiresIn: `${durationDays}d` }
+    );
+    const sessionDoc = {
+      sessionId, token, expiresAt, sitterName: sitterName || null,
+      notes: notes || null, status: 'active', createdAt: new Date().toISOString(),
+      plantIds: plantIds || null, floorId: floorId || null,
+    };
+    await db.collection('users').doc(req.userId).collection('sitSessions').doc(sessionId).set(sessionDoc);
+    res.status(201).json({ ...sessionDoc, shareUrl: `/sit/${token}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/sit-sessions', requireUser, async (req, res) => {
+  try {
+    const snap = await db.collection('users').doc(req.userId).collection('sitSessions')
+      .orderBy('createdAt', 'desc').limit(20).get();
+    res.status(200).json(snap.docs.map((d) => d.data()));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/sit-sessions/:sessionId', requireUser, async (req, res) => {
+  try {
+    await db.collection('users').doc(req.userId).collection('sitSessions')
+      .doc(req.params.sessionId).update({ status: 'ended', endedAt: new Date().toISOString() });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Public sitter routes — no user auth, token-based
+app.get('/sit/:token', async (req, res) => {
+  try {
+    if (!jwt) return res.status(503).json({ error: 'jwt_unavailable' });
+    let decoded;
+    try {
+      decoded = jwt.verify(req.params.token, SIT_SECRET);
+    } catch {
+      return res.status(401).json({ error: 'invalid_or_expired_token' });
+    }
+    const { sessionId, userId, plantIds } = decoded;
+    const sessionSnap = await db.collection('users').doc(userId).collection('sitSessions').doc(sessionId).get();
+    if (!sessionSnap.exists || sessionSnap.data().status !== 'active') {
+      return res.status(404).json({ error: 'session_not_found_or_ended' });
+    }
+    const session = sessionSnap.data();
+    // Get plants
+    let plantsData;
+    if (plantIds && plantIds.length > 0) {
+      const docs = await Promise.all(
+        plantIds.map((id) => db.collection('users').doc(userId).collection('plants').doc(id).get())
+      );
+      plantsData = await Promise.all(
+        docs.filter((d) => d.exists).map((d) => signPlantData({ id: d.id, ...d.data() }))
+      );
+    } else {
+      const snap = await db.collection('users').doc(userId).collection('plants').limit(50).get();
+      plantsData = await Promise.all(snap.docs.map((d) => signPlantData({ id: d.id, ...d.data() })));
+    }
+    res.status(200).json({
+      sessionId, sitterName: session.sitterName, notes: session.notes,
+      expiresAt: session.expiresAt, plants: plantsData,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/sit/:token/water/:plantId', async (req, res) => {
+  try {
+    if (!jwt) return res.status(503).json({ error: 'jwt_unavailable' });
+    let decoded;
+    try {
+      decoded = jwt.verify(req.params.token, SIT_SECRET);
+    } catch {
+      return res.status(401).json({ error: 'invalid_or_expired_token' });
+    }
+    const { sessionId, userId, plantIds } = decoded;
+    const plantId = req.params.plantId;
+    if (plantIds && !plantIds.includes(plantId)) {
+      return res.status(403).json({ error: 'plant_not_in_session' });
+    }
+    const sessionSnap = await db.collection('users').doc(userId).collection('sitSessions').doc(sessionId).get();
+    if (!sessionSnap.exists || sessionSnap.data().status !== 'active') {
+      return res.status(404).json({ error: 'session_ended' });
+    }
+    const now = new Date().toISOString();
+    const ref = db.collection('users').doc(userId).collection('plants').doc(plantId);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const plant = doc.data();
+    const sitterName = sessionSnap.data().sitterName || 'Sitter';
+    const waterEntry = { date: now, method: 'manual', wateredBy: sitterName };
+    await ref.set({
+      lastWatered: now,
+      wateringLog: [...(plant.wateringLog || []).slice(-49), waterEntry],
+      updatedAt: now,
+    }, { merge: true });
+    res.status(201).json({ wateredAt: now, wateredBy: sitterName });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

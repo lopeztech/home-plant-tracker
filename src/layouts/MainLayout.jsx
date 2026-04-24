@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, Component } from 'react'
 import { useRtl } from '../hooks/useRtl.js'
 import { Outlet, Navigate, useLocation } from 'react-router'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
@@ -14,10 +14,18 @@ import FeatureTour from '../components/FeatureTour.jsx'
 import WhatsNewModal from '../components/WhatsNewModal.jsx'
 import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
+import Breadcrumbs from '../components/Breadcrumbs.jsx'
 import OfflineBanner from '../components/OfflineBanner.jsx'
+import TrialBanner from '../components/TrialBanner.jsx'
 import HelpDrawer from '../components/HelpDrawer.jsx'
 import CommandPalette from '../components/CommandPalette.jsx'
 import { SkeletonRect, SkeletonText } from '../components/Skeleton.jsx'
+
+class BreadcrumbsGuard extends Component {
+  state = { failed: false }
+  static getDerivedStateFromError() { return { failed: true } }
+  render() { return this.state.failed ? null : this.props.children }
+}
 
 function GlobalKeyboardShortcuts() {
   const { open } = useCommandPalette()
@@ -75,12 +83,14 @@ export default function MainLayout() {
             <Topbar />
             <Sidebar />
             <main className="app-body">
+              <TrialBanner />
               <OfflineBanner />
               <div className="px-3 pt-3">
                 <WeatherAlertBanner />
               </div>
               <div className="app-content">
               <ErrorBoundary context="this page">
+                <BreadcrumbsGuard><Breadcrumbs /></BreadcrumbsGuard>
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={location.pathname}
