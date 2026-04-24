@@ -42,6 +42,14 @@ export default defineConfig({
       name: 'mobile-chrome',
       use: { ...devices['Pixel 7'] },
     },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+    },
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+    },
   ],
   // Only auto-start a preview server when we're testing the local build.
   webServer: externalBaseUrl ? undefined : {
