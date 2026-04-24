@@ -64,9 +64,9 @@ vi.mock('react-apexcharts', () => ({
   default: () => <div data-testid="apex-chart" />,
 }))
 
-// react-joyride uses DOM APIs not available in jsdom
+// react-joyride v3 uses DOM APIs not available in jsdom (named export, no default)
 vi.mock('react-joyride', () => ({
-  default: () => null,
+  Joyride: () => null,
   STATUS: { FINISHED: 'finished', SKIPPED: 'skipped' },
 }))
 
@@ -111,8 +111,9 @@ const samplePlant = {
 describe('App', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Skip onboarding modal so dashboard content is visible
+    // Skip onboarding + What's-new modal so dashboard content is visible
     localStorage.setItem('plant-tracker-onboarded', '1')
+    localStorage.setItem('plant-tracker-whats-new-seen', '99.0.0')
     plantsApi.list.mockResolvedValue({ plants: [], hasMore: false, nextCursor: null })
     floorsApi.get.mockResolvedValue({ floors: [{ id: 'ground', name: 'Ground Floor', order: 0, type: 'interior' }] })
     useAuth.mockReturnValue({
