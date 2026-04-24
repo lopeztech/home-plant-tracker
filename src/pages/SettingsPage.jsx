@@ -653,8 +653,9 @@ function DataTab({ search }) {
 }
 
 function ApiKeysTab({ search }) {
+  const { isGuest } = useAuth()
   const [keys, setKeys] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!isGuest)
   const [error, setError] = useState(null)
   const [creating, setCreating] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
@@ -673,7 +674,9 @@ function ApiKeysTab({ search }) {
     }
   }, [])
 
-  useEffect(() => { loadKeys() }, [loadKeys])
+  // Guests never have API keys — skip the fetch so demo/preview modes don't
+  // produce a spurious NetworkError in the console.
+  useEffect(() => { if (!isGuest) loadKeys() }, [loadKeys, isGuest])
 
   const handleCreate = async () => {
     if (!newKeyName.trim()) return
@@ -807,6 +810,7 @@ function ApiKeysTab({ search }) {
 }
 
 function BrandingTab({ search }) {
+  const { isGuest } = useAuth()
   const [form, setForm] = useState({ businessName: '', brandColour: '#3a7d44', contactPhone: '', contactEmail: '', contactWebsite: '' })
   const [logoUrl, setLogoUrl] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -815,7 +819,10 @@ function BrandingTab({ search }) {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const logoInputRef = useRef(null)
 
+  // Guests don't have a persisted branding config — skip the fetch so demo
+  // and preview modes don't produce a spurious NetworkError.
   useEffect(() => {
+    if (isGuest) return
     brandingApi.get().then((data) => {
       setForm({
         businessName: data.businessName || '',
@@ -826,7 +833,7 @@ function BrandingTab({ search }) {
       })
       if (data.logoUrl) setLogoUrl(data.logoUrl)
     }).catch(() => {})
-  }, [])
+  }, [isGuest])
 
   const handleLogoUpload = async (file) => {
     if (!file) return
