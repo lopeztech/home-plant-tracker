@@ -1,4 +1,4 @@
-import Joyride, { STATUS } from 'react-joyride'
+import { Joyride, STATUS } from 'react-joyride'
 import { useTour } from '../context/TourContext.jsx'
 
 const TOUR_STEPS = {
