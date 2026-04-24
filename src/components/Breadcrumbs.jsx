@@ -1,38 +1,38 @@
-import { Link, useMatches } from 'react-router'
-import { usePlantContext } from '../context/PlantContext.jsx'
+import { Link, useLocation } from 'react-router'
+
+// Static map — works with BrowserRouter (no data-router useMatches required).
+// Keys are exact pathnames; the first segment is the Home ("Garden") crumb.
+const PATH_LABELS = {
+  '/today':                'Today',
+  '/propagation':          'Propagation',
+  '/analytics':            'Analytics',
+  '/calendar':             'Care Calendar',
+  '/forecast':             'Forecast',
+  '/insights':             'ML Insights',
+  '/bulk-upload':          'Bulk Upload',
+  '/settings/property':    'Settings',
+  '/settings/preferences': 'Settings',
+  '/settings/floors':      'Settings',
+  '/settings/data':        'Settings',
+  '/settings/api-keys':    'Settings',
+  '/settings/branding':    'Settings',
+  '/settings/advanced':    'Settings',
+  '/settings/billing':     'Billing',
+  '/pricing':              'Pricing',
+}
 
 export default function Breadcrumbs() {
-  const matches = useMatches()
-  const { plants } = usePlantContext()
-
-  const crumbs = matches
-    .filter((m) => m.handle?.breadcrumb)
-    .map((m) => {
-      let label = m.handle.breadcrumb
-      if (typeof label === 'function') {
-        label = label(m.params, { plants })
-      }
-      return { label, path: m.pathname }
-    })
-
-  if (crumbs.length <= 1) return null
+  const { pathname } = useLocation()
+  const label = PATH_LABELS[pathname]
+  if (!label) return null
 
   return (
     <nav aria-label="Breadcrumb" className="mb-2 mt-1 px-3">
       <ol className="breadcrumb mb-0 fs-xs">
-        {crumbs.map((crumb, i) => (
-          <li
-            key={crumb.path}
-            className={`breadcrumb-item${i === crumbs.length - 1 ? ' active' : ''}`}
-            aria-current={i === crumbs.length - 1 ? 'page' : undefined}
-          >
-            {i < crumbs.length - 1 ? (
-              <Link to={crumb.path} className="text-decoration-none">{crumb.label}</Link>
-            ) : (
-              crumb.label
-            )}
-          </li>
-        ))}
+        <li className="breadcrumb-item">
+          <Link to="/" className="text-decoration-none">Garden</Link>
+        </li>
+        <li className="breadcrumb-item active" aria-current="page">{label}</li>
       </ol>
     </nav>
   )

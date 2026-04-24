@@ -1,4 +1,4 @@
-import { Suspense, useEffect, Component } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useRtl } from '../hooks/useRtl.js'
 import { Outlet, Navigate, useLocation } from 'react-router'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
@@ -20,12 +20,6 @@ import TrialBanner from '../components/TrialBanner.jsx'
 import HelpDrawer from '../components/HelpDrawer.jsx'
 import CommandPalette from '../components/CommandPalette.jsx'
 import { SkeletonRect, SkeletonText } from '../components/Skeleton.jsx'
-
-class BreadcrumbsGuard extends Component {
-  state = { failed: false }
-  static getDerivedStateFromError() { return { failed: true } }
-  render() { return this.state.failed ? null : this.props.children }
-}
 
 function GlobalKeyboardShortcuts() {
   const { open } = useCommandPalette()
@@ -90,7 +84,7 @@ export default function MainLayout() {
               </div>
               <div className="app-content">
               <ErrorBoundary context="this page">
-                <BreadcrumbsGuard><Breadcrumbs /></BreadcrumbsGuard>
+                <Breadcrumbs />
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={location.pathname}

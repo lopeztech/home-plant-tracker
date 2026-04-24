@@ -19,7 +19,7 @@ export default function SidebarMenu({ items, badges = {} }) {
   function toggleSection(key) {
     const next = { ...collapsed, [key]: !collapsed[key] }
     setCollapsed(next)
-    try { localStorage.setItem('sidebarCollapsed', JSON.stringify(next)) } catch { /* ignore */ } // lgtm[js/clear-text-storage-of-sensitive-data]
+    try { localStorage.setItem('sidebarCollapsed', JSON.stringify(next)) } catch { /* ignore */ }
   }
 
   function renderItem(item) {

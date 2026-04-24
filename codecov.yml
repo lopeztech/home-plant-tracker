@@ -1,0 +1,18 @@
+comment:
+  layout: "reach,diff"
+  behavior: default
+  require_changes: true
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 2%
+    # New-line patch coverage is informational — the project has many UI
+    # components that are intentionally excluded from unit tests (canvas-heavy
+    # 3D views, Storybook stories, etc.).  The overall and backend thresholds
+    # enforced by vitest are the authoritative coverage gates.
+    patch:
+      default:
+        informational: true
