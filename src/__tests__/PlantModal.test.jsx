@@ -847,7 +847,7 @@ describe('PlantModal', () => {
     renderModal({ plant: existingPlant })
     expect(screen.getByRole('tablist', { name: /plant sections/i })).toBeInTheDocument()
     const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth', 'Journal', 'Health'])
+    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth', 'Journal', 'Soil', 'Health'])
   })
 
   it('marks the active tab with aria-selected="true"', () => {
@@ -879,7 +879,7 @@ describe('PlantModal', () => {
   it('wraps to the first tab when ArrowRight is pressed on the last tab', () => {
     renderModal({ plant: existingPlant })
     fireEvent.click(screen.getByText('Health'))
-    const healthTab = screen.getAllByRole('tab')[5]
+    const healthTab = screen.getAllByRole('tab')[6]
     fireEvent.keyDown(healthTab, { key: 'ArrowRight' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
@@ -897,8 +897,8 @@ describe('PlantModal', () => {
     fireEvent.click(screen.getByText('Watering'))
     const wateringTab = screen.getAllByRole('tab')[1]
     fireEvent.keyDown(wateringTab, { key: 'End' })
-    expect(screen.getAllByRole('tab')[5]).toHaveAttribute('aria-selected', 'true')
-    fireEvent.keyDown(screen.getAllByRole('tab')[5], { key: 'Home' })
+    expect(screen.getAllByRole('tab')[6]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(screen.getAllByRole('tab')[6], { key: 'Home' })
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
   })
 })
