@@ -238,6 +238,8 @@ export const propagationApi = {
   promote: (id, data) => request(`/propagations/${id}/promote`, { method: 'POST', body: JSON.stringify(data) }),
   delete: (id) => request(`/propagations/${id}`, { method: 'DELETE' }),
   recommend: (data) => request('/recommend-propagation', { method: 'POST', body: JSON.stringify(data) }),
+  lineage: (plantId, depth = 3) => request(`/plants/${plantId}/lineage?depth=${depth}`),
+  stats: () => request('/propagation/stats'),
 }
 
 export const accountApi = {

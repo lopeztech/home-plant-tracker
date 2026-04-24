@@ -9,11 +9,13 @@ vi.mock('../api/plants.js', () => ({
     update: vi.fn(),
     promote: vi.fn(),
     delete: vi.fn(),
+    stats: vi.fn().mockResolvedValue({ successRateBySpecies: [], successRateByMethod: [], successRateByMonth: [], topMothers: [] }),
+    lineage: vi.fn(),
   },
 }))
 
 vi.mock('../context/PlantContext.jsx', () => ({
-  usePlantContext: () => ({ isGuest: false, reloadPlants: vi.fn() }),
+  usePlantContext: () => ({ isGuest: false, reloadPlants: vi.fn(), plants: [] }),
 }))
 
 vi.mock('../components/EmptyState.jsx', () => ({
@@ -145,5 +147,40 @@ describe('buildPropagationTasks', () => {
     const result = buildPropagationTasks(props, now)
     expect(result.tasks[0].propagationId).toBe('a')
     expect(result.tasks[1].propagationId).toBe('b')
+  })
+})
+
+// ── Stats tab tests ────────────────────────────────────────────────────────────
+describe('PropagationPage stats tab', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    propagationApi.list.mockResolvedValue([])
+    propagationApi.stats.mockResolvedValue({
+      successRateBySpecies: [{ species: 'Pothos', total: 4, succeeded: 3, rate: 75 }],
+      successRateByMethod: [{ method: 'cutting', total: 4, succeeded: 3, rate: 75 }],
+      successRateByMonth: [],
+      topMothers: [{ plantId: 'p1', name: 'Mother Plant', species: 'Pothos', childrenCount: 3, survivalRate: 80 }],
+    })
+  })
+
+  it('renders Stats button in column tabs', async () => {
+    render(<PropagationPage />)
+    await waitFor(() => expect(screen.getByText('Stats')).toBeInTheDocument())
+  })
+
+  it('shows species stats table when Stats tab is clicked', async () => {
+    render(<PropagationPage />)
+    await waitFor(() => screen.getByText('Stats'))
+    fireEvent.click(screen.getByText('Stats'))
+    await waitFor(() => expect(screen.getByText('By species')).toBeInTheDocument())
+    expect(screen.getAllByText('Pothos').length).toBeGreaterThan(0)
+  })
+
+  it('shows top mothers table on Stats tab', async () => {
+    render(<PropagationPage />)
+    await waitFor(() => screen.getByText('Stats'))
+    fireEvent.click(screen.getByText('Stats'))
+    await waitFor(() => expect(screen.getByText('Top producing plants')).toBeInTheDocument())
+    expect(screen.getByText('Mother Plant')).toBeInTheDocument()
   })
 })

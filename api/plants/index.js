@@ -3131,6 +3131,136 @@ app.get('/plants/:id/anomaly', requireUser, async (req, res) => {
   }
 });
 
+// GET /plants/:id/lineage — ancestry and descendants (depth ≤ 3)
+app.get('/plants/:id/lineage', requireUser, async (req, res) => {
+  try {
+    const depth = Math.min(parseInt(req.query.depth) || 3, 3);
+    const targetId = req.params.id;
+
+    const snap = await userPlants(req.userId).get();
+    const allPlants = {};
+    for (const doc of snap.docs) {
+      allPlants[doc.id] = { id: doc.id, ...doc.data() };
+    }
+
+    if (!allPlants[targetId]) {
+      return res.status(404).json({ error: 'Plant not found' });
+    }
+
+    // Walk up parentPlantId chain for ancestors
+    const ancestors = [];
+    const visited = new Set([targetId]);
+    let cursor = allPlants[targetId];
+    for (let d = 0; d < depth; d++) {
+      if (!cursor.parentPlantId || !allPlants[cursor.parentPlantId]) break;
+      if (visited.has(cursor.parentPlantId)) break; // cycle guard
+      visited.add(cursor.parentPlantId);
+      cursor = allPlants[cursor.parentPlantId];
+      ancestors.unshift({ id: cursor.id, name: cursor.name, species: cursor.species, health: cursor.health });
+    }
+
+    // Collect direct children recursively (BFS, depth-limited)
+    function getChildren(plantId, currentDepth) {
+      if (currentDepth >= depth) return [];
+      return Object.values(allPlants)
+        .filter(p => p.parentPlantId === plantId)
+        .map(p => ({
+          id: p.id, name: p.name, species: p.species, health: p.health,
+          propagationMethod: p.propagationMethod || null,
+          children: getChildren(p.id, currentDepth + 1),
+        }));
+    }
+
+    const plant = allPlants[targetId];
+    res.status(200).json({
+      plant: { id: plant.id, name: plant.name, species: plant.species, health: plant.health, parentPlantId: plant.parentPlantId || null },
+      ancestors,
+      children: getChildren(targetId, 0),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /propagation/stats — success-rate analytics by species, method, month + top mothers
+app.get('/propagation/stats', requireUser, async (req, res) => {
+  try {
+    const [propSnap, plantSnap] = await Promise.all([
+      userPropagations(req.userId).get(),
+      userPlants(req.userId).get(),
+    ]);
+
+    const propagations = propSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const plants = plantSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+    const plantById = Object.fromEntries(plants.map(p => [p.id, p]));
+
+    const GOOD_HEALTH = new Set(['Good', 'Excellent']);
+    const SURVIVAL_MS = 90 * 86400000;
+    const now = Date.now();
+
+    function isSurvived(prop) {
+      const child = plants.find(p => p.parentPropagationId === prop.id);
+      if (!child) return false;
+      if (!GOOD_HEALTH.has(child.health)) return false;
+      const created = new Date(child.createdAt || prop.startDate).getTime();
+      return now - created >= SURVIVAL_MS;
+    }
+
+    const bySpecies = {};
+    const byMethod = {};
+    const byMonth = {};
+    const motherTotal = {};
+    const motherSucceeded = {};
+
+    for (const prop of propagations) {
+      if (!['transplanted', 'failed'].includes(prop.status)) continue;
+      const success = prop.status === 'transplanted' && isSurvived(prop);
+
+      const sp = prop.species || 'Unknown';
+      bySpecies[sp] = bySpecies[sp] || { total: 0, succeeded: 0 };
+      bySpecies[sp].total++;
+      if (success) bySpecies[sp].succeeded++;
+
+      const mt = prop.method || 'unknown';
+      byMethod[mt] = byMethod[mt] || { total: 0, succeeded: 0 };
+      byMethod[mt].total++;
+      if (success) byMethod[mt].succeeded++;
+
+      const mo = (prop.startDate || '').slice(0, 7) || 'unknown';
+      byMonth[mo] = byMonth[mo] || { total: 0, succeeded: 0 };
+      byMonth[mo].total++;
+      if (success) byMonth[mo].succeeded++;
+
+      if (prop.parentPlantId) {
+        motherTotal[prop.parentPlantId] = (motherTotal[prop.parentPlantId] || 0) + 1;
+        if (success) motherSucceeded[prop.parentPlantId] = (motherSucceeded[prop.parentPlantId] || 0) + 1;
+      }
+    }
+
+    const rate = (s, t) => t > 0 ? Math.round((s / t) * 100) : 0;
+
+    const topMothers = Object.entries(motherTotal)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([plantId, childrenCount]) => ({
+        plantId,
+        name: plantById[plantId]?.name || null,
+        species: plantById[plantId]?.species || null,
+        childrenCount,
+        survivalRate: rate(motherSucceeded[plantId] || 0, childrenCount),
+      }));
+
+    res.status(200).json({
+      successRateBySpecies: Object.entries(bySpecies).map(([species, v]) => ({ species, ...v, rate: rate(v.succeeded, v.total) })),
+      successRateByMethod: Object.entries(byMethod).map(([method, v]) => ({ method, ...v, rate: rate(v.succeeded, v.total) })),
+      successRateByMonth: Object.entries(byMonth).sort(([a], [b]) => a.localeCompare(b)).map(([month, v]) => ({ month, ...v, rate: rate(v.succeeded, v.total) })),
+      topMothers,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.delete('/plants/:id', requireUser, async (req, res) => {
   try {
     const ref = userPlants(req.userId).doc(req.params.id);
