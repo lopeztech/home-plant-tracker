@@ -17,3 +17,8 @@ terraform/tmp/
 api/plants/integration/images/*.jpg
 api/plants/integration/images/*.jpeg
 api/plants/integration/images/*.png
+
+# Playwright
+test-results/
+playwright-report/
+.playwright/
