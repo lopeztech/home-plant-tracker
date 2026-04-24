@@ -2,8 +2,10 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Button, Spinner } from 'react-bootstrap'
 import QRCode from 'qrcode'
 import { qrApi } from '../api/plants.js'
+import { useAuth } from '../contexts/AuthContext.jsx'
 
 export default function PlantQRTag({ plant }) {
+  const { isGuest } = useAuth()
   const [shortCode, setShortCode] = useState(plant?.shortCode || null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -13,7 +15,10 @@ export default function PlantQRTag({ plant }) {
     ? `${window.location.origin}/scan/${shortCode}`
     : null
 
+  // Guests don't have a server-side record, so skip the short-code fetch to
+  // avoid a spurious NetworkError in the console.
   useEffect(() => {
+    if (isGuest) return
     if (!shortCode && plant?.id) {
       setLoading(true)
       qrApi.getShortCode(plant.id)
@@ -21,7 +26,7 @@ export default function PlantQRTag({ plant }) {
         .catch(err => setError(err.message))
         .finally(() => setLoading(false))
     }
-  }, [plant?.id, shortCode])
+  }, [plant?.id, shortCode, isGuest])
 
   useEffect(() => {
     if (scanUrl && canvasRef.current) {
