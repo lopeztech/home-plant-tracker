@@ -4544,3 +4544,104 @@ describe('GET /api/v1/plants/:id/care-score', () => {
     expect(res.body.score).toBeDefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// GET /plants/:id/lineage  (#305 propagation lineage)
+// ---------------------------------------------------------------------------
+
+describe('GET /plants/:id/lineage', () => {
+  beforeEach(() => {
+    store[plantPath('parent')] = { name: 'Mother Monstera', species: 'Monstera', health: 'Good' };
+    store[plantPath('child')] = { name: 'Child Monstera', species: 'Monstera', health: 'Good', parentPlantId: 'parent' };
+    store[plantPath('grandchild')] = { name: 'Grandchild Monstera', species: 'Monstera', health: 'Good', parentPlantId: 'child' };
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app).get('/plants/nope/lineage').set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns plant with no ancestors or children', async () => {
+    const res = await request(app).get('/plants/parent/lineage').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.plant.id).toBe('parent');
+    expect(res.body.ancestors).toHaveLength(0);
+  });
+
+  it('returns ancestors for a child plant', async () => {
+    const res = await request(app).get('/plants/child/lineage').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.ancestors).toHaveLength(1);
+    expect(res.body.ancestors[0].id).toBe('parent');
+  });
+
+  it('returns children of a parent plant', async () => {
+    const res = await request(app).get('/plants/parent/lineage').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.children).toHaveLength(1);
+    expect(res.body.children[0].id).toBe('child');
+  });
+
+  it('returns nested children up to depth 3', async () => {
+    const res = await request(app).get('/plants/parent/lineage?depth=3').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.children[0].children).toHaveLength(1);
+    expect(res.body.children[0].children[0].id).toBe('grandchild');
+  });
+
+  it('prevents cycles via visited set', async () => {
+    store[plantPath('cycleA')] = { name: 'A', species: 'X', health: 'Good', parentPlantId: 'cycleB' };
+    store[plantPath('cycleB')] = { name: 'B', species: 'X', health: 'Good', parentPlantId: 'cycleA' };
+    const res = await request(app).get('/plants/cycleA/lineage').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    // Should not hang — ancestors capped by cycle guard
+    expect(res.body.ancestors.length).toBeLessThanOrEqual(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /propagation/stats  (#305 propagation lineage)
+// ---------------------------------------------------------------------------
+
+describe('GET /propagation/stats', () => {
+  it('returns empty stats when no data', async () => {
+    const res = await request(app).get('/propagation/stats').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.successRateBySpecies).toHaveLength(0);
+    expect(res.body.topMothers).toHaveLength(0);
+  });
+
+  it('calculates success rate correctly for transplanted propagations', async () => {
+    const ninetyOneDaysAgo = new Date(Date.now() - 91 * 86400000).toISOString();
+    store[propPath('s1')] = { method: 'cutting', species: 'Basil', status: 'transplanted', startDate: '2026-01-01' };
+    store[propPath('s2')] = { method: 'cutting', species: 'Basil', status: 'failed', startDate: '2026-01-01' };
+    // Plant promoted from s1, alive 91+ days with Good health
+    store[plantPath('promoted1')] = { name: 'Basil Jr', species: 'Basil', health: 'Good', parentPropagationId: 's1', createdAt: ninetyOneDaysAgo };
+    const res = await request(app).get('/propagation/stats').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    const basil = res.body.successRateBySpecies.find(r => r.species === 'Basil');
+    expect(basil).toBeDefined();
+    expect(basil.total).toBe(2);
+    expect(basil.succeeded).toBe(1);
+    expect(basil.rate).toBe(50);
+  });
+
+  it('includes top mothers when parentPlantId is set', async () => {
+    const ninetyOneDaysAgo = new Date(Date.now() - 91 * 86400000).toISOString();
+    store[plantPath('mother')] = { name: 'Mother Plant', species: 'Pothos', health: 'Good' };
+    store[propPath('pm1')] = { method: 'cutting', species: 'Pothos', status: 'transplanted', startDate: '2026-01-01', parentPlantId: 'mother' };
+    store[plantPath('pchild')] = { name: 'Pothos Jr', species: 'Pothos', health: 'Good', parentPropagationId: 'pm1', createdAt: ninetyOneDaysAgo };
+    const res = await request(app).get('/propagation/stats').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.topMothers).toHaveLength(1);
+    expect(res.body.topMothers[0].plantId).toBe('mother');
+    expect(res.body.topMothers[0].name).toBe('Mother Plant');
+  });
+
+  it('skips in-progress propagations from stats', async () => {
+    store[propPath('active')] = { method: 'seed', species: 'Tomato', status: 'sown', startDate: '2026-04-01' };
+    const res = await request(app).get('/propagation/stats').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.successRateBySpecies).toHaveLength(0);
+  });
+});

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Button, Badge, Form, Modal, Row, Col } from 'react-bootstrap'
+import { Button, Badge, Form, Modal, Row, Col, Table } from 'react-bootstrap'
 import { propagationApi } from '../api/plants.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import EmptyState from '../components/EmptyState.jsx'
@@ -20,6 +20,105 @@ const STATUS_COLUMNS = {
   growing:  { label: 'Growing',  statuses: ['germinated'],       icon: 'trending-up', color: 'success' },
   ready:    { label: 'Ready',    statuses: ['ready'],             icon: 'check-circle', color: 'primary' },
   done:     { label: 'Done',     statuses: ['transplanted', 'failed'], icon: 'archive', color: 'secondary' },
+}
+
+function StatsPanel({ isGuest }) {
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    if (isGuest) { setLoading(false); return }
+    propagationApi.stats()
+      .then(data => { setStats(data); setError(null) })
+      .catch(e => setError(e.message))
+      .finally(() => setLoading(false))
+  }, [isGuest])
+
+  if (isGuest) return (
+    <div className="panel panel-icon">
+      <div className="panel-container"><div className="panel-content">
+        <EmptyState icon="bar-chart-2" title="Sign in to see propagation stats" description="Track your success rates across species, methods, and seasons." actions={[{ label: 'Sign in', icon: 'log-in', href: '/login' }]} />
+      </div></div>
+    </div>
+  )
+
+  if (loading) return <div className="text-center py-5 text-muted"><div className="spinner-border spinner-border-sm me-2" />Loading…</div>
+  if (error) return <div className="alert alert-danger">{error}</div>
+  if (!stats) return null
+
+  const noData = !stats.successRateByMethod?.length && !stats.topMothers?.length
+
+  if (noData) return (
+    <div className="panel panel-icon">
+      <div className="panel-container"><div className="panel-content">
+        <EmptyState icon="bar-chart-2" title="No completed propagations yet" description="Stats appear once batches are marked as transplanted or failed." />
+      </div></div>
+    </div>
+  )
+
+  return (
+    <div>
+      <Row className="g-3 mb-3">
+        {stats.successRateByMethod?.map(row => (
+          <Col key={row.method} xs={6} md={3}>
+            <div className="panel panel-icon">
+              <div className="panel-container"><div className="panel-content text-center py-3">
+                <div className="tx-title fs-4 fw-bold">{row.rate}%</div>
+                <div className="tx-muted text-capitalize">{row.method}</div>
+                <div className="tx-muted" style={{ fontSize: 11 }}>{row.succeeded}/{row.total} survived</div>
+              </div></div>
+            </div>
+          </Col>
+        ))}
+      </Row>
+
+      {stats.topMothers?.length > 0 && (
+        <div className="panel panel-icon mb-3">
+          <div className="panel-hdr"><h2>Top producing plants</h2></div>
+          <div className="panel-container"><div className="panel-content p-0">
+            <Table size="sm" className="mb-0" responsive>
+              <thead><tr><th>Plant</th><th>Species</th><th className="text-end">Cuttings</th><th className="text-end">Survival</th></tr></thead>
+              <tbody>
+                {stats.topMothers.map(m => (
+                  <tr key={m.plantId}>
+                    <td>{m.name || '—'}</td>
+                    <td className="tx-muted">{m.species || '—'}</td>
+                    <td className="text-end">{m.childrenCount}</td>
+                    <td className="text-end">
+                      <Badge bg={m.survivalRate >= 70 ? 'success' : m.survivalRate >= 40 ? 'warning' : 'danger'}>{m.survivalRate}%</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div></div>
+        </div>
+      )}
+
+      {stats.successRateBySpecies?.length > 0 && (
+        <div className="panel panel-icon">
+          <div className="panel-hdr"><h2>By species</h2></div>
+          <div className="panel-container"><div className="panel-content p-0">
+            <Table size="sm" className="mb-0" responsive>
+              <thead><tr><th>Species</th><th className="text-end">Total</th><th className="text-end">Survival rate</th></tr></thead>
+              <tbody>
+                {stats.successRateBySpecies.map(row => (
+                  <tr key={row.species}>
+                    <td>{row.species}</td>
+                    <td className="text-end">{row.total}</td>
+                    <td className="text-end">
+                      <Badge bg={row.rate >= 70 ? 'success' : row.rate >= 40 ? 'warning' : 'danger'}>{row.rate}%</Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </div></div>
+        </div>
+      )}
+    </div>
+  )
 }
 
 const STATUS_NEXT = {
@@ -46,11 +145,12 @@ function daysSince(dateStr) {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000)
 }
 
-function PropagationCard({ prop, onAdvance, onFail, onPromote, onDelete }) {
+function PropagationCard({ prop, onAdvance, onFail, onPromote, onDelete, plants }) {
   const days = daysSince(prop.startDate)
   const isOverdue = prop.expectedDays && days > prop.expectedDays && !['transplanted', 'failed'].includes(prop.status)
   const nextStatus = STATUS_NEXT[prop.status]
   const isDone = ['transplanted', 'failed'].includes(prop.status)
+  const parentPlant = prop.parentPlantId && plants ? plants.find(p => p.id === prop.parentPlantId) : null
 
   return (
     <div className={`panel panel-icon mb-3 ${isOverdue ? 'border-warning border-opacity-50' : ''}`}>
@@ -64,6 +164,12 @@ function PropagationCard({ prop, onAdvance, onFail, onPromote, onDelete }) {
                 <span className="tx-muted">{days}d ago</span>
                 {prop.batchSize > 1 && <span className="tx-muted">× {prop.batchSize}</span>}
                 {prop.source && <span className="tx-muted text-truncate">{prop.source}</span>}
+                {parentPlant && (
+                  <span className="tx-muted">
+                    <svg className="sa-icon me-1" style={{ width: 11, height: 11 }}><use href="/icons/sprite.svg#git-branch" /></svg>
+                    from <strong>{parentPlant.name}</strong>
+                  </span>
+                )}
               </div>
               {isOverdue && (
                 <div className="text-warning fs-xs mt-1">
@@ -230,7 +336,7 @@ function PromoteModal({ prop, onHide, onPromote }) {
 }
 
 export default function PropagationPage() {
-  const { isGuest, reloadPlants } = usePlantContext()
+  const { isGuest, reloadPlants, plants } = usePlantContext()
   const [propagations, setPropagations] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -325,9 +431,19 @@ export default function PropagationPage() {
             </button>
           )
         })}
+        <button
+          type="button"
+          className={`btn btn-sm ${column === 'stats' ? 'btn-primary' : 'btn-outline-secondary'}`}
+          onClick={() => setColumn('stats')}
+        >
+          <svg className="sa-icon me-1" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#bar-chart-2" /></svg>
+          Stats
+        </button>
       </div>
 
-      {loading ? (
+      {column === 'stats' ? (
+        <StatsPanel isGuest={isGuest} />
+      ) : loading ? (
         <div className="text-center py-5 text-muted">
           <div className="spinner-border spinner-border-sm me-2" />
           Loading…
@@ -364,6 +480,7 @@ export default function PropagationPage() {
               onFail={handleFail}
               onPromote={setPromotingProp}
               onDelete={handleDelete}
+              plants={plants}
             />
           ))}
         </div>
