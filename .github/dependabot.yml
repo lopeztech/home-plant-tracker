@@ -12,6 +12,11 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    ignore:
+      # uuid v9+ is pinned transitively by @google-cloud/storage, exceljs, cloudevents
+      # to ^8.x — Dependabot can't resolve major bumps until those loosen.
+      - dependency-name: "uuid"
+        update-types: ["version-update:semver-major"]
 
   # Backend Cloud Function dependencies
   - package-ecosystem: npm
@@ -24,6 +29,9 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - dependencies
+    ignore:
+      - dependency-name: "uuid"
+        update-types: ["version-update:semver-major"]
 
   # Docker base images
   - package-ecosystem: docker

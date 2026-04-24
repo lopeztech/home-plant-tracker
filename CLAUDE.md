@@ -79,7 +79,15 @@ npx vitest run src/__tests__/PlantModal.test.jsx
 cd api/plants && npx vitest run index.test.js
 ```
 
-> Convention: do NOT run the full test suite locally by default — rely on GitHub Actions CI. Exceptions: `npm run build`, `npm run lint` (in api/plants), `npm audit` before pushing. For Dependabot major-version bumps (including three.js pre-1.0 minor bumps), checkout the branch and attempt a build locally before merging.
+### Preflight — run before every push
+
+```bash
+npm run preflight:fast     # ~60s: backend lint + both audits + frontend build. Run before EVERY push.
+npm run preflight          # full: preflight:fast + frontend tests + backend tests. Run for meaningful code changes.
+npm run install-hooks      # once per clone: enables .githooks/pre-push so preflight:fast runs automatically
+```
+
+> **Convention:** `npm run preflight:fast` before every push is non-negotiable — historically ~80% of our CI failures were a single `npm run build` away from being caught locally. For PRs touching frontend/backend logic, run full `npm run preflight`. Don't bypass the pre-push hook (`--no-verify` / `SKIP_PREFLIGHT=1`) unless you've already reproduced CI in another way. For Dependabot major-version bumps (including three.js pre-1.0 minor bumps), `gh pr checkout` and run `npm run preflight:fast` before merging.
 
 ## Frontend structure (`src/`)
 
@@ -416,6 +424,20 @@ Build-time globals injected by `vite.config.js`: commit SHA, build timestamp.
 - **Backend integration**: `api/plants/integration/` against Firestore emulator (`docker-compose.emulator.yml`).
 - **E2E**: Playwright `e2e/smoke.spec.js`; `E2E_BASE_URL` env; 60s timeout, 1 retry, screenshot on failure.
 
+## CI failure traps (learn these — they account for ~90% of failed runs)
+
+A survey of 60 recent failed runs showed three repeating patterns. All are caught by `npm run preflight` locally; the first two by `preflight:fast`.
+
+1. **Sass `text-contrast()` mixin breaks the frontend build** — `src/assets/sass/app/_mixins.scss` (the legacy Smart Admin `text-contrast` / `paint` / `brush` mixins) uses `(red($n) * 299) + (green($n) * 587) + (blue($n) * 114) / 1000`. Modern Sass + Bootstrap 5.3 can produce a non-colour from that chain and you get `Error: $color: 3 is not a color. (src/assets/sass/app/_mixins.scss ... in contrast())` — a hard build failure, no tests involved. If you see this: don't touch the mixin math; instead confirm you're on a branch rebased past `cb39a79` (the shadow-fix commit). Most recurrences in the survey were PRs that hadn't rebased. **Always rebase feature branches onto `main` before pushing** if main has moved.
+
+2. **Stale test expectations when a PlantModal tab / menu item is added or reordered** — `src/__tests__/PlantModal.test.jsx` asserts both the exact tab list (`['Plant', 'Watering', 'Care', 'Growth', 'Journal', 'Health']`) and indexed positions (`getAllByRole('tab')[5]` for keyboard-roving tests). Adding a new tab (e.g. "Soil" for #304) breaks three tests. Whenever you change the PlantModal tab order or count, grep the test file for `getAllByRole('tab')` and update every hard-coded index + the expected list snapshot.
+
+3. **Dependabot major-version bumps for transitively-pinned packages** — `uuid` is transitively pinned to `^8.x` by `@google-cloud/storage`, `exceljs`, and `cloudevents`. Dependabot's proposed major bump cannot resolve and the whole `Dependabot Updates` workflow errors out. The `.github/dependabot.yml` file ignores `uuid` semver-major updates — add similar ignore blocks for any other package that keeps producing unresolvable bumps (symptom: "No patched version available" in the Dependabot log).
+
+Less common but worth knowing:
+- **Codecov "No coverage reports found"** — frontend run without `test:coverage` or the coverage dir never wrote `lcov.info`. Non-blocking (`fail_ci_if_error: false`) but appears as a red step; don't chase it unless it's the only failure.
+- **`npm audit` blocking CI** — `npm audit --audit-level=high` runs in both roots. If a Dependabot PR drops a new high-severity advisory before you can bump, you'll see it in the `Audit frontend/backend dependencies` step; resolve by bumping or adding an override in `package.json`.
+
 ## CI/CD (`.github/workflows/deploy.yml`)
 
 Triggers: push `main`, PR `main`, manual `workflow_dispatch`.
@@ -443,7 +465,7 @@ Triggers: push `main`, PR `main`, manual `workflow_dispatch`.
 - **Timezone & unit system** — reminders, "X days overdue" badges, and calendar all pass through `useTimezone` + `useUnitSystem`. When reading / writing dates cross-boundary, default to ISO strings in UTC and convert for display.
 - **Motion tokens** — don't inline durations/easings; import from `src/motion/tokens.js` so changes are global.
 - **Stay scoped** — only change the project being worked on; do not cross into `platform-infra` from here. Flag a plan instead (user runs a separate session there). (Memory: `feedback_platform_infra_plans`.)
-- **No local tests by default** — GitHub Actions is the source of truth. Run `npm run build` + `npm audit` locally before pushing. For Dependabot major / pre-1.0 minor bumps, `gh pr checkout` and attempt a build locally (memory: `feedback_test_major_bumps`).
+- **Preflight before every push** — run `npm run preflight:fast` (build + lint + audits, ~60s) before every push; `npm run preflight` (adds tests) for PRs with meaningful code changes. GitHub Actions is still the source of truth, but don't push code that hasn't at least built locally. Install `.githooks/pre-push` once via `npm run install-hooks` to make this automatic. See the "CI failure traps" section above for the three specific patterns this catches. (Memory: `feedback_preflight`.)
 - **Close issues when done**; **push after work** (memory).
 - **Debug data first** — one curl against the API Gateway usually reveals more than reading code. CORS errors almost always mask a real 4xx/5xx — curl directly bypasses the browser CORS layer. (Memory: `feedback_cors_debugging`.)
 - **Don't touch storybook-static/ by hand** — it's a build artefact that's checked in so Firebase can serve it; regenerate via `npm run build-storybook`.
