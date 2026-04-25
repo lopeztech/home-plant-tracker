@@ -110,9 +110,17 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
+      # System libraries (libwoff2dec, libgstreamer-plugins-bad, etc.) are
+      # NOT part of the cached browser bundle — they live in /usr via apt and
+      # disappear between cache-hit runs. Install them every time, not just
+      # on cache miss, otherwise WebKit fails to launch with
+      # "libwoff2dec.so.1.0.2: cannot open shared object file".
+      - name: Install Playwright system deps
+        run: npx playwright install-deps chromium webkit firefox
+
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium webkit firefox
+        run: npx playwright install chromium webkit firefox
 
       # Build with dummy VITE_* values — the smoke test runs in guest mode and
       # never hits the real API, so placeholder values are sufficient and let
@@ -295,9 +303,13 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
 
+      # System libs aren't in the browser cache — install on every run.
+      - name: Install Playwright system deps
+        run: npx playwright install-deps chromium webkit firefox
+
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium webkit firefox
+        run: npx playwright install chromium webkit firefox
 
       # Give Firebase Hosting a beat to propagate the new bundle to the CDN
       # before we start hitting it.
