@@ -17,23 +17,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-
-// Errors that are expected on every load (Google Identity Services rejecting
-// the placeholder client ID in preview builds, geolocation flakes, etc.).
-// Keep this list tight — noise here masks real regressions.
-const IGNORED_ERROR_PATTERNS = [
-  /favicon/i,
-  /GSI_LOGGER|FedCM|Sign-In|gstatic\.com\/cast\/sdk|accounts\.google/i,  // Google OAuth in preview
-  /Failed to load resource.*(403|401)/i,                                 // Google auth 403s
-  /Download the React DevTools/i,
-  /ERR_FAILED.*weather|open-meteo/i,                                      // geolocation flakes
-  /Subscription lookup failed/i,                                          // billingApi has graceful fallback
-  /identity-v1.*400/i,
-  /\[vite\]/i,                                                            // Vite HMR / preview messages
-  // Lazily loaded chunks aborted by a subsequent navigation (benign — the
-  // chunk is no longer needed). Real network errors surface as ERR_FAILED.
-  /net::ERR_ABORTED/i,
-]
+import { attachErrorListeners, enterGuestMode } from './_helpers.js'
 
 const ROUTES = [
   { path: '/today',                label: 'Today (daily tasks)' },
@@ -68,10 +52,6 @@ const PUBLIC_ROUTES = [
   { path: '/portal/invalid-tok',  label: 'Portal (invalid token)',    stubApi: true },
 ]
 
-function isIgnored(text) {
-  return IGNORED_ERROR_PATTERNS.some((rx) => rx.test(text))
-}
-
 // Stub the API endpoints that /scan/:code and /portal/:token fetch on mount
 // with a 404 so we can exercise the graceful "not found" render path without
 // the test hitting the real prod gateway (CORS) or a placeholder host (DNS).
@@ -88,15 +68,6 @@ async function stubApiCalls(page) {
   }))
 }
 
-async function enterGuestMode(page) {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' })
-  const guestButton = page.getByRole('button', { name: /continue as guest|try.*guest|guest mode/i })
-  await guestButton.waitFor({ state: 'visible', timeout: 10_000 })
-  await guestButton.click()
-  // Post-login redirect lands on /today (AuthLayout change in PR #317).
-  await page.waitForURL(/\/today|\/$/, { timeout: 10_000 })
-}
-
 // Chromium logs every failed fetch (4xx/5xx) as a console.error with no URL
 // context, which is pure noise when the test is exercising a "not found" code
 // path. Widen the ignore list only for those opted-in routes.
@@ -107,20 +78,7 @@ test.describe('Public routes: no console errors on load', () => {
     test(`${label} (${path})`, async ({ page }) => {
       if (stubApi) await stubApiCalls(page)
       const extraIgnore = stubApi ? [NOT_FOUND_CONSOLE_NOISE] : []
-      const errors = []
-      const isNoisy = (text) => isIgnored(text) || extraIgnore.some((rx) => rx.test(text))
-      page.on('console', (msg) => {
-        if (msg.type() === 'error' && !isNoisy(msg.text())) errors.push(`console.error: ${msg.text()}`)
-      })
-      page.on('pageerror', (err) => {
-        if (!isNoisy(err.message)) errors.push(`pageerror: ${err.message}\n${err.stack || ''}`)
-      })
-      page.on('requestfailed', (req) => {
-        const url = req.url()
-        const failure = req.failure()?.errorText || 'unknown'
-        const msg = `requestfailed: ${req.method()} ${url} — ${failure}`
-        if (!isNoisy(msg)) errors.push(msg)
-      })
+      const errors = attachErrorListeners(page, extraIgnore)
 
       await page.goto(path, { waitUntil: 'networkidle', timeout: 20_000 })
       await page.waitForTimeout(500)
@@ -132,20 +90,18 @@ test.describe('Public routes: no console errors on load', () => {
 
 test.describe('Authenticated routes: guest mode, no console errors', () => {
   test.beforeEach(async ({ page }) => {
-    await enterGuestMode(page)
+    // No first-run overlay dismissal here — the console-load checks should
+    // see the same DOM real users do, including any first-paint side effects
+    // of those overlays mounting.
+    await enterGuestMode(page, { dismissOverlays: false })
   })
 
   for (const { path, label } of ROUTES) {
     test(`${label} (${path})`, async ({ page }) => {
-      const errors = []
       // Start listening AFTER guest-mode bootstrap so we don't catch any
-      // login-page transient noise.
-      page.on('console', (msg) => {
-        if (msg.type() === 'error' && !isIgnored(msg.text())) errors.push(`console.error: ${msg.text()}`)
-      })
-      page.on('pageerror', (err) => {
-        if (!isIgnored(err.message)) errors.push(`pageerror: ${err.message}\n${err.stack || ''}`)
-      })
+      // login-page transient noise. requestfailed off — these routes fan out
+      // to weather / billing / plants and cancellation is too noisy to police.
+      const errors = attachErrorListeners(page, [], { requestFailed: false })
 
       await page.goto(path, { waitUntil: 'networkidle', timeout: 20_000 })
       await page.waitForTimeout(500)
