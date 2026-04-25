@@ -27,6 +27,10 @@ const IGNORED_ERROR_PATTERNS = [
   /identity-v1.*400/i,
   /\[vite\]/i,
   /Failed to load resource.*404/i,
+  // Network-level errors that fire when Playwright's context.setOffline(true) cuts
+  // the connection mid-flight or when a request is cancelled on page unload.
+  /ERR_INTERNET_DISCONNECTED|ERR_NETWORK_IO_SUSPENDED|ERR_NETWORK_CHANGED|net::ERR/i,
+  /requestfailed:.*ERR_/i,
 ]
 
 function attachErrorListeners(page) {
@@ -144,8 +148,10 @@ test.describe('Sidebar overlays', () => {
     const tourBtn = page.getByRole('button', { name: /take a tour/i })
     await tourBtn.waitFor({ state: 'visible', timeout: 8_000 })
     await tourBtn.click()
-    // The sub-menu lists tours — click the first one
-    const firstTourOption = page.locator('ul.list-unstyled button').first()
+    // The sub-menu lists tours — click the first one.
+    // Selector targets the ps-4 mb-1 sub-list specific to the tour section,
+    // not the outer nav list-unstyled wrapper.
+    const firstTourOption = page.locator('ul.ps-4.mb-1 button').first()
     await firstTourOption.waitFor({ state: 'visible', timeout: 5_000 })
     await firstTourOption.click()
     // react-joyride renders a tooltip/dialog for the first step
@@ -167,8 +173,12 @@ test.describe('Dashboard modals', () => {
 
   test('CsvImportModal — opens from Import button in plant list', async ({ page }) => {
     const errors = attachErrorListeners(page)
+    // The import button lives in PlantListPanel's toolbar. If the panel renders
+    // in a narrower column it may be scrolled; scrollIntoViewIfNeeded ensures
+    // the click lands.
     const importBtn = page.locator('[data-testid="import-plants-btn"]')
     await importBtn.waitFor({ state: 'visible', timeout: 8_000 })
+    await importBtn.scrollIntoViewIfNeeded()
     await importBtn.click()
     const modal = page.locator('.modal.show')
     await expect(modal).toBeVisible({ timeout: 5_000 })
@@ -222,10 +232,11 @@ test.describe('Dashboard modals', () => {
     const firstCard = page.locator('.plant-card').first()
     await firstCard.waitFor({ state: 'visible', timeout: 10_000 })
     await firstCard.click()
-    // Modify the plant name to mark the form dirty
-    const nameField = page.locator('input[placeholder*="name" i], input[id*="name" i]').first()
+    // Modify the species field (plant name is derived; species is the editable text field)
+    // to mark the form dirty.
+    const nameField = page.locator('#plant-species-input')
     await nameField.waitFor({ state: 'visible', timeout: 5_000 })
-    await nameField.fill('Dirty edit test plant name XYZ')
+    await nameField.fill('Dirty edit test species XYZ')
     // Attempt to close — should trigger unsaved-changes guard
     await page.keyboard.press('Escape')
     const guard = page.locator('[aria-labelledby="unsaved-guard-title"]')
@@ -301,7 +312,19 @@ test.describe('Weather alerts', () => {
         }),
       })
     })
-    await dismissFirstRunOverlays(page)
+    // dismissFirstRunOverlays + pre-seed a location so useWeather's geolocation-
+    // denied fallback can call the (mocked) Open-Meteo endpoint.  Without a
+    // saved location the hook short-circuits and never fetches at all.
+    await page.addInitScript(() => {
+      localStorage.setItem('plant_tracker_consent', JSON.stringify({
+        analytics: false, ai: false, decidedAt: new Date().toISOString(),
+      }))
+      localStorage.setItem('plant-tracker-whats-new-seen', '99.0.0')
+      localStorage.setItem('plant-tracker-onboarded', '1')
+      localStorage.setItem('plantTracker_location', JSON.stringify({
+        name: 'London', country: 'United Kingdom', lat: 51.5074, lon: -0.1278,
+      }))
+    })
     const errors = attachErrorListeners(page)
     await page.goto('/login', { waitUntil: 'domcontentloaded' })
     const guestBtn = page.getByRole('button', { name: /continue as guest|try.*guest|guest mode/i })
