@@ -12,6 +12,8 @@ function eventBadgeColor(type) {
   if (type === 'due') return 'warning'
   if (type === 'fertilised') return 'success'
   if (type === 'feed-due') return 'primary'
+  if (type === 'bloom-start') return 'danger'
+  if (type === 'bloom-end') return 'secondary'
   return 'secondary'
 }
 
@@ -96,6 +98,25 @@ export default function CalendarPage() {
           if (nextFeed.getTime() > monthEndTs) break
         }
       }
+      // Bloom start and end events
+      for (const bloom of plant.bloomLog || []) {
+        if (bloom.startedAt) {
+          const ds = localDateStr(new Date(bloom.startedAt), timezone)
+          const [eY, eM1, eD] = ds.split('-').map(Number)
+          if (eM1 - 1 === month && eY === year) {
+            if (!map[eD]) map[eD] = []
+            map[eD].push({ type: 'bloom-start', plant, bloom })
+          }
+        }
+        if (bloom.endedAt) {
+          const ds = localDateStr(new Date(bloom.endedAt), timezone)
+          const [eY, eM1, eD] = ds.split('-').map(Number)
+          if (eM1 - 1 === month && eY === year) {
+            if (!map[eD]) map[eD] = []
+            map[eD].push({ type: 'bloom-end', plant, bloom })
+          }
+        }
+      }
     }
     return map
   }, [plants, weather, floors, month, year, timezone])
@@ -167,6 +188,7 @@ export default function CalendarPage() {
                   const hasDue = events?.some((e) => e.type === 'due')
                   const hasFertilised = events?.some((e) => e.type === 'fertilised')
                   const hasFeedDue = events?.some((e) => e.type === 'feed-due')
+                  const hasBloom = events?.some((e) => e.type === 'bloom-start' || e.type === 'bloom-end')
                   const isSelected = selectedDay === day
 
                   return (
@@ -184,6 +206,7 @@ export default function CalendarPage() {
                           {hasDue && <span className="rounded-circle bg-warning d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
                           {hasFertilised && <span className="rounded-circle bg-success d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
                           {hasFeedDue && <span className="rounded-circle bg-primary d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
+                          {hasBloom && <span className="rounded-circle bg-danger d-inline-block calendar-day-marker" style={{ width: 5, height: 5 }} />}
                         </div>
                       )}
                     </button>
@@ -205,6 +228,9 @@ export default function CalendarPage() {
                 <span className="d-flex align-items-center gap-1">
                   <span className="rounded-circle bg-primary d-inline-block" style={{ width: 6, height: 6 }} /> Feed due
                 </span>
+                <span className="d-flex align-items-center gap-1">
+                  <span className="rounded-circle bg-danger d-inline-block" style={{ width: 6, height: 6 }} /> Bloom
+                </span>
               </div>
 
               {/* Empty month notice */}
@@ -225,7 +251,12 @@ export default function CalendarPage() {
                     <ul className="list-unstyled mb-0">
                       {selectedEvents.map((evt, i) => (
                         <li key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm flex-wrap">
-                          <Badge bg={eventBadgeColor(evt.type)} className="fs-nano">{evt.type.replace('-', ' ')}</Badge>
+                          <Badge bg={eventBadgeColor(evt.type)} className="fs-nano">{
+                            evt.type === 'bloom-start' ? 'bloom start' :
+                            evt.type === 'bloom-end' ? 'bloom end' :
+                            evt.type === 'feed-due' ? 'feed due' :
+                            evt.type
+                          }</Badge>
                           <span className="flex-grow-1">{evt.plant.name}</span>
                           {evt.type === 'due' && handleWaterPlant && (
                             <Button

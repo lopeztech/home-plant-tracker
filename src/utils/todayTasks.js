@@ -160,6 +160,45 @@ export function buildPropagationTasks(propagations, now = new Date()) {
   return { tasks }
 }
 
+/**
+ * Build lifecycle tasks (repotting & pruning) that are overdue.
+ * Uses plant-level fields only — no API call needed.
+ *
+ * @param {Array} plants
+ * @returns {{ tasks: Array }}
+ */
+export function buildLifecycleTasks(plants) {
+  const tasks = []
+  const now = Date.now()
+  for (const plant of (plants || [])) {
+    const repotInterval = (plant.repotIntervalMonths || 18) * 30 * 86400000
+    if (plant.lastRepotted) {
+      const nextRepot = new Date(plant.lastRepotted).getTime() + repotInterval
+      if (now > nextRepot) {
+        tasks.push({
+          id: `repot-${plant.id}`,
+          plant,
+          type: 'repot',
+          daysOverdue: Math.ceil((now - nextRepot) / 86400000),
+        })
+      }
+    }
+    const pruneInterval = (plant.pruneIntervalMonths || 6) * 30 * 86400000
+    if (plant.lastPruned) {
+      const nextPrune = new Date(plant.lastPruned).getTime() + pruneInterval
+      if (now > nextPrune) {
+        tasks.push({
+          id: `prune-${plant.id}`,
+          plant,
+          type: 'prune',
+          daysOverdue: Math.ceil((now - nextPrune) / 86400000),
+        })
+      }
+    }
+  }
+  return { tasks }
+}
+
 function buildFeedReason(status, plant) {
   const last = plant?.lastFertilised ? new Date(plant.lastFertilised) : null
   const neverFed = !last

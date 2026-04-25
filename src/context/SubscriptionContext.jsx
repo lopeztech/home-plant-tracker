@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
-import { billingApi } from '../api/plants.js'
+import { billingApi, accountApi } from '../api/plants.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 // Same shape as backend billing.js TIERS, kept in sync by manual review.
@@ -13,6 +13,8 @@ const DEFAULT_SNAPSHOT = {
   usage:          { plants: 0, ai_analyses: 0, photo_storage_mb: 0 },
   currentPeriodEnd:  null,
   cancelAtPeriodEnd: false,
+  isTrial:           false,
+  trialDaysRemaining: null,
 }
 
 export const SubscriptionContext = createContext(undefined)
@@ -38,6 +40,19 @@ export function SubscriptionProvider({ children }) {
     setLoading(true)
     try {
       const data = await billingApi.getSubscription()
+      // If no subscription exists yet, start the free trial for this new user
+      if (data.billingEnabled && !data.status || data.status === 'free' && !data.isTrial && data.billingEnabled) {
+        try {
+          const trial = await accountApi.startTrial()
+          if (trial && !trial.alreadyExists) {
+            // Re-fetch subscription now that trial is created
+            const refreshed = await billingApi.getSubscription()
+            setSnapshot({ ...DEFAULT_SNAPSHOT, ...refreshed })
+            setError(null)
+            return
+          }
+        } catch { /* ignore — trial start failing should not block the app */ }
+      }
       setSnapshot({ ...DEFAULT_SNAPSHOT, ...data })
       setError(null)
     } catch (err) {

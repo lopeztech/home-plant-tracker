@@ -14,7 +14,9 @@ import FeatureTour from '../components/FeatureTour.jsx'
 import WhatsNewModal from '../components/WhatsNewModal.jsx'
 import WeatherAlertBanner from '../components/WeatherAlertBanner.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
+import Breadcrumbs from '../components/Breadcrumbs.jsx'
 import OfflineBanner from '../components/OfflineBanner.jsx'
+import TrialBanner from '../components/TrialBanner.jsx'
 import HelpDrawer from '../components/HelpDrawer.jsx'
 import CommandPalette from '../components/CommandPalette.jsx'
 import { SkeletonRect, SkeletonText } from '../components/Skeleton.jsx'
@@ -75,12 +77,14 @@ export default function MainLayout() {
             <Topbar />
             <Sidebar />
             <main className="app-body">
+              <TrialBanner />
               <OfflineBanner />
               <div className="px-3 pt-3">
                 <WeatherAlertBanner />
               </div>
               <div className="app-content">
               <ErrorBoundary context="this page">
+                <Breadcrumbs />
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
                     key={location.pathname}
