@@ -42,6 +42,20 @@ export default defineConfig({
       name: 'mobile-chrome',
       use: { ...devices['Pixel 7'] },
     },
+    // Cross-browser projects added per issue #336 (cluster 3).
+    // Scoped to console-smoke only: the goal is catching Safari/Firefox CSS
+    // and date-parsing regressions on page load, not duplicating the full
+    // interaction suite that is already covered by chromium + mobile-chrome.
+    {
+      name: 'webkit',
+      use: { ...devices['Desktop Safari'] },
+      testMatch: ['**/console-smoke.spec.js'],
+    },
+    {
+      name: 'firefox',
+      use: { ...devices['Desktop Firefox'] },
+      testMatch: ['**/console-smoke.spec.js'],
+    },
   ],
   // Only auto-start a preview server when we're testing the local build.
   webServer: externalBaseUrl ? undefined : {

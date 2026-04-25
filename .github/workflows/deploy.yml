@@ -112,7 +112,7 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit firefox
 
       # Build with dummy VITE_* values — the smoke test runs in guest mode and
       # never hits the real API, so placeholder values are sufficient and let
@@ -297,7 +297,7 @@ jobs:
 
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit firefox
 
       # Give Firebase Hosting a beat to propagate the new bundle to the CDN
       # before we start hitting it.
