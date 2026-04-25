@@ -53,15 +53,17 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
         <td>
           <Form.Check
             type="switch"
+            id={`floor-visible-${floor.id}`}
             checked={!floor.hidden}
             onChange={() => onChange({ ...floor, hidden: !floor.hidden })}
             label=""
+            aria-label={`Show floor ${floor.name}`}
           />
         </td>
         <td>
           <div className="d-flex align-items-center gap-2">
-            <button type="button" className="btn btn-sm p-0 border-0" onClick={onToggle} title="Show rooms">
-              <svg className="sa-icon" style={{ width: 14, height: 14, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }}>
+            <button type="button" className="btn btn-sm p-0 border-0" onClick={onToggle} title="Show rooms" aria-label={`${expanded ? 'Hide' : 'Show'} rooms in ${floor.name}`} aria-expanded={expanded}>
+              <svg className="sa-icon" style={{ width: 14, height: 14, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s' }} aria-hidden="true">
                 <use href="/icons/sprite.svg#chevron-right"></use>
               </svg>
             </button>
@@ -70,14 +72,18 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
               value={floor.name}
               onChange={(e) => onChange({ ...floor, name: e.target.value })}
               className="border-0 bg-transparent"
+              aria-label="Floor name"
             />
           </div>
         </td>
         <td>
           <Badge
+            as="button"
+            type="button"
             bg={floor.type === 'outdoor' ? 'success' : 'info'}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: 'pointer', border: 0 }}
             onClick={() => onChange({ ...floor, type: floor.type === 'outdoor' ? 'indoor' : 'outdoor' })}
+            aria-label={`Toggle floor type, currently ${floor.type === 'outdoor' ? 'outdoor' : 'indoor'}`}
           >
             {floor.type === 'outdoor' ? 'outdoor' : 'indoor'}
           </Badge>
@@ -85,12 +91,12 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
         <td className="text-end">
           {confirmDelete ? (
             <div className="d-flex gap-1 justify-content-end">
-              <Button variant="danger" size="sm" onClick={() => { onDelete(floor.id); setConfirmDelete(false) }}>Yes</Button>
-              <Button variant="light" size="sm" onClick={() => setConfirmDelete(false)}>No</Button>
+              <Button variant="danger" size="sm" onClick={() => { onDelete(floor.id); setConfirmDelete(false) }} aria-label={`Confirm delete ${floor.name}`}>Yes</Button>
+              <Button variant="light" size="sm" onClick={() => setConfirmDelete(false)} aria-label="Cancel delete">No</Button>
             </div>
           ) : (
-            <Button variant="link" size="sm" className="text-danger p-0" onClick={() => setConfirmDelete(true)}>
-              <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#trash-2"></use></svg>
+            <Button variant="link" size="sm" className="text-danger p-0" onClick={() => setConfirmDelete(true)} aria-label={`Delete floor ${floor.name}`}>
+              <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#trash-2"></use></svg>
             </Button>
           )}
         </td>
@@ -132,14 +138,17 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                     <div key={i} className={`d-flex align-items-center gap-2 mb-1 ${room.hidden ? 'opacity-50' : ''}`}>
                       <Form.Check
                         type="switch"
+                        id={`room-visible-${floor.id}-${i}`}
                         checked={!room.hidden}
                         onChange={() => updateRoom(i, { hidden: !room.hidden })}
                         className="flex-shrink-0"
+                        aria-label={`Show room ${room.name || `#${i + 1}`}`}
                       />
                       <Form.Control
                         size="sm"
                         value={room.name}
                         onChange={(e) => updateRoom(i, { name: e.target.value })}
+                        aria-label="Room name"
                       />
                       <Badge
                         as="button"
@@ -163,14 +172,15 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                           className="settings-fixed-w-120"
                           style={{ fontSize: '0.7rem' }}
                           title="Yard area"
+                          aria-label="Yard area"
                         >
                           {YARD_AREAS.map((a) => (
                             <option key={a.id} value={a.id}>{a.label}</option>
                           ))}
                         </Form.Select>
                       )}
-                      <Button variant="link" size="sm" className="text-danger p-0 flex-shrink-0" onClick={() => deleteRoom(i)}>
-                        <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#x"></use></svg>
+                      <Button variant="link" size="sm" className="text-danger p-0 flex-shrink-0" onClick={() => deleteRoom(i)} aria-label={`Delete room ${room.name || `#${i + 1}`}`}>
+                        <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#x"></use></svg>
                       </Button>
                     </div>
                   ))}
@@ -185,9 +195,10 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && addRoom()}
+                  aria-label="New room name"
                 />
-                <Button variant="primary" size="sm" onClick={addRoom} disabled={!newRoomName.trim()}>
-                  <svg className="sa-icon" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#plus"></use></svg>
+                <Button variant="primary" size="sm" onClick={addRoom} disabled={!newRoomName.trim()} aria-label="Add room">
+                  <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#plus"></use></svg>
                 </Button>
               </div>
             </div>
@@ -288,13 +299,14 @@ function PropertyTab({ search }) {
           {/* Add zone */}
           <div className="d-flex gap-2 p-3 border-top">
             <Form.Control size="sm" placeholder="Zone name (e.g. Loft)" value={newName}
-              onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddFloor()} />
-            <Form.Select size="sm" value={newType} onChange={(e) => setNewType(e.target.value)} className="settings-fixed-w-120">
+              onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddFloor()}
+              aria-label="New zone name" />
+            <Form.Select size="sm" value={newType} onChange={(e) => setNewType(e.target.value)} className="settings-fixed-w-120" aria-label="New zone type">
               <option value="indoor">Indoor</option>
               <option value="outdoor">Outdoor</option>
             </Form.Select>
-            <Button variant="primary" size="sm" onClick={handleAddFloor} disabled={!newName.trim()}>
-              <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#plus"></use></svg>
+            <Button variant="primary" size="sm" onClick={handleAddFloor} disabled={!newName.trim()} aria-label="Add zone">
+              <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#plus"></use></svg>
             </Button>
           </div>
 
@@ -867,7 +879,7 @@ function BrandingTab({ search }) {
   return (
     <>
       <SettingSection id="branding-identity" title="Business Identity" icon="star" search={search}>
-        <Form.Group className="mb-3">
+        <Form.Group controlId="branding-business-name-input" className="mb-3">
           <Form.Label className="fs-sm fw-semibold">Business name</Form.Label>
           <Form.Control
             data-testid="branding-business-name"
@@ -880,14 +892,16 @@ function BrandingTab({ search }) {
         </Form.Group>
 
         <Form.Group className="mb-3">
-          <Form.Label className="fs-sm fw-semibold">Primary brand colour</Form.Label>
+          <Form.Label htmlFor="branding-colour-picker-input" className="fs-sm fw-semibold">Primary brand colour</Form.Label>
           <div className="d-flex align-items-center gap-2">
             <Form.Control
+              id="branding-colour-picker-input"
               data-testid="branding-colour-picker"
               type="color"
               value={form.brandColour}
               onChange={(e) => setForm((f) => ({ ...f, brandColour: e.target.value }))}
               style={{ width: 48, height: 38, padding: 2, cursor: 'pointer' }}
+              aria-label="Primary brand colour picker"
             />
             <Form.Control
               data-testid="branding-colour-hex"
@@ -895,6 +909,7 @@ function BrandingTab({ search }) {
               onChange={(e) => setForm((f) => ({ ...f, brandColour: e.target.value }))}
               placeholder="#3a7d44"
               style={{ maxWidth: 120 }}
+              aria-label="Primary brand colour hex value"
             />
           </div>
           <Form.Text className="text-muted">Applied to report headers and accent elements.</Form.Text>

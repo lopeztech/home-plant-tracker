@@ -137,11 +137,11 @@ export default function CalendarPage() {
               {monthName}
             </span>
             <div className="panel-toolbar">
-              <Button variant="outline-default" size="sm" className="me-1" onClick={() => setMonthOffset((m) => m - 1)}>
-                <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#chevron-left"></use></svg>
+              <Button variant="outline-default" size="sm" className="me-1" onClick={() => setMonthOffset((m) => m - 1)} aria-label="Previous month">
+                <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#chevron-left"></use></svg>
               </Button>
-              <Button variant="outline-default" size="sm" onClick={() => setMonthOffset((m) => m + 1)}>
-                <svg className="sa-icon" style={{ width: 14, height: 14 }}><use href="/icons/sprite.svg#chevron-right"></use></svg>
+              <Button variant="outline-default" size="sm" onClick={() => setMonthOffset((m) => m + 1)} aria-label="Next month">
+                <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#chevron-right"></use></svg>
               </Button>
             </div>
           </div>

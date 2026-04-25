@@ -92,7 +92,10 @@ export default function Sidebar() {
                 </svg>
               </button>
               {tourMenuOpen && (
-                <ul className="list-unstyled ps-4 mb-1">
+                // `active` is required: Smart Admin's `_nav.scss` sets
+                // `.primary-nav ul.nav-menu ul { display: none; }` and only
+                // un-hides nested submenus when they carry `.active`.
+                <ul className="list-unstyled ps-4 mb-1 active">
                   {TOURS.map((tour) => (
                     <li key={tour.id}>
                       <button
