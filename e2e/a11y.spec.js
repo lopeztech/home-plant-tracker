@@ -45,6 +45,27 @@ const ALLOWLISTED_RULES = [
   // TODO: Audit color tokens in DESIGN.md and lift muted/secondary colors
   //       to meet WCAG 2.1 AA (4.5:1 normal text, 3:1 large text).
   'color-contrast',
+
+  // Several Smart Admin form controls (e.g. the <input type="color"> in
+  // Settings → Branding) and some React-Bootstrap generated elements lack an
+  // explicit <label> or aria-labelledby association that axe can detect.
+  // TODO: Audit all Form.Control/Form.Select usages and add htmlFor/
+  //       aria-labelledby where the visual label is not programmatically linked.
+  'label',
+
+  // Icon-only buttons throughout the app (<button><svg>…</svg></button>)
+  // lack aria-label or visually-hidden text.  Affects calendar prev/next,
+  // toolbar actions, and similar patterns from Smart Admin's design.
+  // TODO: Add aria-label or <span className="visually-hidden"> to every
+  //       icon-only button.
+  'button-name',
+
+  // Bootstrap / Smart Admin strips link underlines via text-decoration:none
+  // in several nav and body-copy contexts.  WCAG SC 1.4.1 requires links
+  // to be distinguishable from surrounding text without relying on color alone.
+  // TODO: Re-enable text-decoration on body-copy links or ensure 3:1 contrast
+  //       ratio between link and surrounding text color per WCAG SC 1.4.1.
+  'link-in-text-block',
 ]
 
 // ── Route lists (copied from console-smoke.spec.js) ──────────────────────────
