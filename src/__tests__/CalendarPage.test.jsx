@@ -77,11 +77,16 @@ describe('CalendarPage', () => {
   it('navigates between months via the chevron buttons', () => {
     render(<CalendarPage />)
 
-    const prevBtn = screen.getAllByRole('button')[0]
-    fireEvent.click(prevBtn)
-    // After clicking previous, we expect the heading text to differ from
-    // the current month — assert the panel still renders without throwing.
-    const { container } = render(<CalendarPage />)
-    expect(container.querySelector('.care-calendar')).not.toBeNull()
+    // Both chevrons must expose accessible names — axe's critical bar fails
+    // without them, which was one of the E2E failures fixed by this change.
+    const prev = screen.getByRole('button', { name: /Previous month/i })
+    const next = screen.getByRole('button', { name: /Next month/i })
+
+    fireEvent.click(prev)
+    fireEvent.click(next)
+    fireEvent.click(next)
+
+    expect(prev).toBeInTheDocument()
+    expect(next).toBeInTheDocument()
   })
 })
