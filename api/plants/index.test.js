@@ -3609,6 +3609,172 @@ describe('DELETE /plants/:id/harvests/:harvestId', () => {
   });
 });
 
+// ── GET /plants/:id/wildlifeObservations ──────────────────────────────────────
+
+describe('GET /plants/:id/wildlifeObservations', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/plants/p1/wildlifeObservations');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .get('/plants/missing/wildlifeObservations')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns empty array when no observations exist', async () => {
+    store[plantPath('p1')] = { name: 'Rose' };
+    const res = await request(app)
+      .get('/plants/p1/wildlifeObservations')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it('returns observations sorted newest-first', async () => {
+    store[plantPath('p1')] = {
+      name: 'Lavender',
+      wildlifeObservationLog: [
+        { id: 'w1', observedAt: '2026-01-01T10:00:00.000Z', category: 'bee' },
+        { id: 'w2', observedAt: '2026-03-01T10:00:00.000Z', category: 'butterfly' },
+      ],
+    };
+    const res = await request(app)
+      .get('/plants/p1/wildlifeObservations')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body[0].id).toBe('w2');
+    expect(res.body[1].id).toBe('w1');
+  });
+});
+
+// ── POST /plants/:id/wildlifeObservations ─────────────────────────────────────
+
+describe('POST /plants/:id/wildlifeObservations', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).post('/plants/p1/wildlifeObservations').send({ category: 'bee' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .post('/plants/missing/wildlifeObservations')
+      .send({ category: 'bee' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 400 when category is missing', async () => {
+    store[plantPath('p1')] = { name: 'Lavender' };
+    const res = await request(app)
+      .post('/plants/p1/wildlifeObservations')
+      .send({ species: 'Bombus terrestris' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/category/i);
+  });
+
+  it('returns 400 when category is invalid', async () => {
+    store[plantPath('p1')] = { name: 'Lavender' };
+    const res = await request(app)
+      .post('/plants/p1/wildlifeObservations')
+      .send({ category: 'dragon' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/category/i);
+  });
+
+  it('returns 400 when count is not positive', async () => {
+    store[plantPath('p1')] = { name: 'Lavender' };
+    const res = await request(app)
+      .post('/plants/p1/wildlifeObservations')
+      .send({ category: 'bee', count: 0 })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/count/i);
+  });
+
+  it('creates an observation and returns 201', async () => {
+    store[plantPath('p1')] = { name: 'Lavender' };
+    const res = await request(app)
+      .post('/plants/p1/wildlifeObservations')
+      .send({ observedAt: '2026-06-01', category: 'bee', species: 'Bombus terrestris', count: 3, notes: 'Very busy' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(201);
+    expect(res.body.category).toBe('bee');
+    expect(res.body.species).toBe('Bombus terrestris');
+    expect(res.body.count).toBe(3);
+    expect(res.body.notes).toBe('Very busy');
+    expect(res.body.id).toBeDefined();
+  });
+
+  it('persists observation to the plant document', async () => {
+    store[plantPath('p1')] = { name: 'Lavender' };
+    await request(app)
+      .post('/plants/p1/wildlifeObservations')
+      .send({ category: 'butterfly' })
+      .set('Authorization', authHeader());
+    const saved = store[plantPath('p1')];
+    expect(saved.wildlifeObservationLog).toHaveLength(1);
+    expect(saved.wildlifeObservationLog[0].category).toBe('butterfly');
+  });
+
+  it('accepts all valid categories', async () => {
+    const categories = ['bee', 'butterfly', 'bird', 'other-insect', 'mammal', 'reptile', 'other'];
+    for (const category of categories) {
+      store[plantPath('p1')] = { name: 'Plant' };
+      const res = await request(app)
+        .post('/plants/p1/wildlifeObservations')
+        .send({ category })
+        .set('Authorization', authHeader());
+      expect(res.status).toBe(201);
+    }
+  });
+});
+
+// ── DELETE /plants/:id/wildlifeObservations/:obsId ────────────────────────────
+
+describe('DELETE /plants/:id/wildlifeObservations/:obsId', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).delete('/plants/p1/wildlifeObservations/w1');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const res = await request(app)
+      .delete('/plants/missing/wildlifeObservations/w1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('removes the observation and returns 200', async () => {
+    store[plantPath('p1')] = {
+      name: 'Lavender',
+      wildlifeObservationLog: [
+        { id: 'w1', category: 'bee' },
+        { id: 'w2', category: 'butterfly' },
+      ],
+    };
+    const res = await request(app)
+      .delete('/plants/p1/wildlifeObservations/w1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(true);
+    expect(store[plantPath('p1')].wildlifeObservationLog).toHaveLength(1);
+    expect(store[plantPath('p1')].wildlifeObservationLog[0].id).toBe('w2');
+  });
+
+  it('is idempotent — deleting a non-existent id still returns 200', async () => {
+    store[plantPath('p1')] = { name: 'Lavender', wildlifeObservationLog: [] };
+    const res = await request(app)
+      .delete('/plants/p1/wildlifeObservations/nonexistent')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+  });
+});
+
 // ── QR short-code & scan routes ───────────────────────────────────────────────
 
 describe('GET /plants/:id/short-code', () => {
