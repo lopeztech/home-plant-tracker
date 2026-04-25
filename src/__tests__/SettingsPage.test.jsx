@@ -8,7 +8,17 @@ const logoutMock = vi.fn()
 
 vi.mock('../context/PlantContext.jsx', () => ({
   usePlantContext: () => ({
-    floors: [{ id: 'ground', name: 'Ground Floor', type: 'indoor', order: 0, rooms: [] }],
+    floors: [
+      {
+        id: 'ground',
+        name: 'Ground Floor',
+        type: 'indoor',
+        order: 0,
+        rooms: [
+          { name: 'Living Room', type: 'indoor', x: 5, y: 5, width: 40, height: 40 },
+        ],
+      },
+    ],
     handleSaveFloors: vi.fn().mockResolvedValue(undefined),
     handleFloorplanUpload: vi.fn(),
     isAnalysingFloorplan: false,
@@ -132,6 +142,94 @@ describe('SettingsPage tabs', () => {
     expect(screen.queryByText(/Floors & Zones/i)).toBeNull()
     fireEvent.change(search, { target: { value: '' } })
     expect(screen.getByText(/Floors & Zones/i)).toBeInTheDocument()
+  })
+
+  it('labels every Property-tab control for assistive tech', () => {
+    renderAt('/settings/property')
+
+    // Floor row controls
+    expect(screen.getByRole('button', { name: /Show rooms in Ground Floor/i })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /^Floor name$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Toggle floor type/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Delete floor Ground Floor/i })).toBeInTheDocument()
+
+    // Add-zone form controls
+    expect(screen.getByRole('textbox', { name: /New zone name/i })).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: /New zone type/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Add zone$/i })).toBeInTheDocument()
+  })
+
+  it('reveals labelled room controls when a floor row is expanded', () => {
+    renderAt('/settings/property')
+
+    // Expand the Ground Floor row to render the inner room controls.
+    fireEvent.click(screen.getByRole('button', { name: /Show rooms in Ground Floor/i }))
+
+    expect(screen.getByRole('textbox', { name: /^Room name$/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Delete room Living Room/i })).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /New room name/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Add room$/i })).toBeInTheDocument()
+  })
+
+  it('switches the confirm-delete UI when the floor delete button is clicked', () => {
+    renderAt('/settings/property')
+
+    fireEvent.click(screen.getByRole('button', { name: /Delete floor Ground Floor/i }))
+    expect(screen.getByRole('button', { name: /Confirm delete Ground Floor/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Cancel delete/i })).toBeInTheDocument()
+
+    // Confirming the delete removes the floor row.
+    fireEvent.click(screen.getByRole('button', { name: /Confirm delete Ground Floor/i }))
+    expect(screen.queryByRole('button', { name: /Delete floor Ground Floor/i })).not.toBeInTheDocument()
+  })
+
+  it('exercises the floor edit handlers (visibility, rename, type toggle)', () => {
+    renderAt('/settings/property')
+
+    // Floor visibility switch
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show floor Ground Floor/i }))
+    // Floor rename
+    const nameInput = screen.getByRole('textbox', { name: /^Floor name$/i })
+    fireEvent.change(nameInput, { target: { value: 'New Ground Floor' } })
+    // Floor type toggle
+    fireEvent.click(screen.getByRole('button', { name: /Toggle floor type/i }))
+
+    // Cancel-delete branch
+    fireEvent.click(screen.getByRole('button', { name: /Delete floor/i }))
+    fireEvent.click(screen.getByRole('button', { name: /Cancel delete/i }))
+    expect(screen.getByRole('button', { name: /Delete floor/i })).toBeInTheDocument()
+  })
+
+  it('exercises the room edit handlers inside an expanded floor', () => {
+    renderAt('/settings/property')
+    fireEvent.click(screen.getByRole('button', { name: /Show rooms in Ground Floor/i }))
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Show room Living Room/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: /^Room name$/i }), { target: { value: 'Lounge' } })
+
+    // Toggling the room to outdoor reveals the yard-area select; exercise its
+    // onChange so the new aria-label and handler line stay covered.
+    fireEvent.click(screen.getByRole('button', { name: /Toggle room type/i }))
+    const yardSelect = screen.getByRole('combobox', { name: /Yard area/i })
+    fireEvent.change(yardSelect, { target: { value: 'backyard' } })
+
+    // Add a new room and remove the existing one.
+    const newRoom = screen.getByRole('textbox', { name: /New room name/i })
+    fireEvent.change(newRoom, { target: { value: 'Den' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Add room$/i }))
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Delete room /i })[0])
+  })
+
+  it('exercises the add-zone form handlers', () => {
+    renderAt('/settings/property')
+
+    fireEvent.change(screen.getByRole('textbox', { name: /New zone name/i }), { target: { value: 'Loft' } })
+    fireEvent.change(screen.getByRole('combobox', { name: /New zone type/i }), { target: { value: 'outdoor' } })
+    fireEvent.click(screen.getByRole('button', { name: /^Add zone$/i }))
+
+    // Once added, a new floor row must appear with its delete button.
+    expect(screen.getByRole('button', { name: /Delete floor Loft/i })).toBeInTheDocument()
   })
 })
 
@@ -314,6 +412,19 @@ describe('SettingsPage Branding tab', () => {
   it('renders business identity section', async () => {
     renderAt('/settings/branding')
     await waitFor(() => expect(screen.getByText(/Business Identity/i)).toBeInTheDocument())
+  })
+
+  it('associates the colour-picker input with its label', async () => {
+    renderAt('/settings/branding')
+    await waitFor(() => expect(screen.getByTestId('branding-colour-picker')).toBeInTheDocument())
+
+    // axe was failing on the picker because Form.Label / Form.Control were
+    // not associated. Verify the input now exposes an accessible name and
+    // the hex sibling input is independently labelled.
+    const picker = screen.getByLabelText(/Primary brand colour/i, { selector: 'input[type="color"]' })
+    expect(picker).toBeInTheDocument()
+    expect(picker.getAttribute('id')).toBe('branding-colour-picker-input')
+    expect(screen.getByRole('textbox', { name: /Primary brand colour hex value/i })).toBeInTheDocument()
   })
 
   it('renders logo upload section', async () => {
