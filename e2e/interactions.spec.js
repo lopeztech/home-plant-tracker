@@ -65,8 +65,18 @@ test.describe('Global overlays', () => {
     await enterGuestMode(page)
   })
 
-  test('Cmd+K opens the command palette', async ({ page }) => {
+  test('Cmd+K opens the command palette', async ({ page, viewport }) => {
+    // Mobile viewports don't have a physical keyboard and Pixel 7 emulation
+    // doesn't deliver Control+K to window listeners reliably. The shortcut
+    // is desktop-only; mobile uses the topbar command-palette button.
+    test.skip(!!viewport && viewport.width < 768, 'Keyboard shortcut is desktop-only')
+
     const errors = attachErrorListeners(page)
+    // GlobalKeyboardShortcuts attaches its keydown listener in a useEffect that
+    // runs after MainLayout mounts. waitForURL resolves on the first matching
+    // navigation, so on slower CI runs the listener may not be attached yet.
+    // Wait for the page to settle before firing the shortcut.
+    await page.waitForLoadState('networkidle')
     const isMac = process.platform === 'darwin'
     await page.keyboard.press(isMac ? 'Meta+k' : 'Control+k')
     const dialog = page.getByRole('dialog', { name: /command palette/i })
