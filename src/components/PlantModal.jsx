@@ -841,10 +841,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
 
   return (
     <>
-    <Modal show onHide={handleClose} size="lg" centered scrollable fullscreen="sm-down">
+    <Modal show onHide={handleClose} size="lg" centered scrollable fullscreen="sm-down" aria-labelledby="plant-modal-title">
       <Modal.Header closeButton className="border-bottom">
-        <Modal.Title className="d-flex align-items-center gap-2 fs-6">
-          <svg className="sa-icon text-primary"><use href="/icons/sprite.svg#feather"></use></svg>
+        <Modal.Title id="plant-modal-title" className="d-flex align-items-center gap-2 fs-6">
+          <svg className="sa-icon text-primary" aria-hidden="true"><use href="/icons/sprite.svg#feather"></use></svg>
           {isEditing ? (plant.name || derivePlantName(plant)) : 'Add Plant'}
           {wateringStatus && (
             <Badge bg={wateringStatus.daysUntil < 0 ? 'danger' : wateringStatus.daysUntil === 0 ? 'warning' : wateringStatus.daysUntil <= 2 ? 'info' : 'success'}>

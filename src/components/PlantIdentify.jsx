@@ -67,10 +67,10 @@ export default function PlantIdentify({ show, onHide, onIdentified }) {
   }
 
   return (
-    <Modal show={show} onHide={handleClose} centered size="md">
+    <Modal show={show} onHide={handleClose} centered size="md" aria-labelledby="plant-identify-title">
       <Modal.Header closeButton>
-        <Modal.Title>
-          <svg className="sa-icon me-2" style={{ width: 18, height: 18 }}><use href="/icons/sprite.svg#camera" /></svg>
+        <Modal.Title id="plant-identify-title">
+          <svg className="sa-icon me-2" style={{ width: 18, height: 18 }} aria-hidden="true"><use href="/icons/sprite.svg#camera" /></svg>
           Identify Plant from Photo
         </Modal.Title>
       </Modal.Header>
