@@ -95,16 +95,26 @@ async function enterGuestMode(page) {
 }
 
 function buildAxeBuilder(page) {
+  // Disable allowlisted rules via the axe options.rules map — more reliable
+  // than chaining .disableRules() which can be reset by a subsequent .options()
+  // call depending on the axe-core version.
+  const ruleOverrides = Object.fromEntries(
+    ALLOWLISTED_RULES.map((r) => [r, { enabled: false }]),
+  )
   return new AxeBuilder({ page })
-    .disableRules(ALLOWLISTED_RULES)
-    // Only report serious and critical violations as test failures.
-    // axe-core impact levels: minor | moderate | serious | critical
-    .options({ resultTypes: ['violations'] })
+    .options({
+      resultTypes: ['violations'],
+      rules: ruleOverrides,
+    })
 }
 
 function assertNoSeriousViolations(results, routePath) {
+  // Belt-and-suspenders: also filter allowlisted rule IDs here so an axe
+  // version skew cannot inadvertently re-enable them.
   const serious = results.violations.filter(
-    (v) => v.impact === 'serious' || v.impact === 'critical',
+    (v) =>
+      (v.impact === 'serious' || v.impact === 'critical') &&
+      !ALLOWLISTED_RULES.includes(v.id),
   )
 
   // Warn on moderate/minor violations so they appear in the report without

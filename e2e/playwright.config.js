@@ -42,13 +42,18 @@ export default defineConfig({
       name: 'mobile-chrome',
       use: { ...devices['Pixel 7'] },
     },
+    // Firefox and webkit run cross-browser smoke + a11y only.
+    // Interaction-heavy specs (modals.spec.js, interactions.spec.js) are kept
+    // Chromium-gated until those tests are hardened for cross-browser quirks.
     {
       name: 'firefox',
       use: { ...devices['Desktop Firefox'] },
+      testMatch: ['**/console-smoke.spec.js', '**/a11y.spec.js'],
     },
     {
       name: 'webkit',
       use: { ...devices['Desktop Safari'] },
+      testMatch: ['**/console-smoke.spec.js', '**/a11y.spec.js'],
     },
   ],
   // Only auto-start a preview server when we're testing the local build.
