@@ -10,61 +10,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-
-const IGNORED_ERROR_PATTERNS = [
-  /favicon/i,
-  /GSI_LOGGER|FedCM|Sign-In|gstatic\.com\/cast\/sdk|accounts\.google/i,
-  /Failed to load resource.*(403|401)/i,
-  /Download the React DevTools/i,
-  /ERR_FAILED.*weather|open-meteo/i,
-  /Subscription lookup failed/i,
-  /identity-v1.*400/i,
-  /\[vite\]/i,
-  // Code-split chunks (UpgradePrompt, Dropdown, ButtonGroup, …) and the SVG
-  // sprite are fetched lazily; if a test navigates or the page tears down
-  // before they resolve, the browser cancels the in-flight request and emits
-  // a `requestfailed` with net::ERR_ABORTED. That's benign — the chunk is no
-  // longer needed. Real failures surface as ERR_FAILED / ERR_NAME_NOT_RESOLVED.
-  /net::ERR_ABORTED/i,
-]
-
-function attachErrorListeners(page) {
-  const errors = []
-  const isIgnored = (t) => IGNORED_ERROR_PATTERNS.some((rx) => rx.test(t))
-  page.on('console', (msg) => {
-    if (msg.type() === 'error' && !isIgnored(msg.text())) errors.push(`console.error: ${msg.text()}`)
-  })
-  page.on('pageerror', (err) => {
-    if (!isIgnored(err.message)) errors.push(`pageerror: ${err.message}\n${err.stack || ''}`)
-  })
-  page.on('requestfailed', (req) => {
-    const msg = `requestfailed: ${req.method()} ${req.url()} — ${req.failure()?.errorText || 'unknown'}`
-    if (!isIgnored(msg)) errors.push(msg)
-  })
-  return errors
-}
-
-// Pre-populate localStorage so first-run overlays (GDPR consent banner,
-// "What's new" modal, onboarding modal) don't intercept pointer events in
-// our interaction tests.
-async function dismissFirstRunOverlays(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('plant_tracker_consent', JSON.stringify({
-      analytics: false, ai: false, decidedAt: new Date().toISOString(),
-    }))
-    localStorage.setItem('plant-tracker-whats-new-seen', '99.0.0')
-    localStorage.setItem('plant-tracker-onboarded', '1')
-  })
-}
-
-async function enterGuestMode(page) {
-  await dismissFirstRunOverlays(page)
-  await page.goto('/login', { waitUntil: 'domcontentloaded' })
-  const guestButton = page.getByRole('button', { name: /continue as guest|try.*guest|guest mode/i })
-  await guestButton.waitFor({ state: 'visible', timeout: 10_000 })
-  await guestButton.click()
-  await page.waitForURL(/\/today|\/$/, { timeout: 10_000 })
-}
+import { attachErrorListeners, enterGuestMode, waitForLayoutReady } from './_helpers.js'
 
 test.describe('Global overlays', () => {
   test.beforeEach(async ({ page }) => {
@@ -78,15 +24,19 @@ test.describe('Global overlays', () => {
     test.skip(!!viewport && viewport.width < 768, 'Keyboard shortcut is desktop-only')
 
     const errors = attachErrorListeners(page)
-    // GlobalKeyboardShortcuts attaches its keydown listener in a useEffect that
-    // runs after MainLayout mounts. waitForURL resolves on the first matching
-    // navigation, so on slower CI runs the listener may not be attached yet.
-    // Wait for the page to settle before firing the shortcut.
-    await page.waitForLoadState('networkidle')
-    const isMac = process.platform === 'darwin'
-    await page.keyboard.press(isMac ? 'Meta+k' : 'Control+k')
+    // Wait for MainLayout (and GlobalKeyboardShortcuts' useEffect) to mount —
+    // the Topbar palette button is the deterministic mount signal.
+    await waitForLayoutReady(page)
     const dialog = page.getByRole('dialog', { name: /command palette/i })
-    await expect(dialog).toBeVisible({ timeout: 5_000 })
+    // Re-press the shortcut on the auto-retry: on slower CI runners the
+    // keydown handler can attach a tick after the button paints, so a single
+    // keypress can race the listener registration. expect.toPass retries the
+    // whole block (press + visibility check) until either succeeds or 5s.
+    const isMac = process.platform === 'darwin'
+    await expect(async () => {
+      await page.keyboard.press(isMac ? 'Meta+k' : 'Control+k')
+      await expect(dialog).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 5_000 })
     // Typing into the search input exercises filtering (the fuzzy matcher
     // caused previous hook-rule regressions). Don't assert on results — just
     // confirm the input accepts text without crashing.
