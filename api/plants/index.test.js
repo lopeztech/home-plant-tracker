@@ -5380,3 +5380,207 @@ describe('sit-session routes', () => {
     expect(res.status).toBe(404);
   });
 });
+
+// ── Households (multi-user shared access — issue #232) ──────────────────────
+
+function namedAuthHeader(sub, name) {
+  const payload = Buffer.from(JSON.stringify({ sub, name, email: `${sub}@example.com` })).toString('base64');
+  return `Bearer h.${payload}.s`;
+}
+
+describe('households', () => {
+  it('GET /households lazy-creates a personal household for first-time users', async () => {
+    const res = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(200);
+    expect(res.body.households).toHaveLength(1);
+    expect(res.body.households[0].name).toBe('My Plants');
+    expect(res.body.households[0].role).toBe('owner');
+    expect(res.body.households[0].isActive).toBe(true);
+    expect(res.body.activeHouseholdId).toBe(res.body.households[0].id);
+  });
+
+  it('GET /households/current returns members for the active household', async () => {
+    const res = await request(app)
+      .get('/households/current')
+      .set('Authorization', namedAuthHeader('alice', 'Alice Anderson'));
+    expect(res.status).toBe(200);
+    expect(res.body.role).toBe('owner');
+    expect(res.body.members).toHaveLength(1);
+    expect(res.body.members[0].userId).toBe('alice');
+    expect(res.body.members[0].displayName).toBe('Alice Anderson');
+    expect(res.body.members[0].isYou).toBe(true);
+    expect(res.body.members[0].isOwner).toBe(true);
+  });
+
+  it('POST /households/:id/invites issues a share code (owner only)', async () => {
+    // Bootstrap alice's household
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+
+    const res = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    expect(res.status).toBe(201);
+    expect(res.body.code).toMatch(/^[A-Z2-9]{8}$/);
+    expect(res.body.role).toBe('editor');
+    expect(new Date(res.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('POST /households/join lets a second user accept an invite and see shared plants', async () => {
+    // Alice creates a household and a plant.
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    await request(app).post('/plants').set('Authorization', authHeader('alice')).send({ name: 'Aloe' });
+
+    // Alice invites editor.
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    const code = inviteRes.body.code;
+
+    // Bob joins.
+    const joinRes = await request(app)
+      .post('/households/join')
+      .set('Authorization', namedAuthHeader('bob', 'Bob'))
+      .send({ code });
+    expect(joinRes.status).toBe(200);
+    expect(joinRes.body.role).toBe('editor');
+
+    // Bob now sees the shared plant.
+    const plants = await request(app).get('/plants').set('Authorization', namedAuthHeader('bob', 'Bob'));
+    expect(plants.status).toBe(200);
+    expect(Array.isArray(plants.body) ? plants.body : plants.body.plants).toBeDefined();
+    const items = Array.isArray(plants.body) ? plants.body : plants.body.plants;
+    expect(items.find((p) => p.name === 'Aloe')).toBeTruthy();
+  });
+
+  it('rejects an already-used invite code', async () => {
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    const code = inviteRes.body.code;
+
+    // Bob accepts.
+    await request(app).post('/households/join').set('Authorization', authHeader('bob')).send({ code });
+    // Carol tries the same code.
+    const second = await request(app).post('/households/join').set('Authorization', authHeader('carol')).send({ code });
+    expect(second.status).toBe(409);
+  });
+
+  it('viewer role is read-only; cannot create plants', async () => {
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'viewer' });
+    expect(inviteRes.status).toBe(201);
+    await request(app).post('/households/join').set('Authorization', authHeader('viewerbob')).send({ code: inviteRes.body.code });
+
+    // Viewer can read plants...
+    const readRes = await request(app).get('/plants').set('Authorization', authHeader('viewerbob'));
+    expect(readRes.status).toBe(200);
+
+    // ...but cannot create them.
+    const writeRes = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader('viewerbob'))
+      .send({ name: 'Pilea' });
+    expect(writeRes.status).toBe(403);
+    expect(writeRes.body.error).toBe('forbidden_role');
+  });
+
+  it('editor can create plants but cannot delete the whole plant (owner only)', async () => {
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    await request(app).post('/households/join').set('Authorization', authHeader('editbob')).send({ code: inviteRes.body.code });
+
+    const created = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader('editbob'))
+      .send({ name: 'Snake plant' });
+    expect(created.status).toBe(201);
+
+    const deleteRes = await request(app)
+      .delete(`/plants/${created.body.id}`)
+      .set('Authorization', authHeader('editbob'));
+    expect(deleteRes.status).toBe(403);
+    expect(deleteRes.body.requiredRole).toBe('owner');
+  });
+
+  it('records lastEditedBy and lastWateredBy audit fields', async () => {
+    const created = await request(app)
+      .post('/plants')
+      .set('Authorization', namedAuthHeader('alice', 'Alice'))
+      .send({ name: 'Pothos' });
+    expect(created.body.lastEditedBy).toMatchObject({ userId: 'alice', displayName: 'Alice' });
+
+    const watered = await request(app)
+      .post(`/plants/${created.body.id}/water`)
+      .set('Authorization', namedAuthHeader('alice', 'Alice'))
+      .send({ method: 'top' });
+    expect(watered.body.lastWateredBy).toMatchObject({ userId: 'alice', displayName: 'Alice' });
+    expect(watered.body.wateringLog[0].wateredBy).toMatchObject({ userId: 'alice', displayName: 'Alice' });
+  });
+
+  it('POST /households creates an additional household and switches active', async () => {
+    // Bootstrap alice's first household.
+    await request(app).get('/households').set('Authorization', authHeader('alice'));
+
+    const created = await request(app)
+      .post('/households')
+      .set('Authorization', authHeader('alice'))
+      .send({ name: 'Holiday Home' });
+    expect(created.status).toBe(201);
+    expect(created.body.name).toBe('Holiday Home');
+
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    expect(list.body.households).toHaveLength(2);
+    expect(list.body.activeHouseholdId).toBe(created.body.id);
+  });
+
+  it('owner can remove a member', async () => {
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    await request(app).post('/households/join').set('Authorization', authHeader('bob')).send({ code: inviteRes.body.code });
+
+    const remove = await request(app)
+      .delete(`/households/${householdId}/members/bob`)
+      .set('Authorization', authHeader('alice'));
+    expect(remove.status).toBe(204);
+
+    // Bob's view falls back to his own personal household, not the shared one.
+    const bobList = await request(app).get('/households').set('Authorization', authHeader('bob'));
+    expect(bobList.body.households.find((h) => h.id === householdId)).toBeUndefined();
+  });
+
+  it('rejects non-owner attempts to invite', async () => {
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    await request(app).post('/households/join').set('Authorization', authHeader('bob')).send({ code: inviteRes.body.code });
+
+    // Bob is editor — cannot create invites.
+    const res = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('bob'))
+      .send({ role: 'viewer' });
+    expect(res.status).toBe(403);
+  });
+});

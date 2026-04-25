@@ -90,16 +90,16 @@ function gcsPath(urlOrPath) {
   return clean.startsWith(prefix) ? clean.slice(prefix.length) : clean;
 }
 
-// Extract the authenticated user's Google `sub` from the request.
+// Extract the authenticated user's identity claims from the request.
 // In production, API Gateway verifies the JWT and injects `x-apigateway-api-userinfo`.
 // In local dev, we decode the Bearer token payload directly (no re-verification needed
 // since the Cloud Function is not publicly reachable without the API key).
-function getUserSub(req) {
+function getUserClaims(req) {
   const gatewayInfo = req.headers['x-apigateway-api-userinfo'];
   if (gatewayInfo) {
     try {
       const payload = JSON.parse(Buffer.from(gatewayInfo, 'base64').toString('utf-8'));
-      if (payload.sub) return payload.sub;
+      if (payload.sub) return { sub: payload.sub, name: payload.name || null, email: payload.email || null };
     } catch {}
   }
   const auth = req.headers['authorization'];
@@ -110,27 +110,52 @@ function getUserSub(req) {
         const pad = parts[1].length % 4;
         const padded = parts[1] + (pad ? '='.repeat(4 - pad) : '');
         const payload = JSON.parse(Buffer.from(padded, 'base64').toString('utf-8'));
-        if (payload.sub) return payload.sub;
+        if (payload.sub) return { sub: payload.sub, name: payload.name || null, email: payload.email || null };
       }
     } catch {}
   }
   return null;
 }
 
+const households = require('./households');
+
+// Resolve the active household for the authenticated actor and decorate the
+// request with: actorUserId, userId (= ownerId of the active household),
+// householdId, role, actorDisplayName. Pre-existing handlers continue to use
+// `req.userId` as the data-tree owner unchanged.
+async function attachHouseholdContext(req, claims) {
+  const displayName = claims.name || claims.email || null;
+  const ctx = await households.resolveHouseholdContext(db, claims.sub, displayName);
+  req.actorUserId = ctx.actorUserId;
+  req.userId = ctx.userId;
+  req.householdId = ctx.householdId;
+  req.role = ctx.role;
+  req.actorDisplayName = displayName;
+}
+
 function requireUser(req, res, next) {
-  const sub = getUserSub(req);
-  if (!sub) return res.status(401).json({ error: 'Unauthorized' });
-  req.userId = sub;
-  next();
+  // Idempotent — the role-gate middleware below may have already resolved
+  // household context for write requests; skip the second Firestore round-trip.
+  if (req.actorUserId) return next();
+  const claims = getUserClaims(req);
+  if (!claims) return res.status(401).json({ error: 'Unauthorized' });
+  attachHouseholdContext(req, claims).then(next).catch((err) => {
+    log.error('household_context_failed', { error: err.message, sub: claims.sub });
+    res.status(500).json({ error: 'Failed to resolve household context' });
+  });
 }
 
 // For routes that accept anonymous callers but should still attribute usage
 // to a user when an Authorization header is present (e.g. AI analyse during
 // onboarding once Google sign-in has happened).
 function softAuth(req, _res, next) {
-  const sub = getUserSub(req);
-  if (sub) req.userId = sub;
-  next();
+  if (req.actorUserId) return next();
+  const claims = getUserClaims(req);
+  if (!claims) return next();
+  attachHouseholdContext(req, claims).then(next).catch((err) => {
+    log.warn('household_context_failed_soft', { error: err.message });
+    next();
+  });
 }
 
 function userPlants(userId) {
@@ -1245,6 +1270,282 @@ app.put('/config/branding', requireUser, requireTier('landscaper_pro'), async (r
   }
 });
 
+// ── Households (multi-user shared access) ────────────────────────────────────
+// All data still lives at users/{ownerId}/... — households add a membership
+// overlay that lets multiple users see and edit the same plants. See
+// households.js for the full design.
+
+// GET /households — list households the actor belongs to + which is active
+app.get('/households', requireUser, async (req, res) => {
+  try {
+    const result = await households.listHouseholdsForUser(db, req.actorUserId);
+    const items = result.households.map((h) => {
+      const memberCount = Object.keys(h.members || {}).length;
+      const myRole = h.members?.[req.actorUserId]?.role || null;
+      return {
+        id: h.id,
+        name: h.name,
+        ownerId: h.ownerId,
+        memberCount,
+        role: myRole,
+        isActive: h.id === result.activeHouseholdId,
+        createdAt: h.createdAt,
+      };
+    });
+    res.status(200).json({ households: items, activeHouseholdId: result.activeHouseholdId });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /households/current — full member list for the active household
+app.get('/households/current', requireUser, async (req, res) => {
+  try {
+    const hh = await households.readHousehold(db, req.householdId);
+    if (!hh) return res.status(404).json({ error: 'Household not found' });
+    const members = Object.entries(hh.members || {}).map(([userId, m]) => ({
+      userId,
+      role: m.role,
+      displayName: m.displayName || null,
+      joinedAt: m.joinedAt,
+      isYou: userId === req.actorUserId,
+      isOwner: userId === hh.ownerId,
+    }));
+    res.status(200).json({
+      id: hh.id,
+      name: hh.name,
+      ownerId: hh.ownerId,
+      role: req.role,
+      members,
+      createdAt: hh.createdAt,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /households — create a new household owned by the actor
+app.post('/households', requireUser, async (req, res) => {
+  try {
+    const name = String(req.body?.name || '').trim().slice(0, 60) || 'My Plants';
+    const now = new Date().toISOString();
+    const data = {
+      name,
+      ownerId: req.actorUserId,
+      createdAt: now,
+      updatedAt: now,
+      members: {
+        [req.actorUserId]: {
+          role: 'owner',
+          displayName: req.actorDisplayName || null,
+          joinedAt: now,
+        },
+      },
+    };
+    const ref = await households.householdsRef(db).add(data);
+
+    const profile = (await households.readProfile(db, req.actorUserId)) || {};
+    const ids = Array.from(new Set([...(profile.householdIds || []), ref.id]));
+    await households.writeProfile(db, req.actorUserId, {
+      activeHouseholdId: ref.id,
+      householdIds: ids,
+      updatedAt: now,
+    });
+
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /households/:id — rename (owner only)
+app.put('/households/:id', requireUser, async (req, res) => {
+  try {
+    const hh = await households.readHousehold(db, req.params.id);
+    if (!hh) return res.status(404).json({ error: 'Household not found' });
+    const member = hh.members?.[req.actorUserId];
+    if (!member || !households.roleMeetsMinimum(member.role, 'owner')) {
+      return res.status(403).json({ error: 'forbidden_role', requiredRole: 'owner', currentRole: member?.role || null });
+    }
+    const name = String(req.body?.name || '').trim().slice(0, 60);
+    if (!name) return res.status(400).json({ error: 'name is required' });
+    await households.householdsRef(db).doc(hh.id).set({ name, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ id: hh.id, name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /households/:id/switch — set the actor's active household
+app.post('/households/:id/switch', requireUser, async (req, res) => {
+  try {
+    const hh = await households.readHousehold(db, req.params.id);
+    if (!hh || !hh.members?.[req.actorUserId]) {
+      return res.status(404).json({ error: 'Household not found or not a member' });
+    }
+    await households.writeProfile(db, req.actorUserId, {
+      activeHouseholdId: hh.id,
+      updatedAt: new Date().toISOString(),
+    });
+    res.status(200).json({ id: hh.id, name: hh.name, role: hh.members[req.actorUserId].role });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /households/:id/invites — create a share-code invite (owner only)
+app.post('/households/:id/invites', requireUser, async (req, res) => {
+  try {
+    const hh = await households.readHousehold(db, req.params.id);
+    if (!hh) return res.status(404).json({ error: 'Household not found' });
+    const member = hh.members?.[req.actorUserId];
+    if (!member || !households.roleMeetsMinimum(member.role, 'owner')) {
+      return res.status(403).json({ error: 'forbidden_role', requiredRole: 'owner', currentRole: member?.role || null });
+    }
+    const role = req.body?.role || 'editor';
+    if (!['viewer', 'editor'].includes(role)) {
+      return res.status(400).json({ error: 'role must be one of: viewer, editor' });
+    }
+    const invite = await households.createInvite(db, {
+      householdId: hh.id,
+      role,
+      invitedBy: req.actorUserId,
+    });
+    res.status(201).json({
+      code: invite.code,
+      role: invite.role,
+      expiresAt: invite.expiresAt,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /households/join — accept an invite code
+app.post('/households/join', requireUser, async (req, res) => {
+  try {
+    const code = String(req.body?.code || '').trim().toUpperCase();
+    if (!code) return res.status(400).json({ error: 'code is required' });
+    let result;
+    try {
+      result = await households.acceptInvite(db, {
+        code,
+        actorUserId: req.actorUserId,
+        actorDisplayName: req.actorDisplayName,
+      });
+    } catch (err) {
+      if (err.code === 'not_found') return res.status(404).json({ error: 'Invite code not found' });
+      if (err.code === 'expired')   return res.status(410).json({ error: 'Invite code expired' });
+      if (err.code === 'already_used') return res.status(409).json({ error: 'Invite code already used' });
+      if (err.code === 'revoked')   return res.status(410).json({ error: 'Invite code was revoked' });
+      throw err;
+    }
+    res.status(200).json({
+      household: { id: result.household.id, name: result.household.name, ownerId: result.household.ownerId },
+      role: result.role,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /households/:id/members/:userId — remove a member (owner only).
+// Owners cannot remove themselves; that requires deleting the household.
+app.delete('/households/:id/members/:userId', requireUser, async (req, res) => {
+  try {
+    const hh = await households.readHousehold(db, req.params.id);
+    if (!hh) return res.status(404).json({ error: 'Household not found' });
+    const actor = hh.members?.[req.actorUserId];
+    if (!actor || !households.roleMeetsMinimum(actor.role, 'owner')) {
+      return res.status(403).json({ error: 'forbidden_role', requiredRole: 'owner', currentRole: actor?.role || null });
+    }
+    const targetId = req.params.userId;
+    if (targetId === hh.ownerId) {
+      return res.status(400).json({ error: 'Cannot remove the household owner' });
+    }
+    if (!hh.members[targetId]) return res.status(404).json({ error: 'Member not found' });
+    const newMembers = { ...hh.members };
+    delete newMembers[targetId];
+    await households.householdsRef(db).doc(hh.id).set({
+      members: newMembers,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    // Update the removed user's profile so the household no longer appears.
+    const profile = (await households.readProfile(db, targetId)) || {};
+    const ids = (profile.householdIds || []).filter((id) => id !== hh.id);
+    const updates = { householdIds: ids, updatedAt: new Date().toISOString() };
+    if (profile.activeHouseholdId === hh.id) updates.activeHouseholdId = null;
+    await households.writeProfile(db, targetId, updates);
+
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /households/:id/members/:userId — change a member's role (owner only)
+app.put('/households/:id/members/:userId', requireUser, async (req, res) => {
+  try {
+    const hh = await households.readHousehold(db, req.params.id);
+    if (!hh) return res.status(404).json({ error: 'Household not found' });
+    const actor = hh.members?.[req.actorUserId];
+    if (!actor || !households.roleMeetsMinimum(actor.role, 'owner')) {
+      return res.status(403).json({ error: 'forbidden_role', requiredRole: 'owner', currentRole: actor?.role || null });
+    }
+    const role = req.body?.role;
+    if (!['viewer', 'editor', 'owner'].includes(role)) {
+      return res.status(400).json({ error: 'role must be one of: viewer, editor, owner' });
+    }
+    const targetId = req.params.userId;
+    if (targetId === hh.ownerId && role !== 'owner') {
+      return res.status(400).json({ error: 'Cannot demote the household owner' });
+    }
+    if (!hh.members[targetId]) return res.status(404).json({ error: 'Member not found' });
+    const newMembers = { ...hh.members, [targetId]: { ...hh.members[targetId], role } };
+    await households.householdsRef(db).doc(hh.id).set({
+      members: newMembers,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+    res.status(200).json({ userId: targetId, role });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Role gate for writes on /plants and /config ──────────────────────────────
+// Runs before the route's own requireUser middleware. Resolves the actor's
+// active-household role and rejects writes from viewers (or downgrades
+// viewer-attempted DELETEs on whole plants from owner-only to 403).
+const WRITE_GATE_SKIP = new Set([
+  '/plants/identify', // softAuth, no plant data write
+]);
+
+app.use((req, res, next) => {
+  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  // Only gate writes under the user's data tree — household management routes
+  // gate themselves; AI/billing/etc don't need this gate.
+  const isPlantPath  = req.path === '/plants' || req.path.startsWith('/plants/');
+  const isConfigPath = req.path.startsWith('/config/');
+  if (!isPlantPath && !isConfigPath) return next();
+  if (WRITE_GATE_SKIP.has(req.path)) return next();
+
+  const claims = getUserClaims(req);
+  if (!claims) return next(); // requireUser will 401 downstream
+
+  attachHouseholdContext(req, claims).then(() => {
+    const isWholePlantDelete = req.method === 'DELETE' && /^\/plants\/[^/]+$/.test(req.path);
+    const min = isWholePlantDelete ? 'owner' : 'editor';
+    if (!households.roleMeetsMinimum(req.role, min)) {
+      return res.status(403).json({ error: 'forbidden_role', requiredRole: min, currentRole: req.role });
+    }
+    next();
+  }).catch((err) => {
+    log.error('write_gate_failed', { error: err.message });
+    next();
+  });
+});
+
 // ── Plants CRUD ───────────────────────────────────────────────────────────────
 
 app.get('/plants', requireUser, async (req, res) => {
@@ -1304,7 +1605,15 @@ app.post('/plants', requireUser, checkQuota('plants', countPlantsForReq), async 
       try { body.imageUrl = body.imageUrl.split('?')[0]; } catch {}
       body.photoLog = [{ url: body.imageUrl, date: now, type: 'growth', analysis: null }];
     }
-    const data = { ...body, shortCode: generateShortCode(), createdAt: now, updatedAt: now };
+    const stamp = households.buildActorStamp(req);
+    const data = {
+      ...body,
+      shortCode: generateShortCode(),
+      createdAt: now,
+      updatedAt: now,
+      createdBy: stamp,
+      lastEditedBy: stamp,
+    };
     const docRef = await userPlants(req.userId).add(data);
     const response = { id: docRef.id, ...data };
     try { await signPlantData(response); } catch (signErr) {
@@ -1344,7 +1653,7 @@ app.put('/plants/:id', requireUser, async (req, res) => {
       try { body.imageUrl = body.imageUrl.split('?')[0]; } catch {}
     }
 
-    const updates = { ...body, updatedAt: now };
+    const updates = { ...body, updatedAt: now, lastEditedBy: households.buildActorStamp(req) };
 
     // Track health changes in healthLog
     if (body.health && body.health !== existing.health) {
@@ -1448,6 +1757,7 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
       return res.status(400).json({ error: `soilBefore must be one of: ${SOIL_BEFORE_OPTS.join(', ')}` });
     }
 
+    const stamp = households.buildActorStamp(req);
     const entry = {
       date: now,
       note: note || '',
@@ -1458,6 +1768,7 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
       soilBefore: soilBefore || null,
       drainedCleanly: drainedCleanly != null ? Boolean(drainedCleanly) : null,
       fertiliserMixed: fertiliserMixed || null,
+      wateredBy: stamp,
     };
 
     const wateringLog = [...(existing.wateringLog || []), entry];
@@ -1467,7 +1778,14 @@ app.post('/plants/:id/water', requireUser, async (req, res) => {
     delete mlCache.wateringPattern;
     delete mlCache.wateringRecommendation;
     delete mlCache.healthPrediction;
-    await ref.set({ lastWatered: now, wateringLog, updatedAt: now, mlCache }, { merge: true });
+    await ref.set({
+      lastWatered: now,
+      wateringLog,
+      updatedAt: now,
+      mlCache,
+      lastWateredBy: stamp,
+      lastEditedBy: stamp,
+    }, { merge: true });
 
     const updated = await ref.get();
     const data = { id: updated.id, ...updated.data() };
@@ -4485,7 +4803,11 @@ function maskApiKey(prefix) {
   return `${prefix}...`;
 }
 
-// Middleware: authenticate via x-plant-api-key header, resolve userId
+// Middleware: authenticate via x-plant-api-key header, resolve userId.
+// API keys belong to the Google sub that created them; the request operates
+// against that sub's *active* household (so a member who issues a key sees
+// the same data they see in the UI). Read-only by default; writes still go
+// through requireRole() on the route.
 async function requireApiKey(req, res, next) {
   const rawKey = req.headers['x-plant-api-key'];
   if (!rawKey) return res.status(401).json({ error: 'Missing x-plant-api-key header' });
@@ -4496,9 +4818,17 @@ async function requireApiKey(req, res, next) {
     if (!hashDoc.exists || hashDoc.data().revokedAt) {
       return res.status(401).json({ error: 'Invalid or revoked API key' });
     }
-    req.userId = hashDoc.data().userId;
+    const ownerSub = hashDoc.data().userId;
     // Update lastUsedAt asynchronously — do not block request
     apiKeyHashesRef().doc(hash).set({ lastUsedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+
+    // Resolve the actor's active household so /api/v1/plants returns the
+    // shared data they see in the UI (not just their personal tree).
+    const ctx = await households.resolveHouseholdContext(db, ownerSub, null);
+    req.actorUserId = ctx.actorUserId;
+    req.userId = ctx.userId;
+    req.householdId = ctx.householdId;
+    req.role = ctx.role;
     next();
   } catch {
     res.status(500).json({ error: 'API key lookup failed' });
