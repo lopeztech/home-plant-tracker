@@ -647,15 +647,37 @@ app.get('/ml/status', async (req, res) => {
 
 // ── ML feature engineering ────────────────────────────────────────────────────
 
-function getSeason(dateStr) {
+// Hemisphere-aware season label for ML rows.  Northern hemisphere maps
+// Mar-May → spring etc.; southern hemisphere is shifted six months so an
+// April event in Sydney is labelled 'autumn', not 'spring'.  Falls back to
+// north when the hemisphere is unknown — preserves prior behaviour for
+// users that haven't set a location preference.
+function getSeason(dateStr, hemisphere = 'north') {
   const month = new Date(dateStr).getMonth(); // 0-indexed
-  if (month >= 2 && month <= 4) return 'spring';
-  if (month >= 5 && month <= 7) return 'summer';
-  if (month >= 8 && month <= 10) return 'autumn';
-  return 'winter';
+  const isNorth = hemisphere !== 'south';
+  if (isNorth) {
+    if (month >= 2 && month <= 4) return 'spring';
+    if (month >= 5 && month <= 7) return 'summer';
+    if (month >= 8 && month <= 10) return 'autumn';
+    return 'winter';
+  }
+  if (month >= 2 && month <= 4) return 'autumn';
+  if (month >= 5 && month <= 7) return 'winter';
+  if (month >= 8 && month <= 10) return 'spring';
+  return 'summer';
 }
 
-function buildFeatureRows(plant) {
+async function getUserHemisphere(userId) {
+  try {
+    const configDoc = await userConfig(userId).doc('preferences').get();
+    if (configDoc.exists && configDoc.data().hemisphere) {
+      return configDoc.data().hemisphere;
+    }
+  } catch { /* fall through to default */ }
+  return 'north';
+}
+
+function buildFeatureRows(plant, hemisphere = 'north') {
   const log = (plant.wateringLog || []).sort((a, b) => new Date(a.date) - new Date(b.date));
   if (log.length < 2) return [];
 
@@ -698,7 +720,7 @@ function buildFeatureRows(plant) {
       adherence_ratio: adherence,
       health_at_watering: health || '',
       health_7d_after: health7d || '',
-      season: getSeason(log[i].date),
+      season: getSeason(log[i].date, hemisphere),
       consecutive_overdue_days: consecutive,
       pot_size: plant.potSize || '',
       room: plant.room || '',
@@ -741,9 +763,10 @@ app.get('/ml/export', async (req, res) => {
     const allRows = [];
     const usersSnap = await db.collection('users').get();
     for (const userDoc of usersSnap.docs) {
+      const hemisphere = await getUserHemisphere(userDoc.id);
       const plantsSnap = await db.collection('users').doc(userDoc.id).collection('plants').get();
       for (const plantDoc of plantsSnap.docs) {
-        allRows.push(...buildFeatureRows(plantDoc.data()));
+        allRows.push(...buildFeatureRows(plantDoc.data(), hemisphere));
       }
     }
 
@@ -2479,7 +2502,8 @@ app.get('/plants/:id/watering-pattern', requireUser, requireTier('home_pro'), as
     let result;
     if (endpointId && (plant.wateringLog || []).length >= 3) {
       try {
-        const featureRows = buildFeatureRows(plant);
+        const hemisphere = await getUserHemisphere(req.userId);
+        const featureRows = buildFeatureRows(plant, hemisphere);
         if (featureRows.length > 0) {
           const predictions = await vertexai.predict(endpointId, [featureRows[featureRows.length - 1]]);
           if (predictions.length > 0 && predictions[0].pattern) {
@@ -2544,7 +2568,8 @@ app.get('/plants/:id/watering-recommendation', requireUser, requireTier('home_pr
 
     if (endpointId && (plant.wateringLog || []).length >= 5) {
       try {
-        const featureRows = buildFeatureRows(plant);
+        const hemisphere = await getUserHemisphere(req.userId);
+        const featureRows = buildFeatureRows(plant, hemisphere);
         if (featureRows.length > 0) {
           const latest = featureRows[featureRows.length - 1];
           const predictions = await vertexai.predict(endpointId, [{
@@ -2698,7 +2723,8 @@ app.get('/plants/:id/health-prediction', requireUser, requireTier('home_pro'), a
 
     if (endpointId && (plant.wateringLog || []).length >= 3) {
       try {
-        const featureRows = buildFeatureRows(plant);
+        const hemisphere = await getUserHemisphere(req.userId);
+        const featureRows = buildFeatureRows(plant, hemisphere);
         if (featureRows.length > 0) {
           const latest = featureRows[featureRows.length - 1];
           const predictions = await vertexai.predict(endpointId, [{
@@ -2741,22 +2767,7 @@ app.get('/plants/:id/health-prediction', requireUser, requireTier('home_pro'), a
 
 // ── Seasonal pattern recognition ─────────────────────────────────────────────
 
-function getSeasonForHemisphere(date, hemisphere) {
-  const month = new Date(date).getMonth(); // 0-indexed
-  const isNorth = hemisphere !== 'south';
-
-  if (isNorth) {
-    if (month >= 2 && month <= 4) return 'spring';
-    if (month >= 5 && month <= 7) return 'summer';
-    if (month >= 8 && month <= 10) return 'autumn';
-    return 'winter';
-  }
-  // Southern hemisphere: seasons are reversed
-  if (month >= 2 && month <= 4) return 'autumn';
-  if (month >= 5 && month <= 7) return 'winter';
-  if (month >= 8 && month <= 10) return 'spring';
-  return 'summer';
-}
+const getSeasonForHemisphere = (date, hemisphere) => getSeason(date, hemisphere);
 
 // Default seasonal multipliers per season (species-independent baseline)
 const SEASONAL_MULTIPLIERS = {
@@ -2805,15 +2816,7 @@ app.get('/plants/:id/seasonal-adjustment', requireUser, requireTier('home_pro'),
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
     const plant = doc.data();
-
-    // Get hemisphere from user config or default to north
-    let hemisphere = 'north';
-    try {
-      const configDoc = await userConfig(req.userId).doc('preferences').get();
-      if (configDoc.exists && configDoc.data().hemisphere) {
-        hemisphere = configDoc.data().hemisphere;
-      }
-    } catch { /* default to north */ }
+    const hemisphere = await getUserHemisphere(req.userId);
 
     const endpointId = process.env.SEASONAL_ADJUSTMENT_ENDPOINT;
     let result;
@@ -2950,7 +2953,8 @@ app.get('/plants/:id/care-score', requireUser, async (req, res) => {
 
     if (endpointId && (plant.wateringLog || []).length >= 3) {
       try {
-        const featureRows = buildFeatureRows(plant);
+        const hemisphere = await getUserHemisphere(req.userId);
+        const featureRows = buildFeatureRows(plant, hemisphere);
         if (featureRows.length > 0) {
           const predictions = await vertexai.predict(endpointId, [featureRows[featureRows.length - 1]]);
           if (predictions.length > 0 && typeof predictions[0].score === 'number') {

@@ -55,6 +55,16 @@ export function urgencyLabel(days) {
 // ── Season detection from latitude ──────────────────────────────────────────
 
 /**
+ * Returns 'north' | 'south' | null based on latitude sign.
+ * Returns null when latitude is unknown so callers can choose how to fall back
+ * (e.g. skip the season note rather than baking in a Northern-Hemisphere default).
+ */
+export function getHemisphere(lat) {
+  if (lat == null || Number.isNaN(lat)) return null
+  return lat >= 0 ? 'north' : 'south'
+}
+
+/**
  * Determine the current season based on latitude (hemisphere) and date.
  * Northern hemisphere: Spring Mar-May, Summer Jun-Aug, Autumn Sep-Nov, Winter Dec-Feb
  * Southern hemisphere: seasons are reversed.

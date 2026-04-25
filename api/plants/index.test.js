@@ -1702,6 +1702,44 @@ describe('GET /ml/export', () => {
     expect(rows.map(r => r.season)).toEqual(['spring', 'summer', 'autumn', 'winter']);
     delete process.env.ML_ADMIN_TOKEN;
   });
+
+  it('reverses season labels for southern-hemisphere users (issue #210)', async () => {
+    process.env.ML_ADMIN_TOKEN = 'test-token';
+    // Two users with the same dates but opposite hemispheres should get
+    // mirrored season labels — without this the ML training set conflates
+    // southern-hemisphere events with northern-hemisphere seasonality.
+    store['users/user-north'] = {};
+    store['users/user-north/config/preferences'] = { hemisphere: 'north' };
+    store['users/user-north/plants/p1'] = {
+      name: 'Plant', species: 'NorthSpecies', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-04-15T00:00:00.000Z' },
+        { date: '2026-07-15T00:00:00.000Z' },
+        { date: '2026-10-15T00:00:00.000Z' },
+      ],
+      healthLog: [],
+    };
+    store['users/user-south'] = {};
+    store['users/user-south/config/preferences'] = { hemisphere: 'south' };
+    store['users/user-south/plants/p1'] = {
+      name: 'Plant', species: 'SouthSpecies', frequencyDays: 7,
+      wateringLog: [
+        { date: '2026-01-01T00:00:00.000Z' },
+        { date: '2026-04-15T00:00:00.000Z' },
+        { date: '2026-07-15T00:00:00.000Z' },
+        { date: '2026-10-15T00:00:00.000Z' },
+      ],
+      healthLog: [],
+    };
+    const res = await request(app).get('/ml/export').set('x-admin-token', 'test-token');
+    const rows = res.text.trim().split('\n').map(l => JSON.parse(l));
+    const northSeasons = rows.filter(r => r.species === 'NorthSpecies').map(r => r.season);
+    const southSeasons = rows.filter(r => r.species === 'SouthSpecies').map(r => r.season);
+    expect(northSeasons).toEqual(['spring', 'summer', 'autumn']);
+    expect(southSeasons).toEqual(['autumn', 'winter', 'spring']);
+    delete process.env.ML_ADMIN_TOKEN;
+  });
 });
 
 // ── GET /plants/:id/watering-recommendation ─────────────────────────────────

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay, computeRainCredit, localDateStr } from '../utils/watering.js'
+import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, getHemisphere, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay, computeRainCredit, localDateStr } from '../utils/watering.js'
 
 function makePlant(overrides = {}) {
   return {
@@ -263,6 +263,26 @@ describe('getSeason', () => {
 
   it('treats latitude 0 (equator) as northern hemisphere', () => {
     expect(getSeason(0, new Date('2026-07-15'))).toBe('summer')
+  })
+})
+
+// ── getHemisphere ──────────────────────────────────────────────────────────
+
+describe('getHemisphere', () => {
+  it('returns null when lat is null, undefined, or NaN', () => {
+    expect(getHemisphere(null)).toBeNull()
+    expect(getHemisphere(undefined)).toBeNull()
+    expect(getHemisphere(Number.NaN)).toBeNull()
+  })
+
+  it('returns north for non-negative latitudes', () => {
+    expect(getHemisphere(0)).toBe('north')
+    expect(getHemisphere(40)).toBe('north')
+  })
+
+  it('returns south for negative latitudes', () => {
+    expect(getHemisphere(-0.001)).toBe('south')
+    expect(getHemisphere(-33)).toBe('south')
   })
 })
 
