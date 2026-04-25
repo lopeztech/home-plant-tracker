@@ -29,12 +29,31 @@ function roleMeetsMinimum(actual, minimum) {
 
 const SHARE_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1
 function generateShareCode() {
+  // crypto.randomInt is unbiased (rejection-sampled internally) so we avoid
+  // CodeQL's modulo-on-crypto-random warning even though our 32-char alphabet
+  // would in fact divide a uint8 evenly.
   let out = '';
-  const buf = crypto.randomBytes(8);
   for (let i = 0; i < 8; i++) {
-    out += SHARE_CODE_ALPHABET[buf[i] % SHARE_CODE_ALPHABET.length];
+    out += SHARE_CODE_ALPHABET[crypto.randomInt(0, SHARE_CODE_ALPHABET.length)];
   }
   return out;
+}
+
+// Validate a string we're about to use as a dynamic object key. JWT subs and
+// path-param userIds are otherwise trusted (the gateway verifies the JWT, and
+// path params are scoped by an owner check) but using a user-controlled value
+// as a computed property name still trips CodeQL's "remote property injection"
+// rule. This belt-and-braces guard rejects anything that isn't a plain
+// identifier-shaped string and the well-known prototype-pollution keys.
+const SAFE_KEY_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+function safeUserKey(id) {
+  if (typeof id !== 'string' || !SAFE_KEY_RE.test(id) || FORBIDDEN_KEYS.has(id)) {
+    const err = new Error('invalid_user_id');
+    err.code = 'invalid_user_id';
+    throw err;
+  }
+  return id;
 }
 
 function householdsRef(db) {
@@ -80,13 +99,14 @@ async function ensurePersonalHousehold(db, userId, displayName) {
   }
 
   const now = new Date().toISOString();
+  const ownerKey = safeUserKey(userId);
   const householdData = {
     name: 'My Plants',
     ownerId: userId,
     createdAt: now,
     updatedAt: now,
     members: {
-      [userId]: {
+      [ownerKey]: {
         role: 'owner',
         displayName: displayName || null,
         joinedAt: now,
@@ -229,14 +249,15 @@ async function acceptInvite(db, { code, actorUserId, actorDisplayName }) {
   // Already a member? still OK — accepting is idempotent. Otherwise
   // append to the members map with the invite's role.
   const now = new Date().toISOString();
-  const existing = household.members?.[actorUserId];
+  const memberKey = safeUserKey(actorUserId);
+  const existing = household.members?.[memberKey];
   const newMember = existing || {
     role: invite.role,
     displayName: actorDisplayName || null,
     joinedAt: now,
   };
   await householdsRef(db).doc(household.id).set({
-    members: { ...(household.members || {}), [actorUserId]: newMember },
+    members: { ...(household.members || {}), [memberKey]: newMember },
     updatedAt: now,
   }, { merge: true });
 
@@ -255,7 +276,7 @@ async function acceptInvite(db, { code, actorUserId, actorDisplayName }) {
     updatedAt: now,
   });
 
-  return { household: { ...household, members: { ...(household.members || {}), [actorUserId]: newMember } }, role: newMember.role };
+  return { household: { ...household, members: { ...(household.members || {}), [memberKey]: newMember } }, role: newMember.role };
 }
 
 async function listHouseholdsForUser(db, userId) {
@@ -273,6 +294,7 @@ module.exports = {
   ROLE_LEVELS,
   roleMeetsMinimum,
   generateShareCode,
+  safeUserKey,
   ensurePersonalHousehold,
   resolveHouseholdContext,
   requireRole,

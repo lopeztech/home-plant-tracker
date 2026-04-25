@@ -1335,7 +1335,7 @@ app.post('/households', requireUser, async (req, res) => {
       createdAt: now,
       updatedAt: now,
       members: {
-        [req.actorUserId]: {
+        [households.safeUserKey(req.actorUserId)]: {
           role: 'owner',
           displayName: req.actorDisplayName || null,
           joinedAt: now,
@@ -1459,11 +1459,15 @@ app.delete('/households/:id/members/:userId', requireUser, async (req, res) => {
     if (!actor || !households.roleMeetsMinimum(actor.role, 'owner')) {
       return res.status(403).json({ error: 'forbidden_role', requiredRole: 'owner', currentRole: actor?.role || null });
     }
-    const targetId = req.params.userId;
+    let targetId;
+    try { targetId = households.safeUserKey(req.params.userId); }
+    catch { return res.status(400).json({ error: 'Invalid userId' }); }
     if (targetId === hh.ownerId) {
       return res.status(400).json({ error: 'Cannot remove the household owner' });
     }
-    if (!hh.members[targetId]) return res.status(404).json({ error: 'Member not found' });
+    if (!Object.prototype.hasOwnProperty.call(hh.members || {}, targetId)) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
     const newMembers = { ...hh.members };
     delete newMembers[targetId];
     await households.householdsRef(db).doc(hh.id).set({
@@ -1497,12 +1501,17 @@ app.put('/households/:id/members/:userId', requireUser, async (req, res) => {
     if (!['viewer', 'editor', 'owner'].includes(role)) {
       return res.status(400).json({ error: 'role must be one of: viewer, editor, owner' });
     }
-    const targetId = req.params.userId;
+    let targetId;
+    try { targetId = households.safeUserKey(req.params.userId); }
+    catch { return res.status(400).json({ error: 'Invalid userId' }); }
     if (targetId === hh.ownerId && role !== 'owner') {
       return res.status(400).json({ error: 'Cannot demote the household owner' });
     }
-    if (!hh.members[targetId]) return res.status(404).json({ error: 'Member not found' });
-    const newMembers = { ...hh.members, [targetId]: { ...hh.members[targetId], role } };
+    if (!Object.prototype.hasOwnProperty.call(hh.members || {}, targetId)) {
+      return res.status(404).json({ error: 'Member not found' });
+    }
+    const existingMember = hh.members[targetId];
+    const newMembers = { ...hh.members, [targetId]: { ...existingMember, role } };
     await households.householdsRef(db).doc(hh.id).set({
       members: newMembers,
       updatedAt: new Date().toISOString(),
