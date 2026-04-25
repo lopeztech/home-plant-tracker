@@ -86,13 +86,19 @@ export async function enterGuestMode(page, { dismissOverlays = true } = {}) {
 }
 
 /**
- * Wait for MainLayout to be fully interactive — i.e. the Topbar has mounted
- * and `GlobalKeyboardShortcuts`' useEffect has had a chance to attach its
- * keydown listener. Use this before firing global keyboard shortcuts; it's
- * deterministic where `waitForLoadState('networkidle')` is racey on CI.
+ * Wait for MainLayout to be fully interactive — i.e. the React tree
+ * (CommandPaletteProvider → GlobalKeyboardShortcuts) has rendered and that
+ * effect has had a chance to attach its keydown listener. Use this before
+ * firing global keyboard shortcuts; it's deterministic where
+ * `waitForLoadState('networkidle')` is racey on CI.
+ *
+ * Waits for `<main class="app-body">` — the wrapper rendered unconditionally
+ * by MainLayout — rather than the Topbar palette button. The Topbar carries
+ * `d-md-none` so its palette button is permanently invisible on desktop
+ * chromium (1280×720), which made the previous helper time out every run.
  */
 export async function waitForLayoutReady(page) {
-  await page.getByRole('button', { name: /open command palette/i }).waitFor({
+  await page.locator('main.app-body').waitFor({
     state: 'visible',
     timeout: 10_000,
   })
