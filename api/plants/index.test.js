@@ -5583,4 +5583,21 @@ describe('households', () => {
       .send({ role: 'viewer' });
     expect(res.status).toBe(403);
   });
+
+  it('rejects member-management calls with prototype-pollution-shaped userIds', async () => {
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const remove = await request(app)
+      .delete(`/households/${householdId}/members/__proto__`)
+      .set('Authorization', authHeader('alice'));
+    expect(remove.status).toBe(400);
+    expect(remove.body.error).toBe('Invalid userId');
+
+    const role = await request(app)
+      .put(`/households/${householdId}/members/constructor`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    expect(role.status).toBe(400);
+    expect(role.body.error).toBe('Invalid userId');
+  });
 });
