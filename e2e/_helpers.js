@@ -60,23 +60,40 @@ export function attachErrorListeners(page, extraIgnore = [], { requestFailed = t
 /**
  * Pre-populate localStorage so first-run overlays (GDPR consent banner,
  * "What's new" modal, onboarding modal) don't intercept pointer events.
+ *
+ * Pass `{ consent: false }`, `{ onboarded: false }`, or `{ whatsNewSeen: false }`
+ * to keep a specific overlay alive for tests that target it directly.
  */
-export async function dismissFirstRunOverlays(page) {
-  await page.addInitScript(() => {
-    localStorage.setItem('plant_tracker_consent', JSON.stringify({
-      analytics: false, ai: false, decidedAt: new Date().toISOString(),
-    }))
-    localStorage.setItem('plant-tracker-whats-new-seen', '99.0.0')
-    localStorage.setItem('plant-tracker-onboarded', '1')
-  })
+export async function dismissFirstRunOverlays(page, {
+  consent = true,
+  onboarded = true,
+  whatsNewSeen = true,
+} = {}) {
+  await page.addInitScript(({ consent, onboarded, whatsNewSeen }) => {
+    if (consent) {
+      localStorage.setItem('plant_tracker_consent', JSON.stringify({
+        analytics: false, ai: false, decidedAt: new Date().toISOString(),
+      }))
+    }
+    if (whatsNewSeen) {
+      localStorage.setItem('plant-tracker-whats-new-seen', '99.0.0')
+    }
+    if (onboarded) {
+      localStorage.setItem('plant-tracker-onboarded', '1')
+    }
+  }, { consent, onboarded, whatsNewSeen })
 }
 
 /**
  * Land on /login, click "Continue as guest", and wait for the post-login
  * redirect to settle. Skips first-run overlays unless `dismissOverlays:false`.
+ *
+ * Per-overlay keys (`consent`, `onboarded`, `whatsNewSeen`) are passed through
+ * to `dismissFirstRunOverlays` so callers can leave one overlay alive while
+ * suppressing the others.
  */
-export async function enterGuestMode(page, { dismissOverlays = true } = {}) {
-  if (dismissOverlays) await dismissFirstRunOverlays(page)
+export async function enterGuestMode(page, { dismissOverlays = true, ...overlayOpts } = {}) {
+  if (dismissOverlays) await dismissFirstRunOverlays(page, overlayOpts)
   await page.goto('/login', { waitUntil: 'domcontentloaded' })
   const guestButton = page.getByRole('button', { name: /continue as guest|try.*guest|guest mode/i })
   await guestButton.waitFor({ state: 'visible', timeout: 10_000 })
