@@ -1859,6 +1859,69 @@ app.delete('/plants/:id/harvests/:harvestId', requireUser, async (req, res) => {
   }
 });
 
+// ── Wildlife / pollinator observation log ────────────────────────────────────
+
+const WILDLIFE_CATEGORIES = new Set(['bee', 'butterfly', 'bird', 'other-insect', 'mammal', 'reptile', 'other']);
+
+app.get('/plants/:id/wildlifeObservations', requireUser, async (req, res) => {
+  try {
+    const doc = await userPlants(req.userId).doc(req.params.id).get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const entries = (doc.data().wildlifeObservationLog || []).sort((a, b) => new Date(b.observedAt) - new Date(a.observedAt));
+    res.status(200).json(entries);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/plants/:id/wildlifeObservations', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+
+    const { observedAt, category, species, count, notes } = req.body || {};
+    if (!category || !WILDLIFE_CATEGORIES.has(category)) {
+      return res.status(400).json({ error: `category must be one of: ${[...WILDLIFE_CATEGORIES].join(', ')}` });
+    }
+    if (count != null && (isNaN(Number(count)) || Number(count) < 1)) {
+      return res.status(400).json({ error: 'count must be a positive integer' });
+    }
+
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const entry = {
+      id,
+      observedAt: observedAt || now,
+      category,
+      species: species ? String(species).trim() : null,
+      count: count != null ? Math.round(Number(count)) : null,
+      notes: notes ? String(notes).trim() : null,
+      createdAt: now,
+    };
+    const existing = doc.data();
+    const wildlifeObservationLog = [...(existing.wildlifeObservationLog || []), entry];
+    await ref.set({ wildlifeObservationLog, updatedAt: now }, { merge: true });
+    res.status(201).json(entry);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/wildlifeObservations/:obsId', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const existing = doc.data();
+    const wildlifeObservationLog = (existing.wildlifeObservationLog || []).filter(e => e.id !== req.params.obsId);
+    await ref.set({ wildlifeObservationLog, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ deleted: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Incident log (pest, disease, deficiency, environmental) ──────────────────
 
 const INCIDENT_CATEGORIES = new Set(['pest', 'disease', 'deficiency', 'environmental']);

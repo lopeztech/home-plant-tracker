@@ -6,7 +6,7 @@ import WateringSheet from './WateringSheet.jsx'
 import SoilTab from './SoilTab.jsx'
 import LifecycleTab from './LifecycleTab.jsx'
 import BloomTab from './BloomTab.jsx'
-import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, incidentApi, dormancyApi } from '../api/plants.js'
+import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, wildlifeApi, incidentApi, dormancyApi } from '../api/plants.js'
 import PlantIdentify from './PlantIdentify.jsx'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -353,6 +353,14 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const [harvestSaving, setHarvestSaving] = useState(false)
   const [harvestError, setHarvestError] = useState(null)
 
+  // Wildlife tab state
+  const [wildlifeEntries, setWildlifeEntries] = useState(
+    () => [...(plant?.wildlifeObservationLog || [])].sort((a, b) => new Date(b.observedAt) - new Date(a.observedAt))
+  )
+  const [newWildlife, setNewWildlife] = useState({ observedAt: new Date().toISOString().slice(0, 10), category: 'bee', species: '', count: '', notes: '' })
+  const [wildlifeSaving, setWildlifeSaving] = useState(false)
+  const [wildlifeError, setWildlifeError] = useState(null)
+
   // Health tab state (incidents)
   const [incidents, setIncidents] = useState(
     () => [...(plant?.incidents || [])].sort((a, b) => new Date(b.firstObservedAt) - new Date(a.firstObservedAt))
@@ -554,6 +562,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       ...(isEditing ? [{ id: 'soil', label: 'Soil' }] : []),
       ...(isEdiblePlant ? [{ id: 'harvest', label: 'Harvest' }] : []),
       ...(isEditing ? [{ id: 'health', label: 'Health' }] : []),
+      ...(isEditing ? [{ id: 'wildlife', label: 'Wildlife' }] : []),
     ],
     [isEdiblePlant, isEditing],
   )
@@ -739,6 +748,33 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       await harvestApi.delete(plant.id, harvestId)
       setHarvestEntries(prev => prev.filter(e => e.id !== harvestId))
     } catch (err) { console.error('Delete harvest entry failed:', err) }
+  }, [plant])
+
+  const handleAddWildlife = useCallback(async () => {
+    setWildlifeSaving(true)
+    setWildlifeError(null)
+    try {
+      const entry = await wildlifeApi.add(plant.id, {
+        observedAt: newWildlife.observedAt,
+        category: newWildlife.category,
+        species: newWildlife.species.trim() || null,
+        count: newWildlife.count ? Number(newWildlife.count) : null,
+        notes: newWildlife.notes.trim() || null,
+      })
+      setWildlifeEntries(prev => [entry, ...prev])
+      setNewWildlife({ observedAt: new Date().toISOString().slice(0, 10), category: 'bee', species: '', count: '', notes: '' })
+    } catch (err) {
+      setWildlifeError(friendlyErrorMessage(err))
+    } finally {
+      setWildlifeSaving(false)
+    }
+  }, [newWildlife, plant])
+
+  const handleDeleteWildlife = useCallback(async (obsId) => {
+    try {
+      await wildlifeApi.delete(plant.id, obsId)
+      setWildlifeEntries(prev => prev.filter(e => e.id !== obsId))
+    } catch (err) { console.error('Delete wildlife observation failed:', err) }
   }, [plant])
 
   const handleAddIncident = useCallback(async () => {
@@ -2250,6 +2286,69 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
               <Button variant="link" size="sm" className="text-danger p-0 fs-xs d-block mt-2" onClick={() => handleDeleteIncident(incident.id)}>
                 Delete
               </Button>
+            </div>
+          ))}
+        </Modal.Body>
+      )}
+
+      {/* Wildlife tab — pollinator & visitor log */}
+      {isEditing && activeTab === 'wildlife' && (
+        <Modal.Body role="tabpanel" id="plant-tabpanel-wildlife" aria-labelledby="plant-tab-wildlife" className="pt-3 pb-4">
+          <h6 className="fw-600 mb-3">Log Wildlife Observation</h6>
+          {wildlifeError && <div className="alert alert-danger py-2 fs-sm mb-3">{wildlifeError}</div>}
+          <Row className="g-2 mb-3">
+            <Col xs={6}>
+              <Form.Select size="sm" aria-label="Category" value={newWildlife.category}
+                onChange={e => setNewWildlife(p => ({ ...p, category: e.target.value }))}>
+                <option value="bee">Bee</option>
+                <option value="butterfly">Butterfly</option>
+                <option value="bird">Bird</option>
+                <option value="other-insect">Other insect</option>
+                <option value="mammal">Mammal</option>
+                <option value="reptile">Reptile</option>
+                <option value="other">Other</option>
+              </Form.Select>
+            </Col>
+            <Col xs={6}>
+              <Form.Control size="sm" placeholder="Species (optional)" aria-label="Species" value={newWildlife.species}
+                onChange={e => setNewWildlife(p => ({ ...p, species: e.target.value }))} />
+            </Col>
+            <Col xs={4}>
+              <Form.Control size="sm" type="date" aria-label="Date observed" value={newWildlife.observedAt}
+                onChange={e => setNewWildlife(p => ({ ...p, observedAt: e.target.value }))} />
+            </Col>
+            <Col xs={4}>
+              <Form.Control size="sm" type="number" min="1" placeholder="Count" aria-label="Count" value={newWildlife.count}
+                onChange={e => setNewWildlife(p => ({ ...p, count: e.target.value }))} />
+            </Col>
+            <Col xs={4}>
+              <Button size="sm" variant="primary" className="w-100" onClick={handleAddWildlife} disabled={wildlifeSaving}>
+                {wildlifeSaving ? <Spinner size="sm" /> : 'Log'}
+              </Button>
+            </Col>
+            <Col xs={12}>
+              <Form.Control size="sm" as="textarea" rows={2} placeholder="Notes (optional)" aria-label="Notes" value={newWildlife.notes}
+                onChange={e => setNewWildlife(p => ({ ...p, notes: e.target.value }))} />
+            </Col>
+          </Row>
+
+          <hr className="my-3" />
+          <h6 className="fw-600 mb-2">Observation History</h6>
+          {wildlifeEntries.length === 0 ? (
+            <p className="text-muted text-center py-3 mb-0 fs-sm">
+              No observations logged yet. Record the pollinators and wildlife visiting this plant.
+            </p>
+          ) : wildlifeEntries.map(obs => (
+            <div key={obs.id} className="border rounded p-3 mb-2">
+              <div className="d-flex align-items-center gap-2">
+                <Badge bg="success" className="fs-xs text-capitalize">{obs.category.replace('-', ' ')}</Badge>
+                {obs.species && <span className="fw-500 fs-sm">{obs.species}</span>}
+                {obs.count && <Badge bg="light" text="dark" className="fs-xs">×{obs.count}</Badge>}
+                <span className="ms-auto fs-xs text-muted">{obs.observedAt?.slice(0, 10)}</span>
+                <Button variant="link" size="sm" className="text-danger p-0 fs-xs" aria-label="Delete observation"
+                  onClick={() => handleDeleteWildlife(obs.id)}>Delete</Button>
+              </div>
+              {obs.notes && <p className="mb-0 mt-1 fs-xs text-muted">{obs.notes}</p>}
             </div>
           ))}
         </Modal.Body>

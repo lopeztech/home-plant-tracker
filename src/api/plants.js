@@ -237,6 +237,12 @@ export const harvestApi = {
   delete: (id, harvestId) => request(`/plants/${id}/harvests/${harvestId}`, { method: 'DELETE' }),
 }
 
+export const wildlifeApi = {
+  list: (id) => request(`/plants/${id}/wildlifeObservations`),
+  add: (id, data) => request(`/plants/${id}/wildlifeObservations`, { method: 'POST', body: JSON.stringify(data) }),
+  delete: (id, obsId) => request(`/plants/${id}/wildlifeObservations/${obsId}`, { method: 'DELETE' }),
+}
+
 export const qrApi = {
   getShortCode: (id) => request(`/plants/${id}/short-code`),
   scan: (shortCode) => request(`/scan/${encodeURIComponent(shortCode)}`),
