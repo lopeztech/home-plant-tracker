@@ -20,6 +20,12 @@ const IGNORED_ERROR_PATTERNS = [
   /Subscription lookup failed/i,
   /identity-v1.*400/i,
   /\[vite\]/i,
+  // Code-split chunks (UpgradePrompt, Dropdown, ButtonGroup, …) and the SVG
+  // sprite are fetched lazily; if a test navigates or the page tears down
+  // before they resolve, the browser cancels the in-flight request and emits
+  // a `requestfailed` with net::ERR_ABORTED. That's benign — the chunk is no
+  // longer needed. Real failures surface as ERR_FAILED / ERR_NAME_NOT_RESOLVED.
+  /net::ERR_ABORTED/i,
 ]
 
 function attachErrorListeners(page) {

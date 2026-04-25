@@ -30,6 +30,9 @@ const IGNORED_ERROR_PATTERNS = [
   /Subscription lookup failed/i,                                          // billingApi has graceful fallback
   /identity-v1.*400/i,
   /\[vite\]/i,                                                            // Vite HMR / preview messages
+  // Lazily loaded chunks aborted by a subsequent navigation (benign — the
+  // chunk is no longer needed). Real network errors surface as ERR_FAILED.
+  /net::ERR_ABORTED/i,
 ]
 
 const ROUTES = [
