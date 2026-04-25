@@ -1574,6 +1574,9 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                             <svg className="sa-icon text-info" style={{ width: 12, height: 12 }}><use href="/icons/sprite.svg#droplet"></use></svg>
                             {formatDate(entry.date, { day: 'numeric', month: 'short', year: 'numeric' })}
                             <span className="text-muted">{formatTime(entry.date)}</span>
+                            {entry.wateredBy?.displayName && (
+                              <span className="text-muted">by {entry.wateredBy.displayName}</span>
+                            )}
                             {entry.note && <span>— {entry.note}</span>}
                           </div>
                         ))}
@@ -2386,10 +2389,19 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Delete confirmation */}
       {confirmDelete && (
         <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ background: 'rgba(0,0,0,0.6)', zIndex: 10, borderRadius: 'inherit' }}>
-          <div className="card shadow-lg mx-4" style={{ maxWidth: 320 }}>
+          <div className="card shadow-lg mx-4" style={{ maxWidth: 360 }}>
             <div className="card-body p-4">
               <p className="fw-500 mb-1">Delete {plant?.name || 'this plant'}?</p>
-              <p className="text-muted fs-sm mb-3">This cannot be undone.</p>
+              <p className="text-muted fs-sm mb-2">This cannot be undone.</p>
+              {plant?.lastEditedBy && (
+                <p className="text-muted fs-sm mb-3">
+                  Last edited by{' '}
+                  <strong>{plant.lastEditedBy.displayName || plant.lastEditedBy.userId}</strong>
+                  {plant.lastEditedBy.at && (
+                    <> on {new Date(plant.lastEditedBy.at).toLocaleDateString()}</>
+                  )}
+                </p>
+              )}
               <div className="d-flex gap-2 justify-content-end">
                 <Button variant="light" onClick={() => setConfirmDelete(false)}>Cancel</Button>
                 <Button variant="danger" onClick={handleDelete}>

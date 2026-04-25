@@ -292,6 +292,18 @@ export const accountApi = {
   startTrial: () => request('/account/trial/start', { method: 'POST' }),
 }
 
+export const householdsApi = {
+  list: () => request('/households'),
+  current: () => request('/households/current'),
+  create: (name) => request('/households', { method: 'POST', body: JSON.stringify({ name }) }),
+  rename: (id, name) => request(`/households/${id}`, { method: 'PUT', body: JSON.stringify({ name }) }),
+  switch: (id) => request(`/households/${id}/switch`, { method: 'POST', body: JSON.stringify({}) }),
+  invite: (id, role = 'editor') => request(`/households/${id}/invites`, { method: 'POST', body: JSON.stringify({ role }) }),
+  join: (code) => request('/households/join', { method: 'POST', body: JSON.stringify({ code }) }),
+  removeMember: (id, userId) => request(`/households/${id}/members/${userId}`, { method: 'DELETE' }),
+  setRole: (id, userId, role) => request(`/households/${id}/members/${userId}`, { method: 'PUT', body: JSON.stringify({ role }) }),
+}
+
 export const billingApi = {
   getSubscription: () => request('/billing/subscription'),
   createCheckoutSession: (tier, interval = 'month') => request('/billing/create-checkout-session', {

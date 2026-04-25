@@ -11,11 +11,13 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, apiKeysApi, brandingApi, imagesApi } from '../api/plants.js'
+import { accountApi, exportApi, apiKeysApi, brandingApi, imagesApi, householdsApi } from '../api/plants.js'
+import { useHousehold } from '../context/HouseholdContext.jsx'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
   { id: 'preferences', label: 'Preferences', icon: 'sliders', tags: 'theme dark mode light temperature celsius fahrenheit metric imperial units location city weather' },
+  { id: 'household', label: 'Household', icon: 'users', tags: 'household share invite member family roommate partner role viewer editor owner code' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'api-keys', label: 'API Keys', icon: 'key', tags: 'api keys rest integration home assistant automation developer' },
   { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
@@ -522,6 +524,305 @@ function PreferencesTab({ search }) {
         </div>
       </SettingSection>
     </>
+  )
+}
+
+function HouseholdTab({ search }) {
+  const { isGuest } = useAuth()
+  const { activeHouseholdId, activeRole, refresh: refreshHouseholds } = useHousehold()
+  const [current, setCurrent] = useState(null)
+  const [loading, setLoading] = useState(!isGuest)
+  const [error, setError] = useState(null)
+  const [inviteRole, setInviteRole] = useState('editor')
+  const [inviteCode, setInviteCode] = useState(null)
+  const [inviteExpiry, setInviteExpiry] = useState(null)
+  const [creatingInvite, setCreatingInvite] = useState(false)
+  const [joinCode, setJoinCode] = useState('')
+  const [joinError, setJoinError] = useState(null)
+  const [joining, setJoining] = useState(false)
+  const [removing, setRemoving] = useState(null)
+  const [createName, setCreateName] = useState('')
+  const [creatingHousehold, setCreatingHousehold] = useState(false)
+  const isOwner = activeRole === 'owner'
+
+  const reload = useCallback(async () => {
+    if (isGuest) return
+    setLoading(true)
+    try {
+      const data = await householdsApi.current()
+      setCurrent(data)
+      setError(null)
+    } catch (err) {
+      setError(err.message || 'Failed to load household')
+    } finally {
+      setLoading(false)
+    }
+  }, [isGuest])
+
+  useEffect(() => { reload() }, [reload, activeHouseholdId])
+
+  if (isGuest) {
+    return (
+      <SettingSection id="household-info" title="Household sharing" icon="users" search={search}>
+        <p className="text-muted mb-0">Sign in to share plants with family or housemates.</p>
+      </SettingSection>
+    )
+  }
+
+  const handleCreateInvite = async () => {
+    if (!current?.id) return
+    setCreatingInvite(true)
+    setError(null)
+    try {
+      const result = await householdsApi.invite(current.id, inviteRole)
+      setInviteCode(result.code)
+      setInviteExpiry(result.expiresAt)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCreatingInvite(false)
+    }
+  }
+
+  const handleJoin = async () => {
+    if (!joinCode.trim()) return
+    setJoining(true)
+    setJoinError(null)
+    try {
+      await householdsApi.join(joinCode.trim().toUpperCase())
+      setJoinCode('')
+      await refreshHouseholds()
+      await reload()
+    } catch (err) {
+      setJoinError(err.message)
+    } finally {
+      setJoining(false)
+    }
+  }
+
+  const handleRemove = async (userId) => {
+    if (!current?.id || !window.confirm('Remove this member from the household?')) return
+    setRemoving(userId)
+    try {
+      await householdsApi.removeMember(current.id, userId)
+      await reload()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRemoving(null)
+    }
+  }
+
+  const handleSwitch = async (id) => {
+    try {
+      await householdsApi.switch(id)
+      await refreshHouseholds()
+      await reload()
+    } catch (err) {
+      setError(err.message)
+    }
+  }
+
+  const handleCreateHousehold = async () => {
+    if (!createName.trim()) return
+    setCreatingHousehold(true)
+    setError(null)
+    try {
+      await householdsApi.create(createName.trim())
+      setCreateName('')
+      await refreshHouseholds()
+      await reload()
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setCreatingHousehold(false)
+    }
+  }
+
+  return (
+    <>
+      <SettingSection id="household-current" title="Current household" icon="home" search={search}>
+        {loading && <p className="text-muted mb-0">Loading…</p>}
+        {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
+        {!loading && current && (
+          <>
+            <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+              <div>
+                <div className="fw-500">{current.name}</div>
+                <small className="text-muted">
+                  Your role: <Badge bg={current.role === 'owner' ? 'primary' : 'secondary'}>{current.role}</Badge>
+                </small>
+              </div>
+            </div>
+            <Table size="sm" hover responsive className="mb-0">
+              <thead>
+                <tr>
+                  <th>Member</th>
+                  <th>Role</th>
+                  <th>Joined</th>
+                  <th aria-label="Actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(current.members || []).map((m) => (
+                  <tr key={m.userId}>
+                    <td>
+                      {m.displayName || m.userId}
+                      {m.isYou && <Badge bg="info" className="ms-2">You</Badge>}
+                      {m.isOwner && <Badge bg="primary" className="ms-2">Owner</Badge>}
+                    </td>
+                    <td>{m.role}</td>
+                    <td>{m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : '—'}</td>
+                    <td className="text-end">
+                      {isOwner && !m.isOwner && !m.isYou && (
+                        <Button
+                          size="sm"
+                          variant="outline-danger"
+                          disabled={removing === m.userId}
+                          onClick={() => handleRemove(m.userId)}
+                        >
+                          {removing === m.userId ? 'Removing…' : 'Remove'}
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </>
+        )}
+      </SettingSection>
+
+      {isOwner && (
+        <SettingSection id="household-invite" title="Invite a member" icon="user-plus" search={search}>
+          <p className="text-muted mb-3">
+            Generate a single-use share code valid for 7 days. The other person enters it on their Household
+            settings page to join.
+          </p>
+          <div className="d-flex flex-wrap gap-2 align-items-end mb-3">
+            <Form.Group>
+              <Form.Label className="mb-1 fs-sm">Role</Form.Label>
+              <Form.Select
+                size="sm"
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value)}
+                style={{ width: 140 }}
+              >
+                <option value="viewer">Viewer (read-only)</option>
+                <option value="editor">Editor</option>
+              </Form.Select>
+            </Form.Group>
+            <Button variant="primary" size="sm" onClick={handleCreateInvite} disabled={creatingInvite}>
+              {creatingInvite ? 'Generating…' : 'Generate share code'}
+            </Button>
+          </div>
+          {inviteCode && (
+            <div className="border rounded p-3 bg-light">
+              <div className="fs-sm text-muted mb-1">Share code (single use)</div>
+              <div className="d-flex align-items-center gap-2">
+                <code className="fs-3 fw-bold">{inviteCode}</code>
+                <Button
+                  size="sm"
+                  variant="outline-secondary"
+                  onClick={() => navigator.clipboard?.writeText(inviteCode)}
+                >
+                  Copy
+                </Button>
+              </div>
+              <small className="text-muted d-block mt-1">
+                Expires {inviteExpiry ? new Date(inviteExpiry).toLocaleString() : 'in 7 days'}
+              </small>
+            </div>
+          )}
+        </SettingSection>
+      )}
+
+      <SettingSection id="household-join" title="Join another household" icon="log-in" search={search}>
+        <p className="text-muted mb-3">
+          If someone shared a code with you, enter it here to join their household.
+        </p>
+        {joinError && <div className="alert alert-danger py-2 mb-3">{joinError}</div>}
+        <div className="d-flex flex-wrap gap-2 align-items-end">
+          <Form.Group>
+            <Form.Label className="mb-1 fs-sm">Share code</Form.Label>
+            <Form.Control
+              size="sm"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+              placeholder="ABCDEFGH"
+              style={{ width: 160, fontFamily: 'monospace', textTransform: 'uppercase' }}
+              maxLength={8}
+            />
+          </Form.Group>
+          <Button variant="primary" size="sm" onClick={handleJoin} disabled={joining || !joinCode.trim()}>
+            {joining ? 'Joining…' : 'Join household'}
+          </Button>
+        </div>
+      </SettingSection>
+
+      <SettingSection id="household-create" title="Create a new household" icon="plus-circle" search={search}>
+        <p className="text-muted mb-3">
+          You can keep multiple separate households (e.g. main home and holiday home). The new household
+          becomes your active one.
+        </p>
+        <div className="d-flex flex-wrap gap-2 align-items-end">
+          <Form.Group>
+            <Form.Label className="mb-1 fs-sm">Name</Form.Label>
+            <Form.Control
+              size="sm"
+              value={createName}
+              onChange={(e) => setCreateName(e.target.value)}
+              placeholder="Holiday home"
+              style={{ width: 220 }}
+              maxLength={60}
+            />
+          </Form.Group>
+          <Button variant="outline-primary" size="sm" onClick={handleCreateHousehold} disabled={creatingHousehold || !createName.trim()}>
+            {creatingHousehold ? 'Creating…' : 'Create household'}
+          </Button>
+        </div>
+      </SettingSection>
+
+      <HouseholdsListSection search={search} onSwitch={handleSwitch} />
+    </>
+  )
+}
+
+function HouseholdsListSection({ search, onSwitch }) {
+  const { households, activeHouseholdId, loading } = useHousehold()
+  if (loading || households.length <= 1) return null
+  return (
+    <SettingSection id="household-switch" title="Switch household" icon="repeat" search={search}>
+      <Table size="sm" hover responsive className="mb-0">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Members</th>
+            <th aria-label="Switch"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {households.map((h) => (
+            <tr key={h.id} className={h.isActive ? 'table-active' : ''}>
+              <td>{h.name}</td>
+              <td>{h.role}</td>
+              <td>{h.memberCount}</td>
+              <td className="text-end">
+                {h.isActive ? (
+                  <Badge bg="success">Active</Badge>
+                ) : (
+                  <Button size="sm" variant="outline-primary" onClick={() => onSwitch(h.id)}>
+                    Switch
+                  </Button>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+      {activeHouseholdId && <small className="text-muted d-block mt-2">Active: {households.find((h) => h.isActive)?.name}</small>}
+    </SettingSection>
   )
 }
 
@@ -1078,6 +1379,7 @@ export default function SettingsPage() {
       <div className="main-content">
         {tab === 'property' && <PropertyTab search={search} />}
         {tab === 'preferences' && <PreferencesTab search={search} />}
+        {tab === 'household' && <HouseholdTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
         {tab === 'api-keys' && <ApiKeysTab search={search} />}
         {tab === 'branding' && <BrandingTab search={search} />}
