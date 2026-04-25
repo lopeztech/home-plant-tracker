@@ -75,11 +75,11 @@ export default function MainLayout() {
             <Topbar />
             <Sidebar />
             <main className="app-body">
-              <div className="app-content">
-                <OfflineBanner />
+              <OfflineBanner />
               <div className="px-3 pt-3">
                 <WeatherAlertBanner />
               </div>
+              <div className="app-content">
               <ErrorBoundary context="this page">
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.div
@@ -88,6 +88,7 @@ export default function MainLayout() {
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
                     transition={{ duration: 0.15 }}
+                    style={{ flex: 1, minWidth: 0 }}
                   >
                     <Suspense fallback={<PageSkeleton />}>
                       <Outlet />

@@ -145,6 +145,25 @@ export function useWeather(tempUnit = 'celsius') {
         .finally(() => { if (!cancelled) setLoading(false) })
     }
 
+    // If the user has manually saved a location (via Settings), use its
+    // coordinates directly — don't require browser geolocation permission.
+    const savedLoc = loadSavedLocation()
+    if (savedLoc?.lat && savedLoc?.lon) {
+      const { lat, lon } = savedLoc
+      const cached = readCache()
+      if (
+        cached &&
+        Date.now() - cached.fetchedAt < CACHE_TTL &&
+        distanceMetres(lat, lon, cached.lat, cached.lon) < 1000
+      ) {
+        setWeather(cached.weather)
+        setLoading(false)
+        return () => { cancelled = true }
+      }
+      fetchWeather(lat, lon)
+      return () => { cancelled = true }
+    }
+
     navigator.geolocation.getCurrentPosition(
       pos => {
         if (cancelled) return
@@ -189,7 +208,7 @@ export function useWeather(tempUnit = 'celsius') {
     )
 
     return () => { cancelled = true }
-  }, [tempUnit])
+  }, [tempUnit, location])
 
   return { weather, loading, locationDenied, location, setLocation }
 }

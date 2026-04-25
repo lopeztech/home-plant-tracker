@@ -140,8 +140,8 @@ export default function InsightsPage() {
   }
 
   return (
-    <div className="p-4">
-      <h2 className="mb-4">ML Insights</h2>
+    <div className="content-wrapper">
+      <h1 className="subheader-title mb-4">ML Insights</h1>
 
       <UpgradePrompt id="insights-lock" feature="home_pro" variant="warning">
         Full ML Insights are a Home Pro feature. Free-tier users see basic per-plant care scores but not aggregate predictions, anomaly detection, or watering-pattern analysis.
@@ -173,6 +173,55 @@ export default function InsightsPage() {
           </Row>
           <SkeletonCard height={240} className="mb-4" />
           <SkeletonRect height={180} style={{ borderRadius: 8 }} />
+        </div>
+      ) : !careScores ? (
+        // No data returned — show a blurred preview so users can see what they'd get
+        <div className="position-relative" aria-hidden="true">
+          <div style={{ filter: 'blur(4px)', pointerEvents: 'none', userSelect: 'none', opacity: 0.6 }}>
+            <Row className="mb-4">
+              {[
+                { label: 'Collection Health', value: '82', sub: '5 plants', color: '#10b981' },
+                { label: 'At Risk', value: '1 plant', sub: 'needs attention', color: '#ef4444' },
+                { label: 'Pattern Breakdown', value: '3 optimal', sub: '1 inconsistent', color: '#f59e0b' },
+              ].map((card) => (
+                <Col md={4} key={card.label} className="mb-3">
+                  <Card className="h-100">
+                    <Card.Body className="text-center">
+                      <h6 className="text-muted mb-2">{card.label}</h6>
+                      <div className="display-4 fw-bold" style={{ color: card.color }}>{card.value}</div>
+                      <small className="text-muted">{card.sub}</small>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
+            <Card className="mb-3">
+              <Card.Body className="d-flex align-items-center justify-content-between">
+                <div className="d-flex align-items-center gap-3">
+                  <Badge style={{ backgroundColor: '#10b981', fontSize: '1.1rem', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>A</Badge>
+                  <div><strong>Monstera deliciosa</strong><small className="text-muted ms-2">Monstera</small></div>
+                </div>
+                <span className="fw-bold">91</span>
+              </Card.Body>
+            </Card>
+            <Card className="mb-3">
+              <Card.Body className="d-flex align-items-center justify-content-between">
+                <div className="d-flex align-items-center gap-3">
+                  <Badge style={{ backgroundColor: '#f59e0b', fontSize: '1.1rem', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>C</Badge>
+                  <div><strong>Peace Lily</strong><small className="text-muted ms-2">Spathiphyllum</small></div>
+                </div>
+                <span className="fw-bold">62</span>
+              </Card.Body>
+            </Card>
+          </div>
+          <div className="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center" style={{ zIndex: 2 }}>
+            <div className="text-center p-4 rounded-3 shadow" style={{ background: 'rgba(var(--bs-body-bg-rgb, 255,255,255), 0.92)', maxWidth: 360 }}>
+              <svg className="sa-icon sa-icon-2x mb-3 text-warning" aria-hidden="true"><use href="/icons/sprite.svg#zap"></use></svg>
+              <h5 className="mb-2">Unlock ML Insights</h5>
+              <p className="text-muted fs-sm mb-3">Upgrade to Home Pro to see real care scores, watering-pattern analysis, anomaly detection, and health predictions for your plants.</p>
+              <a href="/pricing" className="btn btn-primary btn-sm">See plans</a>
+            </div>
+          </div>
         </div>
       ) : (
         <>

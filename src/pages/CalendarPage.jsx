@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { Button, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus, localDateStr } from '../utils/watering.js'
@@ -16,9 +16,19 @@ function eventBadgeColor(type) {
 }
 
 export default function CalendarPage() {
-  const { plants, weather, floors, timezone } = usePlantContext()
+  const { plants, weather, floors, timezone, handleWaterPlant } = usePlantContext()
   const [monthOffset, setMonthOffset] = useState(0)
+  const [watering, setWatering] = useState({})
   const [selectedDay, setSelectedDay] = useState(null)
+
+  const handleWater = useCallback(async (plantId) => {
+    setWatering(prev => ({ ...prev, [plantId]: true }))
+    try {
+      await handleWaterPlant(plantId)
+    } finally {
+      setWatering(prev => ({ ...prev, [plantId]: false }))
+    }
+  }, [handleWaterPlant])
 
   // Use the user's timezone for "today" and date boundary calculations
   const todayStr = localDateStr(new Date(), timezone)
@@ -214,9 +224,20 @@ export default function CalendarPage() {
                   ) : (
                     <ul className="list-unstyled mb-0">
                       {selectedEvents.map((evt, i) => (
-                        <li key={i} className="d-flex align-items-center gap-2 mb-1 fs-sm">
+                        <li key={i} className="d-flex align-items-center gap-2 mb-2 fs-sm flex-wrap">
                           <Badge bg={eventBadgeColor(evt.type)} className="fs-nano">{evt.type.replace('-', ' ')}</Badge>
-                          <span>{evt.plant.name}</span>
+                          <span className="flex-grow-1">{evt.plant.name}</span>
+                          {evt.type === 'due' && handleWaterPlant && (
+                            <Button
+                              size="sm"
+                              variant="outline-info"
+                              style={{ fontSize: '0.7rem', padding: '0.1rem 0.5rem' }}
+                              disabled={!!watering[evt.plant.id]}
+                              onClick={() => handleWater(evt.plant.id)}
+                            >
+                              {watering[evt.plant.id] ? '…' : 'Mark watered'}
+                            </Button>
+                          )}
                         </li>
                       ))}
                     </ul>
