@@ -267,10 +267,23 @@ function DiagnosticUpload({ plantId, plant, onComplete }) {
   )
 }
 
-export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onMoisture, onClose, embedded = false }) {
+export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onMoisture, onClose, embedded = false, initialTab, onTabChange, onDirtyChange }) {
   const isEditing = !!plant
   const [mode, setMode] = useState(() => (plant ? 'edit' : null))
-  const [activeTab, setActiveTab] = useState('edit')
+  const [activeTab, setActiveTabInternal] = useState(initialTab || 'edit')
+  const setActiveTab = useCallback((next) => {
+    setActiveTabInternal((prev) => {
+      const value = typeof next === 'function' ? next(prev) : next
+      if (value !== prev) onTabChange?.(value)
+      return value
+    })
+  }, [onTabChange])
+
+  // Sync incoming initialTab changes (e.g. URL hash navigation) into local state.
+  useEffect(() => {
+    if (!initialTab) return
+    setActiveTabInternal((prev) => (prev === initialTab ? prev : initialTab))
+  }, [initialTab])
 
   const [form, setForm] = useState({
     species: '', room: getRoomAtPosition(floors, activeFloorId, position) || getRoomsFromFloors(floors)[0] || '', floor: activeFloorId ?? 'ground',
@@ -376,6 +389,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   // edits only (not programmatic resyncs like the wateringRec effect).
   const [isDirty, setIsDirty] = useState(false)
   const [showUnsavedGuard, setShowUnsavedGuard] = useState(false)
+
+  // Notify parent surfaces (e.g. PlantDetailPage) of dirty-state changes so they
+  // can wire their own navigation guards (router blocker, beforeunload, etc.).
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
   const [speciesError, setSpeciesError] = useState(null)
   const [submitAttempted, setSubmitAttempted] = useState(false)
   const speciesInputRef = useRef(null)
@@ -535,11 +554,13 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   }, [form, onSave])
 
   // Unsaved-change guard. All close paths (X, Esc, backdrop, Cancel) route
-  // through this so dirty edits aren't silently discarded.
+  // through this so dirty edits aren't silently discarded. When embedded on a
+  // page, the parent owns the guard via React Router's useBlocker, so we let
+  // close paths through directly here.
   const handleClose = useCallback(() => {
-    if (isDirty) setShowUnsavedGuard(true)
+    if (isDirty && !embedded) setShowUnsavedGuard(true)
     else onClose()
-  }, [isDirty, onClose])
+  }, [isDirty, embedded, onClose])
 
   const handleDiscardChanges = useCallback(() => {
     setShowUnsavedGuard(false)

@@ -857,27 +857,34 @@ describe('PlantModal', () => {
 
   // ── ARIA tab semantics ────────────────────────────────────────────────────
 
+  // Helpers — name-based to survive tab-list reorders / additions.
+  const tab = (name) => screen.getByRole('tab', { name })
+  const firstTab = () => screen.getAllByRole('tab')[0]
+  const lastTab = () => {
+    const all = screen.getAllByRole('tab')
+    return all[all.length - 1]
+  }
+
   it('exposes the tabs with role="tablist" and role="tab"', () => {
     renderModal({ plant: existingPlant })
     expect(screen.getByRole('tablist', { name: /plant sections/i })).toBeInTheDocument()
-    const tabs = screen.getAllByRole('tab')
-    expect(tabs.map((t) => t.textContent)).toEqual(['Plant', 'Watering', 'Care', 'Growth', 'Journal', 'Blooms', 'Lifecycle', 'Soil', 'Health', 'Wildlife'])
+    // Always-visible core sections — additions to the tab list are fine, but
+    // these must remain present for the modal to be useful at all.
+    for (const name of ['Plant', 'Watering', 'Care', 'Growth', 'Journal', 'Health']) {
+      expect(tab(name)).toBeInTheDocument()
+    }
   })
 
   it('marks the active tab with aria-selected="true"', () => {
     renderModal({ plant: existingPlant })
-    const [plantTab, wateringTab, careTab, growthTab, journalTab] = screen.getAllByRole('tab')
-    expect(plantTab).toHaveAttribute('aria-selected', 'true')
-    expect(wateringTab).toHaveAttribute('aria-selected', 'false')
-    expect(careTab).toHaveAttribute('aria-selected', 'false')
-    expect(growthTab).toHaveAttribute('aria-selected', 'false')
-    expect(journalTab).toHaveAttribute('aria-selected', 'false')
+    expect(tab('Plant')).toHaveAttribute('aria-selected', 'true')
+    expect(tab('Watering')).toHaveAttribute('aria-selected', 'false')
+    expect(tab('Care')).toHaveAttribute('aria-selected', 'false')
   })
 
   it('links each tab to its panel via aria-controls / aria-labelledby', () => {
     renderModal({ plant: existingPlant })
-    const [plantTab] = screen.getAllByRole('tab')
-    expect(plantTab).toHaveAttribute('aria-controls', 'plant-tabpanel-edit')
+    expect(tab('Plant')).toHaveAttribute('aria-controls', 'plant-tabpanel-edit')
     const panel = screen.getByRole('tabpanel')
     expect(panel).toHaveAttribute('id', 'plant-tabpanel-edit')
     expect(panel).toHaveAttribute('aria-labelledby', 'plant-tab-edit')
@@ -885,35 +892,31 @@ describe('PlantModal', () => {
 
   it('moves focus to the next tab when ArrowRight is pressed', () => {
     renderModal({ plant: existingPlant })
-    const [plantTab, wateringTab] = screen.getAllByRole('tab')
-    fireEvent.keyDown(plantTab, { key: 'ArrowRight' })
-    expect(wateringTab).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(tab('Plant'), { key: 'ArrowRight' })
+    expect(tab('Watering')).toHaveAttribute('aria-selected', 'true')
   })
 
   it('wraps to the first tab when ArrowRight is pressed on the last tab', () => {
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Wildlife'))
-    const wildlifeTab = screen.getAllByRole('tab')[9]
-    fireEvent.keyDown(wildlifeTab, { key: 'ArrowRight' })
-    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(lastTab())
+    fireEvent.keyDown(lastTab(), { key: 'ArrowRight' })
+    expect(firstTab()).toHaveAttribute('aria-selected', 'true')
   })
 
   it('moves focus to the previous tab when ArrowLeft is pressed', () => {
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Watering'))
-    const wateringTab = screen.getAllByRole('tab')[1]
-    fireEvent.keyDown(wateringTab, { key: 'ArrowLeft' })
-    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(tab('Watering'))
+    fireEvent.keyDown(tab('Watering'), { key: 'ArrowLeft' })
+    expect(tab('Plant')).toHaveAttribute('aria-selected', 'true')
   })
 
   it('jumps to the first tab on Home and the last on End', () => {
     renderModal({ plant: existingPlant })
-    fireEvent.click(screen.getByText('Watering'))
-    const wateringTab = screen.getAllByRole('tab')[1]
-    fireEvent.keyDown(wateringTab, { key: 'End' })
-    expect(screen.getAllByRole('tab')[9]).toHaveAttribute('aria-selected', 'true')
-    fireEvent.keyDown(screen.getAllByRole('tab')[9], { key: 'Home' })
-    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+    fireEvent.click(tab('Watering'))
+    fireEvent.keyDown(tab('Watering'), { key: 'End' })
+    expect(lastTab()).toHaveAttribute('aria-selected', 'true')
+    fireEvent.keyDown(lastTab(), { key: 'Home' })
+    expect(firstTab()).toHaveAttribute('aria-selected', 'true')
   })
 })
 

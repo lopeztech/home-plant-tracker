@@ -1,20 +1,61 @@
-import { useCallback } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { Button } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import PlantModal from '../components/PlantModal.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRect } from '../components/Skeleton.jsx'
 
+// Tab IDs that may appear in the URL hash. Anything else is ignored so we don't
+// pass garbage into PlantModal's setActiveTab.
+const VALID_TAB_IDS = new Set([
+  'edit', 'watering', 'care', 'growth', 'journal',
+  'blooms', 'lifecycle', 'soil', 'harvest', 'health', 'wildlife',
+])
+
+function tabFromHash(hash) {
+  const id = (hash || '').replace(/^#/, '')
+  return VALID_TAB_IDS.has(id) ? id : null
+}
+
 export default function PlantDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const location = useLocation()
   const {
     plants, plantsLoading, floors, activeFloorId, weather,
     handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant,
   } = usePlantContext()
 
   const plant = plants.find((p) => p.id === id) || null
+  const [activeTab, setActiveTab] = useState(() => tabFromHash(location.hash) || 'edit')
+  const [isDirty, setIsDirty] = useState(false)
+
+  // External hash changes (e.g. user pasting a URL or clicking the breadcrumb)
+  // should drive the active tab.
+  useEffect(() => {
+    const hashTab = tabFromHash(location.hash)
+    if (hashTab && hashTab !== activeTab) setActiveTab(hashTab)
+  }, [location.hash, activeTab])
+
+  const handleTabChange = useCallback((nextTab) => {
+    setActiveTab(nextTab)
+    const nextHash = nextTab && nextTab !== 'edit' ? `#${nextTab}` : ''
+    if (nextHash !== location.hash) {
+      navigate(`${location.pathname}${location.search}${nextHash}`, { replace: true })
+    }
+  }, [location.hash, location.pathname, location.search, navigate])
+
+  // Browser-level guard for full reloads / tab closes. In-app navigation
+  // (sidebar, breadcrumb, back button) is not blocked yet — that needs
+  // useBlocker, which requires a data-router migration (BrowserRouter →
+  // createBrowserRouter + RouterProvider). Tracked as a follow-up.
+  useEffect(() => {
+    if (!isDirty) return
+    const handler = (e) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', handler)
+    return () => window.removeEventListener('beforeunload', handler)
+  }, [isDirty])
 
   const goBack = useCallback(() => {
     if (window.history.length > 1) navigate(-1)
@@ -23,10 +64,12 @@ export default function PlantDetailPage() {
 
   const handleSave = useCallback(async (plantData) => {
     await handleSavePlant(plantData, plant, null)
+    setIsDirty(false)
   }, [handleSavePlant, plant])
 
   const handleDelete = useCallback(async (plantId) => {
     await handleDeletePlant(plantId)
+    setIsDirty(false)
     goBack()
   }, [handleDeletePlant, goBack])
 
@@ -71,6 +114,9 @@ export default function PlantDetailPage() {
               floors={floors}
               activeFloorId={activeFloorId}
               weather={weather}
+              initialTab={activeTab}
+              onTabChange={handleTabChange}
+              onDirtyChange={setIsDirty}
               onSave={handleSave}
               onDelete={handleDelete}
               onWater={handleWaterPlant}
@@ -80,6 +126,7 @@ export default function PlantDetailPage() {
           )}
         </div>
       </div>
+
     </div>
   )
 }
