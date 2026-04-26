@@ -252,3 +252,11 @@ home-plant-tracker/
 ├── nginx.conf                # SPA routing + asset caching
 └── api/openapi.yaml          # API Gateway OpenAPI 2.0 spec
 ```
+
+## 💰 Bounty Contribution
+
+- **Task:** Monetisation: Gift subscriptions & shareable Plant Tracker gift cards
+- **Reward:** $60
+- **Source:** GitHub-Paid
+- **Date:** 2026-04-27
+
