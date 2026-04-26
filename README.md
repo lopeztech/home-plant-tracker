@@ -252,3 +252,11 @@ home-plant-tracker/
 ├── nginx.conf                # SPA routing + asset caching
 └── api/openapi.yaml          # API Gateway OpenAPI 2.0 spec
 ```
+
+## 💰 Bounty Contribution
+
+- **Task:** Monetisation: Certified care-plan marketplace — experts publish paid templates, 
+- **Reward:** $5
+- **Source:** GitHub-Paid
+- **Date:** 2026-04-27
+
