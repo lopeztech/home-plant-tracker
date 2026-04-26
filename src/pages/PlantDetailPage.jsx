@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { Link, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 import { Button } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import PlantModal from '../components/PlantModal.jsx'
@@ -46,10 +46,12 @@ export default function PlantDetailPage() {
     }
   }, [location.hash, location.pathname, location.search, navigate])
 
-  // Browser-level guard for full reloads / tab closes. In-app navigation
-  // (sidebar, breadcrumb, back button) is not blocked yet — that needs
-  // useBlocker, which requires a data-router migration (BrowserRouter →
-  // createBrowserRouter + RouterProvider). Tracked as a follow-up.
+  // In-app nav guard: intercepts back button, sidebar links, breadcrumb,
+  // programmatic navigates while there are unsaved edits.
+  const blocker = useBlocker(isDirty)
+
+  // Browser-level guard for full reloads / tab closes (useBlocker only fires
+  // for in-app navigation).
   useEffect(() => {
     if (!isDirty) return
     const handler = (e) => { e.preventDefault(); e.returnValue = '' }
@@ -127,6 +129,33 @@ export default function PlantDetailPage() {
         </div>
       </div>
 
+      {blocker?.state === 'blocked' && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="page-unsaved-guard-title"
+          aria-describedby="page-unsaved-guard-body"
+          className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+          style={{ background: 'rgba(0,0,0,0.6)', zIndex: 2000 }}
+        >
+          <div className="card shadow-lg mx-4" style={{ maxWidth: 360 }}>
+            <div className="card-body p-4">
+              <p id="page-unsaved-guard-title" className="fw-500 mb-1">Discard unsaved changes?</p>
+              <p id="page-unsaved-guard-body" className="text-muted fs-sm mb-3">
+                Your edits to this plant haven't been saved. Leaving now will lose them.
+              </p>
+              <div className="d-flex gap-2 justify-content-end">
+                <Button variant="light" onClick={() => blocker.reset?.()} autoFocus>
+                  Keep editing
+                </Button>
+                <Button variant="danger" onClick={() => { setIsDirty(false); blocker.proceed?.() }}>
+                  Discard changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
