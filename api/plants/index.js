@@ -1,5 +1,9 @@
 'use strict';
 
+// chore(deploy): force Cloud Function redeploy 2026-04-25 — picks up the
+// last 4 days of accumulated changes that never reached the function (the
+// CI deploy job kept skipping because none of the merged PRs touched
+// api/plants/). Safe to delete on the next real backend change.
 const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
