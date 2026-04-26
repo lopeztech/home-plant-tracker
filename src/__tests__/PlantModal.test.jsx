@@ -147,6 +147,7 @@ function renderModal(props = {}) {
         onWater={props.onWater}
         onMoisture={props.onMoisture ?? vi.fn()}
         onClose={props.onClose ?? vi.fn()}
+        embedded={props.embedded ?? false}
       />
     </MemoryRouter>
   )
@@ -917,6 +918,36 @@ describe('PlantModal', () => {
     expect(lastTab()).toHaveAttribute('aria-selected', 'true')
     fireEvent.keyDown(lastTab(), { key: 'Home' })
     expect(firstTab()).toHaveAttribute('aria-selected', 'true')
+  })
+
+  // ── Embedded (page route) rail layout ─────────────────────────────────────
+
+  it('renders the tablist with vertical orientation when embedded', () => {
+    renderModal({ plant: existingPlant, embedded: true })
+    const tablist = screen.getByRole('tablist', { name: /plant sections/i })
+    expect(tablist).toHaveAttribute('aria-orientation', 'vertical')
+    expect(tablist).toHaveClass('plant-modal-rail')
+  })
+
+  it('keeps the horizontal nav-tabs class when not embedded', () => {
+    renderModal({ plant: existingPlant })
+    const tablist = screen.getByRole('tablist', { name: /plant sections/i })
+    expect(tablist).toHaveAttribute('aria-orientation', 'horizontal')
+    expect(tablist).toHaveClass('nav-tabs')
+    expect(tablist).not.toHaveClass('plant-modal-rail')
+  })
+
+  it('moves to the next tab when ArrowDown is pressed in embedded mode', () => {
+    renderModal({ plant: existingPlant, embedded: true })
+    fireEvent.keyDown(tab('Plant'), { key: 'ArrowDown' })
+    expect(tab('Watering')).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('moves to the previous tab when ArrowUp is pressed in embedded mode', () => {
+    renderModal({ plant: existingPlant, embedded: true })
+    fireEvent.click(tab('Watering'))
+    fireEvent.keyDown(tab('Watering'), { key: 'ArrowUp' })
+    expect(tab('Plant')).toHaveAttribute('aria-selected', 'true')
   })
 })
 

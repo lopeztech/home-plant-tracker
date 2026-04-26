@@ -284,3 +284,40 @@
     transition: none !important;
   }
 }
+
+/* ── /plants/:id detail shell ─────────────────────────────────────────── */
+
+/* The page route reuses PlantModal in `embedded` mode and renders a
+   left-rail nav next to the active section body on md+. CSS Grid handles
+   the layout: header and footer span both columns, the rail sits in
+   column 1, and whichever Modal.Body is active for the current tab fills
+   column 2. Multiple body candidates exist in the JSX but only one is
+   conditionally rendered at a time, so they all safely share row 2. */
+@media (min-width: 768px) {
+  .plant-detail-shell {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .plant-detail-shell > .modal-header,
+  .plant-detail-shell > .modal-footer {
+    grid-column: 1 / -1;
+  }
+
+  .plant-detail-shell > .plant-modal-rail {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: stretch;
+    border-right: 1px solid var(--bs-border-color);
+    border-bottom: 0 !important;
+    flex-direction: column !important;
+    overflow-y: auto;
+  }
+
+  .plant-detail-shell > .modal-body {
+    grid-column: 2;
+    grid-row: 2;
+    min-width: 0;
+  }
+}
