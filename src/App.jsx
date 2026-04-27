@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext.jsx'
 import { LayoutProvider } from './context/LayoutContext.jsx'
 import { SubscriptionProvider } from './context/SubscriptionContext.jsx'
 import { HouseholdProvider } from './context/HouseholdContext.jsx'
+import { PropertyProvider } from './context/PropertyContext.jsx'
 import { ToastProvider } from './components/Toast.jsx'
 import ConsentBanner from './components/ConsentBanner.jsx'
 
@@ -19,10 +20,12 @@ export default function App() {
         <LayoutProvider>
           <SubscriptionProvider>
             <HouseholdProvider>
+            <PropertyProvider>
               <ToastProvider>
                 <Outlet />
                 <ConsentBanner />
               </ToastProvider>
+            </PropertyProvider>
             </HouseholdProvider>
           </SubscriptionProvider>
         </LayoutProvider>

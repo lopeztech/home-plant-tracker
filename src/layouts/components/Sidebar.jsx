@@ -5,6 +5,7 @@ import { useLayoutContext } from '../../context/LayoutContext.jsx'
 import { usePlantContext } from '../../context/PlantContext.jsx'
 import { useHelp } from '../../context/HelpContext.jsx'
 import { useTour, TOURS } from '../../context/TourContext.jsx'
+import { useProperty } from '../../context/PropertyContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
 import WeatherStrip from '../../components/WeatherStrip.jsx'
 import OfflineIndicator from '../../components/OfflineIndicator.jsx'
@@ -13,6 +14,7 @@ import { buildWaterTasks } from '../../utils/todayTasks.js'
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
+  const { properties, activePropertyId, switchTo } = useProperty()
   const { navMinified, toggleSetting } = useLayoutContext()
   const { weather, location, plants, floors } = usePlantContext()
   const { open: openHelp } = useHelp()
@@ -59,6 +61,22 @@ export default function Sidebar() {
           </>
         )}
       </div>
+
+      {properties.length > 1 && (
+        <div className="px-4 pb-2">
+          <select
+            className="form-select form-select-sm bg-transparent text-white border-white border-opacity-25"
+            value={activePropertyId}
+            onChange={(e) => switchTo(e.target.value)}
+            aria-label="Switch property"
+            style={{ fontSize: '0.78rem' }}
+          >
+            {properties.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <OfflineIndicator />
 

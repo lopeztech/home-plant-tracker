@@ -174,6 +174,21 @@ function userPropagations(userId) {
   return db.collection('users').doc(userId).collection('propagations');
 }
 
+function userProperties(userId) {
+  return db.collection('users').doc(userId).collection('properties');
+}
+
+// Synthesise the implicit 'primary' property for users who pre-date multi-property.
+async function synthPrimary(userId) {
+  const ref = userProperties(userId).doc('primary');
+  const snap = await ref.get();
+  if (snap.exists) return { id: 'primary', ...snap.data() };
+  const now = new Date().toISOString();
+  const data = { name: 'My Home', type: 'residential', archived: false, createdAt: now, updatedAt: now };
+  await ref.set(data);
+  return { id: 'primary', ...data };
+}
+
 // Return a signed read URL valid for 1 hour, or null if no image.
 async function signReadUrl(urlOrPath) {
   const path = gcsPath(urlOrPath);
@@ -561,8 +576,9 @@ Rules:
 
 const { requireTier, checkQuota } = createTierGate(db);
 
-const countPlantsForReq   = (req) => billing.countPlants(db, req.userId);
-const countAiAnalysesForReq = (req) => billing.readAiAnalysesUsage(db, req.userId);
+const countPlantsForReq      = (req) => billing.countPlants(db, req.userId);
+const countAiAnalysesForReq  = (req) => billing.readAiAnalysesUsage(db, req.userId);
+const countPropertiesForReq  = (req) => billing.countProperties(db, req.userId);
 
 // ── Billing — non-webhook routes ─────────────────────────────────────────────
 // (Webhook is declared earlier, before express.json(), to keep the raw body
@@ -1840,6 +1856,110 @@ app.use((req, res, next) => {
   });
 });
 
+// ── Properties CRUD ───────────────────────────────────────────────────────────
+// Properties scope plant inventories for Landscaper Pro users.
+// Free users implicitly have one property ('primary'); home_pro up to 3.
+
+app.get('/properties', requireUser, async (req, res) => {
+  try {
+    const snap = await userProperties(req.userId).get();
+    let items = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => !p.archived);
+    if (items.length === 0) {
+      const primary = await synthPrimary(req.userId);
+      items = [primary];
+    }
+    res.status(200).json({ properties: items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/properties', requireUser, requireTier('home_pro'), checkQuota('properties', countPropertiesForReq), async (req, res) => {
+  try {
+    const { name, address, lat, lng, type, notes } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    const now = new Date().toISOString();
+    const data = {
+      name: name.trim(),
+      address: address || null,
+      lat: lat ?? null,
+      lng: lng ?? null,
+      type: type || 'residential',
+      notes: notes || '',
+      archived: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const ref = await userProperties(req.userId).add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/properties/:id', requireUser, async (req, res) => {
+  try {
+    const snap = await userProperties(req.userId).doc(req.params.id).get();
+    if (!snap.exists || snap.data().archived) return res.status(404).json({ error: 'not_found' });
+    res.status(200).json({ id: snap.id, ...snap.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/properties/:id', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const ref = userProperties(req.userId).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists || snap.data().archived) return res.status(404).json({ error: 'not_found' });
+    const { name, address, lat, lng, type, notes } = req.body;
+    const update = { updatedAt: new Date().toISOString() };
+    if (name !== undefined) update.name = String(name).trim();
+    if (address !== undefined) update.address = address;
+    if (lat !== undefined) update.lat = lat;
+    if (lng !== undefined) update.lng = lng;
+    if (type !== undefined) update.type = type;
+    if (notes !== undefined) update.notes = notes;
+    await ref.set(update, { merge: true });
+    const updated = await ref.get();
+    res.status(200).json({ id: updated.id, ...updated.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/properties/:id', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    if (req.params.id === 'primary') {
+      return res.status(400).json({ error: 'cannot_delete_primary' });
+    }
+    const ref = userProperties(req.userId).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'not_found' });
+    await ref.set({ archived: true, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ archived: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/properties/:id/restore', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const ref = userProperties(req.userId).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'not_found' });
+    await ref.set({ archived: false, updatedAt: new Date().toISOString() }, { merge: true });
+    const updated = await ref.get();
+    res.status(200).json({ id: updated.id, ...updated.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Plants CRUD ───────────────────────────────────────────────────────────────
 
 app.get('/plants', requireUser, async (req, res) => {
@@ -1850,6 +1970,7 @@ app.get('/plants', requireUser, async (req, res) => {
     // Without params the legacy flat array is returned for backward compat.
     const rawLimit = req.query.limit !== undefined ? Number(req.query.limit) : null;
     const after    = req.query.after || null;
+    const propertyId = req.query.propertyId || null;
     const paginated = rawLimit !== null || after !== null;
     const limit = rawLimit ? Math.min(rawLimit, 200) : 200;
 
@@ -1862,11 +1983,17 @@ app.get('/plants', requireUser, async (req, res) => {
     const nextCursor = hasMore ? docs[docs.length - 1].data().createdAt : null;
 
     const plants = await Promise.all(
-      docs.map(async (doc) => {
-        const data = { id: doc.id, ...doc.data() };
-        await signPlantData(data);
-        return data;
-      })
+      docs
+        .filter((doc) => {
+          if (!propertyId) return true;
+          const pid = doc.data().propertyId || 'primary';
+          return pid === propertyId;
+        })
+        .map(async (doc) => {
+          const data = { id: doc.id, ...doc.data() };
+          await signPlantData(data);
+          return data;
+        })
     );
 
     if (paginated) {
