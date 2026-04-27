@@ -6722,4 +6722,387 @@ app.get('/rebates/matches', requireUser, (req, res) => {
   res.status(200).json({ rebates: matches, total: matches.length });
 });
 
+// ── OAuth 2.0 authorisation server (RFC 6749 + RFC 7009) ─────────────────────
+// Lets third-party voice assistants (Alexa, Google Home, Apple Shortcuts) link
+// a user's account and call /voice/* endpoints using standard Bearer tokens.
+// No external SDK needed — the flow is straightforward enough to implement
+// directly using the crypto + jwt tooling already present in this file.
+
+const OAUTH_SECRET = process.env.OAUTH_JWT_SECRET || 'oauth-dev-secret';
+const ACCESS_TOKEN_TTL  = 60 * 60;              // 1 hour (seconds)
+const REFRESH_TOKEN_TTL = 30 * 24 * 60 * 60;   // 30 days (seconds)
+const AUTH_CODE_TTL     = 10 * 60 * 1000;       // 10 minutes (ms)
+
+// Pre-issued clients. Redirect URIs match each platform's account-linking spec.
+const OAUTH_CLIENTS = {
+  'alexa.lopezcloud.dev': {
+    name: 'Amazon Alexa',
+    redirectUris: ['https://pitangui.amazon.com/api/skill/link/M1IIGQ9IEV36MY', 'https://layla.amazon.com/api/skill/link/M1IIGQ9IEV36MY'],
+    scopes: ['voice'],
+  },
+  'google-home.lopezcloud.dev': {
+    name: 'Google Home',
+    redirectUris: ['https://oauth-redirect.googleusercontent.com/r/home-plant-tracker-lcd', 'https://oauth-redirect-sandbox.googleusercontent.com/r/home-plant-tracker-lcd'],
+    scopes: ['voice'],
+  },
+  'apple-shortcuts.lopezcloud.dev': {
+    name: 'Apple Shortcuts',
+    redirectUris: ['planttracker://oauth/callback', 'https://plants.lopezcloud.dev/oauth/callback'],
+    scopes: ['voice'],
+  },
+};
+
+function userOauthGrants(userId) {
+  return db.collection('users').doc(userId).collection('oauthGrants');
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function issueAccessToken(userId, clientId, scopes) {
+  if (!jwt) throw new Error('jwt_unavailable');
+  return jwt.sign(
+    { sub: userId, client_id: clientId, scopes, type: 'oauth_access' },
+    OAUTH_SECRET,
+    { expiresIn: ACCESS_TOKEN_TTL },
+  );
+}
+
+function verifyAccessToken(token) {
+  if (!jwt) throw new Error('jwt_unavailable');
+  const payload = jwt.verify(token, OAUTH_SECRET);
+  if (payload.type !== 'oauth_access') throw new Error('wrong_token_type');
+  return payload;
+}
+
+// Middleware: authenticate /voice/* endpoints using OAuth Bearer tokens.
+async function requireOauthBearer(req, res, next) {
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'missing_token' });
+  }
+  let payload;
+  try {
+    payload = verifyAccessToken(auth.slice(7));
+  } catch {
+    return res.status(401).json({ error: 'invalid_token' });
+  }
+  req.userId = payload.sub;
+  req.oauthClientId = payload.client_id;
+  req.oauthScopes = payload.scopes || [];
+  next();
+}
+
+// GET /oauth/authorize — redirect-based authorisation; requires the user to
+// already hold a valid Google Bearer token (the app session). The assistant
+// platform opens this URL in a webview during account linking.
+app.get('/oauth/authorize', requireUser, async (req, res) => {
+  try {
+    const { client_id, redirect_uri, state, response_type, scope } = req.query;
+    if (response_type !== 'code') {
+      return res.status(400).json({ error: 'unsupported_response_type' });
+    }
+    const client = OAUTH_CLIENTS[client_id];
+    if (!client) return res.status(400).json({ error: 'invalid_client' });
+    if (!client.redirectUris.includes(redirect_uri)) {
+      return res.status(400).json({ error: 'invalid_redirect_uri' });
+    }
+    const scopes = (scope || 'voice').split(/[\s,]+/).filter(Boolean);
+    const invalidScope = scopes.find((s) => !client.scopes.includes(s));
+    if (invalidScope) return res.status(400).json({ error: 'invalid_scope' });
+
+    // Issue a one-time short-lived authorisation code stored in a global
+    // top-level collection so the token endpoint can resolve it without
+    // knowing the userId in advance.
+    const code = crypto.randomBytes(24).toString('hex');
+    const expiresAt = Date.now() + AUTH_CODE_TTL;
+    await db.collection('oauthCodes').doc(code).set({
+      userId: req.userId, clientId: client_id, redirectUri: redirect_uri, scopes, expiresAt, used: false,
+    });
+
+    const dest = new URL(redirect_uri);
+    dest.searchParams.set('code', code);
+    if (state) dest.searchParams.set('state', state);
+    res.redirect(302, dest.toString());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /oauth/token — token endpoint (authorization_code + refresh_token grants)
+app.post('/oauth/token', async (req, res) => {
+  try {
+    if (!jwt) return res.status(503).json({ error: 'jwt_unavailable' });
+    const { grant_type, code, redirect_uri, client_id, refresh_token } = req.body || {};
+
+    const client = OAUTH_CLIENTS[client_id];
+    if (!client) return res.status(401).json({ error: 'invalid_client' });
+
+    if (grant_type === 'authorization_code') {
+      if (!code) return res.status(400).json({ error: 'missing_code' });
+
+      // Find the code across all users (scan by top-level hash is impractical;
+      // instead the code itself is stored at users/{uid}/oauthCodes/{code} and
+      // the uid is encoded in the code via a signed prefix).
+      // Simpler approach: the code contains the userId as a prefix separated by '.'.
+      // The authorize endpoint embeds the uid so we can resolve it directly.
+      // Re-derive from the token store by scanning is a security risk; instead we
+      // use a top-level cross-user lookup collection.
+      const globalRef = db.collection('oauthCodes').doc(code);
+      const globalSnap = await globalRef.get();
+      if (!globalSnap.exists) return res.status(400).json({ error: 'invalid_code' });
+      const { userId, clientId, redirectUri, scopes, expiresAt, used } = globalSnap.data();
+
+      if (used) return res.status(400).json({ error: 'code_already_used' });
+      if (Date.now() > expiresAt) return res.status(400).json({ error: 'code_expired' });
+      if (clientId !== client_id) return res.status(400).json({ error: 'client_mismatch' });
+      if (redirectUri !== redirect_uri) return res.status(400).json({ error: 'redirect_uri_mismatch' });
+
+      // Mark code as used (consume it)
+      await globalRef.set({ used: true }, { merge: true });
+
+      const accessToken = issueAccessToken(userId, client_id, scopes);
+      const rawRefresh = crypto.randomBytes(32).toString('hex');
+      const refreshHash = hashToken(rawRefresh);
+      const now = new Date().toISOString();
+      const expiry = new Date(Date.now() + REFRESH_TOKEN_TTL * 1000).toISOString();
+
+      const grantRef = await userOauthGrants(userId).add({
+        clientId: client_id, scopes, refreshTokenHash: refreshHash,
+        expiresAt: expiry, revokedAt: null, createdAt: now,
+      });
+      // Global hash index lets the refresh_token grant look up userId + grantId
+      await db.collection('oauthRefreshHashes').doc(refreshHash).set({
+        userId, grantId: grantRef.id, revokedAt: null, createdAt: now,
+      });
+
+      return res.status(200).json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: ACCESS_TOKEN_TTL,
+        refresh_token: rawRefresh,
+        scope: scopes.join(' '),
+      });
+    }
+
+    if (grant_type === 'refresh_token') {
+      if (!refresh_token) return res.status(400).json({ error: 'missing_refresh_token' });
+      const refreshHash = hashToken(refresh_token);
+
+      // Scan grants for matching hash (a user will have at most a handful)
+      // We store grants per-user so we need the userId. Use a top-level hash index.
+      const hashRef = db.collection('oauthRefreshHashes').doc(refreshHash);
+      const hashSnap = await hashRef.get();
+      if (!hashSnap.exists) return res.status(401).json({ error: 'invalid_refresh_token' });
+      const { userId, grantId } = hashSnap.data();
+
+      const grantSnap = await userOauthGrants(userId).doc(grantId).get();
+      if (!grantSnap.exists) return res.status(401).json({ error: 'invalid_refresh_token' });
+      const grant = grantSnap.data();
+      if (grant.revokedAt) return res.status(401).json({ error: 'token_revoked' });
+      if (grant.clientId !== client_id) return res.status(401).json({ error: 'client_mismatch' });
+      if (new Date(grant.expiresAt) < new Date()) return res.status(401).json({ error: 'refresh_token_expired' });
+
+      const accessToken = issueAccessToken(userId, client_id, grant.scopes);
+      return res.status(200).json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: ACCESS_TOKEN_TTL,
+        scope: grant.scopes.join(' '),
+      });
+    }
+
+    return res.status(400).json({ error: 'unsupported_grant_type' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /oauth/revoke — RFC 7009 token revocation
+app.post('/oauth/revoke', async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) return res.status(400).json({ error: 'missing_token' });
+
+    // Try to interpret as a refresh token (most common revocation target)
+    const refreshHash = hashToken(token);
+    const hashRef = db.collection('oauthRefreshHashes').doc(refreshHash);
+    const hashSnap = await hashRef.get();
+    if (hashSnap.exists && !hashSnap.data().revokedAt) {
+      const { userId, grantId } = hashSnap.data();
+      const now = new Date().toISOString();
+      await userOauthGrants(userId).doc(grantId).set({ revokedAt: now }, { merge: true });
+      await hashRef.set({ revokedAt: now }, { merge: true });
+    }
+    // RFC 7009 §2.2: always return 200 regardless of whether the token was found
+    res.status(200).json({ revoked: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /oauth/grants — list active linked devices for the authenticated user
+app.get('/oauth/grants', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userOauthGrants(req.userId).get();
+    const grants = snap.docs
+      .filter((d) => !d.data().revokedAt && new Date(d.data().expiresAt) > new Date())
+      .map((d) => {
+        const g = d.data();
+        const client = OAUTH_CLIENTS[g.clientId] || {};
+        return {
+          id: d.id,
+          clientId: g.clientId,
+          clientName: client.name || g.clientId,
+          scopes: g.scopes,
+          createdAt: g.createdAt,
+          expiresAt: g.expiresAt,
+        };
+      });
+    res.status(200).json({ grants });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /oauth/grants/:id — revoke a specific grant (user-facing revocation)
+app.delete('/oauth/grants/:id', requireUser, async (req, res) => {
+  try {
+    const ref = userOauthGrants(req.userId).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'grant_not_found' });
+    if (snap.data().revokedAt) return res.status(409).json({ error: 'already_revoked' });
+    const now = new Date().toISOString();
+    await ref.set({ revokedAt: now }, { merge: true });
+    // Also revoke the hash index so refresh tokens stop working immediately
+    const { refreshTokenHash } = snap.data();
+    if (refreshTokenHash) {
+      await db.collection('oauthRefreshHashes').doc(refreshTokenHash).set({ revokedAt: now }, { merge: true });
+    }
+    res.status(200).json({ revoked: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Voice intent endpoints ─────────────────────────────────────────────────────
+// These endpoints are designed for SSML-ready voice assistant responses.
+// All require a valid OAuth Bearer access token (home_pro+).
+
+// Fuzzy plant name resolver — returns the best match or null
+async function resolveVoicePlant(userId, nameParam) {
+  const snap = await userPlants(userId).get();
+  const plants = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const query = nameParam.toLowerCase();
+  // Exact match first, then substring
+  const exact = plants.find((p) => (p.name || '').toLowerCase() === query);
+  if (exact) return exact;
+  const sub = plants.find(
+    (p) => (p.name || '').toLowerCase().includes(query) || query.includes((p.name || '').toLowerCase()),
+  );
+  return sub || null;
+}
+
+// GET /voice/today — today's watering + feeding tasks (SSML-friendly summary)
+app.get('/voice/today', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userPlants(req.userId).get();
+    const now = new Date();
+    const due = [];
+    for (const d of snap.docs) {
+      const p = { id: d.id, ...d.data() };
+      if (!p.frequencyDays || !p.lastWatered) continue;
+      const next = new Date(new Date(p.lastWatered).getTime() + p.frequencyDays * 86400000);
+      if (next <= now) due.push(p.name || p.species || 'Unknown plant');
+    }
+    const count = due.length;
+    let summary;
+    if (count === 0) {
+      summary = 'All plants are up to date. No watering needed today.';
+    } else if (count === 1) {
+      summary = `One plant needs watering today: ${due[0]}.`;
+    } else {
+      const list = due.length <= 5 ? due.slice(0, -1).join(', ') + ' and ' + due[due.length - 1] : due.slice(0, 5).join(', ') + ` and ${count - 5} more`;
+      summary = `${count} plants need watering today: ${list}.`;
+    }
+    res.status(200).json({ summary, count, plants: due });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /voice/plants/:nameOrFuzzy/status — plant health + last watered
+app.get('/voice/plants/:nameOrFuzzy/status', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const plant = await resolveVoicePlant(req.userId, req.params.nameOrFuzzy);
+    if (!plant) {
+      return res.status(404).json({
+        error: 'plant_not_found',
+        summary: `I couldn't find a plant called ${req.params.nameOrFuzzy} in your collection.`,
+      });
+    }
+    const name = plant.name || plant.species || 'your plant';
+    let waterSentence = '';
+    if (plant.lastWatered) {
+      const daysAgo = Math.floor((Date.now() - new Date(plant.lastWatered).getTime()) / 86400000);
+      waterSentence = daysAgo === 0
+        ? ` It was watered today.`
+        : ` It was last watered ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago.`;
+    }
+    const health = plant.health ? ` Its health is ${plant.health.toLowerCase()}.` : '';
+    const summary = `Your ${name} is in ${plant.room || 'an unknown location'}.${health}${waterSentence}`;
+    res.status(200).json({ summary, plant: { id: plant.id, name: plant.name, health: plant.health, lastWatered: plant.lastWatered, room: plant.room } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /voice/plants/:nameOrFuzzy/water — log a watering via voice
+app.post('/voice/plants/:nameOrFuzzy/water', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const plant = await resolveVoicePlant(req.userId, req.params.nameOrFuzzy);
+    if (!plant) {
+      return res.status(404).json({
+        error: 'plant_not_found',
+        summary: `I couldn't find a plant called ${req.params.nameOrFuzzy} in your collection.`,
+      });
+    }
+    const now = new Date().toISOString();
+    const waterEntry = { date: now, method: 'manual', source: 'voice' };
+    await userPlants(req.userId).doc(plant.id).set({
+      lastWatered: now,
+      wateringLog: [...(plant.wateringLog || []).slice(-49), waterEntry],
+      updatedAt: now,
+    }, { merge: true });
+    const name = plant.name || plant.species || 'your plant';
+    res.status(201).json({ summary: `Logged watering for ${name}.`, wateredAt: now, plantId: plant.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /voice/weather — weather summary with plant care impact
+app.get('/voice/weather', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const configRef = db.collection('users').doc(req.userId).collection('config').doc('preferences');
+    const configSnap = await configRef.get();
+    const prefs = configSnap.exists ? configSnap.data() : {};
+    const location = prefs.location || null;
+    if (!location) {
+      return res.status(200).json({
+        summary: 'No location is set for your garden. Please set your location in Settings to get weather updates.',
+        location: null,
+      });
+    }
+    // Return the stored location; actual weather is fetched by the frontend
+    res.status(200).json({
+      summary: `Weather data for ${location} is available in the app. Check the forecast for any frost or heat alerts affecting your plants.`,
+      location,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 functions.http('plantsApi', app);

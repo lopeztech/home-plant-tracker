@@ -6863,6 +6863,58 @@ describe('POST /materials', () => {
   });
 });
 
+// ── OAuth 2.0 authorisation server ───────────────────────────────────────────
+
+const VALID_CLIENT_ID  = 'alexa.lopezcloud.dev';
+const VALID_REDIRECT   = 'https://pitangui.amazon.com/api/skill/link/M1IIGQ9IEV36MY';
+
+describe('GET /oauth/authorize', () => {
+  it('redirects with code when all params valid', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice', state: 'abc123' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(302);
+    const location = res.headers['location'];
+    expect(location).toMatch(/code=/);
+    expect(location).toMatch(/state=abc123/);
+  });
+
+  it('rejects unknown client_id', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: 'unknown.bad', redirect_uri: VALID_REDIRECT, scope: 'voice' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_client');
+  });
+
+  it('rejects mismatched redirect_uri', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: 'https://evil.example.com', scope: 'voice' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_redirect_uri');
+  });
+
+  it('rejects unsupported response_type', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'token', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('unsupported_response_type');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('POST /gifts/purchase', () => {
   it('returns 503 when billing is disabled', async () => {
     const res = await request(app)
@@ -7387,5 +7439,266 @@ describe('GET /rebates/matches', () => {
   it('requires auth', async () => {
     const res = await request(app).get('/rebates/matches?lat=34.05&lng=-118.24');
     expect(res.status).toBe(401);
+  });
+});
+
+// Helper: complete the authorize → token round-trip and return tokens
+async function oauthFullFlow() {
+  const authRes = await request(app)
+    .get('/oauth/authorize')
+    .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice', state: 'st' })
+    .set('Authorization', authHeader());
+  expect(authRes.status).toBe(302);
+  const url = new URL(authRes.headers['location']);
+  const code = url.searchParams.get('code');
+
+  const tokenRes = await request(app)
+    .post('/oauth/token')
+    .send({ grant_type: 'authorization_code', code, redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+  expect(tokenRes.status).toBe(200);
+  return tokenRes.body; // { access_token, refresh_token, ... }
+}
+
+describe('POST /oauth/token — authorization_code', () => {
+  it('exchanges a valid code for access + refresh tokens', async () => {
+    const tokens = await oauthFullFlow();
+    expect(tokens.access_token).toBeTruthy();
+    expect(tokens.refresh_token).toBeTruthy();
+    expect(tokens.token_type).toBe('Bearer');
+    expect(tokens.expires_in).toBe(3600);
+    expect(tokens.scope).toBe('voice');
+  });
+
+  it('rejects a code that has already been used', async () => {
+    // Get a fresh code
+    const authRes = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice' })
+      .set('Authorization', authHeader());
+    const url = new URL(authRes.headers['location']);
+    const code = url.searchParams.get('code');
+
+    // First exchange succeeds
+    await request(app).post('/oauth/token').send({ grant_type: 'authorization_code', code, redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+
+    // Second exchange fails
+    const res = await request(app).post('/oauth/token').send({ grant_type: 'authorization_code', code, redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('code_already_used');
+  });
+
+  it('rejects an unknown code', async () => {
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'authorization_code', code: 'notavalidcode', redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_code');
+  });
+
+  it('rejects unsupported grant_type', async () => {
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'client_credentials', client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('unsupported_grant_type');
+  });
+});
+
+describe('POST /oauth/token — refresh_token', () => {
+  it('issues a new access token given a valid refresh token', async () => {
+    const { refresh_token } = await oauthFullFlow();
+
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token, client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(200);
+    expect(res.body.access_token).toBeTruthy();
+    expect(res.body.token_type).toBe('Bearer');
+  });
+
+  it('rejects an unknown refresh token', async () => {
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token: 'notreal', client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('invalid_refresh_token');
+  });
+});
+
+describe('POST /oauth/revoke', () => {
+  it('revokes a refresh token and invalidates it for further use', async () => {
+    const { refresh_token } = await oauthFullFlow();
+
+    const revokeRes = await request(app).post('/oauth/revoke').send({ token: refresh_token });
+    expect(revokeRes.status).toBe(200);
+    expect(revokeRes.body.revoked).toBe(true);
+
+    // Subsequent refresh attempt must fail
+    const refreshRes = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token, client_id: VALID_CLIENT_ID });
+    expect(refreshRes.status).toBe(401);
+    expect(refreshRes.body.error).toBe('token_revoked');
+  });
+
+  it('returns 200 for an unknown token (RFC 7009 §2.2)', async () => {
+    const res = await request(app).post('/oauth/revoke').send({ token: 'unknowntokenvalue' });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /oauth/grants', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns active grants', async () => {
+    await oauthFullFlow();
+    const res = await request(app).get('/oauth/grants').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.grants).toHaveLength(1);
+    expect(res.body.grants[0].clientName).toBe('Amazon Alexa');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/oauth/grants');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('DELETE /oauth/grants/:id', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('revokes a grant and removes it from the list', async () => {
+    await oauthFullFlow();
+    const listRes = await request(app).get('/oauth/grants').set('Authorization', authHeader());
+    const grantId = listRes.body.grants[0].id;
+
+    const revokeRes = await request(app)
+      .delete(`/oauth/grants/${grantId}`)
+      .set('Authorization', authHeader());
+    expect(revokeRes.status).toBe(200);
+    expect(revokeRes.body.revoked).toBe(true);
+
+    const listAfter = await request(app).get('/oauth/grants').set('Authorization', authHeader());
+    expect(listAfter.body.grants).toHaveLength(0);
+  });
+
+  it('returns 404 for unknown grant', async () => {
+    const res = await request(app)
+      .delete('/oauth/grants/no-such-id')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).delete('/oauth/grants/some-id');
+    expect(res.status).toBe(401);
+  });
+});
+
+// ── Voice intent endpoints ────────────────────────────────────────────────────
+
+async function makeVoiceBearer() {
+  // Get tokens via full OAuth flow (billing must be enabled + home_pro for /voice/*)
+  process.env.BILLING_ENABLED = 'true';
+  store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  const { access_token } = await oauthFullFlow();
+  return `Bearer ${access_token}`;
+}
+
+describe('GET /voice/today', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns a due-plants summary', async () => {
+    const bearer = await makeVoiceBearer();
+    // Plant overdue by 10 days
+    store[plantPath('p-water')] = { name: 'Monstera', frequencyDays: 7, lastWatered: new Date(Date.now() - 10 * 86400000).toISOString() };
+    const res = await request(app).get('/voice/today').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect(res.body.plants[0]).toBe('Monstera');
+    expect(res.body.summary).toMatch(/Monstera/);
+  });
+
+  it('returns all-up-to-date message when nothing is due', async () => {
+    const bearer = await makeVoiceBearer();
+    store[plantPath('p-fresh')] = { name: 'Snake plant', frequencyDays: 14, lastWatered: new Date().toISOString() };
+    const res = await request(app).get('/voice/today').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(0);
+    expect(res.body.summary).toMatch(/up to date/i);
+  });
+
+  it('rejects missing Bearer token', async () => {
+    const res = await request(app).get('/voice/today');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /voice/plants/:nameOrFuzzy/status', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns status for an exact plant name match', async () => {
+    const bearer = await makeVoiceBearer();
+    const lastWatered = new Date(Date.now() - 2 * 86400000).toISOString();
+    store[plantPath('p-status')] = { name: 'Fiddle leaf fig', health: 'Good', room: 'Living Room', lastWatered };
+    const res = await request(app).get('/voice/plants/Fiddle leaf fig/status').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatch(/Fiddle leaf fig/);
+    expect(res.body.summary).toMatch(/2 days? ago/i);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const bearer = await makeVoiceBearer();
+    const res = await request(app).get('/voice/plants/unicornplant/status').set('Authorization', bearer);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('plant_not_found');
+  });
+});
+
+describe('POST /voice/plants/:nameOrFuzzy/water', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('logs a watering and returns confirmation', async () => {
+    const bearer = await makeVoiceBearer();
+    store[plantPath('p-voice-water')] = { name: 'Pothos', wateringLog: [] };
+    const res = await request(app).post('/voice/plants/Pothos/water').set('Authorization', bearer);
+    expect(res.status).toBe(201);
+    expect(res.body.summary).toMatch(/Pothos/);
+    expect(res.body.wateredAt).toBeTruthy();
+    expect(store[plantPath('p-voice-water')].lastWatered).toBeTruthy();
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const bearer = await makeVoiceBearer();
+    const res = await request(app).post('/voice/plants/NoSuchPlant/water').set('Authorization', bearer);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('plant_not_found');
+  });
+});
+
+describe('GET /voice/weather', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns no-location message when location not set', async () => {
+    const bearer = await makeVoiceBearer();
+    const res = await request(app).get('/voice/weather').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatch(/No location/i);
+  });
+
+  it('returns location name when preferences are set', async () => {
+    const bearer = await makeVoiceBearer();
+    store[`users/${USER_SUB}/config/preferences`] = { location: 'London, UK' };
+    const res = await request(app).get('/voice/weather').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.location).toBe('London, UK');
   });
 });

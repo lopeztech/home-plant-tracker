@@ -12,7 +12,7 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi } from '../api/plants.js'
+import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi } from '../api/plants.js'
 import { useHousehold } from '../context/HouseholdContext.jsx'
 import { useProperty } from '../context/PropertyContext.jsx'
 import { useProfile } from '../context/ProfileContext.jsx'
@@ -23,6 +23,7 @@ const TABS = [
   { id: 'household', label: 'Household', icon: 'users', tags: 'household share invite member family roommate partner role viewer editor owner code' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'client-properties', label: 'Properties', icon: 'home', tags: 'properties clients landscaper multi-property client management' },
+  { id: 'linked-devices', label: 'Linked Devices', icon: 'mic', tags: 'voice alexa google home apple shortcuts assistant linked devices oauth integration' },
   { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
 ]
 
@@ -1239,6 +1240,112 @@ function BrandingTab({ search }) {
   )
 }
 
+const VOICE_CLIENTS = [
+  { id: 'alexa.lopezcloud.dev',          name: 'Amazon Alexa',    icon: 'mic' },
+  { id: 'google-home.lopezcloud.dev',    name: 'Google Home',     icon: 'mic' },
+  { id: 'apple-shortcuts.lopezcloud.dev', name: 'Apple Shortcuts', icon: 'mic' },
+]
+
+function LinkedDevicesTab({ search }) {
+  const { isGuest } = useAuth()
+  const [grants, setGrants] = useState([])
+  const [loading, setLoading] = useState(!isGuest)
+  const [error, setError] = useState(null)
+  const [revoking, setRevoking] = useState(null)
+
+  const loadGrants = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { grants: list } = await oauthApi.listGrants()
+      setGrants(list)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { if (!isGuest) loadGrants() }, [loadGrants, isGuest])
+
+  const handleRevoke = async (id) => {
+    setRevoking(id)
+    setError(null)
+    try {
+      await oauthApi.revokeGrant(id)
+      setGrants((prev) => prev.filter((g) => g.id !== id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  return (
+    <>
+      <SettingSection id="linked-devices-intro" title="Linked Voice Assistants" icon="mic" search={search}>
+        <p className="text-muted fs-sm mb-3">
+          Connect your plant tracker to voice assistants like Amazon Alexa, Google Home, or Apple Shortcuts.
+          Once linked, you can ask your assistant to water plants, check care schedules, and get weather alerts hands-free.
+          Requires a <strong>Home Pro</strong> subscription.
+        </p>
+        <div className="row g-2">
+          {VOICE_CLIENTS.map((client) => (
+            <div key={client.id} className="col-12 col-md-4">
+              <div className="border rounded p-3 d-flex flex-column align-items-center gap-2 text-center">
+                <svg className="sa-icon sa-icon-2x" aria-hidden="true">
+                  <use href="/icons/sprite.svg#mic"></use>
+                </svg>
+                <div className="fw-semibold fs-sm">{client.name}</div>
+                <div className="text-muted fs-xs">Account linking coming soon</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SettingSection>
+
+      <SettingSection id="linked-devices-active" title="Active Connections" icon="shield" search={search}>
+        {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
+        {loading ? (
+          <p className="text-muted fs-sm">Loading…</p>
+        ) : grants.length === 0 ? (
+          <p className="text-muted fs-sm">No linked voice assistants yet.</p>
+        ) : (
+          <Table size="sm" className="mb-0">
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Connected</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {grants.map((g) => (
+                <tr key={g.id}>
+                  <td>{g.clientName}</td>
+                  <td className="text-muted fs-xs">{new Date(g.createdAt).toLocaleDateString()}</td>
+                  <td className="text-muted fs-xs">{new Date(g.expiresAt).toLocaleDateString()}</td>
+                  <td>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleRevoke(g.id)}
+                      disabled={revoking === g.id}
+                      data-testid={`revoke-grant-${g.id}`}
+                    >
+                      {revoking === g.id ? 'Revoking…' : 'Revoke'}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </SettingSection>
+    </>
+  )
+}
+
 function ClientPropertiesTab({ search }) {
   const { properties, refresh } = useProperty()
   const [creating, setCreating] = useState(false)
@@ -1405,6 +1512,7 @@ export default function SettingsPage() {
         {tab === 'household' && <HouseholdTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
         {tab === 'client-properties' && <ClientPropertiesTab search={search} />}
+        {tab === 'linked-devices' && <LinkedDevicesTab search={search} />}
         {tab === 'branding' && <BrandingTab search={search} />}
       </div>
     </div>

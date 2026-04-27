@@ -508,6 +508,22 @@ export const rebatesApi = {
   matches: (lat, lng) => request(`/rebates/matches?lat=${lat}&lng=${lng}`),
 }
 
+export const oauthApi = {
+  getAuthorizeUrl: (clientId, redirectUri, state) => {
+    const base = import.meta.env.VITE_API_BASE_URL || ''
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: 'voice',
+      state: state || '',
+    })
+    return `${base}/oauth/authorize?${params}`
+  },
+  listGrants: () => request('/oauth/grants'),
+  revokeGrant: (id) => request(`/oauth/grants/${id}`, { method: 'DELETE' }),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()
