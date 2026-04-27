@@ -812,6 +812,131 @@ app.get('/climate/plant-compatibility', requireUser, async (req, res) => {
   }
 });
 
+// ── Companion planting ────────────────────────────────────────────────────────
+
+const COMPANIONS_DATA = require('./companions-data');
+
+app.get('/companions', (_req, res) => {
+  res.status(200).json(COMPANIONS_DATA);
+});
+
+// Look up the companion effect between two crop IDs. Keys are stored in both
+// directions (a:b and b:a are equivalent), so we check both orderings.
+function getCompanionEffect(pairings, cropA, cropB) {
+  return pairings[`${cropA}:${cropB}`] ?? pairings[`${cropB}:${cropA}`] ?? null;
+}
+
+app.post('/plants/:id/bed-placement', requireUser, async (req, res) => {
+  const { roomId, cellX, cellY, cellWidth = 1, cellHeight = 1 } = req.body;
+  if (!roomId || cellX == null || cellY == null) {
+    return res.status(400).json({ error: 'roomId, cellX, and cellY are required' });
+  }
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const bedPlacement = {
+      roomId, cellX, cellY,
+      cellWidth: Math.max(1, cellWidth),
+      cellHeight: Math.max(1, cellHeight),
+      plantedAt: new Date().toISOString(),
+    };
+    await ref.set({ bedPlacement, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ bedPlacement });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/bed-placement', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const data = doc.data();
+    delete data.bedPlacement;
+    data.updatedAt = new Date().toISOString();
+    await ref.set(data);
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/config/beds/:roomId/compatibility', requireUser, async (req, res) => {
+  const { roomId } = req.params;
+  try {
+    const snap = await userPlants(req.userId)
+      .get();
+    const placed = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.bedPlacement?.roomId === roomId);
+
+    const pairings = COMPANIONS_DATA.pairings;
+    const crops    = COMPANIONS_DATA.crops;
+
+    // Build a map from cell key to placed plant for quick adjacency lookup
+    const cellMap = {};
+    for (const p of placed) {
+      const bp = p.bedPlacement;
+      for (let dx = 0; dx < (bp.cellWidth || 1); dx++) {
+        for (let dy = 0; dy < (bp.cellHeight || 1); dy++) {
+          cellMap[`${bp.cellX + dx},${bp.cellY + dy}`] = p;
+        }
+      }
+    }
+
+    const cells = placed.map(plant => {
+      const bp = plant.bedPlacement;
+      const speciesKey = (plant.species || plant.name || '').toLowerCase().split(/\s+/)[0];
+      const warnings = [];
+      const compatible = [];
+
+      // Check all 8 neighbours
+      const neighbours = new Set();
+      for (let dx = -1; dx <= bp.cellWidth; dx++) {
+        for (let dy = -1; dy <= bp.cellHeight; dy++) {
+          if (dx >= 0 && dx < bp.cellWidth && dy >= 0 && dy < bp.cellHeight) continue;
+          const n = cellMap[`${bp.cellX + dx},${bp.cellY + dy}`];
+          if (n && n.id !== plant.id) neighbours.add(n);
+        }
+      }
+
+      let worstEffect = 'neutral';
+      for (const n of neighbours) {
+        const nKey = (n.species || n.name || '').toLowerCase().split(/\s+/)[0];
+        const pair = getCompanionEffect(pairings, speciesKey, nKey);
+        if (pair?.effect === 'bad') {
+          worstEffect = 'bad';
+          warnings.push(`${n.name || n.species} — ${pair.why}`);
+        } else if (pair?.effect === 'good' && worstEffect !== 'bad') {
+          worstEffect = 'good';
+          compatible.push(`${n.name || n.species} — ${pair.why}`);
+        }
+      }
+
+      const cropInfo = crops[speciesKey];
+      return {
+        plantId: plant.id,
+        plantName: plant.name || plant.species,
+        species: plant.species,
+        cellX: bp.cellX,
+        cellY: bp.cellY,
+        cellWidth: bp.cellWidth || 1,
+        cellHeight: bp.cellHeight || 1,
+        compatibility: worstEffect,
+        warnings,
+        compatible,
+        recommendedSpacingCm: cropInfo?.spacing_cm ?? null,
+      };
+    });
+
+    res.status(200).json({ roomId, cells });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {

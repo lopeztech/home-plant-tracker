@@ -448,6 +448,16 @@ export const climateApi = {
   },
 }
 
+export const companionsApi = {
+  getMatrix: () => request('/companions'),
+  setBedPlacement: (plantId, placement) =>
+    request(`/plants/${plantId}/bed-placement`, { method: 'POST', body: JSON.stringify(placement) }),
+  removeBedPlacement: (plantId) =>
+    request(`/plants/${plantId}/bed-placement`, { method: 'DELETE' }),
+  getCompatibility: (roomId) =>
+    request(`/config/beds/${encodeURIComponent(roomId)}/compatibility`),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

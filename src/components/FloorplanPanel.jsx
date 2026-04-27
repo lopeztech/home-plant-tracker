@@ -1,11 +1,12 @@
 import { useMemo, useState, useCallback, lazy, Suspense, useRef } from 'react'
 import { useSearchParams } from 'react-router'
-import { Nav, Spinner, ButtonGroup, Button, Dropdown } from 'react-bootstrap'
+import { Nav, Spinner, ButtonGroup, Button, Dropdown, Form } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
-import { plantsApi } from '../api/plants.js'
+import { plantsApi, companionsApi } from '../api/plants.js'
 import LeafletFloorplan from './LeafletFloorplan.jsx'
 import HouseWeatherFrame from './HouseWeatherFrame.jsx'
 import PlantListPanel from './PlantListPanel.jsx'
+import BedGrid from './BedGrid.jsx'
 import { calculateReorganisedPositions } from '../utils/reorganise.js'
 import { useLayoutContext } from '../context/LayoutContext.jsx'
 import { derivePlantName } from '../utils/plantName.js'
@@ -13,13 +14,14 @@ import { derivePlantName } from '../utils/plantName.js'
 const Floorplan3D = lazy(() => import('./Floorplan3D.jsx'))
 const FloorplanGame = lazy(() => import('./FloorplanGame.jsx'))
 
-const VIEW_MODES = ['2d', '3d', 'game', 'list']
+const VIEW_MODES = ['2d', '3d', 'game', 'list', 'bed']
 
 const VIEW_MODE_META = {
   '2d':   { label: '2D',   icon: 'grid' },
   '3d':   { label: '3D',   icon: 'box' },
   game:   { label: 'Game', icon: 'zap' },
   list:   { label: 'List', icon: 'list' },
+  bed:    { label: 'Bed',  icon: 'layout' },
 }
 
 export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPlant, onImportPlants, gnomeWaterRef, fullWidth = false }) {
@@ -42,6 +44,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
     }, { replace: true })
   }, [setSearchParams])
   const [saving, setSaving] = useState(false)
+  const [activeBedRoomId, setActiveBedRoomId] = useState(null)
 
   // Track dragged positions directly — { plantId: { x, y, room } }
   const dirtyMovesRef = useRef({})
@@ -60,6 +63,23 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
     () => plants.filter((p) => (p.floor || 'ground') === activeFloorId),
     [plants, activeFloorId],
   )
+
+  const bedRooms = useMemo(
+    () => (activeFloor?.rooms || []).filter((r) => r.isBed),
+    [activeFloor],
+  )
+
+  const activeBedRoom = useMemo(
+    () => bedRooms.find((r) => r.id === activeBedRoomId) ?? bedRooms[0] ?? null,
+    [bedRooms, activeBedRoomId],
+  )
+
+  const handlePlantMovedToBed = useCallback(async (plantId, placement) => {
+    try {
+      const result = await companionsApi.setBedPlacement(plantId, placement)
+      updatePlantsLocally({ [plantId]: { bedPlacement: result.bedPlacement } })
+    } catch (_) { /* ignore — stale UI is acceptable */ }
+  }, [updatePlantsLocally])
 
   const [hasDirty, setHasDirty] = useState(false)
 
@@ -169,7 +189,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
           ))}
         </Nav>
         <div className="d-flex gap-2 flex-shrink-0 align-items-center">
-          {viewMode !== 'list' && plantsOnFloor.length > 0 && activeFloor?.rooms?.length > 0 && (
+          {viewMode !== 'list' && viewMode !== 'bed' && plantsOnFloor.length > 0 && activeFloor?.rooms?.length > 0 && (
             <Button variant="outline-secondary" size="sm" onClick={handleReorganise} title="Evenly space plants within their rooms">
               <svg className="sa-icon me-1" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#grid"></use></svg>
               Reorganise
@@ -178,7 +198,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
 
           {/* Desktop ≥ sm: full button group */}
           <ButtonGroup size="sm" className="d-none d-sm-inline-flex" role="group" aria-label="View mode">
-            {VIEW_MODES.map((mode) => (
+            {VIEW_MODES.filter((m) => m !== 'bed' || bedRooms.length > 0).map((mode) => (
               <Button
                 key={mode}
                 variant={viewMode === mode ? 'primary' : 'outline-secondary'}
@@ -208,7 +228,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
               {VIEW_MODE_META[viewMode].label}
             </Dropdown.Toggle>
             <Dropdown.Menu>
-              {VIEW_MODES.map((mode) => (
+              {VIEW_MODES.filter((m) => m !== 'bed' || bedRooms.length > 0).map((mode) => (
                 <Dropdown.Item
                   key={mode}
                   active={viewMode === mode}
@@ -237,8 +257,41 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
         </div>
       )}
 
+      {/* Bed grid view */}
+      {viewMode === 'bed' && (
+        <div className="p-3">
+          {bedRooms.length === 0 ? (
+            <p className="text-muted fs-sm">No raised-bed rooms on this floor. Enable "🌱 bed" on a room in Settings → Property.</p>
+          ) : (
+            <>
+              {bedRooms.length > 1 && (
+                <Form.Select
+                  size="sm"
+                  className="mb-3"
+                  value={activeBedRoom?.id ?? ''}
+                  onChange={(e) => setActiveBedRoomId(e.target.value)}
+                  aria-label="Select raised bed room"
+                  style={{ maxWidth: 240 }}
+                >
+                  {bedRooms.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </Form.Select>
+              )}
+              {activeBedRoom && (
+                <BedGrid
+                  room={activeBedRoom}
+                  plants={plants}
+                  onPlantMoved={handlePlantMovedToBed}
+                />
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Map view */}
-      {viewMode !== 'list' && (
+      {viewMode !== 'list' && viewMode !== 'bed' && (
       <div
         className="floorplan-wrapper"
         data-tour="floorplan-panel"
@@ -296,7 +349,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
       )}
 
       {/* Save positions button */}
-      {viewMode !== 'list' && hasDirty && (
+      {viewMode !== 'list' && viewMode !== 'bed' && hasDirty && (
         <div className="d-flex align-items-center justify-content-between px-3 py-2 border-top bg-warning bg-opacity-10">
           <small className="text-muted">{Object.keys(dirtyMovesRef.current).length} plant{Object.keys(dirtyMovesRef.current).length !== 1 ? 's' : ''} moved</small>
           <div className="d-flex gap-2">
@@ -311,7 +364,7 @@ export default function FloorplanPanel({ onPlantClick, onFloorplanClick, onAddPl
       )}
 
       {/* Legend */}
-      {viewMode !== 'list' && plantsOnFloor.length > 0 && (
+      {viewMode !== 'list' && viewMode !== 'bed' && plantsOnFloor.length > 0 && (
         <div className="d-flex align-items-center gap-3 px-3 py-2 border-top fs-xs text-muted">
           {[
             { color: '#ef4444', label: 'Overdue' },

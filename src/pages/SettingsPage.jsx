@@ -137,53 +137,96 @@ function FloorRow({ floor, onChange, onDelete, expanded, onToggle }) {
               ) : (
                 <div className="mb-3">
                   {rooms.map((room, i) => (
-                    <div key={i} className={`d-flex align-items-center gap-2 mb-1 ${room.hidden ? 'opacity-50' : ''}`}>
-                      <Form.Check
-                        type="switch"
-                        id={`room-visible-${floor.id}-${i}`}
-                        checked={!room.hidden}
-                        onChange={() => updateRoom(i, { hidden: !room.hidden })}
-                        className="flex-shrink-0"
-                        aria-label={`Show room ${room.name || `#${i + 1}`}`}
-                      />
-                      <Form.Control
-                        size="sm"
-                        value={room.name}
-                        onChange={(e) => updateRoom(i, { name: e.target.value })}
-                        aria-label="Room name"
-                      />
-                      <Badge
-                        as="button"
-                        type="button"
-                        bg={room.type === 'outdoor' ? 'success' : 'info'}
-                        style={{ cursor: 'pointer', fontSize: '0.65rem', border: 0 }}
-                        onClick={() => updateRoom(i, { type: room.type === 'outdoor' ? 'indoor' : 'outdoor' })}
-                        title="Toggle indoor/outdoor"
-                        aria-label={`Toggle room type, currently ${room.type === 'outdoor' ? 'outdoor' : 'indoor'}`}
-                      >
-                        <svg className="sa-icon me-1" style={{ width: 10, height: 10 }} aria-hidden="true">
-                          <use href={`/icons/sprite.svg#${room.type === 'outdoor' ? 'sun' : 'home'}`}></use>
-                        </svg>
-                        {room.type === 'outdoor' ? 'outdoor' : 'indoor'}
-                      </Badge>
-                      {(room.type === 'outdoor' || floor.type === 'outdoor') && (
-                        <Form.Select
+                    <div key={i} className={room.hidden ? 'opacity-50 mb-2' : 'mb-2'}>
+                      <div className="d-flex align-items-center gap-2">
+                        <Form.Check
+                          type="switch"
+                          id={`room-visible-${floor.id}-${i}`}
+                          checked={!room.hidden}
+                          onChange={() => updateRoom(i, { hidden: !room.hidden })}
+                          className="flex-shrink-0"
+                          aria-label={`Show room ${room.name || `#${i + 1}`}`}
+                        />
+                        <Form.Control
                           size="sm"
-                          value={room.area || 'frontyard'}
-                          onChange={(e) => updateRoom(i, { area: e.target.value })}
-                          className="settings-fixed-w-120"
-                          style={{ fontSize: '0.7rem' }}
-                          title="Yard area"
-                          aria-label="Yard area"
+                          value={room.name}
+                          onChange={(e) => updateRoom(i, { name: e.target.value })}
+                          aria-label="Room name"
+                        />
+                        <Badge
+                          as="button"
+                          type="button"
+                          bg={room.type === 'outdoor' ? 'success' : 'info'}
+                          style={{ cursor: 'pointer', fontSize: '0.65rem', border: 0 }}
+                          onClick={() => updateRoom(i, { type: room.type === 'outdoor' ? 'indoor' : 'outdoor' })}
+                          title="Toggle indoor/outdoor"
+                          aria-label={`Toggle room type, currently ${room.type === 'outdoor' ? 'outdoor' : 'indoor'}`}
                         >
-                          {YARD_AREAS.map((a) => (
-                            <option key={a.id} value={a.id}>{a.label}</option>
-                          ))}
-                        </Form.Select>
+                          <svg className="sa-icon me-1" style={{ width: 10, height: 10 }} aria-hidden="true">
+                            <use href={`/icons/sprite.svg#${room.type === 'outdoor' ? 'sun' : 'home'}`}></use>
+                          </svg>
+                          {room.type === 'outdoor' ? 'outdoor' : 'indoor'}
+                        </Badge>
+                        {(room.type === 'outdoor' || floor.type === 'outdoor') && (
+                          <Form.Select
+                            size="sm"
+                            value={room.area || 'frontyard'}
+                            onChange={(e) => updateRoom(i, { area: e.target.value })}
+                            className="settings-fixed-w-120"
+                            style={{ fontSize: '0.7rem' }}
+                            title="Yard area"
+                            aria-label="Yard area"
+                          >
+                            {YARD_AREAS.map((a) => (
+                              <option key={a.id} value={a.id}>{a.label}</option>
+                            ))}
+                          </Form.Select>
+                        )}
+                        <Badge
+                          as="button"
+                          type="button"
+                          bg={room.isBed ? 'warning' : 'secondary'}
+                          style={{ cursor: 'pointer', fontSize: '0.65rem', border: 0, color: room.isBed ? '#000' : undefined }}
+                          onClick={() => updateRoom(i, { isBed: !room.isBed })}
+                          title="Use as raised bed"
+                          aria-label={`Toggle raised bed, currently ${room.isBed ? 'raised bed' : 'not a raised bed'}`}
+                          aria-pressed={!!room.isBed}
+                        >
+                          🌱 bed
+                        </Badge>
+                        <Button variant="link" size="sm" className="text-danger p-0 flex-shrink-0" onClick={() => deleteRoom(i)} aria-label={`Delete room ${room.name || `#${i + 1}`}`}>
+                          <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#x"></use></svg>
+                        </Button>
+                      </div>
+                      {room.isBed && (
+                        <div className="ms-4 mt-1 d-flex align-items-center gap-2 fs-xs text-muted">
+                          <span>Grid:</span>
+                          <Form.Control
+                            size="sm"
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={room.gridCellsX || 4}
+                            onChange={(e) => updateRoom(i, { gridCellsX: Math.max(1, Math.min(20, parseInt(e.target.value) || 4)) })}
+                            style={{ width: 52, fontSize: '0.7rem' }}
+                            aria-label="Grid columns"
+                            title="Columns"
+                          />
+                          <span>cols ×</span>
+                          <Form.Control
+                            size="sm"
+                            type="number"
+                            min={1}
+                            max={20}
+                            value={room.gridCellsY || 4}
+                            onChange={(e) => updateRoom(i, { gridCellsY: Math.max(1, Math.min(20, parseInt(e.target.value) || 4)) })}
+                            style={{ width: 52, fontSize: '0.7rem' }}
+                            aria-label="Grid rows"
+                            title="Rows"
+                          />
+                          <span>rows</span>
+                        </div>
                       )}
-                      <Button variant="link" size="sm" className="text-danger p-0 flex-shrink-0" onClick={() => deleteRoom(i)} aria-label={`Delete room ${room.name || `#${i + 1}`}`}>
-                        <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#x"></use></svg>
-                      </Button>
                     </div>
                   ))}
                 </div>

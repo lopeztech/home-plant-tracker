@@ -5601,3 +5601,190 @@ describe('households', () => {
     expect(role.body.error).toBe('Invalid userId');
   });
 });
+
+// ── Companion planting ────────────────────────────────────────────────────────
+
+describe('GET /companions', () => {
+  it('returns the companion matrix with crops and pairings', async () => {
+    const res = await request(app).get('/companions');
+    expect(res.status).toBe(200);
+    expect(res.body.crops).toBeDefined();
+    expect(res.body.pairings).toBeDefined();
+    // spot-check: tomato crop present
+    expect(res.body.crops.tomato).toBeDefined();
+    expect(res.body.crops.tomato.name).toBe('Tomato');
+  });
+
+  it('pairings are bidirectional (basil:tomato same effect as tomato:basil)', async () => {
+    const res = await request(app).get('/companions');
+    const p = res.body.pairings;
+    // Either forward or reverse key should resolve to the same effect
+    const forward = p['tomato:basil'] || p['basil:tomato'];
+    const reverse = p['basil:tomato'] || p['tomato:basil'];
+    expect(forward).toBeDefined();
+    expect(reverse).toBeDefined();
+    expect(forward.effect).toBe(reverse.effect);
+    expect(forward.effect).toBe('good');
+  });
+});
+
+describe('POST /plants/:id/bed-placement', () => {
+  it('sets bedPlacement on a plant', async () => {
+    const created = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Tomato', species: 'tomato' });
+    expect(created.status).toBe(201);
+    const id = created.body.id;
+
+    const res = await request(app)
+      .post(`/plants/${id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-1', cellX: 2, cellY: 3 });
+    expect(res.status).toBe(200);
+    expect(res.body.bedPlacement.roomId).toBe('bed-1');
+    expect(res.body.bedPlacement.cellX).toBe(2);
+    expect(res.body.bedPlacement.cellY).toBe(3);
+    expect(res.body.bedPlacement.cellWidth).toBe(1);
+    expect(res.body.bedPlacement.cellHeight).toBe(1);
+  });
+
+  it('returns 400 when roomId is missing', async () => {
+    const created = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Pepper' });
+    const res = await request(app)
+      .post(`/plants/${created.body.id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ cellX: 0, cellY: 0 });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for a non-existent plant', async () => {
+    const res = await request(app)
+      .post('/plants/no-such-plant/bed-placement')
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-1', cellX: 0, cellY: 0 });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('DELETE /plants/:id/bed-placement', () => {
+  it('removes bedPlacement from a plant', async () => {
+    const created = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Lettuce', species: 'lettuce' });
+    const id = created.body.id;
+    await request(app)
+      .post(`/plants/${id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-1', cellX: 1, cellY: 1 });
+
+    const res = await request(app)
+      .delete(`/plants/${id}/bed-placement`)
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(204);
+
+    // Confirm placement is gone
+    const get = await request(app).get(`/plants/${id}`).set('Authorization', authHeader());
+    expect(get.body.bedPlacement).toBeUndefined();
+  });
+});
+
+describe('GET /config/beds/:roomId/compatibility', () => {
+  it('tomato next to basil → good compatibility', async () => {
+    const tomatoRes = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Tomato', species: 'tomato' });
+    const basilRes = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Basil', species: 'basil' });
+
+    await request(app)
+      .post(`/plants/${tomatoRes.body.id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-compat', cellX: 0, cellY: 0 });
+    await request(app)
+      .post(`/plants/${basilRes.body.id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-compat', cellX: 1, cellY: 0 });
+
+    const res = await request(app)
+      .get('/config/beds/bed-compat/compatibility')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.roomId).toBe('bed-compat');
+
+    const tomatoCell = res.body.cells.find(c => c.plantId === tomatoRes.body.id);
+    expect(tomatoCell).toBeDefined();
+    expect(tomatoCell.compatibility).toBe('good');
+    expect(tomatoCell.compatible.length).toBeGreaterThan(0);
+  });
+
+  it('tomato next to kale → bad compatibility', async () => {
+    const tomatoRes = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Tomato', species: 'tomato' });
+    const kaleRes = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Kale', species: 'kale' });
+
+    await request(app)
+      .post(`/plants/${tomatoRes.body.id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-bad', cellX: 0, cellY: 0 });
+    await request(app)
+      .post(`/plants/${kaleRes.body.id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-bad', cellX: 1, cellY: 0 });
+
+    const res = await request(app)
+      .get('/config/beds/bed-bad/compatibility')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+
+    const tomatoCell = res.body.cells.find(c => c.plantId === tomatoRes.body.id);
+    expect(tomatoCell.compatibility).toBe('bad');
+    expect(tomatoCell.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('plant with no companions nearby → neutral', async () => {
+    const solePlant = await request(app)
+      .post('/plants')
+      .set('Authorization', authHeader())
+      .send({ name: 'Lettuce', species: 'lettuce' });
+
+    await request(app)
+      .post(`/plants/${solePlant.body.id}/bed-placement`)
+      .set('Authorization', authHeader())
+      .send({ roomId: 'bed-solo', cellX: 0, cellY: 0 });
+
+    const res = await request(app)
+      .get('/config/beds/bed-solo/compatibility')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    const cell = res.body.cells[0];
+    expect(cell.compatibility).toBe('neutral');
+    expect(cell.warnings).toHaveLength(0);
+    expect(cell.compatible).toHaveLength(0);
+  });
+
+  it('empty room returns empty cells array', async () => {
+    const res = await request(app)
+      .get('/config/beds/bed-empty/compatibility')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.cells).toHaveLength(0);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/config/beds/bed-empty/compatibility');
+    expect(res.status).toBe(401);
+  });
+});
