@@ -1,0 +1,135 @@
+[
+  {
+    "id": "socal-mwd-turf-rebate",
+    "name": "SoCal MWD Turf Replacement Rebate",
+    "region": "us-ca",
+    "category": "water",
+    "amountFormula": "Up to $2/sq ft, max $6,000",
+    "amountCents": 200,
+    "amountUnit": "per_sq_ft",
+    "eligibility": {
+      "minLat": 32.5,
+      "maxLat": 35.5,
+      "minLng": -119.5,
+      "maxLng": -116.0
+    },
+    "applyUrl": "https://socalwatersmart.com/index.php/landing/turf_removal",
+    "affiliateUrl": null,
+    "description": "Replace lawn grass with low-water plants or permeable surfaces. Participating Southern California water agencies offer up to $2/sq ft in rebates.",
+    "validUntil": "2027-06-30"
+  },
+  {
+    "id": "ladwp-turf-removal",
+    "name": "LADWP Turf Removal & Water-Efficient Landscape",
+    "region": "us-ca",
+    "category": "water",
+    "amountFormula": "Up to $4/sq ft for qualified turf removal",
+    "amountCents": 400,
+    "amountUnit": "per_sq_ft",
+    "eligibility": {
+      "minLat": 33.7,
+      "maxLat": 34.35,
+      "minLng": -118.9,
+      "maxLng": -118.1
+    },
+    "applyUrl": "https://www.ladwp.com/conservation/conservation-programs/turf-removal-program",
+    "affiliateUrl": null,
+    "description": "Los Angeles DWP customers can receive up to $4/sq ft for replacing grass with drought-tolerant landscaping including native plants.",
+    "validUntil": "2027-03-31"
+  },
+  {
+    "id": "ebmud-baywise-rebate",
+    "name": "EBMUD Bay-Friendly Landscape Rebate",
+    "region": "us-ca",
+    "category": "water",
+    "amountFormula": "$200 per completed assessment + $2/sq ft turf removal",
+    "amountCents": 200,
+    "amountUnit": "per_sq_ft",
+    "eligibility": {
+      "minLat": 37.45,
+      "maxLat": 38.1,
+      "minLng": -122.5,
+      "maxLng": -121.8
+    },
+    "applyUrl": "https://www.ebmud.com/water-and-wastewater/conservation/rebates-and-programs/bay-friendly-landscape/",
+    "affiliateUrl": null,
+    "description": "East Bay MUD customers can receive rebates for turf removal and installation of low-water, climate-adapted plants in the Bay Area.",
+    "validUntil": "2027-12-31"
+  },
+  {
+    "id": "sdcwa-replace-dont-displace",
+    "name": "San Diego Turf Replacement Program",
+    "region": "us-ca",
+    "category": "water",
+    "amountFormula": "Up to $1.75/sq ft for grass removal, max $2,500",
+    "amountCents": 175,
+    "amountUnit": "per_sq_ft",
+    "eligibility": {
+      "minLat": 32.5,
+      "maxLat": 33.4,
+      "minLng": -117.6,
+      "maxLng": -116.1
+    },
+    "applyUrl": "https://www.sdcwa.org/your-water/conservation-programs/turf-rebate-program",
+    "affiliateUrl": null,
+    "description": "San Diego County Water Authority customers can replace grass with drought-tolerant plants and receive rebates of up to $1.75/sq ft.",
+    "validUntil": "2027-09-30"
+  },
+  {
+    "id": "ca-native-plant-rebate",
+    "name": "California Native Plant Rebate (statewide)",
+    "region": "us-ca",
+    "category": "native-plant",
+    "amountFormula": "$50–$300 voucher per participating nursery visit",
+    "amountCents": 15000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 32.5,
+      "maxLat": 42.0,
+      "minLng": -124.5,
+      "maxLng": -114.1
+    },
+    "applyUrl": "https://calwild.org/native-plant-rebate-program/",
+    "affiliateUrl": null,
+    "description": "Statewide programme offering vouchers for California native plants at participating nurseries. Available to all California homeowners.",
+    "validUntil": "2027-12-31"
+  },
+  {
+    "id": "alameda-county-compost",
+    "name": "Alameda County Compost Bin & Vermicompost Rebate",
+    "region": "us-ca",
+    "category": "compost",
+    "amountFormula": "Up to $50 back on compost bins or vermicomposters",
+    "amountCents": 5000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 37.45,
+      "maxLat": 38.0,
+      "minLng": -122.4,
+      "maxLng": -121.7
+    },
+    "applyUrl": "https://www.stopwaste.org/at-home/home-compostinginstallation",
+    "affiliateUrl": null,
+    "description": "Alameda County residents can purchase composting bins and vermicomposters at a discount or receive rebates through StopWaste.",
+    "validUntil": "2027-12-31"
+  },
+  {
+    "id": "pge-energy-upgrade-ca",
+    "name": "PG&E / Energy Upgrade California Landscape Irrigation Rebate",
+    "region": "us-ca",
+    "category": "energy",
+    "amountFormula": "Up to $300 for smart irrigation controllers",
+    "amountCents": 30000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 35.0,
+      "maxLat": 42.0,
+      "minLng": -124.5,
+      "maxLng": -119.0
+    },
+    "applyUrl": "https://www.pge.com/en/account/rate-plans/clean-energy/rebates.html",
+    "affiliateUrl": null,
+    "description": "PG&E customers in Northern California can receive rebates for installing weather-based smart irrigation controllers that reduce outdoor water and energy use.",
+    "validUntil": "2027-06-30"
+  }
+]

@@ -493,6 +493,11 @@ export const companionsApi = {
     request(`/config/beds/${encodeURIComponent(roomId)}/compatibility`),
 }
 
+export const rebatesApi = {
+  categories: () => request('/rebates/categories'),
+  matches: (lat, lng) => request(`/rebates/matches?lat=${lat}&lng=${lng}`),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

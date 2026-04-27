@@ -245,6 +245,29 @@ async function signPlantData(data) {
 
 const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace', 'Deck', 'Yard', 'Courtyard', 'Porch', 'Veranda']);
 
+// ── Rebate catalog (loaded at boot; served from memory) ───────────────────────
+const REBATE_CATALOG = [
+  ...require('./data/rebates/us-ca.json'),
+  ...require('./data/rebates/uk-london.json'),
+];
+const REBATE_CATEGORIES = [
+  { id: 'water', label: 'Water Saving', icon: 'droplet' },
+  { id: 'native-plant', label: 'Native Plants', icon: 'leaf' },
+  { id: 'compost', label: 'Composting', icon: 'layers' },
+  { id: 'energy', label: 'Energy', icon: 'zap' },
+];
+
+function matchRebates(lat, lng) {
+  const now = new Date().toISOString().slice(0, 10);
+  return REBATE_CATALOG.filter((r) => {
+    const { minLat, maxLat, minLng, maxLng } = r.eligibility;
+    if (lat < minLat || lat > maxLat) return false;
+    if (lng < minLng || lng > maxLng) return false;
+    if (r.validUntil && r.validUntil < now) return false;
+    return true;
+  });
+}
+
 const billing = require('./billing');
 const { createTierGate } = require('./tierGate');
 
@@ -6501,6 +6524,22 @@ app.post('/sit/:token/water/:plantId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── GET /rebates/categories ───────────────────────────────────────────────────
+app.get('/rebates/categories', (req, res) => {
+  res.status(200).json({ categories: REBATE_CATEGORIES });
+});
+
+// ── GET /rebates/matches ──────────────────────────────────────────────────────
+app.get('/rebates/matches', requireUser, (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+  if (isNaN(lat) || isNaN(lng)) {
+    return res.status(400).json({ error: 'lat and lng query parameters are required' });
+  }
+  const matches = matchRebates(lat, lng);
+  res.status(200).json({ rebates: matches, total: matches.length });
 });
 
 functions.http('plantsApi', app);

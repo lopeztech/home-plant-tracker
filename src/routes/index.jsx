@@ -26,6 +26,7 @@ const TemplatesPage = lazy(() => import('../pages/TemplatesPage.jsx'))
 const MaterialsPage = lazy(() => import('../pages/MaterialsPage.jsx'))
 const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
 const SitPage = lazy(() => import('../pages/SitPage.jsx'))
+const RebatesPage = lazy(() => import('../pages/RebatesPage.jsx'))
 
 export const routes = [
   {
@@ -64,6 +65,7 @@ export const routes = [
           { path: 'admin', element: <Navigate to="/admin/features" replace /> },
           { path: 'admin/:tab', element: <AdminPage />, handle: { breadcrumb: 'Admin' } },
           { path: 'pricing', element: <PricingPage />, handle: { breadcrumb: 'Pricing' } },
+          { path: 'rebates', element: <Suspense fallback={null}><RebatesPage /></Suspense>, handle: { breadcrumb: 'Rebates & Grants' } },
         ],
       },
     ],

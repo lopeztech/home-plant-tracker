@@ -7100,3 +7100,76 @@ describe('GET /materials — propertyId scoping (billing enabled)', () => {
     expect(res.body.materials[0].name).toBe('Site supply');
   });
 });
+
+// ── GET /rebates/categories ───────────────────────────────────────────────────
+
+describe('GET /rebates/categories', () => {
+  it('returns the category list without auth', async () => {
+    const res = await request(app).get('/rebates/categories');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.categories)).toBe(true);
+    const ids = res.body.categories.map((c) => c.id);
+    expect(ids).toContain('water');
+    expect(ids).toContain('native-plant');
+    expect(ids).toContain('compost');
+    expect(ids).toContain('energy');
+  });
+});
+
+// ── GET /rebates/matches ──────────────────────────────────────────────────────
+
+describe('GET /rebates/matches', () => {
+  it('returns SoCal rebates for a Los Angeles coordinate', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=34.05&lng=-118.24')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBeGreaterThan(0);
+    const ids = res.body.rebates.map((r) => r.id);
+    expect(ids).toContain('ladwp-turf-removal');
+    expect(ids).toContain('socal-mwd-turf-rebate');
+  });
+
+  it('returns London rebates for a central London coordinate', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=51.5&lng=-0.1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBeGreaterThan(0);
+    const ids = res.body.rebates.map((r) => r.id);
+    expect(ids).toContain('london-rewilding-garden-grant');
+    expect(ids).toContain('thames-water-smart-meter');
+  });
+
+  it('returns empty for a location with no matched rebates (New Zealand)', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=-36.85&lng=174.76')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(0);
+    expect(res.body.rebates).toHaveLength(0);
+  });
+
+  it('does not return SoCal rebates for a Bay Area coordinate', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=37.77&lng=-122.41')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    const ids = res.body.rebates.map((r) => r.id);
+    expect(ids).not.toContain('ladwp-turf-removal');
+    expect(ids).toContain('ebmud-baywise-rebate');
+  });
+
+  it('returns 400 when lat/lng are missing', async () => {
+    const res = await request(app)
+      .get('/rebates/matches')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/lat/);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/rebates/matches?lat=34.05&lng=-118.24');
+    expect(res.status).toBe(401);
+  });
+});
