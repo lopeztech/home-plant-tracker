@@ -19,6 +19,7 @@
     "@google-cloud/functions-framework": "^3.0.0",
     "@google-cloud/storage": "^7.19.0",
     "@google/generative-ai": "^0.24.1",
+    "@react-pdf/renderer": "^4.5.1",
     "cors": "^2.8.5",
     "csv-parse": "^6.2.1",
     "exceljs": "^4.4.0",

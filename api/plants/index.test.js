@@ -163,6 +163,9 @@ beforeAll(() => {
         return JSON.parse(Buffer.from(token.slice(6), 'hex').toString());
       },
     },
+    './reports/plantCareReport': {
+      generatePdfBuffer: async () => Buffer.from('%PDF-1.4 mock-pdf-content'),
+    },
   });
 });
 
@@ -7700,5 +7703,133 @@ describe('GET /voice/weather', () => {
     const res = await request(app).get('/voice/weather').set('Authorization', bearer);
     expect(res.status).toBe(200);
     expect(res.body.location).toBe('London, UK');
+  });
+});
+
+// ── Plant care report generation (#160) ──────────────────────────────────────
+
+describe('POST /reports/generate', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    // Pre-seed a property and a plant
+    store[`users/${USER_SUB}/properties/primary`] = { name: 'My Home', type: 'residential', archived: false };
+    store[plantPath('plant-1')] = { name: 'Monstera', propertyId: 'primary', frequencyDays: 7, lastWatered: new Date(Date.now() - 5 * 86400000).toISOString(), health: 'Good', wateringLog: [], feedingLog: [] };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('generates a PDF and returns a signed download URL', async () => {
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+    expect(res.status).toBe(201);
+    expect(res.body.downloadUrl).toBeTruthy();
+    expect(res.body.reportId).toBeTruthy();
+    expect(res.body.propertyName).toBe('My Home');
+    // PDF buffer should have been saved to GCS
+    expect(storageSavedFiles.some((f) => f.path.startsWith('reports/'))).toBe(true);
+  });
+
+  it('respects a custom dateRange', async () => {
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary', dateRange: { from: '2026-01-01T00:00:00.000Z', to: '2026-01-31T23:59:59.999Z' } });
+    expect(res.status).toBe(201);
+    expect(res.body.dateRange.from).toMatch(/2026-01-01/);
+  });
+
+  it('returns 400 for invalid date range (from > to)', async () => {
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary', dateRange: { from: '2026-12-31T00:00:00.000Z', to: '2026-01-01T00:00:00.000Z' } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('date_range_from_must_be_before_to');
+  });
+
+  it('requires home_pro tier', async () => {
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'free', status: 'active' };
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('upgrade_required');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/reports/generate').send({ propertyId: 'primary' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /reports', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns an empty list when no reports exist', async () => {
+    const res = await request(app).get('/reports').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.reports).toEqual([]);
+  });
+
+  it('returns generated reports', async () => {
+    // Generate a report first
+    store[plantPath('p2')] = { name: 'Snake plant', propertyId: 'primary', health: 'Good', wateringLog: [], feedingLog: [] };
+    await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+
+    const res = await request(app).get('/reports').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.reports).toHaveLength(1);
+    expect(res.body.reports[0].propertyId).toBe('primary');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/reports');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /reports/:reportId/download', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('redirects to a signed URL for a valid report', async () => {
+    store[plantPath('p3')] = { name: 'Pothos', propertyId: 'primary', health: 'Good', wateringLog: [], feedingLog: [] };
+    const genRes = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+    expect(genRes.status).toBe(201);
+    const { reportId } = genRes.body;
+
+    const res = await request(app)
+      .get(`/reports/${reportId}/download`)
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(302);
+    expect(res.headers['location']).toBeTruthy();
+  });
+
+  it('returns 404 for unknown report', async () => {
+    const res = await request(app)
+      .get('/reports/no-such-report/download')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/reports/any/download');
+    expect(res.status).toBe(401);
   });
 });

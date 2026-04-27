@@ -6722,6 +6722,126 @@ app.get('/rebates/matches', requireUser, (req, res) => {
   res.status(200).json({ rebates: matches, total: matches.length });
 });
 
+// ── Plant care report generation (#160) ──────────────────────────────────────
+// Generates per-property PDF care reports using @react-pdf/renderer.
+// Tier gate: home_pro (own household / primary property); landscaper_pro (any property).
+
+const { generatePdfBuffer } = require('./reports/plantCareReport');
+
+function userReports(userId) {
+  return db.collection('users').doc(userId).collection('reports');
+}
+
+app.post('/reports/generate', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const { propertyId = 'primary', dateRange, includeSections } = req.body || {};
+
+    // Default date range: last 30 days
+    const to   = dateRange?.to   ? new Date(dateRange.to)   : new Date();
+    const from = dateRange?.from ? new Date(dateRange.from) : new Date(to.getTime() - 30 * 86400000);
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+      return res.status(400).json({ error: 'invalid_date_range' });
+    }
+    if (from > to) {
+      return res.status(400).json({ error: 'date_range_from_must_be_before_to' });
+    }
+
+    // Load property name
+    let propertyName = 'My Garden';
+    const propSnap = await userProperties(req.userId).doc(propertyId).get();
+    if (propSnap.exists) propertyName = propSnap.data().name || propertyName;
+
+    // Load plants (optionally filtered by propertyId)
+    const plantsSnap = await userPlants(req.userId).get();
+    const plants = plantsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => (p.propertyId || 'primary') === propertyId);
+
+    // Load branding (landscaper_pro users only; home_pro gets default)
+    let branding = null;
+    const brandingDoc = await db.collection('users').doc(req.userId).collection('config').doc('branding').get();
+    if (brandingDoc.exists) branding = brandingDoc.data();
+
+    // Fetch logo bytes so the renderer can embed it
+    if (branding?.logoUrl) {
+      try {
+        const logoRes = await globalThis.fetch(branding.logoUrl);
+        if (!logoRes.ok) throw new Error('logo_fetch_failed');
+        const buf = Buffer.from(await logoRes.arrayBuffer());
+        branding = { ...branding, logoUrl: buf };
+      } catch {
+        branding = { ...branding, logoUrl: null };
+      }
+    }
+
+    const pdfBuffer = await generatePdfBuffer({
+      plants,
+      branding,
+      dateRange: { from: from.toISOString(), to: to.toISOString() },
+      propertyName,
+      includeSections,
+    });
+
+    // Persist to GCS
+    const reportId = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+    const gcsFilePath = `reports/${req.userId}/${reportId}.pdf`;
+    await storage.bucket(IMAGES_BUCKET).file(gcsFilePath).save(pdfBuffer, { contentType: 'application/pdf' });
+    const [signedUrl] = await storage.bucket(IMAGES_BUCKET).file(gcsFilePath).getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
+    const now = new Date().toISOString();
+    const meta = {
+      reportId,
+      propertyId,
+      propertyName,
+      dateRange: { from: from.toISOString(), to: to.toISOString() },
+      includeSections: includeSections || {},
+      gcsPath: gcsFilePath,
+      createdAt: now,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    await userReports(req.userId).doc(reportId).set(meta);
+
+    res.status(201).json({ reportId, downloadUrl: signedUrl, ...meta });
+  } catch (err) {
+    log.error('report_generate_failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/reports', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userReports(req.userId).orderBy('createdAt', 'desc').limit(20).get();
+    const now = new Date();
+    const reports = snap.docs
+      .map((d) => d.data())
+      .filter((r) => new Date(r.expiresAt) > now);
+    res.status(200).json({ reports });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/reports/:reportId/download', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userReports(req.userId).doc(req.params.reportId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'report_not_found' });
+    const { gcsPath, expiresAt } = snap.data();
+    if (new Date(expiresAt) < new Date()) return res.status(410).json({ error: 'report_expired' });
+    const [signedUrl] = await storage.bucket(IMAGES_BUCKET).file(gcsPath).getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+    });
+    res.redirect(302, signedUrl);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── OAuth 2.0 authorisation server (RFC 6749 + RFC 7009) ─────────────────────
 // Lets third-party voice assistants (Alexa, Google Home, Apple Shortcuts) link
 // a user's account and call /voice/* endpoints using standard Bearer tokens.

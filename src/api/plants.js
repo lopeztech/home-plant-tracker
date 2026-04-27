@@ -508,6 +508,12 @@ export const rebatesApi = {
   matches: (lat, lng) => request(`/rebates/matches?lat=${lat}&lng=${lng}`),
 }
 
+export const reportsApi = {
+  generate: (body) => request('/reports/generate', { method: 'POST', body: JSON.stringify(body) }),
+  list: () => request('/reports'),
+  downloadUrl: (reportId) => `${import.meta.env.VITE_API_BASE_URL || ''}/reports/${reportId}/download`,
+}
+
 export const oauthApi = {
   getAuthorizeUrl: (clientId, redirectUri, state) => {
     const base = import.meta.env.VITE_API_BASE_URL || ''

@@ -12,7 +12,7 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi } from '../api/plants.js'
+import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi, reportsApi } from '../api/plants.js'
 import { useHousehold } from '../context/HouseholdContext.jsx'
 import { useProperty } from '../context/PropertyContext.jsx'
 import { useProfile } from '../context/ProfileContext.jsx'
@@ -1346,6 +1346,157 @@ function LinkedDevicesTab({ search }) {
   )
 }
 
+function ReportGenerateModal({ propertyId, propertyName, onClose }) {
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]
+  })
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [sections, setSections] = useState({ health: true, watering: true, feeding: true, photos: true })
+  const [generating, setGenerating] = useState(false)
+  const [downloadUrl, setDownloadUrl] = useState(null)
+  const [error, setError] = useState(null)
+
+  const toggleSection = (key) => setSections((s) => ({ ...s, [key]: !s[key] }))
+
+  const handleGenerate = async () => {
+    setGenerating(true)
+    setError(null)
+    try {
+      const result = await reportsApi.generate({
+        propertyId,
+        dateRange: { from: `${fromDate}T00:00:00.000Z`, to: `${toDate}T23:59:59.999Z` },
+        includeSections: sections,
+      })
+      setDownloadUrl(result.downloadUrl)
+    } catch (err) {
+      setError(err.message || 'Failed to generate report')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="modal show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title" id="report-modal-title">Generate Care Report — {propertyName}</h5>
+            <button type="button" className="btn-close" onClick={onClose} aria-label="Close"></button>
+          </div>
+          <div className="modal-body">
+            {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
+            {downloadUrl ? (
+              <div className="text-center py-3">
+                <svg className="sa-icon sa-icon-2x mb-2 text-success" aria-hidden="true"><use href="/icons/sprite.svg#check-circle"></use></svg>
+                <p className="mb-3">Your report is ready.</p>
+                <a href={downloadUrl} target="_blank" rel="noreferrer" className="btn btn-success">
+                  <svg className="sa-icon me-1" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#download"></use></svg>
+                  Download PDF
+                </a>
+              </div>
+            ) : (
+              <>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fs-sm fw-semibold">Date range</Form.Label>
+                  <div className="d-flex gap-2 align-items-center">
+                    <Form.Control type="date" size="sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="From date" />
+                    <span className="text-muted fs-sm">to</span>
+                    <Form.Control type="date" size="sm" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="To date" />
+                  </div>
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label className="fs-sm fw-semibold">Include sections</Form.Label>
+                  <div className="d-flex flex-wrap gap-2">
+                    {Object.entries(sections).map(([key, val]) => (
+                      <Form.Check
+                        key={key}
+                        type="checkbox"
+                        id={`section-${key}`}
+                        label={key.charAt(0).toUpperCase() + key.slice(1)}
+                        checked={val}
+                        onChange={() => toggleSection(key)}
+                      />
+                    ))}
+                  </div>
+                </Form.Group>
+              </>
+            )}
+          </div>
+          {!downloadUrl && (
+            <div className="modal-footer">
+              <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={handleGenerate} disabled={generating}>
+                {generating ? 'Generating…' : 'Generate PDF'}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="modal-backdrop show" onClick={onClose}></div>
+    </div>
+  )
+}
+
+function ReportsSection({ search }) {
+  const { isGuest } = useAuth()
+  const [reports, setReports] = useState([])
+  const [loading, setLoading] = useState(!isGuest)
+  const [error, setError] = useState(null)
+
+  const loadReports = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { reports: list } = await reportsApi.list()
+      setReports(list)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { if (!isGuest) loadReports() }, [loadReports, isGuest])
+
+  return (
+    <SettingSection id="reports-history" title="Report History" icon="file-text" search={search}>
+      {error && <div className="alert alert-danger py-2 mb-2">{error}</div>}
+      {loading ? (
+        <p className="text-muted fs-sm">Loading…</p>
+      ) : reports.length === 0 ? (
+        <p className="text-muted fs-sm mb-0">No reports generated yet. Use the button above to generate your first report.</p>
+      ) : (
+        <Table size="sm" className="mb-0">
+          <thead>
+            <tr><th>Property</th><th>Period</th><th>Generated</th><th></th></tr>
+          </thead>
+          <tbody>
+            {reports.map((r) => (
+              <tr key={r.reportId}>
+                <td className="fw-medium">{r.propertyName}</td>
+                <td className="text-muted fs-xs">
+                  {new Date(r.dateRange.from).toLocaleDateString()} – {new Date(r.dateRange.to).toLocaleDateString()}
+                </td>
+                <td className="text-muted fs-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
+                <td>
+                  <a
+                    href={reportsApi.downloadUrl(r.reportId)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-outline-secondary btn-sm"
+                    data-testid={`download-report-${r.reportId}`}
+                  >
+                    PDF
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </SettingSection>
+  )
+}
+
 function ClientPropertiesTab({ search }) {
   const { properties, refresh } = useProperty()
   const [creating, setCreating] = useState(false)
@@ -1353,6 +1504,7 @@ function ClientPropertiesTab({ search }) {
   const [newType, setNewType] = useState('residential')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [reportModalProp, setReportModalProp] = useState(null)
 
   const handleCreate = async () => {
     if (!newName.trim()) return
@@ -1380,6 +1532,14 @@ function ClientPropertiesTab({ search }) {
   }
 
   return (
+    <>
+    {reportModalProp && (
+      <ReportGenerateModal
+        propertyId={reportModalProp.id}
+        propertyName={reportModalProp.name}
+        onClose={() => setReportModalProp(null)}
+      />
+    )}
     <SettingSection id="client-properties" title="Client Properties" icon="home" search={search}>
       <div className="p-0">
         <Table hover responsive className="mb-0">
@@ -1387,7 +1547,7 @@ function ClientPropertiesTab({ search }) {
             <tr>
               <th>Name</th>
               <th>Type</th>
-              <th style={{ width: 80 }}></th>
+              <th style={{ width: 160 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -1396,11 +1556,16 @@ function ClientPropertiesTab({ search }) {
                 <td className="fw-medium">{p.name}</td>
                 <td className="text-capitalize text-muted fs-sm">{p.type || 'residential'}</td>
                 <td>
-                  {p.id !== 'primary' && (
-                    <Button variant="outline-danger" size="sm" onClick={() => handleArchive(p.id)} aria-label={`Archive ${p.name}`}>
-                      <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#trash"></use></svg>
+                  <div className="d-flex gap-1">
+                    <Button variant="outline-primary" size="sm" onClick={() => setReportModalProp(p)} aria-label={`Generate report for ${p.name}`} data-testid={`report-btn-${p.id}`}>
+                      Report
                     </Button>
-                  )}
+                    {p.id !== 'primary' && (
+                      <Button variant="outline-danger" size="sm" onClick={() => handleArchive(p.id)} aria-label={`Archive ${p.name}`}>
+                        <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#trash"></use></svg>
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1431,6 +1596,8 @@ function ClientPropertiesTab({ search }) {
         )}
       </div>
     </SettingSection>
+    <ReportsSection search={search} />
+    </>
   )
 }
 
