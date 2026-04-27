@@ -622,10 +622,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   }, [])
 
   const handleTabKeyDown = useCallback((e, index) => {
-    if (e.key === 'ArrowRight') {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault()
       setActiveTab(TABS[(index + 1) % TABS.length].id)
-    } else if (e.key === 'ArrowLeft') {
+    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault()
       setActiveTab(TABS[(index - 1 + TABS.length) % TABS.length].id)
     } else if (e.key === 'Home') {
@@ -965,9 +965,22 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       {/* Tab nav for editing — WAI-ARIA Tabs Pattern. Using native buttons
           (rather than Nav.Link) so aria-controls / aria-selected are preserved
           exactly as set; React-Bootstrap's Nav.Link filters them when it's not
-          nested inside a Tab.Container. */}
+          nested inside a Tab.Container.
+
+          When `embedded` (page route), the nav renders as a vertical left rail
+          on md+ next to the active section body. The dialog modal keeps its
+          horizontal nav-tabs above the body. */}
       {isEditing && (
-        <ul className="nav nav-tabs px-3 pt-2" role="tablist" aria-label="Plant sections">
+        <ul
+          className={
+            embedded
+              ? 'nav nav-pills plant-modal-rail flex-row flex-md-column gap-1 p-2 mb-0 flex-nowrap overflow-auto border-bottom border-md-0'
+              : 'nav nav-tabs px-3 pt-2'
+          }
+          role="tablist"
+          aria-label="Plant sections"
+          aria-orientation={embedded ? 'vertical' : 'horizontal'}
+        >
           {TABS.map((tab, i) => {
             const selected = activeTab === tab.id
             return (
@@ -979,7 +992,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   aria-selected={selected}
                   aria-controls={`plant-tabpanel-${tab.id}`}
                   tabIndex={selected ? 0 : -1}
-                  className={`nav-link${selected ? ' active' : ''}`}
+                  className={`nav-link${selected ? ' active' : ''}${embedded ? ' text-start' : ''}`}
                   onClick={() => setActiveTab(tab.id)}
                   onKeyDown={(e) => handleTabKeyDown(e, i)}
                 >
@@ -2467,7 +2480,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   return (
     <>
     {embedded ? (
-      <div className="modal-content position-relative shadow-sm" aria-labelledby="plant-modal-title">
+      <div className="modal-content position-relative shadow-sm plant-detail-shell" aria-labelledby="plant-modal-title">
         {innerContent}
       </div>
     ) : (
