@@ -7230,6 +7230,93 @@ describe('GET /gifts/mine', () => {
   });
 });
 
+
+// ── POST /billing/webhook (gift checkout) ────────────────────────────────────
+
+describe('POST /billing/webhook — gift checkout.session.completed', () => {
+  const FAKE_SK  = 'sk_test_fakefakefakefakefakefakefakefakefakefak';
+  const FAKE_WHSEC = 'whsec_testfakesecret';
+  let savedBillingEnabled;
+
+  beforeEach(() => {
+    savedBillingEnabled = process.env.BILLING_ENABLED;
+    process.env.BILLING_ENABLED = 'true';
+    process.env.STRIPE_SECRET_KEY = FAKE_SK;
+    process.env.STRIPE_WEBHOOK_SECRET = FAKE_WHSEC;
+  });
+
+  afterEach(() => {
+    if (savedBillingEnabled === undefined) {
+      delete process.env.BILLING_ENABLED;
+    } else {
+      process.env.BILLING_ENABLED = savedBillingEnabled;
+    }
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+  });
+
+  function makeStripeHeader(payload) {
+    const Stripe = require('stripe');
+    const s = Stripe(FAKE_SK);
+    return s.webhooks.generateTestHeaderString({ payload, secret: FAKE_WHSEC });
+  }
+
+  it('mints a gift code and stores gift records for a completed gift checkout', async () => {
+    const purchaserUid = USER_SUB;
+    const session = {
+      id: 'cs_test_gift_001',
+      object: 'checkout.session',
+      payment_intent: 'pi_test_001',
+      customer_email: 'buyer@example.com',
+      metadata: {
+        giftPurchase: 'true',
+        purchaserUid,
+        durationMonths: '3',
+        recipientEmail: 'recipient@example.com',
+        recipientName: 'Alice',
+      },
+    };
+    const event = {
+      id: 'evt_gift_001',
+      type: 'checkout.session.completed',
+      data: { object: session },
+    };
+    const payload = JSON.stringify(event);
+    const header = makeStripeHeader(payload);
+
+    const res = await request(app)
+      .post('/billing/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', header)
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.received).toBe(true);
+
+    // A gift doc should have been written to giftCodeHashes
+    const hashEntries = Object.keys(store).filter(k => k.startsWith('giftCodeHashes/'));
+    expect(hashEntries.length).toBe(1);
+
+    // The purchaser should have a giftsSent record
+    const sentEntries = Object.keys(store).filter(k => k.startsWith(`users/${purchaserUid}/giftsSent/`));
+    expect(sentEntries.length).toBe(1);
+    const sent = store[sentEntries[0]];
+    expect(sent.status).toBe('active');
+    expect(sent.durationMonths).toBe(3);
+    expect(sent.recipientEmail).toBe('recipient@example.com');
+  });
+
+  it('returns 400 when the webhook signature is invalid', async () => {
+    const event = { id: 'evt_bad', type: 'checkout.session.completed', data: { object: {} } };
+    const res = await request(app)
+      .post('/billing/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', 'bad-sig')
+      .send(JSON.stringify(event));
+    expect(res.status).toBe(400);
+  });
+});
+
 // ── GET /rebates/categories ───────────────────────────────────────────────────
 
 describe('GET /rebates/categories', () => {

@@ -251,13 +251,18 @@ const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrac
 const GIFT_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
 function generateGiftCode() {
-  const b = crypto.randomBytes(12);
-  let out = '';
-  for (let i = 0; i < 12; i++) {
-    out += GIFT_CODE_ALPHABET[b[i] % GIFT_CODE_ALPHABET.length];
-    if (i === 3 || i === 7) out += '-';
+  const len = GIFT_CODE_ALPHABET.length;
+  const maxUnbiased = 256 - (256 % len);
+  const positions = [];
+  while (positions.length < 12) {
+    const chunk = crypto.randomBytes(32);
+    for (let i = 0; i < chunk.length && positions.length < 12; i++) {
+      if (chunk[i] < maxUnbiased) positions.push(chunk[i] % len);
+    }
   }
-  return out;
+  return positions.slice(0, 4).map(p => GIFT_CODE_ALPHABET[p]).join('') + '-' +
+         positions.slice(4, 8).map(p => GIFT_CODE_ALPHABET[p]).join('') + '-' +
+         positions.slice(8, 12).map(p => GIFT_CODE_ALPHABET[p]).join('');
 }
 
 function hashGiftCode(code) {
