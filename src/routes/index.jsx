@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { Navigate } from 'react-router'
+import App from '../App.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 import AuthLayout from '../layouts/AuthLayout.jsx'
 
@@ -23,34 +24,39 @@ const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
 const SitPage = lazy(() => import('../pages/SitPage.jsx'))
 
 export const routes = [
-  { path: '/privacy', element: <Suspense fallback={null}><PrivacyPage /></Suspense> },
-  { path: '/terms', element: <Suspense fallback={null}><TermsPage /></Suspense> },
-  { path: '/scan/:shortCode', element: <Suspense fallback={null}><ScanPage /></Suspense> },
-  { path: '/portal/:token', element: <Suspense fallback={null}><PortalPage /></Suspense> },
-  { path: '/sit/:token', element: <Suspense fallback={null}><SitPage /></Suspense> },
   {
-    element: <AuthLayout />,
+    element: <App />,
     children: [
-      { path: '/login', element: <LoginPage /> },
-    ],
-  },
-  {
-    element: <MainLayout />,
-    children: [
-      { index: true, element: <DashboardPage />, handle: { breadcrumb: 'Garden' } },
-      { path: 'today', element: <TodayPage />, handle: { breadcrumb: 'Today' } },
-      { path: 'propagation', element: <PropagationPage />, handle: { breadcrumb: 'Propagation' } },
-      { path: 'plants', element: <Navigate to="/?view=list" replace /> },
-      { path: 'plants/:id', element: <PlantDetailPage />, handle: { breadcrumb: 'Plant' } },
-      { path: 'analytics', element: <AnalyticsPage />, handle: { breadcrumb: 'Analytics' } },
-      { path: 'calendar', element: <CalendarPage />, handle: { breadcrumb: 'Care Calendar' } },
-      { path: 'forecast', element: <ForecastPage />, handle: { breadcrumb: 'Forecast' } },
-      { path: 'insights', element: <InsightsPage />, handle: { breadcrumb: 'ML Insights' } },
-      { path: 'bulk-upload', element: <BulkUploadPage />, handle: { breadcrumb: 'Bulk Upload' } },
-      { path: 'settings', element: <Navigate to="/settings/property" replace /> },
-      { path: 'settings/billing', element: <BillingPage /> },
-      { path: 'settings/:tab', element: <SettingsPage />, handle: { breadcrumb: 'Settings' } },
-      { path: 'pricing', element: <PricingPage />, handle: { breadcrumb: 'Pricing' } },
+      { path: '/privacy', element: <Suspense fallback={null}><PrivacyPage /></Suspense> },
+      { path: '/terms', element: <Suspense fallback={null}><TermsPage /></Suspense> },
+      { path: '/scan/:shortCode', element: <Suspense fallback={null}><ScanPage /></Suspense> },
+      { path: '/portal/:token', element: <Suspense fallback={null}><PortalPage /></Suspense> },
+      { path: '/sit/:token', element: <Suspense fallback={null}><SitPage /></Suspense> },
+      {
+        element: <AuthLayout />,
+        children: [
+          { path: '/login', element: <LoginPage /> },
+        ],
+      },
+      {
+        element: <MainLayout />,
+        children: [
+          { index: true, element: <DashboardPage />, handle: { breadcrumb: 'Garden' } },
+          { path: 'today', element: <TodayPage />, handle: { breadcrumb: 'Today' } },
+          { path: 'propagation', element: <PropagationPage />, handle: { breadcrumb: 'Propagation' } },
+          { path: 'plants', element: <Navigate to="/?view=list" replace /> },
+          { path: 'plants/:id', element: <PlantDetailPage />, handle: { breadcrumb: 'Plant' } },
+          { path: 'analytics', element: <AnalyticsPage />, handle: { breadcrumb: 'Analytics' } },
+          { path: 'calendar', element: <CalendarPage />, handle: { breadcrumb: 'Care Calendar' } },
+          { path: 'forecast', element: <ForecastPage />, handle: { breadcrumb: 'Forecast' } },
+          { path: 'insights', element: <InsightsPage />, handle: { breadcrumb: 'ML Insights' } },
+          { path: 'bulk-upload', element: <BulkUploadPage />, handle: { breadcrumb: 'Bulk Upload' } },
+          { path: 'settings', element: <Navigate to="/settings/property" replace /> },
+          { path: 'settings/billing', element: <BillingPage /> },
+          { path: 'settings/:tab', element: <SettingsPage />, handle: { breadcrumb: 'Settings' } },
+          { path: 'pricing', element: <PricingPage />, handle: { breadcrumb: 'Pricing' } },
+        ],
+      },
     ],
   },
 ]

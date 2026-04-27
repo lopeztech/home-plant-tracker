@@ -1,7 +1,7 @@
 import React from 'react'
 import { act, render, screen } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { RouterProvider, createMemoryRouter } from 'react-router'
 
 let plantContextValue
 let lastPlantModalProps
@@ -30,13 +30,11 @@ vi.mock('../components/PlantModal.jsx', () => ({
 import PlantDetailPage from '../pages/PlantDetailPage.jsx'
 
 function renderAt(path) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/plants/:id" element={<PlantDetailPage />} />
-      </Routes>
-    </MemoryRouter>
+  const router = createMemoryRouter(
+    [{ path: '/plants/:id', element: <PlantDetailPage /> }],
+    { initialEntries: [path] },
   )
+  return render(<RouterProvider router={router} />)
 }
 
 beforeEach(() => {

@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { MemoryRouter } from 'react-router'
+import { RouterProvider, createMemoryRouter } from 'react-router'
 
 // ── Module mocks ──────────────────────────────────────────────────────────────
 
@@ -84,16 +84,13 @@ vi.mock('@react-oauth/google', () => ({
   GoogleLogin: () => <button>Sign in with Google</button>,
 }))
 
-import App from '../App.jsx'
+import { routes } from '../routes/index.jsx'
 import { plantsApi, floorsApi } from '../api/plants.js'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 function renderApp(initialRoute = '/') {
-  return render(
-    <MemoryRouter initialEntries={[initialRoute]}>
-      <App />
-    </MemoryRouter>
-  )
+  const router = createMemoryRouter(routes, { initialEntries: [initialRoute] })
+  return render(<RouterProvider router={router} />)
 }
 
 const samplePlant = {
