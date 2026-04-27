@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
+import { Link } from 'react-router'
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import PlantQRTag from './PlantQRTag.jsx'
@@ -266,7 +267,7 @@ function DiagnosticUpload({ plantId, plant, onComplete }) {
   )
 }
 
-export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onMoisture, onClose }) {
+export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onMoisture, onClose, embedded = false }) {
   const isEditing = !!plant
   const [mode, setMode] = useState(() => (plant ? 'edit' : null))
   const [activeTab, setActiveTab] = useState('edit')
@@ -879,20 +880,23 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
     finally { setWateringRecLoading(false) }
   }, [form, plant, floors, wateringStatus, wateringHistory, persistHistory, ctxLocation, ctxTempUnit, weather])
 
-  return (
+  const headerNode = (
+    <Modal.Header closeButton={!embedded} className="border-bottom">
+      <Modal.Title id="plant-modal-title" className="d-flex align-items-center gap-2 fs-6">
+        <svg className="sa-icon text-primary" aria-hidden="true"><use href="/icons/sprite.svg#feather"></use></svg>
+        {isEditing ? (plant.name || derivePlantName(plant)) : 'Add Plant'}
+        {wateringStatus && (
+          <Badge bg={wateringStatus.daysUntil < 0 ? 'danger' : wateringStatus.daysUntil === 0 ? 'warning' : wateringStatus.daysUntil <= 2 ? 'info' : 'success'}>
+            {wateringStatus.label}
+          </Badge>
+        )}
+      </Modal.Title>
+    </Modal.Header>
+  )
+
+  const innerContent = (
     <>
-    <Modal show onHide={handleClose} size="lg" centered scrollable fullscreen="sm-down" aria-labelledby="plant-modal-title">
-      <Modal.Header closeButton className="border-bottom">
-        <Modal.Title id="plant-modal-title" className="d-flex align-items-center gap-2 fs-6">
-          <svg className="sa-icon text-primary" aria-hidden="true"><use href="/icons/sprite.svg#feather"></use></svg>
-          {isEditing ? (plant.name || derivePlantName(plant)) : 'Add Plant'}
-          {wateringStatus && (
-            <Badge bg={wateringStatus.daysUntil < 0 ? 'danger' : wateringStatus.daysUntil === 0 ? 'warning' : wateringStatus.daysUntil <= 2 ? 'info' : 'success'}>
-              {wateringStatus.label}
-            </Badge>
-          )}
-        </Modal.Title>
-      </Modal.Header>
+      {headerNode}
 
       {/* Mode choice for new plants */}
       {!isEditing && mode === null && (
@@ -2422,6 +2426,12 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
             Delete
           </Button>
         )}
+        {!embedded && isEditing && plant?.id && (
+          <Link to={`/plants/${plant.id}`} className="btn btn-link text-decoration-none">
+            Open full record
+            <svg className="sa-icon ms-1" aria-hidden="true"><use href="/icons/sprite.svg#arrow-right"></use></svg>
+          </Link>
+        )}
         <Button variant="light" onClick={handleClose}>Cancel</Button>
         {mode !== null && (!isEditing || activeTab === 'edit') && (
           <Button variant="primary" onClick={handleSubmit} disabled={!form.species.trim() || isSaving}>
@@ -2430,7 +2440,20 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           </Button>
         )}
       </Modal.Footer>
-    </Modal>
+    </>
+  )
+
+  return (
+    <>
+    {embedded ? (
+      <div className="modal-content position-relative shadow-sm" aria-labelledby="plant-modal-title">
+        {innerContent}
+      </div>
+    ) : (
+      <Modal show onHide={handleClose} size="lg" centered scrollable fullscreen="sm-down" aria-labelledby="plant-modal-title">
+        {innerContent}
+      </Modal>
+    )}
 
     {plant && showWateringSheet && (
       <WateringSheet

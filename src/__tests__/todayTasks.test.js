@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
   buildWaterTasks,
   buildFeedTasks,
@@ -23,14 +23,22 @@ describe('buildWaterTasks', () => {
   })
 
   it('returns no tasks when every plant is not yet due', () => {
+    // getWateringStatus reads `new Date()` directly, so we must freeze
+    // wall-clock time to keep the relative-day setup deterministic.
     const now = new Date('2026-04-21T09:00:00Z')
-    const plants = [
-      plant({ id: 'p1', name: 'Monstera', lastWatered: new Date(now.getTime() - 2 * DAY).toISOString() }),
-      plant({ id: 'p2', name: 'Fern',     lastWatered: new Date(now.getTime() - 1 * DAY).toISOString() }),
-    ]
-    const { tasks, deferredByRain } = buildWaterTasks(plants, null, indoorFloor, now)
-    expect(tasks).toEqual([])
-    expect(deferredByRain).toBe(0)
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+    try {
+      const plants = [
+        plant({ id: 'p1', name: 'Monstera', lastWatered: new Date(now.getTime() - 2 * DAY).toISOString() }),
+        plant({ id: 'p2', name: 'Fern',     lastWatered: new Date(now.getTime() - 1 * DAY).toISOString() }),
+      ]
+      const { tasks, deferredByRain } = buildWaterTasks(plants, null, indoorFloor, now)
+      expect(tasks).toEqual([])
+      expect(deferredByRain).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('flags overdue plants and sorts most-overdue first', () => {

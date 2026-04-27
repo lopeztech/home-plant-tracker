@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { MemoryRouter } from 'react-router'
 import PlantModal from '../components/PlantModal.jsx'
 import { measurementsApi, phenologyApi, journalApi } from '../api/plants.js'
 
@@ -135,17 +136,19 @@ const existingPlant = {
 
 function renderModal(props = {}) {
   return render(
-    <PlantModal
-      plant={props.plant ?? null}
-      position={props.position ?? { x: 50, y: 50 }}
-      floors={props.floors ?? floors}
-      activeFloorId={props.activeFloorId ?? 'ground'}
-      onSave={props.onSave ?? vi.fn()}
-      onDelete={props.onDelete ?? vi.fn()}
-      onWater={props.onWater}
-      onMoisture={props.onMoisture ?? vi.fn()}
-      onClose={props.onClose ?? vi.fn()}
-    />
+    <MemoryRouter>
+      <PlantModal
+        plant={props.plant ?? null}
+        position={props.position ?? { x: 50, y: 50 }}
+        floors={props.floors ?? floors}
+        activeFloorId={props.activeFloorId ?? 'ground'}
+        onSave={props.onSave ?? vi.fn()}
+        onDelete={props.onDelete ?? vi.fn()}
+        onWater={props.onWater}
+        onMoisture={props.onMoisture ?? vi.fn()}
+        onClose={props.onClose ?? vi.fn()}
+      />
+    </MemoryRouter>
   )
 }
 
