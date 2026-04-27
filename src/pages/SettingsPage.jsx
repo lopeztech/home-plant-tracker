@@ -11,8 +11,9 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, apiKeysApi, brandingApi, imagesApi, householdsApi } from '../api/plants.js'
+import { accountApi, exportApi, apiKeysApi, brandingApi, imagesApi, householdsApi, propertiesApi } from '../api/plants.js'
 import { useHousehold } from '../context/HouseholdContext.jsx'
+import { useProperty } from '../context/PropertyContext.jsx'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'household', label: 'Household', icon: 'users', tags: 'household share invite member family roommate partner role viewer editor owner code' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'api-keys', label: 'API Keys', icon: 'key', tags: 'api keys rest integration home assistant automation developer' },
+  { id: 'client-properties', label: 'Properties', icon: 'home', tags: 'properties clients landscaper multi-property client management' },
   { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
   { id: 'advanced', label: 'Advanced', icon: 'tool', tags: 'reset onboarding developer version advanced' },
 ]
@@ -1353,6 +1355,94 @@ function AdvancedTab({ search }) {
   )
 }
 
+function ClientPropertiesTab({ search }) {
+  const { properties, refresh } = useProperty()
+  const [creating, setCreating] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [newType, setNewType] = useState('residential')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+
+  const handleCreate = async () => {
+    if (!newName.trim()) return
+    setSaving(true)
+    setError(null)
+    try {
+      await propertiesApi.create({ name: newName.trim(), type: newType })
+      setNewName('')
+      setCreating(false)
+      await refresh()
+    } catch (err) {
+      setError(err.message || 'Failed to create property')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleArchive = async (id) => {
+    try {
+      await propertiesApi.archive(id)
+      await refresh()
+    } catch (err) {
+      setError(err.message || 'Failed to archive property')
+    }
+  }
+
+  return (
+    <SettingSection id="client-properties" title="Client Properties" icon="home" search={search}>
+      <div className="p-0">
+        <Table hover responsive className="mb-0">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Type</th>
+              <th style={{ width: 80 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {properties.map((p) => (
+              <tr key={p.id}>
+                <td className="fw-medium">{p.name}</td>
+                <td className="text-capitalize text-muted fs-sm">{p.type || 'residential'}</td>
+                <td>
+                  {p.id !== 'primary' && (
+                    <Button variant="outline-danger" size="sm" onClick={() => handleArchive(p.id)} aria-label={`Archive ${p.name}`}>
+                      <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#trash"></use></svg>
+                    </Button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+
+        {error && <p className="text-danger fs-sm px-3 pt-2 mb-0">{error}</p>}
+
+        {creating ? (
+          <div className="d-flex gap-2 p-3 border-top">
+            <Form.Control size="sm" placeholder="Property name" value={newName} onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleCreate()} aria-label="New property name" autoFocus />
+            <Form.Select size="sm" value={newType} onChange={(e) => setNewType(e.target.value)} style={{ maxWidth: 140 }} aria-label="Property type">
+              <option value="residential">Residential</option>
+              <option value="commercial">Commercial</option>
+              <option value="strata">Strata</option>
+            </Form.Select>
+            <Button size="sm" variant="primary" onClick={handleCreate} disabled={saving || !newName.trim()}>Save</Button>
+            <Button size="sm" variant="outline-secondary" onClick={() => setCreating(false)}>Cancel</Button>
+          </div>
+        ) : (
+          <div className="p-3 border-top">
+            <Button size="sm" variant="outline-primary" onClick={() => setCreating(true)}>
+              <svg className="sa-icon me-1" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#plus"></use></svg>
+              Add property
+            </Button>
+          </div>
+        )}
+      </div>
+    </SettingSection>
+  )
+}
+
 const VALID_TABS = TABS.map((t) => t.id)
 
 export default function SettingsPage() {
@@ -1425,6 +1515,7 @@ export default function SettingsPage() {
         {tab === 'household' && <HouseholdTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
         {tab === 'api-keys' && <ApiKeysTab search={search} />}
+        {tab === 'client-properties' && <ClientPropertiesTab search={search} />}
         {tab === 'branding' && <BrandingTab search={search} />}
         {tab === 'advanced' && <AdvancedTab search={search} />}
       </div>

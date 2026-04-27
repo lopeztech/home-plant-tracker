@@ -28,6 +28,9 @@ vi.mock('../context/TourContext.jsx', () => ({
     { id: 'floorplan', label: 'Using the floorplan' },
   ],
 }))
+vi.mock('../context/PropertyContext.jsx', () => ({
+  useProperty: () => ({ properties: [], activePropertyId: 'primary', switchTo: vi.fn() }),
+}))
 
 import Sidebar from '../layouts/components/Sidebar.jsx'
 

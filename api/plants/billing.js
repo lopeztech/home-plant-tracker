@@ -20,7 +20,7 @@ const TIERS = {
       plants:            Infinity,
       ai_analyses:       Infinity,
       photo_storage_mb:  2048,
-      properties:        1,
+      properties:        3,
       team_members:      0,
     },
   },
@@ -123,6 +123,11 @@ async function countPlants(db, userId) {
   return snap.docs.length;
 }
 
+async function countProperties(db, userId) {
+  const snap = await db.collection('users').doc(userId).collection('properties').get();
+  return snap.docs.filter(d => !d.data().archived).length;
+}
+
 async function readAiAnalysesUsage(db, userId, key = monthKey()) {
   const ref = db.collection('users').doc(userId).collection('usage').doc(key);
   const snap = await ref.get();
@@ -210,6 +215,7 @@ module.exports = {
   tierMeetsMinimum,
   tierQuota,
   countPlants,
+  countProperties,
   readAiAnalysesUsage,
   incrementAiAnalyses,
   readStorageUsageMb,

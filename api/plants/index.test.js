@@ -5788,3 +5788,193 @@ describe('GET /config/beds/:roomId/compatibility', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ── Properties CRUD (#159) ────────────────────────────────────────────────────
+
+const propDocPath = (id) => `users/${USER_SUB}/properties/${id}`;
+
+describe('GET /properties — lazy primary synthesis', () => {
+  it('returns primary property when none exist', async () => {
+    const res = await request(app).get('/properties').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(1);
+    expect(res.body.properties[0].id).toBe('primary');
+    expect(res.body.properties[0].name).toBe('My Home');
+    expect(res.body.properties[0].archived).toBe(false);
+  });
+
+  it('persists the synthesised primary to Firestore', async () => {
+    await request(app).get('/properties').set('Authorization', authHeader());
+    expect(store[propDocPath('primary')]).toBeDefined();
+    expect(store[propDocPath('primary')].name).toBe('My Home');
+  });
+
+  it('returns existing properties without duplication', async () => {
+    store[propDocPath('primary')] = { name: 'My Home', archived: false, createdAt: '2026-01-01' };
+    store[propDocPath('p2')] = { name: 'Beach House', archived: false, createdAt: '2026-02-01' };
+    const res = await request(app).get('/properties').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(2);
+  });
+
+  it('excludes archived properties', async () => {
+    store[propDocPath('primary')] = { name: 'My Home', archived: false, createdAt: '2026-01-01' };
+    store[propDocPath('archived-one')] = { name: 'Old Property', archived: true, createdAt: '2026-01-15' };
+    const res = await request(app).get('/properties').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.properties).toHaveLength(1);
+    expect(res.body.properties[0].id).toBe('primary');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/properties');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /properties — create', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('creates a new property and returns 201', async () => {
+    const res = await request(app)
+      .post('/properties')
+      .set('Authorization', authHeader())
+      .send({ name: 'Beach House', type: 'residential' });
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('Beach House');
+    expect(res.body.archived).toBe(false);
+    expect(res.body.id).toBeDefined();
+  });
+
+  it('returns 400 when name is missing', async () => {
+    const res = await request(app)
+      .post('/properties')
+      .set('Authorization', authHeader())
+      .send({ type: 'commercial' });
+    expect(res.status).toBe(400);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/properties').send({ name: 'Test' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /properties — quota enforcement (home_pro limit = 3)', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('allows up to 3 properties for home_pro', async () => {
+    store[propDocPath('primary')] = { name: 'My Home', archived: false };
+    store[propDocPath('p2')] = { name: 'Second', archived: false };
+    const res = await request(app)
+      .post('/properties')
+      .set('Authorization', authHeader())
+      .send({ name: 'Third' });
+    expect(res.status).toBe(201);
+  });
+
+  it('blocks a 4th property for home_pro with 429 quota_exceeded', async () => {
+    store[propDocPath('primary')] = { name: 'My Home', archived: false };
+    store[propDocPath('p2')] = { name: 'Second', archived: false };
+    store[propDocPath('p3')] = { name: 'Third', archived: false };
+    const res = await request(app)
+      .post('/properties')
+      .set('Authorization', authHeader())
+      .send({ name: 'Fourth' });
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe('quota_exceeded');
+    expect(res.body.quotaType).toBe('properties');
+    expect(res.body.limit).toBe(3);
+  });
+
+  it('landscaper_pro user has unlimited properties', async () => {
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'landscaper_pro', status: 'active' };
+    for (let i = 0; i < 5; i++) {
+      store[propDocPath(`p${i}`)] = { name: `Property ${i}`, archived: false };
+    }
+    const res = await request(app)
+      .post('/properties')
+      .set('Authorization', authHeader())
+      .send({ name: 'Sixth Property' });
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('DELETE /properties/:id — soft delete', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    store[propDocPath('p-to-archive')] = { name: 'Old Garden', archived: false };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('soft-deletes a property (sets archived: true)', async () => {
+    const res = await request(app)
+      .delete('/properties/p-to-archive')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.archived).toBe(true);
+    expect(store[propDocPath('p-to-archive')].archived).toBe(true);
+  });
+
+  it('prevents deleting the primary property', async () => {
+    store[propDocPath('primary')] = { name: 'My Home', archived: false };
+    const res = await request(app)
+      .delete('/properties/primary')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('cannot_delete_primary');
+  });
+
+  it('archived property is excluded from GET /properties', async () => {
+    await request(app).delete('/properties/p-to-archive').set('Authorization', authHeader());
+    store[propDocPath('primary')] = { name: 'My Home', archived: false };
+    const listRes = await request(app).get('/properties').set('Authorization', authHeader());
+    const ids = listRes.body.properties.map((p) => p.id);
+    expect(ids).not.toContain('p-to-archive');
+  });
+});
+
+describe('GET /plants — propertyId filter', () => {
+  it('returns only plants for the given propertyId', async () => {
+    store[plantPath('p-a1')] = { name: 'Monstera', propertyId: 'prop-a', createdAt: '2026-01-03' };
+    store[plantPath('p-a2')] = { name: 'Fern', propertyId: 'prop-a', createdAt: '2026-01-02' };
+    store[plantPath('p-b1')] = { name: 'Cactus', propertyId: 'prop-b', createdAt: '2026-01-01' };
+    const res = await request(app)
+      .get('/plants?propertyId=prop-a')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    const names = res.body.map((p) => p.name);
+    expect(names).toContain('Monstera');
+    expect(names).toContain('Fern');
+    expect(names).not.toContain('Cactus');
+  });
+
+  it('treats plants without propertyId as primary', async () => {
+    store[plantPath('no-prop')] = { name: 'Legacy Plant', createdAt: '2026-01-01' };
+    const res = await request(app)
+      .get('/plants?propertyId=primary')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    const names = res.body.map((p) => p.name);
+    expect(names).toContain('Legacy Plant');
+  });
+
+  it('returns all plants when no propertyId is provided', async () => {
+    store[plantPath('pa')] = { name: 'A', propertyId: 'prop-a', createdAt: '2026-01-02' };
+    store[plantPath('pb')] = { name: 'B', propertyId: 'prop-b', createdAt: '2026-01-01' };
+    const res = await request(app)
+      .get('/plants')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(2);
+  });
+});

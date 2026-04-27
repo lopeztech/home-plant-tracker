@@ -286,6 +286,15 @@ export const soilApi = {
   insight: (plantId) => request(`/plants/${plantId}/soil-insight`),
 }
 
+export const propertiesApi = {
+  list: () => request('/properties'),
+  create: (data) => request('/properties', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id) => request(`/properties/${id}`),
+  update: (id, data) => request(`/properties/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  archive: (id) => request(`/properties/${id}`, { method: 'DELETE' }),
+  restore: (id) => request(`/properties/${id}/restore`, { method: 'POST', body: JSON.stringify({}) }),
+}
+
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),
