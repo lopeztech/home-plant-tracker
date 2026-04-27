@@ -67,7 +67,7 @@ export function buildWaterTasks(plants, weather, floors, now = new Date()) {
   let deferredByRain = 0
   const tasks = []
   for (const plant of plants || []) {
-    const status = getWateringStatus(plant, weather, floors)
+    const status = getWateringStatus(plant, weather, floors, null, now)
     if (status.skippedRain) {
       if (isOutdoor(plant, floors)) deferredByRain++
       continue
