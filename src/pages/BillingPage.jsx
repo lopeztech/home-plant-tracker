@@ -171,6 +171,7 @@ export default function BillingPage() {
                 <Form.Control
                   type="text"
                   placeholder="XXXX-XXXX-XXXX"
+                  aria-label="Gift code"
                   value={redeemCode}
                   onChange={(e) => setRedeemCode(e.target.value)}
                   style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}
