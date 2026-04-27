@@ -9,6 +9,16 @@ on:
       - main
   workflow_dispatch:
 
+# Serialise per-ref. On main, rapid-fire merges would otherwise overlap deploys,
+# leaving the post-deploy Playwright smoke loading an index.html whose lazy
+# chunks were already replaced by a newer deploy in flight (MIME=text/html on
+# the missing chunk → SPA-rewrite to index.html → "Failed to load module
+# script"). Cancel-in-progress is safe because Firebase Hosting deploys are
+# atomic; killing mid-upload just discards the unfinished version.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   id-token: write  # Required for Workload Identity Federation
@@ -312,9 +322,12 @@ jobs:
         run: npx playwright install chromium webkit firefox
 
       # Give Firebase Hosting a beat to propagate the new bundle to the CDN
-      # before we start hitting it.
+      # before we start hitting it. Bumped from 20s after a chunk-mismatch
+      # smoke failure: the new deploy hadn't fully fanned out across edges,
+      # so a fresh page load could grab one edge's index.html while a lazy
+      # chunk request hit another edge serving the previous version.
       - name: Wait for deploy to propagate
-        run: sleep 20
+        run: sleep 60
 
       - name: Run Playwright smoke against production
         env:
