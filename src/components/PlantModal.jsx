@@ -7,6 +7,7 @@ import SoilTab from './SoilTab.jsx'
 import LifecycleTab from './LifecycleTab.jsx'
 import BloomTab from './BloomTab.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, wildlifeApi, incidentApi, dormancyApi } from '../api/plants.js'
+import HardinessBadge from './HardinessBadge.jsx'
 import PlantIdentify from './PlantIdentify.jsx'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -1159,15 +1160,25 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   </Col>
                 </Row>
                 {isOutdoor({ room: form.room, floor: form.floor }, floors) && (
-                  <Form.Group className="mb-3">
-                    <Form.Check
-                      type="checkbox"
-                      id="is-under-cover"
-                      label={<>Under cover <span className="text-muted fs-xs">(patio, porch, greenhouse — reduces effective rainfall)</span></>}
-                      checked={!!form.isUnderCover}
-                      onChange={e => update('isUnderCover', e.target.checked)}
-                    />
-                  </Form.Group>
+                  <>
+                    <Form.Group className="mb-3">
+                      <Form.Check
+                        type="checkbox"
+                        id="is-under-cover"
+                        label={<>Under cover <span className="text-muted fs-xs">(patio, porch, greenhouse — reduces effective rainfall)</span></>}
+                        checked={!!form.isUnderCover}
+                        onChange={e => update('isUnderCover', e.target.checked)}
+                      />
+                    </Form.Group>
+                    {ctxLocation?.lat && (
+                      <div className="mb-3">
+                        <HardinessBadge
+                          plant={{ ...form, id: plant?.id }}
+                          location={{ lat: ctxLocation.lat, lon: ctxLocation.lon }}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
                 <Form.Group className="mb-3">
                   <Form.Label>Plant Category</Form.Label>

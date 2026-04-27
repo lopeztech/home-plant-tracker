@@ -437,6 +437,17 @@ export const sitApi = {
   waterPlant: (token, plantId) => fetch(`${BASE_URL}/sit/${token}/water/${plantId}`, { method: 'POST' }).then((r) => r.ok ? r.json() : r.json().then((e) => Promise.reject(e))),
 }
 
+export const climateApi = {
+  lookup(lat, lng) {
+    return request(`/climate/lookup?lat=${lat}&lng=${lng}`)
+  },
+  plantCompatibility(species, lat, lng, plantId) {
+    const params = new URLSearchParams({ species, lat, lng })
+    if (plantId) params.set('plantId', plantId)
+    return request(`/climate/plant-compatibility?${params}`)
+  },
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

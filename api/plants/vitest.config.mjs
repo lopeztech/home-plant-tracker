@@ -6,7 +6,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['index.js', 'vertexai.js'],
+      include: ['index.js', 'vertexai.js', 'climate.js'],
       exclude: ['*.test.*', 'integration/**', 'node_modules/**'],
       thresholds: {
         statements: 80,
