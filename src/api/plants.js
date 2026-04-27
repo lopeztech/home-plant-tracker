@@ -609,3 +609,10 @@ export const templatesApi = {
   apply: (id, data) =>
     request(`/templates/${id}/apply`, { method: 'POST', body: JSON.stringify(data) }),
 }
+
+export const notificationsApi = {
+  getPreferences: () => request('/preferences/notifications'),
+  updatePreferences: (data) => request('/preferences/notifications', { method: 'PUT', body: JSON.stringify(data) }),
+  registerToken: (data) => request('/preferences/notifications/fcm-tokens', { method: 'POST', body: JSON.stringify(data) }),
+  revokeToken: (token) => request(`/preferences/notifications/fcm-tokens/${encodeURIComponent(token)}`, { method: 'DELETE' }),
+}

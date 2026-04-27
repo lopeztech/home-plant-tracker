@@ -18,6 +18,8 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 let jwt;
 try { jwt = require('jsonwebtoken'); } catch { jwt = null; }
+let webPush;
+try { webPush = require('web-push'); } catch { webPush = null; }
 
 // ── Gemini API fetch patch ────────────────────────────────────────────────────
 // The Gemini API sometimes embeds generated text that contains raw control
@@ -7521,6 +7523,175 @@ app.get('/voice/weather', requireOauthBearer, requireTier('home_pro'), async (re
       summary: `Weather data for ${location} is available in the app. Check the forecast for any frost or heat alerts affecting your plants.`,
       location,
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Push/email notifications (#162) ──────────────────────────────────────────
+
+const { sendEmail } = require('./email');
+
+// Initialise web-push VAPID once if credentials are available
+if (webPush && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webPush.setVapidDetails(
+    'mailto:notifications@plants.lopezcloud.dev',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+}
+
+async function sendPushNotification(subscription, payload) {
+  if (!webPush || !process.env.VAPID_PUBLIC_KEY) return { skipped: true, reason: 'vapid_unavailable' };
+  try {
+    await webPush.sendNotification(subscription, JSON.stringify(payload));
+    return { sent: true };
+  } catch (err) {
+    if (err.statusCode === 410 || err.statusCode === 404) return { expired: true };
+    throw err;
+  }
+}
+
+function userNotificationPrefs(userId) {
+  return db.collection('users').doc(userId).collection('preferences').doc('notifications');
+}
+
+// GET /preferences/notifications
+app.get('/preferences/notifications', requireUser, async (req, res) => {
+  try {
+    const snap = await userNotificationPrefs(req.userId).get();
+    const defaults = {
+      pushEnabled: false, emailEnabled: true, perPlantAlerts: false,
+      dailyDigest: true, weeklyDigest: false,
+      quietHoursStart: '08:00', quietHoursEnd: '20:00', fcmTokens: [],
+    };
+    res.status(200).json(snap.exists ? { ...defaults, ...snap.data() } : defaults);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /preferences/notifications
+app.put('/preferences/notifications', requireUser, async (req, res) => {
+  try {
+    const allowed = ['pushEnabled', 'emailEnabled', 'perPlantAlerts', 'dailyDigest', 'weeklyDigest', 'quietHoursStart', 'quietHoursEnd'];
+    const update = {};
+    for (const key of allowed) {
+      if (req.body && req.body[key] !== undefined) update[key] = req.body[key];
+    }
+    if (Object.keys(update).length === 0) return res.status(400).json({ error: 'no_valid_fields' });
+    await userNotificationPrefs(req.userId).set(update, { merge: true });
+    const snap = await userNotificationPrefs(req.userId).get();
+    res.status(200).json(snap.data());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /preferences/notifications/fcm-tokens — register a push subscription
+app.post('/preferences/notifications/fcm-tokens', requireUser, async (req, res) => {
+  try {
+    const { token, deviceLabel, subscription } = req.body || {};
+    if (!token && !subscription) return res.status(400).json({ error: 'token or subscription is required' });
+    const ref = userNotificationPrefs(req.userId);
+    const snap = await ref.get();
+    const existing = snap.exists ? (snap.data().fcmTokens || []) : [];
+    const entry = { token: token || null, subscription: subscription || null, deviceLabel: deviceLabel || 'Unknown device', lastSeen: new Date().toISOString() };
+    const filtered = existing.filter((t) => t.token !== token);
+    await ref.set({ fcmTokens: [...filtered, entry] }, { merge: true });
+    res.status(201).json({ registered: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /preferences/notifications/fcm-tokens/:token — revoke a push subscription
+app.delete('/preferences/notifications/fcm-tokens/:token', requireUser, async (req, res) => {
+  try {
+    const ref = userNotificationPrefs(req.userId);
+    const snap = await ref.get();
+    const existing = snap.exists ? (snap.data().fcmTokens || []) : [];
+    const filtered = existing.filter((t) => t.token !== decodeURIComponent(req.params.token));
+    await ref.set({ fcmTokens: filtered }, { merge: true });
+    res.status(200).json({ removed: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /notifications/dispatch — Cloud Scheduler OIDC target; processes all users
+app.post('/notifications/dispatch', async (req, res) => {
+  if (process.env.NOTIFICATIONS_ENABLED !== 'true') {
+    return res.status(200).json({ status: 'notifications_disabled' });
+  }
+  try {
+    const usersSnap = await db.collection('users').get();
+    let sent = 0, skipped = 0;
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10);
+
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const prefSnap = await userNotificationPrefs(userId).get();
+      if (!prefSnap.exists) { skipped++; continue; }
+      const prefs = prefSnap.data();
+      if (!prefs.dailyDigest && !prefs.perPlantAlerts) { skipped++; continue; }
+
+      // Idempotency check: skip if already dispatched today
+      const logRef = db.collection('users').doc(userId).collection('notificationLog').doc(todayKey);
+      const logSnap = await logRef.get();
+      if (logSnap.exists && logSnap.data().dailyDispatched) { skipped++; continue; }
+
+      // Quiet-hours check (UTC approximation)
+      const [startH] = (prefs.quietHoursStart || '08:00').split(':').map(Number);
+      const [endH] = (prefs.quietHoursEnd || '20:00').split(':').map(Number);
+      const currentH = now.getUTCHours();
+      if (currentH < startH || currentH >= endH) { skipped++; continue; }
+
+      // Aggregate today's tasks
+      const plantsSnap = await userPlants(userId).get();
+      const due = [];
+      const overdue = [];
+      for (const d of plantsSnap.docs) {
+        const p = { id: d.id, ...d.data() };
+        if (!p.frequencyDays || !p.lastWatered) continue;
+        const next = new Date(new Date(p.lastWatered).getTime() + p.frequencyDays * 86400000);
+        const daysLate = Math.floor((now - next) / 86400000);
+        if (daysLate === 0) due.push(p.name || p.species || 'A plant');
+        if (daysLate >= 1) overdue.push({ name: p.name || p.species || 'A plant', daysLate });
+      }
+
+      // Send push
+      if (prefs.pushEnabled && (prefs.fcmTokens || []).length > 0) {
+        const payload = {
+          title: 'Plant Tracker',
+          body: due.length > 0 ? `${due.length} plant${due.length !== 1 ? 's' : ''} need watering today` : `${overdue.length} plant${overdue.length !== 1 ? 's' : ''} overdue`,
+          icon: '/icons/icon-192x192.png',
+        };
+        for (const t of prefs.fcmTokens) {
+          if (t.subscription) {
+            await sendPushNotification(t.subscription, payload).catch(() => {});
+          }
+        }
+      }
+
+      // Send email digest
+      if (prefs.emailEnabled && prefs.dailyDigest) {
+        const userPrefsSnap = await db.collection('users').doc(userId).collection('config').doc('preferences').get();
+        const email = userPrefsSnap.exists ? userPrefsSnap.data().email : null;
+        if (email) {
+          await sendEmail({
+            to: email,
+            template: 'dailyDigest',
+            dynamicData: { dueCount: due.length, overdueCount: overdue.length, duePlants: due.slice(0, 5), overduePlants: overdue.slice(0, 5) },
+          }).catch(() => {});
+        }
+      }
+
+      await logRef.set({ dailyDispatched: true, dispatchedAt: now.toISOString() }, { merge: true });
+      sent++;
+    }
+    res.status(200).json({ status: 'ok', sent, skipped });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

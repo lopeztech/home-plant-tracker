@@ -166,6 +166,14 @@ beforeAll(() => {
     './reports/plantCareReport': {
       generatePdfBuffer: async () => Buffer.from('%PDF-1.4 mock-pdf-content'),
     },
+    './email': {
+      sendEmail: async () => ({ sent: true }),
+      TEMPLATES: { dailyDigest: 'd-1', weeklyDigest: 'd-2', plantAlert: 'd-3' },
+    },
+    'web-push': {
+      setVapidDetails: () => {},
+      sendNotification: async () => ({ statusCode: 201 }),
+    },
   });
 });
 
@@ -8122,5 +8130,117 @@ describe('GET /voice/plants/:nameOrFuzzy/status — watered today branch', () =>
     const res = await request(app).get('/voice/plants/Jade plant/status').set('Authorization', bearer);
     expect(res.status).toBe(200);
     expect(res.body.summary).toMatch(/watered today/i);
+  });
+});
+
+// ── Notification preferences and dispatch (#162) ─────────────────────────────
+
+describe('GET /preferences/notifications', () => {
+  it('returns default preferences for new user', async () => {
+    const res = await request(app).get('/preferences/notifications').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.emailEnabled).toBe(true);
+    expect(res.body.pushEnabled).toBe(false);
+    expect(res.body.dailyDigest).toBe(true);
+  });
+
+  it('returns stored preferences when they exist', async () => {
+    store[`users/${USER_SUB}/preferences/notifications`] = { pushEnabled: true, emailEnabled: false, dailyDigest: false, weeklyDigest: true, quietHoursStart: '09:00', quietHoursEnd: '21:00', fcmTokens: [] };
+    const res = await request(app).get('/preferences/notifications').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pushEnabled).toBe(true);
+    expect(res.body.weeklyDigest).toBe(true);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/preferences/notifications');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PUT /preferences/notifications', () => {
+  it('updates preferences and returns merged result', async () => {
+    const res = await request(app)
+      .put('/preferences/notifications')
+      .set('Authorization', authHeader())
+      .send({ emailEnabled: false, weeklyDigest: true, quietHoursStart: '07:00' });
+    expect(res.status).toBe(200);
+    expect(store[`users/${USER_SUB}/preferences/notifications`].weeklyDigest).toBe(true);
+  });
+
+  it('returns 400 when no valid fields provided', async () => {
+    const res = await request(app)
+      .put('/preferences/notifications')
+      .set('Authorization', authHeader())
+      .send({ unknownField: 'value' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /preferences/notifications/fcm-tokens', () => {
+  it('registers a push subscription token', async () => {
+    const res = await request(app)
+      .post('/preferences/notifications/fcm-tokens')
+      .set('Authorization', authHeader())
+      .send({ token: 'fcm-token-abc', deviceLabel: 'Chrome on MacBook' });
+    expect(res.status).toBe(201);
+    expect(res.body.registered).toBe(true);
+    const stored = store[`users/${USER_SUB}/preferences/notifications`];
+    expect(stored.fcmTokens.some((t) => t.token === 'fcm-token-abc')).toBe(true);
+  });
+
+  it('returns 400 when neither token nor subscription provided', async () => {
+    const res = await request(app)
+      .post('/preferences/notifications/fcm-tokens')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('DELETE /preferences/notifications/fcm-tokens/:token', () => {
+  it('removes a token', async () => {
+    store[`users/${USER_SUB}/preferences/notifications`] = { fcmTokens: [{ token: 'tok-del', deviceLabel: 'Phone' }] };
+    const res = await request(app)
+      .delete('/preferences/notifications/fcm-tokens/tok-del')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(store[`users/${USER_SUB}/preferences/notifications`].fcmTokens).toHaveLength(0);
+  });
+});
+
+describe('POST /notifications/dispatch', () => {
+  it('returns disabled status when NOTIFICATIONS_ENABLED is not set', async () => {
+    const res = await request(app).post('/notifications/dispatch');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('notifications_disabled');
+  });
+
+  it('processes users and sends digest when NOTIFICATIONS_ENABLED=true', async () => {
+    process.env.NOTIFICATIONS_ENABLED = 'true';
+    // Seed a user doc so collection().get() finds it
+    store[`users/${USER_SUB}`] = { createdAt: new Date().toISOString() };
+    store[`users/${USER_SUB}/preferences/notifications`] = {
+      emailEnabled: true, pushEnabled: false, dailyDigest: true,
+      quietHoursStart: '00:00', quietHoursEnd: '23:59', fcmTokens: [],
+    };
+    store[`users/${USER_SUB}/config/preferences`] = { email: 'test@example.com' };
+    store[plantPath('dispatch-p1')] = { name: 'Fern', frequencyDays: 7, lastWatered: new Date(Date.now() - 8 * 86400000).toISOString() };
+    const res = await request(app).post('/notifications/dispatch');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(typeof res.body.sent).toBe('number');
+    delete process.env.NOTIFICATIONS_ENABLED;
+  });
+
+  it('skips users with no notification preferences', async () => {
+    process.env.NOTIFICATIONS_ENABLED = 'true';
+    // Seed a user doc with no preferences — should be skipped
+    store[`users/${USER_SUB}`] = { createdAt: new Date().toISOString() };
+    const res = await request(app).post('/notifications/dispatch');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(res.body.skipped).toBeGreaterThanOrEqual(1);
+    delete process.env.NOTIFICATIONS_ENABLED;
   });
 });

@@ -12,7 +12,7 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi, reportsApi, marketplaceApi } from '../api/plants.js'
+import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi, reportsApi, marketplaceApi, notificationsApi } from '../api/plants.js'
 import { useHousehold } from '../context/HouseholdContext.jsx'
 import { useProperty } from '../context/PropertyContext.jsx'
 import { useProfile } from '../context/ProfileContext.jsx'
@@ -23,6 +23,7 @@ const TABS = [
   { id: 'household', label: 'Household', icon: 'users', tags: 'household share invite member family roommate partner role viewer editor owner code' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'client-properties', label: 'Properties', icon: 'home', tags: 'properties clients landscaper multi-property client management' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', tags: 'notifications push email reminders watering alerts digest' },
   { id: 'marketplace', label: 'Marketplace', icon: 'package', tags: 'marketplace cuttings swaps community display name contact karma' },
   { id: 'linked-devices', label: 'Linked Devices', icon: 'mic', tags: 'voice alexa google home apple shortcuts assistant linked devices oauth integration' },
   { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
@@ -1241,6 +1242,96 @@ function BrandingTab({ search }) {
   )
 }
 
+function NotificationsTab({ search }) {
+  const [prefs, setPrefs] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    notificationsApi.getPreferences().then(setPrefs).catch((e) => setError(e.message))
+  }, [])
+
+  const handleChange = (key, value) => setPrefs((p) => ({ ...p, [key]: value }))
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const updated = await notificationsApi.updatePreferences(prefs)
+      setPrefs(updated)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const requestPushPermission = async () => {
+    if (!('Notification' in window)) { setError('Push notifications are not supported in this browser.'); return }
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') { setError('Push permission denied.'); return }
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
+      if (!vapidKey) { setError('Push not configured (missing VAPID key).'); return }
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey })
+      await notificationsApi.registerToken({ subscription: JSON.parse(JSON.stringify(sub)), deviceLabel: navigator.userAgent.slice(0, 60) })
+      handleChange('pushEnabled', true)
+    }
+  }
+
+  if (!prefs) return <p className="text-muted fs-sm">Loading…</p>
+
+  return (
+    <div className="settings-section">
+      <h4 className="settings-section-title">Notifications</h4>
+      {error && <div className="alert alert-danger py-2 fs-sm mb-3">{error}</div>}
+      <div className="card mb-3">
+        <div className="card-body">
+          <h6 className="mb-3">Channels</h6>
+          <Form.Check type="switch" id="notif-email" label="Daily digest email" checked={!!prefs.emailEnabled} onChange={(e) => handleChange('emailEnabled', e.target.checked)} className="mb-2" />
+          {prefs.pushEnabled ? (
+            <Form.Check type="switch" id="notif-push" label="Push notifications (enabled)" checked={!!prefs.pushEnabled} onChange={(e) => handleChange('pushEnabled', e.target.checked)} className="mb-2" />
+          ) : (
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <Form.Check type="switch" id="notif-push" label="Push notifications" checked={false} onChange={() => requestPushPermission()} />
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="card mb-3">
+        <div className="card-body">
+          <h6 className="mb-3">Alert types</h6>
+          <Form.Check type="switch" id="notif-daily" label="Daily digest (due plants, overdue count)" checked={!!prefs.dailyDigest} onChange={(e) => handleChange('dailyDigest', e.target.checked)} className="mb-2" />
+          <Form.Check type="switch" id="notif-weekly" label="Weekly digest" checked={!!prefs.weeklyDigest} onChange={(e) => handleChange('weeklyDigest', e.target.checked)} className="mb-2" />
+          <Form.Check type="switch" id="notif-alerts" label="Per-plant alerts (overdue ≥ 3 days, frost/heatwave)" checked={!!prefs.perPlantAlerts} onChange={(e) => handleChange('perPlantAlerts', e.target.checked)} />
+        </div>
+      </div>
+      <div className="card mb-3">
+        <div className="card-body">
+          <h6 className="mb-3">Quiet hours</h6>
+          <div className="row g-2">
+            <div className="col-6">
+              <Form.Label className="fs-xs text-muted mb-1">Start</Form.Label>
+              <Form.Control type="time" size="sm" value={prefs.quietHoursStart || '08:00'} onChange={(e) => handleChange('quietHoursStart', e.target.value)} />
+            </div>
+            <div className="col-6">
+              <Form.Label className="fs-xs text-muted mb-1">End</Form.Label>
+              <Form.Control type="time" size="sm" value={prefs.quietHoursEnd || '20:00'} onChange={(e) => handleChange('quietHoursEnd', e.target.value)} />
+            </div>
+          </div>
+        </div>
+      </div>
+      <Button size="sm" variant="primary" onClick={handleSave} disabled={saving}>
+        {saving ? 'Saving…' : saved ? 'Saved!' : 'Save preferences'}
+      </Button>
+    </div>
+  )
+}
+
 function MarketplaceTab({ search }) {
   const { isGuest } = useAuth()
   const [profile, setProfile] = useState({ displayName: '', contactEmail: '', karma: 0, badges: [] })
@@ -1751,6 +1842,7 @@ export default function SettingsPage() {
         {tab === 'household' && <HouseholdTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
         {tab === 'client-properties' && <ClientPropertiesTab search={search} />}
+        {tab === 'notifications' && <NotificationsTab search={search} />}
         {tab === 'marketplace' && <MarketplaceTab search={search} />}
         {tab === 'linked-devices' && <LinkedDevicesTab search={search} />}
         {tab === 'branding' && <BrandingTab search={search} />}
