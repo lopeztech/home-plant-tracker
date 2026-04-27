@@ -508,6 +508,22 @@ export const rebatesApi = {
   matches: (lat, lng) => request(`/rebates/matches?lat=${lat}&lng=${lng}`),
 }
 
+export const marketplaceApi = {
+  listListings: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null)).toString()
+    return request(`/marketplace/listings${q ? '?' + q : ''}`)
+  },
+  getListing: (id) => request(`/marketplace/listings/${id}`),
+  createListing: (data) => request('/marketplace/listings', { method: 'POST', body: JSON.stringify(data) }),
+  updateListing: (id, data) => request(`/marketplace/listings/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  claimListing: (id) => request(`/marketplace/listings/${id}/claim`, { method: 'POST', body: JSON.stringify({}) }),
+  confirmHandover: (id) => request(`/marketplace/listings/${id}/confirm-handover`, { method: 'POST', body: JSON.stringify({}) }),
+  reportListing: (id, reason) => request(`/marketplace/listings/${id}/report`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  getProfile: (userId) => request(`/marketplace/profile/${userId}`),
+  getMyProfile: () => request('/marketplace/me'),
+  updateMyProfile: (data) => request('/marketplace/me', { method: 'PUT', body: JSON.stringify(data) }),
+}
+
 export const reportsApi = {
   generate: (body) => request('/reports/generate', { method: 'POST', body: JSON.stringify(body) }),
   list: () => request('/reports'),

@@ -6722,6 +6722,307 @@ app.get('/rebates/matches', requireUser, (req, res) => {
   res.status(200).json({ rebates: matches, total: matches.length });
 });
 
+// ── Plant-swap marketplace (#264) ────────────────────────────────────────────
+// UK-only, free listings, postcode-prefix geosearch via postcodes.io.
+// No payments, no in-app chat — users exchange contact via profile fields.
+
+const MARKETPLACE_BLOCKED_WORDS = ['spam', 'scam', 'buy now', 'click here'];
+
+// Haversine distance in km between two lat/lng points
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Lookup outward code (e.g. "SW1A") → { lat, lng } via postcodes.io, cached in Firestore
+async function resolvePostcodeCentroid(outwardCode) {
+  const key = outwardCode.toUpperCase().replace(/\s/g, '');
+  const cacheRef = db.collection('postcodeCentroids').doc(key);
+  const cached = await cacheRef.get();
+  if (cached.exists) return cached.data();
+  const response = await globalThis.fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(key)}`);
+  if (!response.ok) throw new Error(`postcodes.io lookup failed for ${key}`);
+  const { result } = await response.json();
+  if (!result?.latitude) throw new Error(`No centroid for postcode ${key}`);
+  const coords = { lat: result.latitude, lng: result.longitude };
+  await cacheRef.set(coords);
+  return coords;
+}
+
+// Gemini one-shot check: is this a genuine plant listing?
+async function checkIsPlantListing(text) {
+  try {
+    const prompt = `You are a content moderator for a plant-swap marketplace. Read the following listing description and decide if it is a genuine plant cutting, division, seed, or plant offering. Reply with only valid JSON in this format: {"isPlantListing":true|false,"reason":"brief reason"}\n\nListing: ${text.slice(0, 500)}`;
+    const result = await geminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
+    const parsed = parseGeminiJson(result.response.text());
+    return parsed;
+  } catch {
+    return { isPlantListing: true, reason: 'check_unavailable' };
+  }
+}
+
+function hasBlockedWords(text) {
+  const lower = (text || '').toLowerCase();
+  return MARKETPLACE_BLOCKED_WORDS.some((w) => lower.includes(w));
+}
+
+// GET /marketplace/listings — browse with optional filtering
+app.get('/marketplace/listings', async (req, res) => {
+  try {
+    const { outwardCode, radiusKm, species, kind, sort = 'newest' } = req.query;
+    const snap = await db.collection('marketplaceListings')
+      .orderBy('createdAt', 'desc').limit(100).get();
+    let listings = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((l) => l.status === 'active');
+
+    // Geographic filter
+    if (outwardCode) {
+      try {
+        const { lat, lng } = await resolvePostcodeCentroid(outwardCode);
+        const radius = Math.min(Number(radiusKm) || 15, 100);
+        listings = listings.filter((l) => {
+          if (!l.lat || !l.lng) return false;
+          return haversineKm(lat, lng, l.lat, l.lng) <= radius;
+        });
+        if (sort === 'nearest') {
+          listings.sort((a, b) => haversineKm(lat, lng, a.lat, a.lng) - haversineKm(lat, lng, b.lat, b.lng));
+        }
+      } catch {
+        // If postcode lookup fails, return unfiltered
+      }
+    }
+
+    if (species) {
+      const q = species.toLowerCase();
+      listings = listings.filter((l) => (l.species || '').toLowerCase().includes(q));
+    }
+    if (kind) listings = listings.filter((l) => l.kind === kind);
+
+    // Omit sensitive contact info from public listing list
+    listings = listings.map(({ contactEmail: _e, contactPhone: _p, ownerUid: _u, ...safe }) => safe);
+    res.status(200).json({ listings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /marketplace/listings/:id — single listing detail (shows contact info to auth users)
+app.get('/marketplace/listings/:id', softAuth, async (req, res) => {
+  try {
+    const snap = await db.collection('marketplaceListings').doc(req.params.id).get();
+    if (!snap.exists || snap.data().status === 'removed') {
+      return res.status(404).json({ error: 'listing_not_found' });
+    }
+    const listing = { id: snap.id, ...snap.data() };
+    // Only reveal contact info to authenticated users
+    if (!req.userId) {
+      const { contactEmail: _e, contactPhone: _p, ownerUid: _u, ...safe } = listing;
+      return res.status(200).json(safe);
+    }
+    res.status(200).json(listing);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings — create a listing
+app.post('/marketplace/listings', requireUser, async (req, res) => {
+  try {
+    const { species, kind, description, outwardCode, contactEmail, contactPhone, suggestedDonation, imageUrls } = req.body || {};
+    if (!species || !kind || !outwardCode) {
+      return res.status(400).json({ error: 'species, kind, and outwardCode are required' });
+    }
+    const VALID_KINDS = ['cutting', 'division', 'seed', 'mature', 'surplus'];
+    if (!VALID_KINDS.includes(kind)) {
+      return res.status(400).json({ error: `kind must be one of: ${VALID_KINDS.join(', ')}` });
+    }
+    if (!contactEmail && !contactPhone) {
+      return res.status(400).json({ error: 'contactEmail or contactPhone is required' });
+    }
+    if (hasBlockedWords(description)) {
+      return res.status(422).json({ error: 'listing_contains_prohibited_content' });
+    }
+
+    const check = await checkIsPlantListing(`${species} ${description || ''}`);
+    if (!check.isPlantListing) {
+      return res.status(422).json({ error: 'listing_not_recognised_as_plant_offering', reason: check.reason });
+    }
+
+    let lat = null, lng = null;
+    try {
+      const centroid = await resolvePostcodeCentroid(outwardCode);
+      lat = centroid.lat;
+      lng = centroid.lng;
+    } catch {
+      return res.status(400).json({ error: 'invalid_outward_code' });
+    }
+
+    // Load lister's display name
+    const profileRef = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const profileSnap = await profileRef.get();
+    const displayName = profileSnap.exists ? profileSnap.data().displayName : null;
+
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 14 * 86400000).toISOString();
+    const data = {
+      ownerUid: req.userId,
+      ownerDisplayName: displayName || 'Anonymous',
+      species: String(species).trim(),
+      kind,
+      description: description ? String(description).trim() : '',
+      outwardCode: outwardCode.toUpperCase().trim(),
+      lat,
+      lng,
+      contactEmail: contactEmail || null,
+      contactPhone: contactPhone || null,
+      suggestedDonation: suggestedDonation || null,
+      imageUrls: Array.isArray(imageUrls) ? imageUrls.slice(0, 3) : [],
+      status: 'active',
+      reportCount: 0,
+      createdAt: now,
+      expiresAt,
+    };
+    const docRef = await db.collection('marketplaceListings').add(data);
+    res.status(201).json({ id: docRef.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /marketplace/listings/:id — update (owner only)
+app.put('/marketplace/listings/:id', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'listing_not_found' });
+    if (snap.data().ownerUid !== req.userId) return res.status(403).json({ error: 'not_owner' });
+    const { description, contactEmail, contactPhone, suggestedDonation, status } = req.body || {};
+    const update = { updatedAt: new Date().toISOString() };
+    if (description !== undefined) update.description = String(description).trim();
+    if (contactEmail !== undefined) update.contactEmail = contactEmail;
+    if (contactPhone !== undefined) update.contactPhone = contactPhone;
+    if (suggestedDonation !== undefined) update.suggestedDonation = suggestedDonation;
+    if (status === 'claimed' || status === 'active') update.status = status;
+    await ref.set(update, { merge: true });
+    const updated = await ref.get();
+    res.status(200).json({ id: updated.id, ...updated.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings/:id/claim — mark as claimed
+app.post('/marketplace/listings/:id/claim', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists || snap.data().status === 'removed') return res.status(404).json({ error: 'listing_not_found' });
+    if (snap.data().ownerUid === req.userId) return res.status(400).json({ error: 'cannot_claim_own_listing' });
+    await ref.set({ status: 'claimed', claimedByUid: req.userId, claimedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ claimed: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings/:id/confirm-handover — owner confirms listing complete
+app.post('/marketplace/listings/:id/confirm-handover', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'listing_not_found' });
+    if (snap.data().ownerUid !== req.userId) return res.status(403).json({ error: 'not_owner' });
+    const now = new Date().toISOString();
+    await ref.set({ status: 'completed', completedAt: now }, { merge: true });
+    // Award +1 karma to lister
+    const karmaRef = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const kSnap = await karmaRef.get();
+    const current = kSnap.exists ? (kSnap.data().karma || 0) : 0;
+    await karmaRef.set({ karma: current + 1, updatedAt: now }, { merge: true });
+    res.status(200).json({ completed: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings/:id/report — report a listing
+app.post('/marketplace/listings/:id/report', requireUser, async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    const listingRef = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await listingRef.get();
+    if (!snap.exists || snap.data().status === 'removed') return res.status(404).json({ error: 'listing_not_found' });
+
+    const reportId = `${Date.now()}-${req.userId}`;
+    await db.collection('marketplaceReports').doc(reportId).set({
+      listingId: req.params.id, reporterUid: req.userId,
+      reason: reason || 'unspecified', status: 'pending', createdAt: new Date().toISOString(),
+    });
+
+    // Auto-hide at 3 reports
+    const newCount = (snap.data().reportCount || 0) + 1;
+    const update = { reportCount: newCount };
+    if (newCount >= 3) update.status = 'hidden';
+    await listingRef.set(update, { merge: true });
+
+    res.status(201).json({ reported: true, autoHidden: newCount >= 3 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /marketplace/profile/:userId — public profile
+app.get('/marketplace/profile/:userId', async (req, res) => {
+  try {
+    const profileRef = db.collection('users').doc(req.params.userId).collection('marketplaceProfile').doc('profile');
+    const profileSnap = await profileRef.get();
+    const profile = profileSnap.exists ? profileSnap.data() : { karma: 0, badges: [] };
+
+    const listingsSnap = await db.collection('marketplaceListings').orderBy('createdAt', 'desc').limit(20).get();
+    const listings = listingsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((l) => l.ownerUid === req.params.userId && l.status !== 'removed')
+      .map(({ contactEmail: _e, contactPhone: _p, ownerUid: _u, ...safe }) => safe);
+
+    res.status(200).json({ profile: { userId: req.params.userId, ...profile }, listings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET/PUT /marketplace/me — authenticated user's own profile
+app.get('/marketplace/me', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const snap = await ref.get();
+    res.status(200).json(snap.exists ? snap.data() : { karma: 0, badges: [], displayName: null, contactEmail: null, contactPhone: null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/marketplace/me', requireUser, async (req, res) => {
+  try {
+    const { displayName, contactEmail, contactPhone } = req.body || {};
+    const ref = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const now = new Date().toISOString();
+    const update = { updatedAt: now };
+    if (displayName !== undefined) update.displayName = String(displayName).trim().slice(0, 64);
+    if (contactEmail !== undefined) update.contactEmail = contactEmail;
+    if (contactPhone !== undefined) update.contactPhone = contactPhone;
+    await ref.set(update, { merge: true });
+    const updated = await ref.get();
+    res.status(200).json(updated.data());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Plant care report generation (#160) ──────────────────────────────────────
 // Generates per-property PDF care reports using @react-pdf/renderer.
 // Tier gate: home_pro (own household / primary property); landscaper_pro (any property).

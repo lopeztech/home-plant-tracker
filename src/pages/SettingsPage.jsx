@@ -12,7 +12,7 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi, reportsApi } from '../api/plants.js'
+import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi, reportsApi, marketplaceApi } from '../api/plants.js'
 import { useHousehold } from '../context/HouseholdContext.jsx'
 import { useProperty } from '../context/PropertyContext.jsx'
 import { useProfile } from '../context/ProfileContext.jsx'
@@ -23,6 +23,7 @@ const TABS = [
   { id: 'household', label: 'Household', icon: 'users', tags: 'household share invite member family roommate partner role viewer editor owner code' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'client-properties', label: 'Properties', icon: 'home', tags: 'properties clients landscaper multi-property client management' },
+  { id: 'marketplace', label: 'Marketplace', icon: 'package', tags: 'marketplace cuttings swaps community display name contact karma' },
   { id: 'linked-devices', label: 'Linked Devices', icon: 'mic', tags: 'voice alexa google home apple shortcuts assistant linked devices oauth integration' },
   { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
 ]
@@ -1240,6 +1241,77 @@ function BrandingTab({ search }) {
   )
 }
 
+function MarketplaceTab({ search }) {
+  const { isGuest } = useAuth()
+  const [profile, setProfile] = useState({ displayName: '', contactEmail: '', karma: 0, badges: [] })
+  const [loading, setLoading] = useState(!isGuest)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (isGuest) return
+    marketplaceApi.getMyProfile()
+      .then((data) => setProfile((p) => ({ ...p, ...data })))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [isGuest])
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      await marketplaceApi.updateMyProfile({ displayName: profile.displayName, contactEmail: profile.contactEmail })
+      setSaved(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <SettingSection id="marketplace-profile" title="Marketplace Profile" icon="package" search={search}>
+        <p className="text-muted fs-sm mb-3">
+          Your public profile on the <a href="/community" className="text-primary">Community Cuttings Board</a>.
+          Your display name and karma are visible to other gardeners; your contact details are only shown to users you engage with.
+        </p>
+        {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
+        {saved && <div className="alert alert-success py-2 mb-3">Profile saved.</div>}
+        {loading ? (
+          <p className="text-muted fs-sm">Loading…</p>
+        ) : (
+          <>
+            <div className="row g-3 mb-3">
+              <div className="col-12 col-md-4 text-center">
+                <div className="fw-bold display-6 text-primary">{profile.karma || 0}</div>
+                <div className="text-muted fs-xs">Karma</div>
+              </div>
+              <div className="col-12 col-md-8">
+                <Form.Group className="mb-3">
+                  <Form.Label className="fs-sm fw-semibold">Display name</Form.Label>
+                  <Form.Control size="sm" value={profile.displayName || ''} onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value }))}
+                    placeholder="e.g. PlantLover42" maxLength={64} />
+                  <Form.Text className="text-muted fs-xs">Shown on your listings. Leave blank to appear as &quot;Anonymous&quot;.</Form.Text>
+                </Form.Group>
+                <Form.Group className="mb-0">
+                  <Form.Label className="fs-sm fw-semibold">Contact email (for listings)</Form.Label>
+                  <Form.Control type="email" size="sm" value={profile.contactEmail || ''} onChange={(e) => setProfile((p) => ({ ...p, contactEmail: e.target.value }))}
+                    placeholder="you@example.com" />
+                  <Form.Text className="text-muted fs-xs">Shown on your active listings so collectors can reach you.</Form.Text>
+                </Form.Group>
+              </div>
+            </div>
+            <Button size="sm" variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</Button>
+          </>
+        )}
+      </SettingSection>
+    </>
+  )
+}
+
 const VOICE_CLIENTS = [
   { id: 'alexa.lopezcloud.dev',          name: 'Amazon Alexa',    icon: 'mic' },
   { id: 'google-home.lopezcloud.dev',    name: 'Google Home',     icon: 'mic' },
@@ -1679,6 +1751,7 @@ export default function SettingsPage() {
         {tab === 'household' && <HouseholdTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
         {tab === 'client-properties' && <ClientPropertiesTab search={search} />}
+        {tab === 'marketplace' && <MarketplaceTab search={search} />}
         {tab === 'linked-devices' && <LinkedDevicesTab search={search} />}
         {tab === 'branding' && <BrandingTab search={search} />}
       </div>

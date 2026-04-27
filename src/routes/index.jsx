@@ -28,6 +28,8 @@ const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
 const SitPage = lazy(() => import('../pages/SitPage.jsx'))
 const RebatesPage = lazy(() => import('../pages/RebatesPage.jsx'))
 const GiftPage = lazy(() => import('../pages/GiftPage.jsx'))
+const CommunityPage = lazy(() => import('../pages/CommunityPage.jsx'))
+const CommunityGuidelinesPage = lazy(() => import('../pages/CommunityGuidelinesPage.jsx'))
 
 export const routes = [
   {
@@ -39,6 +41,7 @@ export const routes = [
       { path: '/scan/:shortCode', element: <Suspense fallback={null}><ScanPage /></Suspense> },
       { path: '/portal/:token', element: <Suspense fallback={null}><PortalPage /></Suspense> },
       { path: '/sit/:token', element: <Suspense fallback={null}><SitPage /></Suspense> },
+      { path: '/community-guidelines', element: <Suspense fallback={null}><CommunityGuidelinesPage /></Suspense> },
       {
         element: <AuthLayout />,
         children: [
@@ -68,6 +71,7 @@ export const routes = [
           { path: 'admin/:tab', element: <AdminPage />, handle: { breadcrumb: 'Admin' } },
           { path: 'pricing', element: <PricingPage />, handle: { breadcrumb: 'Pricing' } },
           { path: 'rebates', element: <Suspense fallback={null}><RebatesPage /></Suspense>, handle: { breadcrumb: 'Rebates & Grants' } },
+          { path: 'community', element: <Suspense fallback={null}><CommunityPage /></Suspense>, handle: { breadcrumb: 'Community' } },
         ],
       },
     ],

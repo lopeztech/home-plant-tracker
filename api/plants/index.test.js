@@ -7833,3 +7833,294 @@ describe('GET /reports/:reportId/download', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ── Marketplace (#264) ────────────────────────────────────────────────────────
+
+// Seed a postcodes.io cache entry so tests don't need to hit the network
+const POSTCODE_CACHE_KEY = 'SW1A';
+
+beforeEach(() => {
+  store[`postcodeCentroids/${POSTCODE_CACHE_KEY}`] = { lat: 51.5, lng: -0.13 };
+});
+
+describe('POST /marketplace/listings', () => {
+  it('creates a listing and returns 201', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => '{"isPlantListing":true,"reason":"plant offering"}' } });
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Monstera deliciosa', kind: 'cutting', outwardCode: 'SW1A', contactEmail: 'test@test.com', description: 'Healthy cutting' });
+    expect(res.status).toBe(201);
+    expect(res.body.species).toBe('Monstera deliciosa');
+    expect(res.body.kind).toBe('cutting');
+    expect(res.body.outwardCode).toBe('SW1A');
+    expect(res.body.status).toBe('active');
+    expect(res.body.lat).toBe(51.5);
+  });
+
+  it('returns 422 when Gemini rejects as non-plant listing', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => '{"isPlantListing":false,"reason":"unrelated content"}' } });
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Not a plant', kind: 'cutting', outwardCode: 'SW1A', contactEmail: 'x@x.com' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('listing_not_recognised_as_plant_offering');
+  });
+
+  it('returns 422 for blocked word in description', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Pothos', kind: 'cutting', outwardCode: 'SW1A', contactEmail: 'x@x.com', description: 'click here to buy now' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('listing_contains_prohibited_content');
+  });
+
+  it('returns 400 when required fields missing', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ kind: 'cutting' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when no contact info provided', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => '{"isPlantListing":true}' } });
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Fern', kind: 'cutting', outwardCode: 'SW1A' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/contact/i);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/marketplace/listings').send({ species: 'x', kind: 'cutting', outwardCode: 'SW1A' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /marketplace/listings', () => {
+  beforeEach(() => {
+    store['marketplaceListings/l1'] = { species: 'Monstera', kind: 'cutting', outwardCode: 'SW1A', lat: 51.5, lng: -0.13, status: 'active', contactEmail: 'secret@x.com', ownerUid: 'other-user', createdAt: new Date().toISOString() };
+    store['marketplaceListings/l2'] = { species: 'Pothos', kind: 'seed', outwardCode: 'EC1A', lat: 51.52, lng: -0.10, status: 'active', contactEmail: 'secret2@x.com', ownerUid: 'other-user', createdAt: new Date().toISOString() };
+  });
+
+  it('returns active listings without contact info', async () => {
+    const res = await request(app).get('/marketplace/listings');
+    expect(res.status).toBe(200);
+    expect(res.body.listings).toHaveLength(2);
+    expect(res.body.listings[0].contactEmail).toBeUndefined();
+    expect(res.body.listings[0].ownerUid).toBeUndefined();
+  });
+
+  it('filters by kind', async () => {
+    const res = await request(app).get('/marketplace/listings?kind=cutting');
+    expect(res.status).toBe(200);
+    expect(res.body.listings.every((l) => l.kind === 'cutting')).toBe(true);
+  });
+
+  it('filters by species (case-insensitive)', async () => {
+    const res = await request(app).get('/marketplace/listings?species=monstera');
+    expect(res.status).toBe(200);
+    expect(res.body.listings).toHaveLength(1);
+    expect(res.body.listings[0].species).toBe('Monstera');
+  });
+});
+
+describe('POST /marketplace/listings/:id/report — auto-hide at 3 reports', () => {
+  beforeEach(() => {
+    store['marketplaceListings/r-list'] = { species: 'Fern', kind: 'cutting', outwardCode: 'SW1A', status: 'active', reportCount: 0, ownerUid: 'not-me', createdAt: new Date().toISOString() };
+  });
+
+  it('increments reportCount', async () => {
+    const res = await request(app).post('/marketplace/listings/r-list/report').set('Authorization', authHeader()).send({ reason: 'spam' });
+    expect(res.status).toBe(201);
+    expect(store['marketplaceListings/r-list'].reportCount).toBe(1);
+    expect(res.body.autoHidden).toBe(false);
+  });
+
+  it('auto-hides listing when reportCount reaches 3', async () => {
+    store['marketplaceListings/r-list'].reportCount = 2;
+    const res = await request(app).post('/marketplace/listings/r-list/report').set('Authorization', authHeader()).send({ reason: 'spam' });
+    expect(res.status).toBe(201);
+    expect(res.body.autoHidden).toBe(true);
+    expect(store['marketplaceListings/r-list'].status).toBe('hidden');
+  });
+});
+
+describe('GET /marketplace/profile/:userId', () => {
+  it('returns public profile and listings', async () => {
+    store[`users/pub-user/marketplaceProfile/profile`] = { displayName: 'GardenFan', karma: 3, badges: [] };
+    store['marketplaceListings/pub-l'] = { species: 'Cactus', kind: 'cutting', outwardCode: 'N1', status: 'active', ownerUid: 'pub-user', contactEmail: 'x@x.com', createdAt: new Date().toISOString() };
+    const res = await request(app).get('/marketplace/profile/pub-user');
+    expect(res.status).toBe(200);
+    expect(res.body.profile.karma).toBe(3);
+    expect(res.body.listings.some((l) => l.species === 'Cactus')).toBe(true);
+    expect(res.body.listings[0].contactEmail).toBeUndefined();
+  });
+});
+
+describe('GET /marketplace/me and PUT /marketplace/me', () => {
+  it('returns empty profile for new user', async () => {
+    const res = await request(app).get('/marketplace/me').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.karma).toBe(0);
+  });
+
+  it('updates display name', async () => {
+    const res = await request(app).put('/marketplace/me').set('Authorization', authHeader()).send({ displayName: 'LeafLover', contactEmail: 'leaf@x.com' });
+    expect(res.status).toBe(200);
+    expect(store[`users/${USER_SUB}/marketplaceProfile/profile`].displayName).toBe('LeafLover');
+  });
+});
+
+describe('GET /marketplace/listings/:id — single listing', () => {
+  beforeEach(() => {
+    store['marketplaceListings/detail-1'] = {
+      species: 'Aloe vera', kind: 'cutting', outwardCode: 'N1',
+      status: 'active', contactEmail: 'owner@example.com', ownerUid: 'other-user',
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('hides contact info for unauthenticated request', async () => {
+    const res = await request(app).get('/marketplace/listings/detail-1');
+    expect(res.status).toBe(200);
+    expect(res.body.species).toBe('Aloe vera');
+    expect(res.body.contactEmail).toBeUndefined();
+    expect(res.body.ownerUid).toBeUndefined();
+  });
+
+  it('reveals contact info for authenticated request', async () => {
+    const res = await request(app).get('/marketplace/listings/detail-1').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.contactEmail).toBe('owner@example.com');
+  });
+
+  it('returns 404 for unknown listing', async () => {
+    const res = await request(app).get('/marketplace/listings/no-such-listing');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('PUT /marketplace/listings/:id — owner update', () => {
+  beforeEach(() => {
+    store['marketplaceListings/edit-1'] = {
+      species: 'Ficus', kind: 'cutting', outwardCode: 'SW1A',
+      status: 'active', contactEmail: 'owner@example.com',
+      ownerUid: USER_SUB, createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('owner can update description and status', async () => {
+    const res = await request(app)
+      .put('/marketplace/listings/edit-1')
+      .set('Authorization', authHeader())
+      .send({ description: 'Updated description', status: 'claimed' });
+    expect(res.status).toBe(200);
+    expect(res.body.description).toBe('Updated description');
+    expect(res.body.status).toBe('claimed');
+  });
+
+  it('returns 403 when not the owner', async () => {
+    const res = await request(app)
+      .put('/marketplace/listings/edit-1')
+      .set('Authorization', authHeader('other-person'))
+      .send({ description: 'Nope' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('not_owner');
+  });
+
+  it('returns 404 when listing does not exist', async () => {
+    const res = await request(app)
+      .put('/marketplace/listings/nonexistent')
+      .set('Authorization', authHeader())
+      .send({ description: 'Test' });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /marketplace/listings/:id/claim', () => {
+  beforeEach(() => {
+    store['marketplaceListings/claim-1'] = {
+      species: 'Succulent', kind: 'cutting', outwardCode: 'EC1A',
+      status: 'active', contactEmail: 'x@x.com', ownerUid: 'another-owner',
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('marks listing as claimed', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/claim-1/claim')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.claimed).toBe(true);
+    expect(store['marketplaceListings/claim-1'].status).toBe('claimed');
+    expect(store['marketplaceListings/claim-1'].claimedByUid).toBe(USER_SUB);
+  });
+
+  it('returns 400 when owner tries to claim own listing', async () => {
+    store['marketplaceListings/claim-1'].ownerUid = USER_SUB;
+    const res = await request(app)
+      .post('/marketplace/listings/claim-1/claim')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('cannot_claim_own_listing');
+  });
+
+  it('returns 404 for removed listing', async () => {
+    store['marketplaceListings/claim-1'].status = 'removed';
+    const res = await request(app)
+      .post('/marketplace/listings/claim-1/claim')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /marketplace/listings/:id/confirm-handover', () => {
+  beforeEach(() => {
+    store['marketplaceListings/handover-1'] = {
+      species: 'Begonia', kind: 'division', outwardCode: 'W1A',
+      status: 'claimed', contactEmail: 'x@x.com', ownerUid: USER_SUB,
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('owner confirms handover and receives +1 karma', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/handover-1/confirm-handover')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.completed).toBe(true);
+    expect(store['marketplaceListings/handover-1'].status).toBe('completed');
+    expect(store[`users/${USER_SUB}/marketplaceProfile/profile`].karma).toBe(1);
+  });
+
+  it('returns 403 when not the owner', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/handover-1/confirm-handover')
+      .set('Authorization', authHeader('not-owner'));
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 for unknown listing', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/no-such/confirm-handover')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /voice/plants/:nameOrFuzzy/status — watered today branch', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('reports watered today when daysAgo is 0', async () => {
+    const bearer = await makeVoiceBearer();
+    store[plantPath('p-today')] = { name: 'Jade plant', health: 'Excellent', room: 'Kitchen', lastWatered: new Date().toISOString() };
+    const res = await request(app).get('/voice/plants/Jade plant/status').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatch(/watered today/i);
+  });
+});
