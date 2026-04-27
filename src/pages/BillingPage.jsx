@@ -1,8 +1,8 @@
-import { useState } from 'react'
-import { Button, ProgressBar, Alert, Row, Col } from 'react-bootstrap'
+import { useState, useEffect } from 'react'
+import { Button, ProgressBar, Alert, Row, Col, Form, Badge } from 'react-bootstrap'
 import { Link } from 'react-router'
 import { useSubscription } from '../context/SubscriptionContext.jsx'
-import { billingApi } from '../api/plants.js'
+import { billingApi, giftsApi } from '../api/plants.js'
 import { useToast } from '../components/Toast.jsx'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
 
@@ -29,10 +29,51 @@ function Quota({ label, used, limit, unit }) {
   )
 }
 
+function GiftStatusBadge({ status }) {
+  const map = { active: 'success', redeemed: 'secondary', expired: 'warning', refunded: 'danger' }
+  return <Badge bg={map[status] || 'secondary'}>{status}</Badge>
+}
+
 export default function BillingPage() {
   const { billingEnabled, tier, status, currentPeriodEnd, cancelAtPeriodEnd, hasStripeCustomer, isTrial, quotas, usage, refresh } = useSubscription()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
+  const [redeemCode, setRedeemCode] = useState('')
+  const [redeemBusy, setRedeemBusy] = useState(false)
+  const [redeemError, setRedeemError] = useState(null)
+  const [sentGifts, setSentGifts] = useState(null)
+  const [giftsLoading, setGiftsLoading] = useState(false)
+
+  useEffect(() => {
+    setGiftsLoading(true)
+    giftsApi.mine()
+      .then((r) => setSentGifts(r.sent || []))
+      .catch(() => setSentGifts([]))
+      .finally(() => setGiftsLoading(false))
+  }, [])
+
+  const redeem = async (e) => {
+    e.preventDefault()
+    if (!redeemCode.trim()) return
+    setRedeemBusy(true)
+    setRedeemError(null)
+    try {
+      await giftsApi.redeem(redeemCode.trim())
+      toast.success('Gift redeemed! Your plan has been upgraded.')
+      setRedeemCode('')
+      refresh()
+    } catch (err) {
+      const messages = {
+        invalid_code: 'That code doesn\'t match any gift. Check for typos.',
+        gift_already_redeemed: 'This gift has already been redeemed.',
+        gift_expired: 'This gift code has expired.',
+        gift_not_for_this_account: 'This gift was sent to a different email address.',
+      }
+      setRedeemError(messages[err.message] || friendlyErrorMessage(err, { context: 'redeeming gift' }))
+    } finally {
+      setRedeemBusy(false)
+    }
+  }
 
   const manage = async () => {
     setBusy(true)
@@ -114,6 +155,58 @@ export default function BillingPage() {
               <Quota label="AI analyses this month" used={usage.ai_analyses} limit={quotas.ai_analyses} />
               <Quota label="Photo storage" used={usage.photo_storage_mb} limit={quotas.photo_storage_mb} unit="MB" />
               <Button variant="link" size="sm" onClick={refresh} className="p-0">Refresh</Button>
+            </div>
+          </div>
+        </Col>
+      </Row>
+
+      <Row className="mt-2">
+        <Col md={6} className="mb-4">
+          <div className="card h-100">
+            <div className="card-body">
+              <h2 className="h5 mb-1">Redeem a gift</h2>
+              <p className="text-muted small mb-3">Enter the XXXX-XXXX-XXXX code from a gift.</p>
+              {redeemError && <Alert variant="danger" className="py-2">{redeemError}</Alert>}
+              <Form onSubmit={redeem} className="d-flex gap-2">
+                <Form.Control
+                  type="text"
+                  placeholder="XXXX-XXXX-XXXX"
+                  value={redeemCode}
+                  onChange={(e) => setRedeemCode(e.target.value)}
+                  style={{ fontFamily: 'monospace', letterSpacing: '0.05em' }}
+                  maxLength={14}
+                />
+                <Button type="submit" variant="primary" disabled={redeemBusy || !redeemCode.trim()}>
+                  {redeemBusy ? '…' : 'Redeem'}
+                </Button>
+              </Form>
+            </div>
+          </div>
+        </Col>
+        <Col md={6} className="mb-4">
+          <div className="card h-100">
+            <div className="card-body">
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <h2 className="h5 mb-0">Gifts sent</h2>
+                <Button as={Link} to="/gift" size="sm" variant="outline-primary">Buy a gift</Button>
+              </div>
+              {giftsLoading ? (
+                <div className="text-muted small">Loading…</div>
+              ) : !sentGifts || sentGifts.length === 0 ? (
+                <p className="text-muted small mb-0">No gifts sent yet.</p>
+              ) : (
+                <ul className="list-unstyled mb-0">
+                  {sentGifts.map((g) => (
+                    <li key={g.id || g.giftId} className="d-flex justify-content-between align-items-center mb-2 fs-sm">
+                      <span>
+                        {g.recipientName || g.recipientEmail || 'Open gift'}{' '}
+                        <span className="text-muted">({g.durationMonths}mo)</span>
+                      </span>
+                      <GiftStatusBadge status={g.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </Col>

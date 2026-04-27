@@ -6863,6 +6863,106 @@ describe('POST /materials', () => {
   });
 });
 
+describe('POST /gifts/purchase', () => {
+  it('returns 503 when billing is disabled', async () => {
+    const res = await request(app)
+      .post('/gifts/purchase')
+      .set('Authorization', authHeader())
+      .send({ durationMonths: 3 });
+    expect(res.status).toBe(503);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/gifts/purchase').send({ durationMonths: 3 });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 for an invalid durationMonths', async () => {
+    const res = await request(app)
+      .post('/gifts/purchase')
+      .set('Authorization', authHeader())
+      .send({ durationMonths: 6 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/durationMonths/);
+  });
+});
+
+describe('POST /gifts/redeem', () => {
+  it('returns 400 when code is missing', async () => {
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for a non-existent code', async () => {
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({ code: 'XXXX-XXXX-XXXX' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('invalid_code');
+  });
+
+  it('redeems a valid active gift and upgrades subscription', async () => {
+    const code = 'ABCD-EFGH-JKMN';
+    const codeHashed = require('crypto').createHash('sha256').update(code.replace(/-/g, '').trim()).digest('hex');
+    const giftId = 'gift-test-1';
+    store[`gifts/${giftId}`] = {
+      code, codeHashed, purchaserUid: 'other-user',
+      tier: 'home_pro', durationMonths: 3,
+      status: 'active', purchasedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 1e10).toISOString(),
+      recipientEmail: null,
+    };
+    store[`giftCodeHashes/${codeHashed}`] = { giftId };
+    store[`users/other-user/giftsSent/${giftId}`] = { giftId, status: 'active', durationMonths: 3 };
+
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({ code });
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe('home_pro');
+    expect(res.body.trialEnd).toBeDefined();
+
+    const sub = store[`users/${USER_SUB}/subscription/current`];
+    expect(sub.isTrial).toBe(true);
+    expect(sub.trialTier).toBe('home_pro');
+    expect(sub.giftRedemptionId).toBe(giftId);
+
+    const updatedGift = store[`gifts/${giftId}`];
+    expect(updatedGift.status).toBe('redeemed');
+    expect(updatedGift.redeemedByUid).toBe(USER_SUB);
+  });
+
+  it('returns 409 when the gift is already redeemed', async () => {
+    const code = 'AAAA-BBBB-CCCC';
+    const codeHashed = require('crypto').createHash('sha256').update(code.replace(/-/g, '').trim()).digest('hex');
+    const giftId = 'gift-redeemed-1';
+    store[`gifts/${giftId}`] = {
+      code, codeHashed, status: 'redeemed',
+      tier: 'home_pro', durationMonths: 3,
+      purchasedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 1e10).toISOString(),
+    };
+    store[`giftCodeHashes/${codeHashed}`] = { giftId };
+
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({ code });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('gift_already_redeemed');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/gifts/redeem').send({ code: 'AAAA-BBBB-CCCC' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('PUT /materials/:id', () => {
   it('updates material metadata', async () => {
     store[matPath('mat1')] = { name: 'Old name', unit: 'g', onHand: 100, reorderThreshold: 10, reorderQty: 20, archived: false };
@@ -7098,6 +7198,35 @@ describe('GET /materials — propertyId scoping (billing enabled)', () => {
     expect(res.status).toBe(200);
     expect(res.body.materials).toHaveLength(1);
     expect(res.body.materials[0].name).toBe('Site supply');
+  });
+});
+
+// ── Gift subscriptions ────────────────────────────────────────────────────────
+
+describe('GET /gifts/mine', () => {
+  beforeEach(() => {
+    store[`users/${USER_SUB}/giftsSent/gift-a`] = {
+      giftId: 'gift-a', status: 'active', tier: 'home_pro',
+      durationMonths: 3, recipientEmail: 'friend@example.com', purchasedAt: '2026-04-01T00:00:00Z',
+    };
+    store[`users/${USER_SUB}/giftsSent/gift-b`] = {
+      giftId: 'gift-b', status: 'redeemed', tier: 'home_pro',
+      durationMonths: 12, recipientEmail: null, purchasedAt: '2026-03-01T00:00:00Z',
+    };
+  });
+
+  it('returns sent gifts for the authenticated user', async () => {
+    const res = await request(app)
+      .get('/gifts/mine')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.sent)).toBe(true);
+    expect(res.body.sent.length).toBe(2);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/gifts/mine');
+    expect(res.status).toBe(401);
   });
 });
 

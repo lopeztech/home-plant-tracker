@@ -27,12 +27,14 @@ const MaterialsPage = lazy(() => import('../pages/MaterialsPage.jsx'))
 const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
 const SitPage = lazy(() => import('../pages/SitPage.jsx'))
 const RebatesPage = lazy(() => import('../pages/RebatesPage.jsx'))
+const GiftPage = lazy(() => import('../pages/GiftPage.jsx'))
 
 export const routes = [
   {
     element: <App />,
     children: [
       { path: '/privacy', element: <Suspense fallback={null}><PrivacyPage /></Suspense> },
+      { path: '/gift', element: <Suspense fallback={null}><GiftPage /></Suspense> },
       { path: '/terms', element: <Suspense fallback={null}><TermsPage /></Suspense> },
       { path: '/scan/:shortCode', element: <Suspense fallback={null}><ScanPage /></Suspense> },
       { path: '/portal/:token', element: <Suspense fallback={null}><PortalPage /></Suspense> },
