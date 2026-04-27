@@ -174,7 +174,7 @@ export function isPlantDormant(plant) {
   return plant.currentPhase === 'dormant'
 }
 
-export function getWateringStatus(plant, weather = null, floors = [], timezone = null) {
+export function getWateringStatus(plant, weather = null, floors = [], timezone = null, now = new Date()) {
   // Dormant plants: suppress overdue flag entirely
   if (isPlantDormant(plant)) {
     const season = getSeason(weather?.location?.lat ?? null)
@@ -277,7 +277,7 @@ export function getWateringStatus(plant, weather = null, floors = [], timezone =
   const last      = new Date(plant.lastWatered)
   const next      = new Date(last.getTime() + effective * 86400000)
   // Compare as day strings in the user's timezone so the boundary doesn't shift with UTC offset
-  const todayStr  = localDateStr(new Date(), tz)
+  const todayStr  = localDateStr(now, tz)
   const nextStr   = localDateStr(next, tz)
   const daysUntil = Math.round((new Date(nextStr) - new Date(todayStr)) / 86400000)
 

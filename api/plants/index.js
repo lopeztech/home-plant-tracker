@@ -656,6 +656,287 @@ app.get('/billing/subscription', requireUser, async (req, res) => {
   }
 });
 
+// ── Climate lookup ────────────────────────────────────────────────────────────
+
+const CLIMATE_CACHE_TTL_DAYS = 90;
+const { classifyKoppen, deriveFrostDates } = require('./climate');
+
+// Fetch 10 years of daily climate data from Open-Meteo archive API.
+async function fetchOpenMeteoClimate(lat, lng) {
+  const endYear = new Date().getFullYear() - 1;
+  const startYear = endYear - 9;
+  const url = new URL('https://archive-api.open-meteo.com/v1/archive');
+  url.searchParams.set('latitude', lat.toFixed(4));
+  url.searchParams.set('longitude', lng.toFixed(4));
+  url.searchParams.set('start_date', `${startYear}-01-01`);
+  url.searchParams.set('end_date', `${endYear}-12-31`);
+  url.searchParams.set('daily', 'temperature_2m_mean,temperature_2m_min,precipitation_sum');
+  url.searchParams.set('timezone', 'UTC');
+
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Open-Meteo archive API error: ${res.status}`);
+  const data = await res.json();
+
+  const times = data.daily.time;
+  const means = data.daily.temperature_2m_mean;
+  const mins  = data.daily.temperature_2m_min;
+  const precs = data.daily.precipitation_sum;
+
+  // Aggregate into monthly normals (12 months)
+  const monthMeanSums = Array(12).fill(0);
+  const monthMeanCounts = Array(12).fill(0);
+  const monthPrecipSums = Array(12).fill(0);
+  const dailyRecords = [];
+
+  for (let i = 0; i < times.length; i++) {
+    const m = parseInt(times[i].slice(5, 7), 10) - 1; // 0-indexed
+    if (means[i] != null) {
+      monthMeanSums[m] += means[i];
+      monthMeanCounts[m]++;
+    }
+    if (precs[i] != null) monthPrecipSums[m] += precs[i] / 10; // accumulate then average later
+    if (mins[i] != null) dailyRecords.push({ date: times[i], minTemp: mins[i] });
+  }
+
+  // Monthly means (°C) and avg monthly precipitation (mm)
+  const monthlyMeans = monthMeanSums.map((s, i) => monthMeanCounts[i] > 0 ? +(s / monthMeanCounts[i]).toFixed(1) : 0);
+  // monthPrecipSums divided by number of years gives avg annual precip per month
+  const numYears = endYear - startYear + 1;
+  const monthlyPrecip = monthPrecipSums.map(s => +(s / numYears).toFixed(1));
+
+  const koppen = classifyKoppen(monthlyMeans, monthlyPrecip);
+  const { lastFrostMonthDay, firstFrostMonthDay } = deriveFrostDates(dailyRecords);
+
+  return { koppen, lastFrostMonthDay, firstFrostMonthDay, monthlyMeans, monthlyPrecip };
+}
+
+app.get('/climate/lookup', async (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+  if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat and lng are required' });
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'lat/lng out of range' });
+  }
+
+  const cellKey = `${lat.toFixed(1)},${lng.toFixed(1)}`;
+  try {
+    const cacheRef = db.collection('climateCache').doc(cellKey);
+    const cacheDoc = await cacheRef.get();
+    if (cacheDoc.exists) {
+      const cached = cacheDoc.data();
+      const ageMs = Date.now() - new Date(cached.updatedAt).getTime();
+      if (ageMs < CLIMATE_CACHE_TTL_DAYS * 86400000) {
+        return res.status(200).json({
+          koppen:             cached.koppen,
+          lastFrostMonthDay:  cached.lastFrostMonthDay,
+          firstFrostMonthDay: cached.firstFrostMonthDay,
+          monthlyMeans:       cached.monthlyMeans,
+          monthlyPrecip:      cached.monthlyPrecip,
+          cached:             true,
+        });
+      }
+    }
+
+    const climate = await fetchOpenMeteoClimate(lat, lng);
+    await cacheRef.set({ ...climate, updatedAt: new Date().toISOString() });
+    res.status(200).json({ ...climate, cached: false });
+  } catch (err) {
+    log.error('climate_lookup_failed', { cellKey, error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const PLANT_COMPATIBILITY_SCHEMA = {
+  type: SchemaType.OBJECT,
+  properties: {
+    verdict:          { type: SchemaType.STRING },
+    overwinterAdvice: { type: SchemaType.STRING },
+  },
+  required: ['verdict'],
+};
+
+app.get('/climate/plant-compatibility', requireUser, async (req, res) => {
+  const { species, lat: latStr, lng: lngStr } = req.query;
+  if (!species) return res.status(400).json({ error: 'species is required' });
+  const lat = parseFloat(latStr);
+  const lng = parseFloat(lngStr);
+  if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat and lng are required' });
+
+  try {
+    // Reuse climate lookup (cached path is fast)
+    const cellKey = `${lat.toFixed(1)},${lng.toFixed(1)}`;
+    let climate;
+    const cacheDoc = await db.collection('climateCache').doc(cellKey).get();
+    if (cacheDoc.exists) {
+      const cached = cacheDoc.data();
+      const ageMs = Date.now() - new Date(cached.updatedAt).getTime();
+      if (ageMs < CLIMATE_CACHE_TTL_DAYS * 86400000) {
+        climate = cached;
+      }
+    }
+    if (!climate) {
+      climate = await fetchOpenMeteoClimate(lat, lng);
+      await db.collection('climateCache').doc(cellKey).set({ ...climate, updatedAt: new Date().toISOString() });
+    }
+
+    const prompt = `Given that a ${species} plant is growing in a climate with Köppen code "${climate.koppen}", ` +
+      `last spring frost around ${climate.lastFrostMonthDay || 'unknown'} and ` +
+      `first autumn frost around ${climate.firstFrostMonthDay || 'unknown'}, ` +
+      `assess whether this species is likely to survive outdoors year-round in this climate. ` +
+      `Reply with a JSON object: { "verdict": "hardy" | "tender" | "unsuitable", "overwinterAdvice": "one-sentence advice if tender or unsuitable" }.`;
+
+    const result = await geminiWithRetry({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        maxOutputTokens: 256,
+        temperature: 0.2,
+        responseMimeType: 'application/json',
+        responseSchema: PLANT_COMPATIBILITY_SCHEMA,
+      },
+    });
+
+    const parsed = parseGeminiJson(result.response.text());
+
+    // Cache on the plant if plantId is provided
+    if (req.query.plantId) {
+      const locationStamp = `${lat.toFixed(1)},${lng.toFixed(1)}`;
+      await userPlants(req.userId).doc(req.query.plantId).set(
+        { compatibility: { ...parsed, koppen: climate.koppen, locationStamp, updatedAt: new Date().toISOString() } },
+        { merge: true },
+      );
+    }
+
+    res.status(200).json({ ...parsed, koppen: climate.koppen });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
+// ── Companion planting ────────────────────────────────────────────────────────
+
+const COMPANIONS_DATA = require('./companions-data');
+
+app.get('/companions', (_req, res) => {
+  res.status(200).json(COMPANIONS_DATA);
+});
+
+// Look up the companion effect between two crop IDs. Keys are stored in both
+// directions (a:b and b:a are equivalent), so we check both orderings.
+function getCompanionEffect(pairings, cropA, cropB) {
+  return pairings[`${cropA}:${cropB}`] ?? pairings[`${cropB}:${cropA}`] ?? null;
+}
+
+app.post('/plants/:id/bed-placement', requireUser, async (req, res) => {
+  const { roomId, cellX, cellY, cellWidth = 1, cellHeight = 1 } = req.body;
+  if (!roomId || cellX == null || cellY == null) {
+    return res.status(400).json({ error: 'roomId, cellX, and cellY are required' });
+  }
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const bedPlacement = {
+      roomId, cellX, cellY,
+      cellWidth: Math.max(1, cellWidth),
+      cellHeight: Math.max(1, cellHeight),
+      plantedAt: new Date().toISOString(),
+    };
+    await ref.set({ bedPlacement, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ bedPlacement });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/plants/:id/bed-placement', requireUser, async (req, res) => {
+  try {
+    const ref = userPlants(req.userId).doc(req.params.id);
+    const doc = await ref.get();
+    if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
+    const data = doc.data();
+    delete data.bedPlacement;
+    data.updatedAt = new Date().toISOString();
+    await ref.set(data);
+    res.status(204).end();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/config/beds/:roomId/compatibility', requireUser, async (req, res) => {
+  const { roomId } = req.params;
+  try {
+    const snap = await userPlants(req.userId)
+      .get();
+    const placed = snap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.bedPlacement?.roomId === roomId);
+
+    const pairings = COMPANIONS_DATA.pairings;
+    const crops    = COMPANIONS_DATA.crops;
+
+    // Build a map from cell key to placed plant for quick adjacency lookup
+    const cellMap = {};
+    for (const p of placed) {
+      const bp = p.bedPlacement;
+      for (let dx = 0; dx < (bp.cellWidth || 1); dx++) {
+        for (let dy = 0; dy < (bp.cellHeight || 1); dy++) {
+          cellMap[`${bp.cellX + dx},${bp.cellY + dy}`] = p;
+        }
+      }
+    }
+
+    const cells = placed.map(plant => {
+      const bp = plant.bedPlacement;
+      const speciesKey = (plant.species || plant.name || '').toLowerCase().split(/\s+/)[0];
+      const warnings = [];
+      const compatible = [];
+
+      // Check all 8 neighbours
+      const neighbours = new Set();
+      for (let dx = -1; dx <= bp.cellWidth; dx++) {
+        for (let dy = -1; dy <= bp.cellHeight; dy++) {
+          if (dx >= 0 && dx < bp.cellWidth && dy >= 0 && dy < bp.cellHeight) continue;
+          const n = cellMap[`${bp.cellX + dx},${bp.cellY + dy}`];
+          if (n && n.id !== plant.id) neighbours.add(n);
+        }
+      }
+
+      let worstEffect = 'neutral';
+      for (const n of neighbours) {
+        const nKey = (n.species || n.name || '').toLowerCase().split(/\s+/)[0];
+        const pair = getCompanionEffect(pairings, speciesKey, nKey);
+        if (pair?.effect === 'bad') {
+          worstEffect = 'bad';
+          warnings.push(`${n.name || n.species} — ${pair.why}`);
+        } else if (pair?.effect === 'good' && worstEffect !== 'bad') {
+          worstEffect = 'good';
+          compatible.push(`${n.name || n.species} — ${pair.why}`);
+        }
+      }
+
+      const cropInfo = crops[speciesKey];
+      return {
+        plantId: plant.id,
+        plantName: plant.name || plant.species,
+        species: plant.species,
+        cellX: bp.cellX,
+        cellY: bp.cellY,
+        cellWidth: bp.cellWidth || 1,
+        cellHeight: bp.cellHeight || 1,
+        compatibility: worstEffect,
+        warnings,
+        compatible,
+        recommendedSpacingCm: cropInfo?.spacing_cm ?? null,
+      };
+    });
+
+    res.status(200).json({ roomId, cells });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Health ────────────────────────────────────────────────────────────────────
 
 app.get('/health', (req, res) => {

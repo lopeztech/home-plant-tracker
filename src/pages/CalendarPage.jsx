@@ -1,9 +1,11 @@
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Button, Badge } from 'react-bootstrap'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { getWateringStatus, localDateStr } from '../utils/watering.js'
 import { getFeedingStatus } from '../utils/feeding.js'
 import EmptyState from '../components/EmptyState.jsx'
+import { climateApi } from '../api/plants.js'
+import { getGrowingSeason } from '../utils/climate.js'
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
@@ -18,10 +20,20 @@ function eventBadgeColor(type) {
 }
 
 export default function CalendarPage() {
-  const { plants, weather, floors, timezone, handleWaterPlant } = usePlantContext()
+  const { plants, weather, floors, timezone, handleWaterPlant, location } = usePlantContext()
   const [monthOffset, setMonthOffset] = useState(0)
   const [watering, setWatering] = useState({})
   const [selectedDay, setSelectedDay] = useState(null)
+  const [climate, setClimate] = useState(null)
+
+  useEffect(() => {
+    if (!location?.lat || !location?.lon) return
+    let cancelled = false
+    climateApi.lookup(location.lat, location.lon)
+      .then(data => { if (!cancelled) setClimate(data) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [location?.lat, location?.lon])
 
   const handleWater = useCallback(async (plantId) => {
     setWatering(prev => ({ ...prev, [plantId]: true }))
@@ -232,6 +244,20 @@ export default function CalendarPage() {
                   <span className="rounded-circle bg-danger d-inline-block" style={{ width: 6, height: 6 }} /> Bloom
                 </span>
               </div>
+
+              {/* Growing-season caption */}
+              {climate && (() => {
+                const gs = getGrowingSeason(climate, year)
+                if (!gs) return null
+                const inSeason = year + '-' + String(month + 1).padStart(2, '0') >= gs.start.slice(0, 7) &&
+                                 year + '-' + String(month + 1).padStart(2, '0') <= gs.end.slice(0, 7)
+                return (
+                  <div className={`mt-3 fs-xs rounded px-2 py-1 d-flex align-items-center gap-1 ${inSeason ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-muted'}`}
+                    data-testid="growing-season-caption">
+                    🌱 {gs.label}
+                  </div>
+                )
+              })()}
 
               {/* Empty month notice */}
               {!hasEventsThisMonth && (

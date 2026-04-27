@@ -8,6 +8,8 @@ import SoilTab from './SoilTab.jsx'
 import LifecycleTab from './LifecycleTab.jsx'
 import BloomTab from './BloomTab.jsx'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, wildlifeApi, incidentApi, dormancyApi } from '../api/plants.js'
+import HardinessBadge from './HardinessBadge.jsx'
+import LuxMeterButton from './LuxMeterButton.jsx'
 import PlantIdentify from './PlantIdentify.jsx'
 import Chart from 'react-apexcharts'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, getMoistureDisplay } from '../utils/watering.js'
@@ -1196,16 +1198,43 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                     </Form.Group>
                   </Col>
                 </Row>
-                {isOutdoor({ room: form.room, floor: form.floor }, floors) && (
-                  <Form.Group className="mb-3">
-                    <Form.Check
-                      type="checkbox"
-                      id="is-under-cover"
-                      label={<>Under cover <span className="text-muted fs-xs">(patio, porch, greenhouse — reduces effective rainfall)</span></>}
-                      checked={!!form.isUnderCover}
-                      onChange={e => update('isUnderCover', e.target.checked)}
+                <Form.Group className="mb-3">
+                  <Form.Label className="fs-xs text-muted">Ambient light reading</Form.Label>
+                  <div>
+                    <LuxMeterButton
+                      plantId={plant?.id}
+                      sunExposure={form.sunExposure}
                     />
-                  </Form.Group>
+                    {plant?.lastLuxReading != null && (
+                      <div className="mt-1 fs-xs text-muted">
+                        Last reading: {plant.lastLuxReading >= 1000
+                          ? `${(plant.lastLuxReading / 1000).toFixed(1)}k`
+                          : Math.round(plant.lastLuxReading)} lux
+                        {plant.lastLuxReadingDate && ` · ${new Date(plant.lastLuxReadingDate).toLocaleDateString()}`}
+                      </div>
+                    )}
+                  </div>
+                </Form.Group>
+                {isOutdoor({ room: form.room, floor: form.floor }, floors) && (
+                  <>
+                    <Form.Group className="mb-3">
+                      <Form.Check
+                        type="checkbox"
+                        id="is-under-cover"
+                        label={<>Under cover <span className="text-muted fs-xs">(patio, porch, greenhouse — reduces effective rainfall)</span></>}
+                        checked={!!form.isUnderCover}
+                        onChange={e => update('isUnderCover', e.target.checked)}
+                      />
+                    </Form.Group>
+                    {ctxLocation?.lat && (
+                      <div className="mb-3">
+                        <HardinessBadge
+                          plant={{ ...form, id: plant?.id }}
+                          location={{ lat: ctxLocation.lat, lon: ctxLocation.lon }}
+                        />
+                      </div>
+                    )}
+                  </>
                 )}
                 <Form.Group className="mb-3">
                   <Form.Label>Plant Category</Form.Label>
