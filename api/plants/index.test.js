@@ -5978,3 +5978,106 @@ describe('GET /plants — propertyId filter', () => {
     expect(res.body).toHaveLength(2);
   });
 });
+
+describe('GET /properties/:id', () => {
+  it('returns a single property by id', async () => {
+    store[propDocPath('prop-detail')] = { name: 'Garden Flat', archived: false, type: 'residential' };
+    const res = await request(app)
+      .get('/properties/prop-detail')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe('prop-detail');
+    expect(res.body.name).toBe('Garden Flat');
+  });
+
+  it('returns 404 for an unknown id', async () => {
+    const res = await request(app)
+      .get('/properties/does-not-exist')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for an archived property', async () => {
+    store[propDocPath('archived')] = { name: 'Old Place', archived: true };
+    const res = await request(app)
+      .get('/properties/archived')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/properties/any');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PUT /properties/:id', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    store[propDocPath('p-edit')] = { name: 'Old Name', type: 'residential', archived: false };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('updates a property name', async () => {
+    const res = await request(app)
+      .put('/properties/p-edit')
+      .set('Authorization', authHeader())
+      .send({ name: 'New Name' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('New Name');
+  });
+
+  it('updates type and notes', async () => {
+    const res = await request(app)
+      .put('/properties/p-edit')
+      .set('Authorization', authHeader())
+      .send({ type: 'commercial', notes: 'Big client' });
+    expect(res.status).toBe(200);
+    expect(res.body.type).toBe('commercial');
+    expect(res.body.notes).toBe('Big client');
+  });
+
+  it('returns 404 for unknown property', async () => {
+    const res = await request(app)
+      .put('/properties/no-such-prop')
+      .set('Authorization', authHeader())
+      .send({ name: 'X' });
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).put('/properties/p-edit').send({ name: 'X' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /properties/:id/restore', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    store[propDocPath('p-archived')] = { name: 'Restored Garden', archived: true };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('restores an archived property', async () => {
+    const res = await request(app)
+      .post('/properties/p-archived/restore')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.archived).toBe(false);
+    expect(store[propDocPath('p-archived')].archived).toBe(false);
+  });
+
+  it('returns 404 for unknown property', async () => {
+    const res = await request(app)
+      .post('/properties/no-such/restore')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/properties/p-archived/restore');
+    expect(res.status).toBe(401);
+  });
+});
