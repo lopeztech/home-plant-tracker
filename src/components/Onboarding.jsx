@@ -5,28 +5,43 @@ import { useProfile } from '../context/ProfileContext.jsx'
 
 const LS_KEY = 'plant-tracker-onboarded'
 
-const STEP_ICONS = [
-  '/icons/sprite.svg#upload',
-  '/icons/sprite.svg#plus',
-  '/icons/sprite.svg#droplet',
-]
+// Step icons keyed by persona — landscaper steps are about properties /
+// visits / branding, household are about floorplan / plants / watering.
+const STEP_ICONS = {
+  household:  ['/icons/sprite.svg#upload',     '/icons/sprite.svg#plus',     '/icons/sprite.svg#droplet'],
+  landscaper: ['/icons/sprite.svg#home',       '/icons/sprite.svg#calendar', '/icons/sprite.svg#star'],
+}
+
+// `both` reuses the household track — it's the broader of the two and the
+// user can re-take the landscaper tour from the Take-a-tour menu later.
+const STEP_KEYS = {
+  household:  ['step1', 'step2', 'step3'],
+  landscaper: ['landscaperStep1', 'landscaperStep2', 'landscaperStep3'],
+}
+
+function infoStepsFor(persona, t) {
+  const track = persona === 'landscaper' ? 'landscaper' : 'household'
+  return STEP_KEYS[track].map((key, i) => ({
+    kind: 'info',
+    icon: STEP_ICONS[track][i],
+    title: t(`${key}.title`),
+    description: t(`${key}.description`),
+  }))
+}
 
 export default function Onboarding() {
   const { t } = useTranslation('onboarding')
-  const { setAccountType } = useProfile()
+  const { accountType, setAccountType } = useProfile()
   const [step, setStep] = useState(0)
   const [show, setShow] = useState(false)
   const [savingPersona, setSavingPersona] = useState(false)
 
   // First step is the persona picker (no Next button — clicking a card
-  // saves and advances). Remaining steps are the original info screens,
-  // unchanged.
+  // saves and advances). Remaining steps adapt to the picked persona —
+  // landscaper sees Property/Visit/Branding copy, household sees the
+  // original Floorplan/Plants/Watering copy.
   const PERSONA_STEP = { kind: 'persona' }
-  const INFO_STEPS = [
-    { kind: 'info', icon: STEP_ICONS[0], title: t('step1.title'), description: t('step1.description') },
-    { kind: 'info', icon: STEP_ICONS[1], title: t('step2.title'), description: t('step2.description') },
-    { kind: 'info', icon: STEP_ICONS[2], title: t('step3.title'), description: t('step3.description') },
-  ]
+  const INFO_STEPS = infoStepsFor(accountType, t)
   const STEPS = [PERSONA_STEP, ...INFO_STEPS]
 
   useEffect(() => {

@@ -2,9 +2,12 @@ import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const setAccountTypeMock = vi.fn().mockResolvedValue(undefined)
+let mockedAccountType = 'household'
+const setAccountTypeMock = vi.fn().mockImplementation(async (next) => {
+  mockedAccountType = next
+})
 vi.mock('../context/ProfileContext.jsx', () => ({
-  useProfile: () => ({ accountType: 'household', setAccountType: setAccountTypeMock, loading: false, error: null, refresh: vi.fn() }),
+  useProfile: () => ({ accountType: mockedAccountType, setAccountType: setAccountTypeMock, loading: false, error: null, refresh: vi.fn() }),
 }))
 
 import Onboarding from '../components/Onboarding.jsx'
@@ -19,6 +22,7 @@ describe('Onboarding', () => {
   beforeEach(() => {
     localStorage.clear()
     setAccountTypeMock.mockClear()
+    mockedAccountType = 'household'
   })
 
   it('renders the persona picker as the first step', () => {
@@ -69,6 +73,26 @@ describe('Onboarding', () => {
     fireEvent.click(screen.getByText('Get started'))
     expect(screen.queryByText('Track Watering')).not.toBeInTheDocument()
     expect(localStorage.getItem(STORAGE_KEY)).toBe('1')
+  })
+
+  it('shows landscaper-specific info steps after picking landscaper', async () => {
+    render(<Onboarding />)
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Managing client properties/i })) })
+
+    expect(setAccountTypeMock).toHaveBeenCalledWith('landscaper')
+    await waitFor(() => expect(screen.getByText('Add Your First Property')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByText('Next'))
+    expect(screen.getByText('Schedule a Visit')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByText('Next'))
+    expect(screen.getByText('Send Branded Reports')).toBeInTheDocument()
+  })
+
+  it('"both" persona uses the household track', async () => {
+    render(<Onboarding />)
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /I do both/i })) })
+    await waitFor(() => expect(screen.getByText('Upload a Floorplan')).toBeInTheDocument())
   })
 
   it('skip-tour button sets localStorage and hides onboarding from the persona step', () => {

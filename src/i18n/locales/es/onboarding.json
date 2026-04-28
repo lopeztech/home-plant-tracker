@@ -11,6 +11,18 @@
     "title": "Registra el riego",
     "description": "Marca las plantas como regadas para crear tu horario de cuidados. Recibe recordatorios cuando las plantas necesiten atención."
   },
+  "landscaperStep1": {
+    "title": "Añade tu primera propiedad",
+    "description": "Cada cliente tiene su propia propiedad con plantas, plano y calendario de cuidados. Añade una desde Ajustes → Propiedades."
+  },
+  "landscaperStep2": {
+    "title": "Programa una visita",
+    "description": "Planifica visitas de riego, poda o mantenimiento. Marca tu llegada y la finalización — el cliente recibe un registro del trabajo realizado."
+  },
+  "landscaperStep3": {
+    "title": "Envía informes con tu marca",
+    "description": "Configura el logo y los colores de tu negocio en Ajustes → Marca para que cada informe de cliente lleve tu identidad."
+  },
   "skipTour": "Omitir tour",
   "getStarted": "Empezar"
 }
