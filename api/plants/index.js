@@ -126,6 +126,7 @@ function getUserClaims(req) {
 const households = require('./households');
 const team = require('./team');
 const visits = require('./visits');
+const templates = require('./templates');
 
 // Resolve the active household for the authenticated actor and decorate the
 // request with: actorUserId, userId (= ownerId of the active household),
@@ -2257,6 +2258,199 @@ app.post('/visits/:id/complete', requireUser, requireTier('landscaper_pro'), asy
     if (req.body?.notes) updates.notes = req.body.notes;
     await ref.set(updates, { merge: true });
     res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Maintenance templates — issue #297 ───────────────────────────────────────
+
+// GET /platform/templates — curated library (empty for v1, no auth needed)
+app.get('/platform/templates', async (_req, res) => {
+  res.status(200).json({ templates: [] });
+});
+
+// GET /templates — list user templates
+app.get('/templates', requireUser, async (req, res) => {
+  try {
+    const snap = await templates.templatesRef(db, req.userId).get();
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    res.status(200).json({ templates: items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /templates — create a template
+app.post('/templates', requireUser, async (req, res) => {
+  try {
+    const { title, description, items, forTier } = req.body || {};
+    if (!title || typeof title !== 'string' || !title.trim()) {
+      return res.status(400).json({ error: 'title is required' });
+    }
+    const itemError = templates.validateItems(items || []);
+    if (itemError) return res.status(400).json({ error: itemError });
+
+    const now = new Date().toISOString();
+    const data = {
+      title: title.trim(),
+      description: description || null,
+      items: (items || []).map((item, idx) => ({
+        id: item.id || `item-${idx}`,
+        title: item.title,
+        taskType: item.taskType || 'custom',
+        plantIds: Array.isArray(item.plantIds) ? item.plantIds : [],
+        estimatedMinutes: item.estimatedMinutes || 30,
+        materialNote: item.materialNote || null,
+        status: 'pending',
+      })),
+      forTier: forTier || 'landscaper_pro',
+      clonedFrom: null,
+      createdBy: req.actorUserId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const ref = await templates.templatesRef(db, req.userId).add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /templates/:id — get a single template
+app.get('/templates/:id', requireUser, async (req, res) => {
+  try {
+    const snap = await templates.templateRef(db, req.userId, req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Template not found' });
+    res.status(200).json({ id: snap.id, ...snap.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /templates/:id — update a template
+app.put('/templates/:id', requireUser, async (req, res) => {
+  try {
+    const ref = templates.templateRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Template not found' });
+
+    const { title, description, items, forTier } = req.body || {};
+    if (items !== undefined) {
+      const err = templates.validateItems(items);
+      if (err) return res.status(400).json({ error: err });
+    }
+    const updates = { updatedAt: new Date().toISOString() };
+    if (title !== undefined) updates.title = title;
+    if (description !== undefined) updates.description = description;
+    if (items !== undefined) updates.items = items;
+    if (forTier !== undefined) updates.forTier = forTier;
+
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /templates/:id — delete a template
+app.delete('/templates/:id', requireUser, requireOrgOwner, async (req, res) => {
+  try {
+    const ref = templates.templateRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Template not found' });
+    await ref.delete();
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /templates/:id/clone — clone into user's library (home_pro can clone too)
+app.post('/templates/:id/clone', requireUser, async (req, res) => {
+  try {
+    const snap = await templates.templateRef(db, req.userId, req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Template not found' });
+    const src = snap.data();
+
+    const now = new Date().toISOString();
+    const clone = {
+      ...src,
+      title: `${src.title} (copy)`,
+      clonedFrom: snap.id,
+      createdBy: req.actorUserId,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const ref = await templates.templatesRef(db, req.userId).add(clone);
+    res.status(201).json({ id: ref.id, ...clone });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /templates/:id/preview?propertyId= — dry-run: match plants, compute duration
+app.post('/templates/:id/preview', requireUser, async (req, res) => {
+  try {
+    const snap = await templates.templateRef(db, req.userId, req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Template not found' });
+
+    const template = { id: snap.id, ...snap.data() };
+    const plantsSnap = await db.collection('users').doc(req.userId).collection('plants').get();
+    let plants = plantsSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    if (req.query.propertyId) plants = plants.filter((p) => p.propertyId === req.query.propertyId);
+
+    const preview = templates.previewTemplate(template, plants);
+    res.status(200).json(preview);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /templates/:id/apply — create a visit from this template
+app.post('/templates/:id/apply', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    const snap = await templates.templateRef(db, req.userId, req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Template not found' });
+
+    const tmpl = snap.data();
+    const { propertyId, scheduledStart, assignedTo } = req.body || {};
+    if (!propertyId || !scheduledStart) {
+      return res.status(400).json({ error: 'propertyId and scheduledStart are required' });
+    }
+
+    const now = new Date().toISOString();
+    const checklist = (tmpl.items || []).map((item) => ({
+      id: item.id,
+      title: item.title,
+      taskType: item.taskType,
+      plantIds: item.plantIds || [],
+      status: 'pending',
+      notes: null,
+    }));
+
+    const allPlantIds = [...new Set(checklist.flatMap((c) => c.plantIds))];
+    const visitData = {
+      propertyId,
+      title: tmpl.title,
+      description: tmpl.description || null,
+      scheduledStart,
+      scheduledEnd: null,
+      estimatedDurationMinutes: (tmpl.items || []).reduce((s, i) => s + (i.estimatedMinutes || 0), 0) || 60,
+      assignedTo: assignedTo || req.userId,
+      plantIds: allPlantIds,
+      checklist,
+      status: 'scheduled',
+      recurrence: null,
+      notes: null,
+      templateId: snap.id,
+      createdBy: req.actorUserId,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const visitRef = await visits.visitsRef(db, req.userId).add(visitData);
+    res.status(201).json({ id: visitRef.id, ...visitData });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

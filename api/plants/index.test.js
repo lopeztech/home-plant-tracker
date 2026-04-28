@@ -6648,3 +6648,144 @@ describe('visit scheduling (#164)', () => {
     expect(res.body.error).toBe('upgrade_required');
   });
 });
+
+// ── Maintenance templates — issue #297 ───────────────────────────────────────
+
+describe('maintenance templates (#297)', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store['users/alice/subscription/current'] = { tier: 'landscaper_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('GET /platform/templates returns empty array (v1)', async () => {
+    const res = await request(app).get('/platform/templates');
+    expect(res.status).toBe(200);
+    expect(res.body.templates).toEqual([]);
+  });
+
+  it('POST /templates creates a template', async () => {
+    const res = await request(app)
+      .post('/templates')
+      .set('Authorization', authHeader('alice'))
+      .send({
+        title: 'Spring Prep',
+        items: [
+          { title: 'Water all beds', taskType: 'watering', estimatedMinutes: 30 },
+          { title: 'Check for pests', taskType: 'inspection', estimatedMinutes: 15 },
+        ],
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.title).toBe('Spring Prep');
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items[0].taskType).toBe('watering');
+  });
+
+  it('POST /templates rejects missing title', async () => {
+    const res = await request(app)
+      .post('/templates')
+      .set('Authorization', authHeader('alice'))
+      .send({ items: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /templates rejects invalid taskType', async () => {
+    const res = await request(app)
+      .post('/templates')
+      .set('Authorization', authHeader('alice'))
+      .send({ title: 'Test', items: [{ title: 'Do it', taskType: 'swimming' }] });
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /templates lists user templates', async () => {
+    await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'Template A', items: [] });
+    await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'Template B', items: [] });
+
+    const res = await request(app).get('/templates').set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(200);
+    expect(res.body.templates).toHaveLength(2);
+  });
+
+  it('GET /templates/:id returns a single template', async () => {
+    const created = await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'My Routine', items: [] });
+    const res = await request(app).get(`/templates/${created.body.id}`).set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(200);
+    expect(res.body.title).toBe('My Routine');
+  });
+
+  it('PUT /templates/:id updates the template', async () => {
+    const created = await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'Old Title', items: [] });
+    const res = await request(app).put(`/templates/${created.body.id}`)
+      .set('Authorization', authHeader('alice'))
+      .send({ title: 'New Title' });
+    expect(res.status).toBe(200);
+    expect(res.body.title).toBe('New Title');
+  });
+
+  it('DELETE /templates/:id removes the template', async () => {
+    const created = await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'Trash Me', items: [] });
+    const del = await request(app).delete(`/templates/${created.body.id}`).set('Authorization', authHeader('alice'));
+    expect(del.status).toBe(204);
+    const after = await request(app).get(`/templates/${created.body.id}`).set('Authorization', authHeader('alice'));
+    expect(after.status).toBe(404);
+  });
+
+  it('POST /templates/:id/clone creates a copy', async () => {
+    const created = await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'Original', items: [{ title: 'Task 1', taskType: 'watering' }] });
+    const clone = await request(app).post(`/templates/${created.body.id}/clone`)
+      .set('Authorization', authHeader('alice'));
+    expect(clone.status).toBe(201);
+    expect(clone.body.title).toContain('copy');
+    expect(clone.body.clonedFrom).toBe(created.body.id);
+    expect(clone.body.id).not.toBe(created.body.id);
+  });
+
+  it('POST /templates/:id/preview returns matched plants and total duration', async () => {
+    // Seed a plant for alice
+    store['users/alice/plants/plant-1'] = { id: 'plant-1', name: 'Rose', species: 'Rosa' };
+
+    const created = await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({
+        title: 'Rose Care',
+        items: [
+          { title: 'Water roses', taskType: 'watering', plantIds: ['plant-1'], estimatedMinutes: 20 },
+        ],
+      });
+    const preview = await request(app).post(`/templates/${created.body.id}/preview`)
+      .set('Authorization', authHeader('alice'));
+    expect(preview.status).toBe(200);
+    expect(preview.body.totalMinutes).toBe(20);
+    expect(preview.body.items[0].matchedPlants).toHaveLength(1);
+    expect(preview.body.items[0].matchedPlants[0].name).toBe('Rose');
+  });
+
+  it('POST /templates/:id/apply creates a visit', async () => {
+    const created = await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'Summer Visit', items: [{ title: 'Water everything', taskType: 'watering', estimatedMinutes: 45 }] });
+
+    const applyRes = await request(app).post(`/templates/${created.body.id}/apply`)
+      .set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-06-01T09:00:00Z' });
+    expect(applyRes.status).toBe(201);
+    expect(applyRes.body.title).toBe('Summer Visit');
+    expect(applyRes.body.propertyId).toBe('prop-1');
+    expect(applyRes.body.status).toBe('scheduled');
+    expect(applyRes.body.checklist).toHaveLength(1);
+    expect(applyRes.body.templateId).toBe(created.body.id);
+  });
+
+  it('POST /templates/:id/apply requires propertyId and scheduledStart', async () => {
+    const created = await request(app).post('/templates').set('Authorization', authHeader('alice'))
+      .send({ title: 'T', items: [] });
+    const res = await request(app).post(`/templates/${created.body.id}/apply`)
+      .set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1' }); // missing scheduledStart
+    expect(res.status).toBe(400);
+  });
+});
