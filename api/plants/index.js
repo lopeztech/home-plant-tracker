@@ -122,19 +122,39 @@ function getUserClaims(req) {
 }
 
 const households = require('./households');
+const team = require('./team');
+const visits = require('./visits');
 
 // Resolve the active household for the authenticated actor and decorate the
 // request with: actorUserId, userId (= ownerId of the active household),
 // householdId, role, actorDisplayName. Pre-existing handlers continue to use
 // `req.userId` as the data-tree owner unchanged.
+//
+// When x-org-id header is present, try to resolve landscaper org context first.
+// If the actor is an active team member of that org, req.userId becomes the
+// org owner's UID so all existing data accessors work unchanged. req.orgRole
+// holds the landscaper role ('manager'|'technician').
 async function attachHouseholdContext(req, claims) {
   const displayName = claims.name || claims.email || null;
+  req.actorDisplayName = displayName;
+
+  const orgId = req.headers['x-org-id'];
+  if (orgId) {
+    const orgCtx = await team.resolveOrgContext(db, claims.sub, orgId);
+    if (orgCtx) {
+      req.actorUserId = claims.sub;
+      req.userId = orgCtx.userId;
+      req.orgRole = orgCtx.orgRole;
+      req.role = orgCtx.role; // household-compatible: 'editor'|'viewer'
+      return;
+    }
+  }
+
   const ctx = await households.resolveHouseholdContext(db, claims.sub, displayName);
   req.actorUserId = ctx.actorUserId;
   req.userId = ctx.userId;
   req.householdId = ctx.householdId;
   req.role = ctx.role;
-  req.actorDisplayName = displayName;
 }
 
 function requireUser(req, res, next) {
@@ -579,6 +599,7 @@ const { requireTier, checkQuota } = createTierGate(db);
 const countPlantsForReq      = (req) => billing.countPlants(db, req.userId);
 const countAiAnalysesForReq  = (req) => billing.readAiAnalysesUsage(db, req.userId);
 const countPropertiesForReq  = (req) => billing.countProperties(db, req.userId);
+const countTeamMembersForReq = (req) => team.countActiveMembers(db, req.userId);
 
 // ── Billing — non-webhook routes ─────────────────────────────────────────────
 // (Webhook is declared earlier, before express.json(), to keep the raw body
@@ -1818,6 +1839,357 @@ app.put('/households/:id/members/:userId', requireUser, async (req, res) => {
       updatedAt: new Date().toISOString(),
     }, { merge: true });
     res.status(200).json({ userId: targetId, role });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Landscaper team management — issue #163 ──────────────────────────────────
+// Team routes are only accessible to the org owner (not via x-org-id context).
+
+function requireOrgOwner(req, res, next) {
+  // org members acting via x-org-id must not manage the team themselves
+  if (req.orgRole) {
+    return res.status(403).json({ error: 'forbidden_role', requiredRole: 'owner', currentRole: req.orgRole });
+  }
+  return next();
+}
+
+// GET /me/orgs — list orgs the current user belongs to as a team member
+app.get('/me/orgs', requireUser, async (req, res) => {
+  try {
+    const orgs = await team.listOrgsForUser(db, req.actorUserId);
+    res.status(200).json({ orgs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /team/invite — create an invite link (org owner only, landscaper_pro)
+app.post('/team/invite', requireUser, requireTier('landscaper_pro'), requireOrgOwner,
+  checkQuota('team_members', countTeamMembersForReq), async (req, res) => {
+    try {
+      const { role, assignedPropertyIds } = req.body || {};
+      if (!role || !(role in team.ORG_ROLES)) {
+        return res.status(400).json({ error: 'role must be one of: manager, technician' });
+      }
+      const invite = await team.createInvite(db, {
+        ownerUid: req.userId,
+        role,
+        assignedPropertyIds: assignedPropertyIds || null,
+      });
+      const inviteUrl = `${process.env.APP_BASE_URL || 'https://plants.lopezcloud.dev'}/team/accept?token=${invite.token}`;
+      res.status(201).json({ token: invite.token, inviteUrl, role: invite.role, expiresAt: invite.expiresAt });
+    } catch (err) {
+      if (err.code === 'invalid_role') return res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+// GET /team — list active team members (org owner or manager)
+app.get('/team', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const members = await team.listMembers(db, req.userId);
+    res.status(200).json({ members });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /team/:memberUid — update role or assigned properties (org owner only)
+app.patch('/team/:memberUid', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    let memberUid;
+    try { memberUid = households.safeUserKey(req.params.memberUid); }
+    catch { return res.status(400).json({ error: 'Invalid memberUid' }); }
+
+    const memberRef = team.teamMemberRef(db, req.userId, memberUid);
+    const snap = await memberRef.get();
+    if (!snap.exists || snap.data().status === 'suspended') {
+      return res.status(404).json({ error: 'Team member not found' });
+    }
+
+    const updates = {};
+    if (req.body?.role !== undefined) {
+      if (!(req.body.role in team.ORG_ROLES)) {
+        return res.status(400).json({ error: 'role must be one of: manager, technician' });
+      }
+      updates.role = req.body.role;
+    }
+    if (req.body?.assignedPropertyIds !== undefined) {
+      updates.assignedPropertyIds = Array.isArray(req.body.assignedPropertyIds)
+        ? req.body.assignedPropertyIds : null;
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+
+    await memberRef.set(updates, { merge: true });
+    if (updates.role) {
+      await team.orgMembershipRef(db, memberUid, req.userId).set({ role: updates.role }, { merge: true });
+    }
+    res.status(200).json({ memberUid, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /team/:memberUid — suspend a team member (org owner only)
+app.delete('/team/:memberUid', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    let memberUid;
+    try { memberUid = households.safeUserKey(req.params.memberUid); }
+    catch { return res.status(400).json({ error: 'Invalid memberUid' }); }
+
+    const memberRef = team.teamMemberRef(db, req.userId, memberUid);
+    const snap = await memberRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Team member not found' });
+
+    const now = new Date().toISOString();
+    await memberRef.set({ status: 'suspended', suspendedAt: now }, { merge: true });
+    await team.orgMembershipRef(db, memberUid, req.userId).set({ status: 'suspended' }, { merge: true });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /team/accept — accept a team invite (requireUser, no tier gate)
+app.post('/team/accept', requireUser, async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'token is required' });
+    }
+    const result = await team.acceptInvite(db, { token, actorUserId: req.actorUserId });
+    res.status(200).json({ ownerUid: result.ownerUid, role: result.role });
+  } catch (err) {
+    const statusMap = { not_found: 404, already_used: 409, expired: 410 };
+    const status = statusMap[err.code] || 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// ── Visit scheduling — issue #164 ────────────────────────────────────────────
+
+// GET /visits.ics?token= — iCal feed (no auth, token-based read-only)
+app.get('/visits.ics', async (req, res) => {
+  try {
+    const token = req.query.token;
+    const userId = await visits.resolveIcsToken(db, token);
+    if (!userId) return res.status(401).send('Invalid or missing token');
+    await visits.materialiseUpcoming(db, userId);
+    const snap = await visits.visitsRef(db, userId).get();
+    const all = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((v) => v.status !== 'cancelled');
+    const ical = visits.generateIcal(all);
+    res.set('Content-Type', 'text/calendar; charset=utf-8');
+    res.set('Content-Disposition', 'attachment; filename="visits.ics"');
+    res.status(200).send(ical);
+  } catch {
+    res.status(500).send('Error generating calendar');
+  }
+});
+
+// GET /visits/ics-token — get or create iCal feed token
+app.get('/visits/ics-token', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const token = await visits.getOrCreateIcsToken(db, req.userId);
+    const feedUrl = `${process.env.APP_BASE_URL || 'https://api.plants.lopezcloud.dev'}/visits.ics?token=${token}`;
+    res.status(200).json({ token, feedUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /visits — list visits (with RBAC, date range, status filters)
+app.get('/visits', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    await visits.materialiseUpcoming(db, req.userId);
+    const snap = await visits.visitsRef(db, req.userId).get();
+    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // Query filters
+    const { propertyId, from, to, status, assignedTo } = req.query;
+    if (propertyId) items = items.filter((v) => v.propertyId === propertyId);
+    if (status)     items = items.filter((v) => v.status === status);
+    if (assignedTo) items = items.filter((v) => v.assignedTo === assignedTo);
+    if (from)       items = items.filter((v) => v.scheduledStart >= from);
+    if (to)         items = items.filter((v) => v.scheduledStart <= to);
+
+    // RBAC: get actor's assignedPropertyIds when acting as org member
+    let assignedPropertyIds = null;
+    if (req.orgRole === 'manager') {
+      const memberSnap = await db.collection('users').doc(req.userId).collection('team').doc(req.actorUserId).get();
+      assignedPropertyIds = memberSnap.exists ? (memberSnap.data().assignedPropertyIds || null) : null;
+    }
+    items = visits.applyVisitRbac(items, req.orgRole, req.actorUserId, assignedPropertyIds);
+
+    // Sort ascending by scheduledStart
+    items.sort((a, b) => (a.scheduledStart || '').localeCompare(b.scheduledStart || ''));
+
+    res.status(200).json({ visits: items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits — create a visit (optionally with recurrence)
+app.post('/visits', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    const {
+      propertyId, title, description, scheduledStart, scheduledEnd,
+      estimatedDurationMinutes, assignedTo, plantIds, checklist, recurrence, notes,
+    } = req.body || {};
+
+    if (!propertyId || !scheduledStart) {
+      return res.status(400).json({ error: 'propertyId and scheduledStart are required' });
+    }
+
+    const now = new Date().toISOString();
+    const data = {
+      propertyId,
+      title: title || 'Property Visit',
+      description: description || null,
+      scheduledStart,
+      scheduledEnd: scheduledEnd || null,
+      estimatedDurationMinutes: estimatedDurationMinutes || 60,
+      assignedTo: assignedTo || req.userId,
+      plantIds: Array.isArray(plantIds) ? plantIds : [],
+      checklist: Array.isArray(checklist) ? checklist : [],
+      status: 'scheduled',
+      recurrence: recurrence || null,
+      notes: notes || null,
+      createdBy: req.actorUserId,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const ref = await visits.visitsRef(db, req.userId).add(data);
+    const created = { id: ref.id, ...data };
+
+    // Immediately materialise recurring instances
+    if (recurrence?.freq) {
+      const instances = visits.buildInstances(created, Date.now());
+      for (const inst of instances) {
+        await visits.visitsRef(db, req.userId).add({ ...inst, createdBy: req.actorUserId, createdAt: now, updatedAt: now });
+      }
+    }
+
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /visits/:id — get a single visit
+app.get('/visits/:id', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const snap = await visits.visitRef(db, req.userId, req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const visit = { id: snap.id, ...snap.data() };
+
+    // RBAC check
+    let assignedPropertyIds = null;
+    if (req.orgRole === 'manager') {
+      const mSnap = await db.collection('users').doc(req.userId).collection('team').doc(req.actorUserId).get();
+      assignedPropertyIds = mSnap.exists ? mSnap.data().assignedPropertyIds : null;
+    }
+    const [accessible] = visits.applyVisitRbac([visit], req.orgRole, req.actorUserId, assignedPropertyIds);
+    if (!accessible) return res.status(403).json({ error: 'forbidden' });
+
+    res.status(200).json(visit);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /visits/:id — update visit details
+app.put('/visits/:id', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    if (snap.data().status === 'completed') {
+      return res.status(409).json({ error: 'Cannot update a completed visit' });
+    }
+
+    const allowed = ['title', 'description', 'scheduledStart', 'scheduledEnd',
+      'estimatedDurationMinutes', 'assignedTo', 'plantIds', 'checklist', 'notes', 'status'];
+    const updates = { updatedAt: new Date().toISOString() };
+    for (const key of allowed) {
+      if (req.body?.[key] !== undefined) updates[key] = req.body[key];
+    }
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /visits/:id — cancel a visit
+app.delete('/visits/:id', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const now = new Date().toISOString();
+    await ref.set({ status: 'cancelled', cancelledAt: now, updatedAt: now }, { merge: true });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits/:id/check-in — record arrival time
+app.post('/visits/:id/check-in', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const now = new Date().toISOString();
+    const updates = { arrivedAt: now, status: 'in_progress', updatedAt: now };
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits/:id/check-out — record departure time
+app.post('/visits/:id/check-out', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const now = new Date().toISOString();
+    const arrivedAt = snap.data().arrivedAt;
+    const durationMinutes = arrivedAt
+      ? Math.round((new Date(now) - new Date(arrivedAt)) / 60000) : null;
+    const updates = { departedAt: now, durationMinutes, updatedAt: now };
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits/:id/complete — mark completed, lock checklist
+app.post('/visits/:id/complete', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    if (snap.data().status === 'completed') {
+      return res.status(409).json({ error: 'Visit already completed' });
+    }
+    const now = new Date().toISOString();
+    const updates = { status: 'completed', completedAt: now, updatedAt: now };
+    if (req.body?.checklist) updates.checklist = req.body.checklist;
+    if (req.body?.notes) updates.notes = req.body.notes;
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

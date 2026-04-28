@@ -20,6 +20,7 @@ const PrivacyPage = lazy(() => import('../pages/PrivacyPage.jsx'))
 const TermsPage = lazy(() => import('../pages/TermsPage.jsx'))
 const ScanPage = lazy(() => import('../pages/ScanPage.jsx'))
 const PropagationPage = lazy(() => import('../pages/PropagationPage.jsx'))
+const VisitsPage = lazy(() => import('../pages/VisitsPage.jsx'))
 const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
 const SitPage = lazy(() => import('../pages/SitPage.jsx'))
 
@@ -48,6 +49,7 @@ export const routes = [
           { path: 'plants/:id', element: <PlantDetailPage />, handle: { breadcrumb: 'Plant' } },
           { path: 'analytics', element: <AnalyticsPage />, handle: { breadcrumb: 'Analytics' } },
           { path: 'calendar', element: <CalendarPage />, handle: { breadcrumb: 'Care Calendar' } },
+          { path: 'visits', element: <VisitsPage />, handle: { breadcrumb: 'Visit Schedule' } },
           { path: 'forecast', element: <ForecastPage />, handle: { breadcrumb: 'Forecast' } },
           { path: 'insights', element: <InsightsPage />, handle: { breadcrumb: 'ML Insights' } },
           { path: 'bulk-upload', element: <BulkUploadPage />, handle: { breadcrumb: 'Bulk Upload' } },
