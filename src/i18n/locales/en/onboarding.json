@@ -11,6 +11,18 @@
     "title": "Track Watering",
     "description": "Mark plants as watered to build your care schedule. Get reminders when plants need attention."
   },
+  "landscaperStep1": {
+    "title": "Add Your First Property",
+    "description": "Each client gets their own property with its own plants, floorplan, and care schedule. Add one from Settings → Properties."
+  },
+  "landscaperStep2": {
+    "title": "Schedule a Visit",
+    "description": "Plan watering, pruning, or maintenance visits ahead of time. Check in on arrival and complete on the way out — your client gets a record of work done."
+  },
+  "landscaperStep3": {
+    "title": "Send Branded Reports",
+    "description": "Configure your business logo and colours in Settings → Branding so every client report carries your brand."
+  },
   "skipTour": "Skip tour",
   "getStarted": "Get started"
 }
