@@ -3291,6 +3291,64 @@ describe('DELETE /plants/:id/journal/:entryId', () => {
 
 // ── DELETE /account ───────────────────────────────────────────────────────────
 
+describe('GET /profile', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).get('/profile');
+    expect(res.status).toBe(401);
+  });
+
+  it('lazy-defaults to household when no doc exists, without writing', async () => {
+    const res = await request(app).get('/profile').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ accountType: 'household' });
+    expect(store[`users/${USER_SUB}/profile/account`]).toBeUndefined();
+  });
+
+  it('returns the stored accountType', async () => {
+    store[`users/${USER_SUB}/profile/account`] = { accountType: 'landscaper' };
+    const res = await request(app).get('/profile').set('Authorization', authHeader());
+    expect(res.body).toEqual({ accountType: 'landscaper' });
+  });
+
+  it('falls back to household when stored value is corrupt', async () => {
+    store[`users/${USER_SUB}/profile/account`] = { accountType: 'wizard' };
+    const res = await request(app).get('/profile').set('Authorization', authHeader());
+    expect(res.body).toEqual({ accountType: 'household' });
+  });
+});
+
+describe('PUT /profile', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).put('/profile').send({ accountType: 'landscaper' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects unknown accountType with 400', async () => {
+    const res = await request(app).put('/profile')
+      .set('Authorization', authHeader())
+      .send({ accountType: 'wizard' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects missing accountType', async () => {
+    const res = await request(app).put('/profile')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('persists each valid value and returns it', async () => {
+    for (const value of ['household', 'landscaper', 'both']) {
+      const res = await request(app).put('/profile')
+        .set('Authorization', authHeader())
+        .send({ accountType: value });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ accountType: value });
+      expect(store[`users/${USER_SUB}/profile/account`].accountType).toBe(value);
+    }
+  });
+});
+
 describe('DELETE /account', () => {
   it('returns 401 without auth', async () => {
     const res = await request(app).delete('/account');

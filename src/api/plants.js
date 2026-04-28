@@ -301,6 +301,11 @@ export const accountApi = {
   startTrial: () => request('/account/trial/start', { method: 'POST' }),
 }
 
+export const profileApi = {
+  get: () => request('/profile'),
+  set: (accountType) => request('/profile', { method: 'PUT', body: JSON.stringify({ accountType }) }),
+}
+
 export const householdsApi = {
   list: () => request('/households'),
   current: () => request('/households/current'),

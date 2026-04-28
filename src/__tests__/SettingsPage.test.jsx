@@ -33,6 +33,11 @@ vi.mock('../context/LayoutContext.jsx', () => ({
   useLayoutContext: () => ({ theme: 'light', themeMode: 'light', changeTheme: changeThemeMock, changeThemeMode: changeThemeMock }),
 }))
 
+const setAccountTypeMock = vi.fn().mockResolvedValue(undefined)
+vi.mock('../context/ProfileContext.jsx', () => ({
+  useProfile: () => ({ accountType: 'household', setAccountType: setAccountTypeMock, loading: false, error: null, refresh: vi.fn() }),
+}))
+
 vi.mock('../contexts/AuthContext.jsx', () => ({
   useAuth: () => ({ logout: logoutMock }),
 }))
@@ -94,6 +99,21 @@ describe('SettingsPage tabs', () => {
     renderAt('/settings/preferences')
     expect(screen.getByText(/Appearance/i)).toBeInTheDocument()
     expect(screen.getByText(/Location/i)).toBeInTheDocument()
+  })
+
+  it('shows Profile mode section with three options on Preferences', () => {
+    renderAt('/settings/preferences')
+    expect(screen.getByText(/Profile mode/i)).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Household/i })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /Landscaper/i })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Both' })).not.toBeChecked()
+  })
+
+  it('persists a Profile mode change via setAccountType', async () => {
+    setAccountTypeMock.mockClear()
+    renderAt('/settings/preferences')
+    fireEvent.click(screen.getByRole('radio', { name: /Landscaper/i }))
+    await waitFor(() => expect(setAccountTypeMock).toHaveBeenCalledWith('landscaper'))
   })
 
   it('shows the Data tab content at /settings/data', () => {

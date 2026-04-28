@@ -5018,6 +5018,41 @@ app.delete('/account', requireUser, async (req, res) => {
   }
 });
 
+// User profile / persona. Persona drives which menu items are visible (UI
+// filter only — actual permissions stay tier-gated). Stored separately from
+// /subscription/current because a free-tier user can be a landscaper trialing
+// the app, and a paid user can want to see both surfaces.
+const ACCOUNT_TYPES = ['household', 'landscaper', 'both'];
+
+app.get('/profile', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('users').doc(req.userId).collection('profile').doc('account');
+    const snap = await ref.get();
+    // Lazy default: never write on read so we don't churn docs for users who
+    // never visit Settings.
+    const data = snap.exists ? snap.data() : {};
+    res.status(200).json({
+      accountType: ACCOUNT_TYPES.includes(data.accountType) ? data.accountType : 'household',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/profile', requireUser, async (req, res) => {
+  try {
+    const { accountType } = req.body || {};
+    if (!ACCOUNT_TYPES.includes(accountType)) {
+      return res.status(400).json({ error: `accountType must be one of ${ACCOUNT_TYPES.join(', ')}` });
+    }
+    const ref = db.collection('users').doc(req.userId).collection('profile').doc('account');
+    await ref.set({ accountType, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ accountType });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/account/trial/start', requireUser, async (req, res) => {
   try {
     const subRef = db.collection('users').doc(req.userId).collection('subscription').doc('current');

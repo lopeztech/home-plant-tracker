@@ -33,6 +33,10 @@ vi.mock('../api/plants.js', () => ({
     createPortalSession:   vi.fn(),
   },
   outbreakApi: { list: vi.fn().mockResolvedValue({ plants: [], hasMore: false, nextCursor: null }) },
+  profileApi: {
+    get: vi.fn().mockResolvedValue({ accountType: 'household' }),
+    set: vi.fn().mockResolvedValue({ accountType: 'household' }),
+  },
 }))
 
 vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {
