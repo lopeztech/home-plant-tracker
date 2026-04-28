@@ -1,9 +1,11 @@
 'use strict';
 
-// chore(deploy): force Cloud Function redeploy 2026-04-25 — picks up the
-// last 4 days of accumulated changes that never reached the function (the
-// CI deploy job kept skipping because none of the merged PRs touched
-// api/plants/). Safe to delete on the next real backend change.
+// chore(deploy): force Cloud Function redeploy 2026-04-29 — production has
+// been stuck on PR #374 since #377's deploy failed at E2E smoke (the
+// onboarding spec wasn't updated for the persona picker). #379 fixed the
+// E2E but only touched e2e/, so paths-filter still skipped deploy-function.
+// This bumps a backend-path file so the next push triggers the deploy and
+// production picks up /profile, /households, and the rest.
 const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
