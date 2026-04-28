@@ -7016,3 +7016,87 @@ describe('GET /materials/:id/movements', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('GET /materials/:id', () => {
+  it('returns material by id', async () => {
+    store[matPath('mat1')] = { name: 'Compost', unit: 'kg', onHand: 5, reorderThreshold: 1, archived: false };
+    const res = await request(app)
+      .get('/materials/mat1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Compost');
+    expect(res.body.id).toBe('mat1');
+  });
+
+  it('returns 404 for non-existent material', async () => {
+    const res = await request(app)
+      .get('/materials/nope')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for an archived material', async () => {
+    store[matPath('mat1')] = { name: 'Old item', unit: 'g', archived: true };
+    const res = await request(app)
+      .get('/materials/mat1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /materials — home_pro cap (billing enabled)', () => {
+  beforeEach(() => { process.env.BILLING_ENABLED = 'true'; });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns 429 when 25 active materials already exist', async () => {
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    for (let i = 1; i <= 25; i++) {
+      store[matPath(`m${i}`)] = { name: `Mat ${i}`, unit: 'g', archived: false };
+    }
+    const res = await request(app)
+      .post('/materials')
+      .set('Authorization', authHeader())
+      .send({ name: 'Overflow', unit: 'g' });
+    expect(res.status).toBe(429);
+    expect(res.body.error).toBe('quota_exceeded');
+    expect(res.body.quotaType).toBe('materials');
+  });
+
+  it('archived materials do not count toward the cap', async () => {
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    for (let i = 1; i <= 25; i++) {
+      store[matPath(`m${i}`)] = { name: `Mat ${i}`, unit: 'g', archived: true };
+    }
+    const res = await request(app)
+      .post('/materials')
+      .set('Authorization', authHeader())
+      .send({ name: 'Fits fine', unit: 'g' });
+    expect(res.status).toBe(201);
+  });
+});
+
+describe('GET /materials — propertyId scoping (billing enabled)', () => {
+  beforeEach(() => { process.env.BILLING_ENABLED = 'true'; });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns 403 for home_pro user requesting property-scoped stock', async () => {
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    const res = await request(app)
+      .get('/materials?propertyId=prop1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('upgrade_required');
+  });
+
+  it('allows landscaper_pro to filter materials by propertyId', async () => {
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'landscaper_pro', status: 'active' };
+    store[matPath('m1')] = { name: 'Site supply', unit: 'kg', onHand: 5, archived: false, propertyId: 'prop1' };
+    store[matPath('m2')] = { name: 'Other prop', unit: 'kg', onHand: 3, archived: false, propertyId: 'prop2' };
+    const res = await request(app)
+      .get('/materials?propertyId=prop1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.materials).toHaveLength(1);
+    expect(res.body.materials[0].name).toBe('Site supply');
+  });
+});
