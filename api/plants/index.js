@@ -123,6 +123,7 @@ function getUserClaims(req) {
 
 const households = require('./households');
 const team = require('./team');
+const visits = require('./visits');
 
 // Resolve the active household for the authenticated actor and decorate the
 // request with: actorUserId, userId (= ownerId of the active household),
@@ -1966,6 +1967,231 @@ app.post('/team/accept', requireUser, async (req, res) => {
     const statusMap = { not_found: 404, already_used: 409, expired: 410 };
     const status = statusMap[err.code] || 500;
     res.status(status).json({ error: err.message });
+  }
+});
+
+// ── Visit scheduling — issue #164 ────────────────────────────────────────────
+
+// GET /visits.ics?token= — iCal feed (no auth, token-based read-only)
+app.get('/visits.ics', async (req, res) => {
+  try {
+    const token = req.query.token;
+    const userId = await visits.resolveIcsToken(db, token);
+    if (!userId) return res.status(401).send('Invalid or missing token');
+    await visits.materialiseUpcoming(db, userId);
+    const snap = await visits.visitsRef(db, userId).get();
+    const all = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((v) => v.status !== 'cancelled');
+    const ical = visits.generateIcal(all);
+    res.set('Content-Type', 'text/calendar; charset=utf-8');
+    res.set('Content-Disposition', 'attachment; filename="visits.ics"');
+    res.status(200).send(ical);
+  } catch {
+    res.status(500).send('Error generating calendar');
+  }
+});
+
+// GET /visits/ics-token — get or create iCal feed token
+app.get('/visits/ics-token', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const token = await visits.getOrCreateIcsToken(db, req.userId);
+    const feedUrl = `${process.env.APP_BASE_URL || 'https://api.plants.lopezcloud.dev'}/visits.ics?token=${token}`;
+    res.status(200).json({ token, feedUrl });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /visits — list visits (with RBAC, date range, status filters)
+app.get('/visits', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    await visits.materialiseUpcoming(db, req.userId);
+    const snap = await visits.visitsRef(db, req.userId).get();
+    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+    // Query filters
+    const { propertyId, from, to, status, assignedTo } = req.query;
+    if (propertyId) items = items.filter((v) => v.propertyId === propertyId);
+    if (status)     items = items.filter((v) => v.status === status);
+    if (assignedTo) items = items.filter((v) => v.assignedTo === assignedTo);
+    if (from)       items = items.filter((v) => v.scheduledStart >= from);
+    if (to)         items = items.filter((v) => v.scheduledStart <= to);
+
+    // RBAC: get actor's assignedPropertyIds when acting as org member
+    let assignedPropertyIds = null;
+    if (req.orgRole === 'manager') {
+      const memberSnap = await db.collection('users').doc(req.userId).collection('team').doc(req.actorUserId).get();
+      assignedPropertyIds = memberSnap.exists ? (memberSnap.data().assignedPropertyIds || null) : null;
+    }
+    items = visits.applyVisitRbac(items, req.orgRole, req.actorUserId, assignedPropertyIds);
+
+    // Sort ascending by scheduledStart
+    items.sort((a, b) => (a.scheduledStart || '').localeCompare(b.scheduledStart || ''));
+
+    res.status(200).json({ visits: items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits — create a visit (optionally with recurrence)
+app.post('/visits', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    const {
+      propertyId, title, description, scheduledStart, scheduledEnd,
+      estimatedDurationMinutes, assignedTo, plantIds, checklist, recurrence, notes,
+    } = req.body || {};
+
+    if (!propertyId || !scheduledStart) {
+      return res.status(400).json({ error: 'propertyId and scheduledStart are required' });
+    }
+
+    const now = new Date().toISOString();
+    const data = {
+      propertyId,
+      title: title || 'Property Visit',
+      description: description || null,
+      scheduledStart,
+      scheduledEnd: scheduledEnd || null,
+      estimatedDurationMinutes: estimatedDurationMinutes || 60,
+      assignedTo: assignedTo || req.userId,
+      plantIds: Array.isArray(plantIds) ? plantIds : [],
+      checklist: Array.isArray(checklist) ? checklist : [],
+      status: 'scheduled',
+      recurrence: recurrence || null,
+      notes: notes || null,
+      createdBy: req.actorUserId,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const ref = await visits.visitsRef(db, req.userId).add(data);
+    const created = { id: ref.id, ...data };
+
+    // Immediately materialise recurring instances
+    if (recurrence?.freq) {
+      const instances = visits.buildInstances(created, Date.now());
+      for (const inst of instances) {
+        await visits.visitsRef(db, req.userId).add({ ...inst, createdBy: req.actorUserId, createdAt: now, updatedAt: now });
+      }
+    }
+
+    res.status(201).json(created);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /visits/:id — get a single visit
+app.get('/visits/:id', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const snap = await visits.visitRef(db, req.userId, req.params.id).get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const visit = { id: snap.id, ...snap.data() };
+
+    // RBAC check
+    let assignedPropertyIds = null;
+    if (req.orgRole === 'manager') {
+      const mSnap = await db.collection('users').doc(req.userId).collection('team').doc(req.actorUserId).get();
+      assignedPropertyIds = mSnap.exists ? mSnap.data().assignedPropertyIds : null;
+    }
+    const [accessible] = visits.applyVisitRbac([visit], req.orgRole, req.actorUserId, assignedPropertyIds);
+    if (!accessible) return res.status(403).json({ error: 'forbidden' });
+
+    res.status(200).json(visit);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /visits/:id — update visit details
+app.put('/visits/:id', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    if (snap.data().status === 'completed') {
+      return res.status(409).json({ error: 'Cannot update a completed visit' });
+    }
+
+    const allowed = ['title', 'description', 'scheduledStart', 'scheduledEnd',
+      'estimatedDurationMinutes', 'assignedTo', 'plantIds', 'checklist', 'notes', 'status'];
+    const updates = { updatedAt: new Date().toISOString() };
+    for (const key of allowed) {
+      if (req.body?.[key] !== undefined) updates[key] = req.body[key];
+    }
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /visits/:id — cancel a visit
+app.delete('/visits/:id', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const now = new Date().toISOString();
+    await ref.set({ status: 'cancelled', cancelledAt: now, updatedAt: now }, { merge: true });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits/:id/check-in — record arrival time
+app.post('/visits/:id/check-in', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const now = new Date().toISOString();
+    const updates = { arrivedAt: now, status: 'in_progress', updatedAt: now };
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits/:id/check-out — record departure time
+app.post('/visits/:id/check-out', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    const now = new Date().toISOString();
+    const arrivedAt = snap.data().arrivedAt;
+    const durationMinutes = arrivedAt
+      ? Math.round((new Date(now) - new Date(arrivedAt)) / 60000) : null;
+    const updates = { departedAt: now, durationMinutes, updatedAt: now };
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /visits/:id/complete — mark completed, lock checklist
+app.post('/visits/:id/complete', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const ref = visits.visitRef(db, req.userId, req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Visit not found' });
+    if (snap.data().status === 'completed') {
+      return res.status(409).json({ error: 'Visit already completed' });
+    }
+    const now = new Date().toISOString();
+    const updates = { status: 'completed', completedAt: now, updatedAt: now };
+    if (req.body?.checklist) updates.checklist = req.body.checklist;
+    if (req.body?.notes) updates.notes = req.body.notes;
+    await ref.set(updates, { merge: true });
+    res.status(200).json({ id: snap.id, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

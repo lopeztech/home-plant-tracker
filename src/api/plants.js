@@ -488,3 +488,31 @@ export const imagesApi = {
     return publicUrl
   },
 }
+
+export const teamApi = {
+  invite: (role, assignedPropertyIds) =>
+    request('/team/invite', { method: 'POST', body: JSON.stringify({ role, assignedPropertyIds }) }),
+  list: () => request('/team'),
+  update: (memberUid, data) =>
+    request(`/team/${memberUid}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  remove: (memberUid) => request(`/team/${memberUid}`, { method: 'DELETE' }),
+  accept: (token) =>
+    request('/team/accept', { method: 'POST', body: JSON.stringify({ token }) }),
+  myOrgs: () => request('/me/orgs'),
+}
+
+export const visitsApi = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null))
+    return request(`/visits${qs.size ? `?${qs}` : ''}`)
+  },
+  create: (data) => request('/visits', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id) => request(`/visits/${id}`),
+  update: (id, data) => request(`/visits/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  cancel: (id) => request(`/visits/${id}`, { method: 'DELETE' }),
+  checkIn: (id) => request(`/visits/${id}/check-in`, { method: 'POST' }),
+  checkOut: (id) => request(`/visits/${id}/check-out`, { method: 'POST' }),
+  complete: (id, data) =>
+    request(`/visits/${id}/complete`, { method: 'POST', body: JSON.stringify(data) }),
+  getIcsToken: () => request('/visits/ics-token'),
+}

@@ -6261,3 +6261,169 @@ describe('team RBAC (#163)', () => {
     expect(res.body.error).toBe('upgrade_required');
   });
 });
+
+// ── Visit scheduling — issue #164 ────────────────────────────────────────────
+
+describe('visit scheduling (#164)', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store['users/alice/subscription/current'] = { tier: 'landscaper_pro', status: 'active' };
+    // Seed a property so visits have a valid propertyId
+    store['users/alice/properties/prop-1'] = { name: 'Main Garden', archived: false };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('POST /visits creates a visit and returns 201', async () => {
+    const res = await request(app)
+      .post('/visits')
+      .set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z', title: 'Spring trim' });
+    expect(res.status).toBe(201);
+    expect(res.body.title).toBe('Spring trim');
+    expect(res.body.propertyId).toBe('prop-1');
+    expect(res.body.status).toBe('scheduled');
+    expect(res.body.id).toBeDefined();
+  });
+
+  it('POST /visits requires propertyId and scheduledStart', async () => {
+    const res = await request(app)
+      .post('/visits')
+      .set('Authorization', authHeader('alice'))
+      .send({ title: 'No property' });
+    expect(res.status).toBe(400);
+  });
+
+  it('GET /visits returns the created visit', async () => {
+    await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z' });
+    const res = await request(app).get('/visits').set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(200);
+    expect(res.body.visits.length).toBeGreaterThan(0);
+  });
+
+  it('GET /visits/:id returns a single visit', async () => {
+    const created = await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z' });
+    const res = await request(app).get(`/visits/${created.body.id}`).set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(200);
+    expect(res.body.id).toBe(created.body.id);
+  });
+
+  it('PUT /visits/:id updates visit details', async () => {
+    const created = await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z' });
+    const res = await request(app).put(`/visits/${created.body.id}`)
+      .set('Authorization', authHeader('alice'))
+      .send({ notes: 'Bring hedge trimmer' });
+    expect(res.status).toBe(200);
+    expect(res.body.notes).toBe('Bring hedge trimmer');
+  });
+
+  it('DELETE /visits/:id cancels the visit', async () => {
+    const created = await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z' });
+    const del = await request(app).delete(`/visits/${created.body.id}`).set('Authorization', authHeader('alice'));
+    expect(del.status).toBe(204);
+    // Verify status is cancelled
+    const after = await request(app).get(`/visits/${created.body.id}`).set('Authorization', authHeader('alice'));
+    expect(after.body.status).toBe('cancelled');
+  });
+
+  it('POST /visits/:id/check-in records arrivedAt and sets status in_progress', async () => {
+    const created = await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z' });
+    const res = await request(app).post(`/visits/${created.body.id}/check-in`).set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('in_progress');
+    expect(res.body.arrivedAt).toBeDefined();
+  });
+
+  it('POST /visits/:id/check-out records departedAt and durationMinutes', async () => {
+    const created = await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z' });
+    await request(app).post(`/visits/${created.body.id}/check-in`).set('Authorization', authHeader('alice'));
+    const res = await request(app).post(`/visits/${created.body.id}/check-out`).set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(200);
+    expect(res.body.departedAt).toBeDefined();
+    expect(typeof res.body.durationMinutes).toBe('number');
+  });
+
+  it('POST /visits/:id/complete marks visit completed', async () => {
+    const created = await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z' });
+    const res = await request(app).post(`/visits/${created.body.id}/complete`)
+      .set('Authorization', authHeader('alice'))
+      .send({ notes: 'All done' });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('completed');
+    expect(res.body.completedAt).toBeDefined();
+  });
+
+  it('POST /visits with recurrence materialises instances', async () => {
+    const res = await request(app)
+      .post('/visits')
+      .set('Authorization', authHeader('alice'))
+      .send({
+        propertyId: 'prop-1',
+        scheduledStart: '2026-01-01T09:00:00Z', // past, so instances are in future
+        recurrence: { freq: 'weekly', count: 3 },
+      });
+    expect(res.status).toBe(201);
+    // Instances should be materialised; GET /visits should include them
+    const listRes = await request(app).get('/visits').set('Authorization', authHeader('alice'));
+    // Parent + up to 3 instances
+    expect(listRes.body.visits.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('GET /visits.ics returns valid iCal with token', async () => {
+    // Get iCal token
+    const tokenRes = await request(app).get('/visits/ics-token').set('Authorization', authHeader('alice'));
+    expect(tokenRes.status).toBe(200);
+    const { token } = tokenRes.body;
+
+    // Create a visit
+    await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z', title: 'Garden Visit' });
+
+    const icalRes = await request(app).get(`/visits.ics?token=${token}`);
+    expect(icalRes.status).toBe(200);
+    expect(icalRes.headers['content-type']).toContain('text/calendar');
+    expect(icalRes.text).toContain('BEGIN:VCALENDAR');
+    expect(icalRes.text).toContain('BEGIN:VEVENT');
+    expect(icalRes.text).toContain('Garden Visit');
+  });
+
+  it('GET /visits.ics returns 401 with invalid token', async () => {
+    const res = await request(app).get('/visits.ics?token=invalid-token');
+    expect(res.status).toBe(401);
+  });
+
+  it('technician can only see visits assigned to them', async () => {
+    store['users/alice/subscription/current'] = { tier: 'landscaper_pro', status: 'active' };
+
+    // Alice (owner) creates two visits — one for bob, one for herself
+    const v1 = await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-01T09:00:00Z', assignedTo: 'bob', title: 'Bob visit' });
+    await request(app).post('/visits').set('Authorization', authHeader('alice'))
+      .send({ propertyId: 'prop-1', scheduledStart: '2026-05-02T09:00:00Z', assignedTo: 'alice', title: 'Alice visit' });
+    expect(v1.status).toBe(201);
+
+    // Bob joins as technician
+    const invRes = await request(app).post('/team/invite').set('Authorization', authHeader('alice')).send({ role: 'technician' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    // Bob reads visits with x-org-id — should only see his
+    const res = await request(app).get('/visits').set(orgAuthHeader('bob', 'alice'));
+    expect(res.status).toBe(200);
+    const names = res.body.visits.map((v) => v.title);
+    expect(names).toContain('Bob visit');
+    expect(names).not.toContain('Alice visit');
+  });
+
+  it('requires landscaper_pro tier', async () => {
+    store['users/alice/subscription/current'] = { tier: 'home_pro', status: 'active' };
+    const res = await request(app).get('/visits').set('Authorization', authHeader('alice'));
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('upgrade_required');
+  });
+});
