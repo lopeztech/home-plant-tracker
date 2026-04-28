@@ -6,15 +6,17 @@ import { usePlantContext } from '../../context/PlantContext.jsx'
 import { useHelp } from '../../context/HelpContext.jsx'
 import { useTour, TOURS } from '../../context/TourContext.jsx'
 import { useProperty } from '../../context/PropertyContext.jsx'
+import { useProfile } from '../../context/ProfileContext.jsx'
 import SidebarMenu from './SidebarMenu.jsx'
 import WeatherStrip from '../../components/WeatherStrip.jsx'
 import OfflineIndicator from '../../components/OfflineIndicator.jsx'
-import { menuItems } from './menuData.js'
+import { menuItems, filterMenuByPersona } from './menuData.js'
 import { buildWaterTasks } from '../../utils/todayTasks.js'
 
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const { properties, activePropertyId, switchTo } = useProperty()
+  const { accountType } = useProfile()
   const { navMinified, toggleSetting } = useLayoutContext()
   const { weather, location, plants, floors } = usePlantContext()
   const { open: openHelp } = useHelp()
@@ -25,6 +27,11 @@ export default function Sidebar() {
   const todayCount = useMemo(
     () => buildWaterTasks(plants, weather, floors).tasks.length,
     [plants, weather, floors],
+  )
+
+  const visibleMenu = useMemo(
+    () => filterMenuByPersona(menuItems, accountType),
+    [accountType],
   )
 
   const toggleSidenav = () => {
@@ -83,7 +90,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <div className="primary-nav flex-grow-1 overflow-auto">
         <div className="scrollbar">
-          <SidebarMenu items={menuItems} badges={{ today: todayCount }} />
+          <SidebarMenu items={visibleMenu} badges={{ today: todayCount }} />
           {/* Sign out — below Settings */}
           <ul className="nav-menu d-flex flex-column">
             <li>
