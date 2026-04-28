@@ -29,10 +29,13 @@ test.describe('First-run overlays', () => {
     // Set consent + whatsNewSeen; leave onboarded unset → Onboarding shows.
     await enterGuestMode(page, { consent: true, onboarded: false, whatsNewSeen: true })
     await page.goto('/', { waitUntil: 'networkidle' })
-    // Onboarding is a Bootstrap modal; step 1 title is "Upload a Floorplan".
+    // Onboarding is a Bootstrap modal. Step 1 (added in PR #376) is the
+    // persona picker — "How will you use Plant Tracker?". The original info
+    // steps (Upload a Floorplan / Add Your Plants / Track Watering) follow
+    // once a persona is picked.
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible({ timeout: 8_000 })
-    await expect(dialog).toContainText('Upload a Floorplan')
+    await expect(dialog).toContainText('How will you use Plant Tracker')
     expect(errors, `Unexpected errors on Onboarding:\n${errors.join('\n\n')}`).toEqual([])
   })
 
