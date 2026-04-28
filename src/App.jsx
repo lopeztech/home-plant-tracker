@@ -3,6 +3,7 @@ import { GoogleOAuthProvider } from '@react-oauth/google'
 import { AuthProvider } from './contexts/AuthContext.jsx'
 import { LayoutProvider } from './context/LayoutContext.jsx'
 import { SubscriptionProvider } from './context/SubscriptionContext.jsx'
+import { ProfileProvider } from './context/ProfileContext.jsx'
 import { HouseholdProvider } from './context/HouseholdContext.jsx'
 import { PropertyProvider } from './context/PropertyContext.jsx'
 import { ToastProvider } from './components/Toast.jsx'
@@ -19,14 +20,16 @@ export default function App() {
       <AuthProvider>
         <LayoutProvider>
           <SubscriptionProvider>
-            <HouseholdProvider>
-            <PropertyProvider>
-              <ToastProvider>
-                <Outlet />
-                <ConsentBanner />
-              </ToastProvider>
-            </PropertyProvider>
-            </HouseholdProvider>
+            <ProfileProvider>
+              <HouseholdProvider>
+              <PropertyProvider>
+                <ToastProvider>
+                  <Outlet />
+                  <ConsentBanner />
+                </ToastProvider>
+              </PropertyProvider>
+              </HouseholdProvider>
+            </ProfileProvider>
           </SubscriptionProvider>
         </LayoutProvider>
       </AuthProvider>

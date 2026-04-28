@@ -14,10 +14,11 @@ import i18n from '../i18n/index.js'
 import { accountApi, exportApi, apiKeysApi, brandingApi, imagesApi, householdsApi, propertiesApi } from '../api/plants.js'
 import { useHousehold } from '../context/HouseholdContext.jsx'
 import { useProperty } from '../context/PropertyContext.jsx'
+import { useProfile } from '../context/ProfileContext.jsx'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
-  { id: 'preferences', label: 'Preferences', icon: 'sliders', tags: 'theme dark mode light temperature celsius fahrenheit metric imperial units location city weather' },
+  { id: 'preferences', label: 'Preferences', icon: 'sliders', tags: 'theme dark mode light temperature celsius fahrenheit metric imperial units location city weather profile mode persona household landscaper gardener role' },
   { id: 'household', label: 'Household', icon: 'users', tags: 'household share invite member family roommate partner role viewer editor owner code' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'api-keys', label: 'API Keys', icon: 'key', tags: 'api keys rest integration home assistant automation developer' },
@@ -384,13 +385,36 @@ function PropertyTab({ search }) {
   )
 }
 
+const PROFILE_OPTIONS = [
+  {
+    value: 'household',
+    label: 'Household',
+    description: 'Track plants in your home, share with family, log watering and feeding.',
+    icon: 'home',
+  },
+  {
+    value: 'landscaper',
+    label: 'Landscaper / gardener',
+    description: 'Manage client properties, schedule visits, run a team, send branded reports.',
+    icon: 'briefcase',
+  },
+  {
+    value: 'both',
+    label: 'Both',
+    description: "I do both — show me everything.",
+    icon: 'layers',
+  },
+]
+
 function PreferencesTab({ search }) {
   const { tempUnit, unitSystem, location, setLocation, timezone, setTimezone } = usePlantContext()
   const { themeMode, changeThemeMode } = useLayoutContext()
+  const { accountType, setAccountType } = useProfile()
   const { t } = useTranslation('settings')
   const [locationSearch, setLocationSearch] = useState('')
   const [locationResults, setLocationResults] = useState([])
   const [locationSearching, setLocationSearching] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
 
   const THEME_OPTIONS = [
     { value: 'light', label: 'Light', icon: 'sun' },
@@ -398,8 +422,59 @@ function PreferencesTab({ search }) {
     { value: 'auto', label: 'Auto', icon: 'monitor' },
   ]
 
+  const onPickProfile = async (next) => {
+    if (next === accountType || profileSaving) return
+    setProfileSaving(true)
+    try {
+      await setAccountType(next)
+    } catch { /* ProfileContext surfaces the error; no-op here */ }
+    finally { setProfileSaving(false) }
+  }
+
   return (
     <>
+      <SettingSection id="profile-mode" title="Profile mode" icon="user" search={search}>
+        <p className="text-muted small mb-3">
+          Tailors which menus you see. Doesn&apos;t change what you can pay for —
+          your plan still controls premium features and quotas.
+        </p>
+        <div className="d-flex flex-column flex-md-row gap-2" role="radiogroup" aria-label="Profile mode">
+          {PROFILE_OPTIONS.map(({ value, label, description, icon }) => {
+            const selected = accountType === value
+            return (
+              <div
+                key={value}
+                className={`flex-fill border rounded p-3 d-flex gap-2 ${selected ? 'border-primary bg-primary-subtle' : ''} ${profileSaving ? 'opacity-50' : ''}`}
+                onClick={() => onPickProfile(value)}
+                style={{ cursor: profileSaving ? 'wait' : 'pointer' }}
+              >
+                <Form.Check
+                  type="radio"
+                  id={`profile-${value}`}
+                  name="profile-mode"
+                  value={value}
+                  checked={selected}
+                  onChange={() => onPickProfile(value)}
+                  disabled={profileSaving}
+                  aria-label={label}
+                  aria-describedby={`profile-${value}-desc`}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <div>
+                  <div className="d-flex align-items-center gap-1 fw-500">
+                    <svg className="sa-icon" style={{ width: 14, height: 14 }} aria-hidden="true">
+                      <use href={`/icons/sprite.svg#${icon}`}></use>
+                    </svg>
+                    {label}
+                  </div>
+                  <div id={`profile-${value}-desc`} className="text-muted small">{description}</div>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </SettingSection>
+
       <SettingSection id="appearance" title="Appearance" icon="sun" search={search}>
         <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
           <span>Theme</span>
