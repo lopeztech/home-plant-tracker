@@ -1,3 +1,6 @@
+// `personas` (optional): which Profile-mode personas the item is shown to.
+// Items / sections without a `personas` key are universal. Filter is applied
+// in Sidebar.jsx; ordering and labels stay declared here.
 export const menuItems = [
   {
     key: 'garden',
@@ -10,6 +13,18 @@ export const menuItems = [
       { key: 'calendar', label: 'Care Calendar', icon: '/icons/sprite.svg#calendar', url: '/calendar' },
       { key: 'forecast', label: 'Forecast', icon: '/icons/sprite.svg#cloud', url: '/forecast' },
       { key: 'propagation', label: 'Propagation', icon: '/icons/sprite.svg#git-branch', url: '/propagation' },
+    ],
+  },
+  {
+    key: 'pro',
+    label: 'Pro',
+    isSection: true,
+    collapsible: true,
+    personas: ['landscaper', 'both'],
+    children: [
+      { key: 'visits', label: 'Visits', icon: '/icons/sprite.svg#calendar', url: '/visits' },
+      { key: 'client-properties', label: 'Properties', icon: '/icons/sprite.svg#home', url: '/settings/client-properties' },
+      { key: 'branding', label: 'Branding', icon: '/icons/sprite.svg#star', url: '/settings/branding' },
     ],
   },
   {
@@ -34,3 +49,20 @@ export const menuItems = [
     ],
   },
 ]
+
+/**
+ * Drop sections / children whose `personas` array doesn't include the
+ * current accountType. Universal items (no `personas` key) always pass.
+ * Empty sections (all children filtered out) are removed.
+ */
+export function filterMenuByPersona(items, accountType) {
+  const matches = (item) => !item.personas || item.personas.includes(accountType)
+  return items
+    .filter(matches)
+    .map((section) => {
+      if (!section.children) return section
+      const children = section.children.filter(matches)
+      return { ...section, children }
+    })
+    .filter((section) => !section.children || section.children.length > 0)
+}

@@ -31,6 +31,10 @@ vi.mock('../context/TourContext.jsx', () => ({
 vi.mock('../context/PropertyContext.jsx', () => ({
   useProperty: () => ({ properties: [], activePropertyId: 'primary', switchTo: vi.fn() }),
 }))
+let profileAccountType = 'household'
+vi.mock('../context/ProfileContext.jsx', () => ({
+  useProfile: () => ({ accountType: profileAccountType }),
+}))
 
 import Sidebar from '../layouts/components/Sidebar.jsx'
 
@@ -58,5 +62,32 @@ describe('Sidebar tour menu', () => {
     render(<MemoryRouter><Sidebar /></MemoryRouter>)
     fireEvent.click(screen.getByRole('button', { name: /What's new/i }))
     expect(openWhatsNew).toHaveBeenCalled()
+  })
+})
+
+describe('Sidebar persona filter', () => {
+  it('hides the Pro section for household persona', () => {
+    profileAccountType = 'household'
+    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: /Today/i })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^Visits$/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /^Properties$/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /^Branding$/i })).toBeNull()
+  })
+
+  it('shows the Pro section for landscaper persona', () => {
+    profileAccountType = 'landscaper'
+    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: /^Visits$/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^Properties$/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^Branding$/i })).toBeInTheDocument()
+  })
+
+  it('shows the Pro section for both persona', () => {
+    profileAccountType = 'both'
+    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: /^Visits$/i })).toBeInTheDocument()
+    // Universal items still visible
+    expect(screen.getByRole('link', { name: /Today/i })).toBeInTheDocument()
   })
 })
