@@ -2593,6 +2593,199 @@ app.post('/properties/:id/restore', requireUser, requireTier('home_pro'), async 
   }
 });
 
+// ── Materials inventory (#295) ─────────────────────────────────────────────
+
+function userMaterials(userId) {
+  return db.collection('users').doc(userId).collection('materials');
+}
+
+const MATERIAL_UNITS = ['g', 'kg', 'L', 'mL', 'each'];
+const MOVEMENT_REASONS = ['use', 'restock', 'adjustment'];
+const HOME_PRO_MATERIALS_CAP = 25;
+
+async function assertLandscaperPro(req, res) {
+  if (!billing.billingEnabled()) return true;
+  const tier = await billing.getCurrentTier(db, req.userId);
+  if (billing.TIERS[tier].level < billing.TIERS.landscaper_pro.level) {
+    res.status(403).json({ error: 'upgrade_required', requiredTier: 'landscaper_pro', upgradeUrl: '/pricing' });
+    return false;
+  }
+  return true;
+}
+
+// GET /materials — list materials; optional ?propertyId= for property-scoped stock
+app.get('/materials', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const { propertyId } = req.query;
+    if (propertyId && !(await assertLandscaperPro(req, res))) return;
+    const snap = await userMaterials(req.userId).get();
+    let items = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((m) => !m.archived);
+    if (propertyId) items = items.filter((m) => m.propertyId === propertyId);
+    res.status(200).json({ materials: items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /materials — create a material; enforces 25-item cap for home_pro users
+app.post('/materials', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const { name, unit, onHand, reorderThreshold, reorderQty, propertyId,
+            sku, supplier, supplierUrl, costPerUnitCents, notes } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim())
+      return res.status(400).json({ error: 'name is required' });
+    if (!MATERIAL_UNITS.includes(unit))
+      return res.status(400).json({ error: `unit must be one of: ${MATERIAL_UNITS.join(', ')}` });
+    if (propertyId) {
+      if (!(await assertLandscaperPro(req, res))) return;
+    } else if (billing.billingEnabled()) {
+      const tier = await billing.getCurrentTier(db, req.userId);
+      if (billing.TIERS[tier].level < billing.TIERS.landscaper_pro.level) {
+        const snap = await userMaterials(req.userId).get();
+        const count = snap.docs.filter((d) => !d.data().archived).length;
+        if (count >= HOME_PRO_MATERIALS_CAP) {
+          return res.status(429).json({ error: 'quota_exceeded', quotaType: 'materials',
+            limit: HOME_PRO_MATERIALS_CAP, upgradeUrl: '/pricing' });
+        }
+      }
+    }
+    const now = new Date().toISOString();
+    const data = {
+      name: name.trim(), unit,
+      onHand: typeof onHand === 'number' ? onHand : 0,
+      reorderThreshold: typeof reorderThreshold === 'number' ? reorderThreshold : 0,
+      reorderQty: typeof reorderQty === 'number' ? reorderQty : 0,
+      propertyId: propertyId || null,
+      sku: sku || null, supplier: supplier || null, supplierUrl: supplierUrl || null,
+      costPerUnitCents: typeof costPerUnitCents === 'number' ? costPerUnitCents : null,
+      notes: notes || '', archived: false, createdAt: now, updatedAt: now,
+    };
+    const ref = await userMaterials(req.userId).add(data);
+    res.status(201).json({ id: ref.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /materials/shopping-list — materials at or below reorderThreshold, grouped by supplier
+// Must be declared before /materials/:id to prevent route shadowing.
+app.get('/materials/shopping-list', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userMaterials(req.userId).get();
+    const items = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((m) => !m.archived && m.onHand <= m.reorderThreshold)
+      .sort((a, b) => (a.supplier || '').localeCompare(b.supplier || ''));
+    res.status(200).json({ items });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /materials/:id — get one material
+app.get('/materials/:id', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userMaterials(req.userId).doc(req.params.id).get();
+    if (!snap.exists || snap.data().archived) return res.status(404).json({ error: 'not_found' });
+    res.status(200).json({ id: snap.id, ...snap.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /materials/:id — update material metadata (onHand is only changed via movements)
+app.put('/materials/:id', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const ref = userMaterials(req.userId).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists || snap.data().archived) return res.status(404).json({ error: 'not_found' });
+    const { name, unit, reorderThreshold, reorderQty, sku, supplier, supplierUrl, costPerUnitCents, notes } = req.body;
+    const update = { updatedAt: new Date().toISOString() };
+    if (name !== undefined) update.name = String(name).trim();
+    if (unit !== undefined) {
+      if (!MATERIAL_UNITS.includes(unit)) return res.status(400).json({ error: `unit must be one of: ${MATERIAL_UNITS.join(', ')}` });
+      update.unit = unit;
+    }
+    if (reorderThreshold !== undefined) update.reorderThreshold = Number(reorderThreshold);
+    if (reorderQty !== undefined) update.reorderQty = Number(reorderQty);
+    if (sku !== undefined) update.sku = sku;
+    if (supplier !== undefined) update.supplier = supplier;
+    if (supplierUrl !== undefined) update.supplierUrl = supplierUrl;
+    if (costPerUnitCents !== undefined) update.costPerUnitCents = costPerUnitCents;
+    if (notes !== undefined) update.notes = notes;
+    await ref.set(update, { merge: true });
+    const updated = await ref.get();
+    res.status(200).json({ id: updated.id, ...updated.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /materials/:id — soft-delete (archive)
+app.delete('/materials/:id', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const ref = userMaterials(req.userId).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'not_found' });
+    await ref.set({ archived: true, updatedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ archived: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /materials/:id/movements — record a stock change atomically
+// Uses a Firestore transaction so onHand always equals the sum of movements.
+app.post('/materials/:id/movements', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const { delta, reason, visitId, plantId, notes } = req.body;
+    if (typeof delta !== 'number' || delta === 0)
+      return res.status(400).json({ error: 'delta must be a non-zero number' });
+    if (!MOVEMENT_REASONS.includes(reason))
+      return res.status(400).json({ error: `reason must be one of: ${MOVEMENT_REASONS.join(', ')}` });
+    const matRef = userMaterials(req.userId).doc(req.params.id);
+    let movementId, finalOnHand;
+    await db.runTransaction(async (txn) => {
+      const snap = await txn.get(matRef);
+      if (!snap.exists || snap.data().archived) throw Object.assign(new Error('not_found'), { status: 404 });
+      finalOnHand = Math.max(0, (snap.data().onHand ?? 0) + delta);
+      const now = new Date().toISOString();
+      const movRef = matRef.collection('movements').doc();
+      movementId = movRef.id;
+      txn.set(movRef, {
+        delta, reason,
+        visitId: visitId || null, plantId: plantId || null,
+        actorUid: req.actorUserId || req.userId,
+        notes: notes || '', createdAt: now,
+      });
+      const matUpdate = { onHand: finalOnHand, updatedAt: now };
+      if (reason === 'restock') matUpdate.lastRestockedAt = now;
+      txn.update(matRef, matUpdate);
+    });
+    res.status(201).json({ id: movementId, onHand: finalOnHand });
+  } catch (err) {
+    if (err.message === 'not_found') return res.status(404).json({ error: 'not_found' });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /materials/:id/movements — list movements; optional ?from= and ?to= ISO date filters
+app.get('/materials/:id/movements', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const matRef = userMaterials(req.userId).doc(req.params.id);
+    const snap = await matRef.get();
+    if (!snap.exists || snap.data().archived) return res.status(404).json({ error: 'not_found' });
+    const { from, to } = req.query;
+    const movSnap = await matRef.collection('movements').orderBy('createdAt', 'desc').get();
+    const movements = movSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((m) => (!from || m.createdAt >= from) && (!to || m.createdAt <= to));
+    res.status(200).json({ movements });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Plants CRUD ───────────────────────────────────────────────────────────────
 
 app.get('/plants', requireUser, async (req, res) => {

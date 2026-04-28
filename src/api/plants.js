@@ -295,6 +295,22 @@ export const propertiesApi = {
   restore: (id) => request(`/properties/${id}/restore`, { method: 'POST', body: JSON.stringify({}) }),
 }
 
+export const materialsApi = {
+  list: (propertyId) => request(`/materials${propertyId ? `?propertyId=${encodeURIComponent(propertyId)}` : ''}`),
+  create: (data) => request('/materials', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/materials/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  archive: (id) => request(`/materials/${id}`, { method: 'DELETE' }),
+  shoppingList: () => request('/materials/shopping-list'),
+  addMovement: (id, data) => request(`/materials/${id}/movements`, { method: 'POST', body: JSON.stringify(data) }),
+  listMovements: (id, { from, to } = {}) => {
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    const qs = params.toString()
+    return request(`/materials/${id}/movements${qs ? `?${qs}` : ''}`)
+  },
+}
+
 export const accountApi = {
   deleteAccount: () => request('/account', { method: 'DELETE' }),
   exportData: () => request('/account/export'),

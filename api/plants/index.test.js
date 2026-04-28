@@ -19,9 +19,10 @@ function clearStore() {
 function makeCollRef(prefix) {
   return {
     doc(id) {
-      const path = `${prefix}/${id}`;
+      const docId = id !== undefined ? id : `auto-${++idCounter}`;
+      const path = `${prefix}/${docId}`;
       return {
-        id,
+        id: docId,
         get:    async () => ({ exists: store[path] !== undefined, id, data: () => store[path] }),
         set:    async (data, opts) => {
           store[path] = (opts && opts.merge && store[path])
@@ -136,6 +137,14 @@ beforeAll(() => {
     '@google-cloud/firestore': {
       Firestore: class {
         collection(name) { return makeCollRef(name); }
+        async runTransaction(fn) {
+          const txn = {
+            get: async (ref) => ref.get(),
+            set: (ref, data, opts) => ref.set(data, opts),
+            update: (ref, data) => ref.update(data),
+          };
+          return fn(txn);
+        }
       },
     },
     './vertexai': {
@@ -6787,5 +6796,223 @@ describe('maintenance templates (#297)', () => {
       .set('Authorization', authHeader('alice'))
       .send({ propertyId: 'prop-1' }); // missing scheduledStart
     expect(res.status).toBe(400);
+  });
+});
+
+// ── Materials inventory (#295) ────────────────────────────────────────────────
+
+const matPath = (id) => `users/${USER_SUB}/materials/${id}`;
+
+describe('GET /materials', () => {
+  it('requires auth', async () => {
+    const res = await request(app).get('/materials');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns empty list when no materials exist', async () => {
+    const res = await request(app).get('/materials').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.materials).toEqual([]);
+  });
+
+  it('returns active materials and excludes archived ones', async () => {
+    store[matPath('mat1')] = { name: 'Slow-release fertiliser', unit: 'g', onHand: 500, reorderThreshold: 100, archived: false };
+    store[matPath('mat2')] = { name: 'Neem oil', unit: 'mL', onHand: 0, reorderThreshold: 50, archived: true };
+    const res = await request(app).get('/materials').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.materials).toHaveLength(1);
+    expect(res.body.materials[0].name).toBe('Slow-release fertiliser');
+  });
+});
+
+describe('POST /materials', () => {
+  it('creates a material with required fields', async () => {
+    const res = await request(app)
+      .post('/materials')
+      .set('Authorization', authHeader())
+      .send({ name: 'Compost', unit: 'kg', onHand: 10, reorderThreshold: 2, reorderQty: 5 });
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('Compost');
+    expect(res.body.unit).toBe('kg');
+    expect(res.body.onHand).toBe(10);
+    expect(res.body.archived).toBe(false);
+    expect(res.body.id).toBeDefined();
+  });
+
+  it('rejects missing name', async () => {
+    const res = await request(app)
+      .post('/materials')
+      .set('Authorization', authHeader())
+      .send({ unit: 'kg' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('name is required');
+  });
+
+  it('rejects invalid unit', async () => {
+    const res = await request(app)
+      .post('/materials')
+      .set('Authorization', authHeader())
+      .send({ name: 'Test', unit: 'bananas' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/unit must be one of/);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/materials').send({ name: 'X', unit: 'g' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PUT /materials/:id', () => {
+  it('updates material metadata', async () => {
+    store[matPath('mat1')] = { name: 'Old name', unit: 'g', onHand: 100, reorderThreshold: 10, reorderQty: 20, archived: false };
+    const res = await request(app)
+      .put('/materials/mat1')
+      .set('Authorization', authHeader())
+      .send({ name: 'New name', supplier: 'GardenCo' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('New name');
+    expect(res.body.supplier).toBe('GardenCo');
+  });
+
+  it('returns 404 for missing material', async () => {
+    const res = await request(app)
+      .put('/materials/nonexistent')
+      .set('Authorization', authHeader())
+      .send({ name: 'X' });
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for archived material', async () => {
+    store[matPath('mat1')] = { name: 'X', unit: 'g', archived: true };
+    const res = await request(app)
+      .put('/materials/mat1')
+      .set('Authorization', authHeader())
+      .send({ name: 'Y' });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('DELETE /materials/:id', () => {
+  it('soft-deletes by setting archived=true', async () => {
+    store[matPath('mat1')] = { name: 'Fertiliser', unit: 'g', archived: false };
+    const res = await request(app)
+      .delete('/materials/mat1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.archived).toBe(true);
+    expect(store[matPath('mat1')].archived).toBe(true);
+  });
+
+  it('returns 404 for non-existent material', async () => {
+    const res = await request(app)
+      .delete('/materials/nope')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /materials/shopping-list', () => {
+  it('returns only materials at or below reorderThreshold', async () => {
+    store[matPath('mat1')] = { name: 'Low stock item', unit: 'kg', onHand: 1, reorderThreshold: 2, reorderQty: 5, archived: false, supplier: 'A' };
+    store[matPath('mat2')] = { name: 'Adequate stock', unit: 'kg', onHand: 10, reorderThreshold: 2, reorderQty: 5, archived: false, supplier: 'B' };
+    store[matPath('mat3')] = { name: 'Archived low', unit: 'kg', onHand: 0, reorderThreshold: 5, reorderQty: 2, archived: true, supplier: 'C' };
+    const res = await request(app).get('/materials/shopping-list').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+    expect(res.body.items[0].name).toBe('Low stock item');
+  });
+
+  it('includes items where onHand equals reorderThreshold', async () => {
+    store[matPath('mat1')] = { name: 'Exactly at threshold', unit: 'each', onHand: 3, reorderThreshold: 3, reorderQty: 10, archived: false };
+    const res = await request(app).get('/materials/shopping-list').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(1);
+  });
+});
+
+describe('POST /materials/:id/movements', () => {
+  beforeEach(() => {
+    store[matPath('mat1')] = { name: 'Compost', unit: 'kg', onHand: 10, reorderThreshold: 2, archived: false };
+  });
+
+  it('deducts stock on "use" movement', async () => {
+    const res = await request(app)
+      .post('/materials/mat1/movements')
+      .set('Authorization', authHeader())
+      .send({ delta: -3, reason: 'use' });
+    expect(res.status).toBe(201);
+    expect(res.body.onHand).toBe(7);
+    expect(res.body.id).toBeDefined();
+  });
+
+  it('adds stock on "restock" movement', async () => {
+    const res = await request(app)
+      .post('/materials/mat1/movements')
+      .set('Authorization', authHeader())
+      .send({ delta: 5, reason: 'restock' });
+    expect(res.status).toBe(201);
+    expect(res.body.onHand).toBe(15);
+  });
+
+  it('never drops onHand below 0', async () => {
+    const res = await request(app)
+      .post('/materials/mat1/movements')
+      .set('Authorization', authHeader())
+      .send({ delta: -999, reason: 'use' });
+    expect(res.status).toBe(201);
+    expect(res.body.onHand).toBe(0);
+  });
+
+  it('sets lastRestockedAt on restock', async () => {
+    await request(app)
+      .post('/materials/mat1/movements')
+      .set('Authorization', authHeader())
+      .send({ delta: 5, reason: 'restock' });
+    expect(store[matPath('mat1')].lastRestockedAt).toBeDefined();
+  });
+
+  it('rejects delta of 0', async () => {
+    const res = await request(app)
+      .post('/materials/mat1/movements')
+      .set('Authorization', authHeader())
+      .send({ delta: 0, reason: 'use' });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects invalid reason', async () => {
+    const res = await request(app)
+      .post('/materials/mat1/movements')
+      .set('Authorization', authHeader())
+      .send({ delta: 1, reason: 'magic' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for non-existent material', async () => {
+    const res = await request(app)
+      .post('/materials/nope/movements')
+      .set('Authorization', authHeader())
+      .send({ delta: -1, reason: 'use' });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /materials/:id/movements', () => {
+  it('returns movements for a material', async () => {
+    store[matPath('mat1')] = { name: 'Compost', unit: 'kg', onHand: 10, archived: false };
+    store[`${matPath('mat1')}/movements/mov1`] = { delta: -2, reason: 'use', createdAt: '2026-04-01T10:00:00Z' };
+    store[`${matPath('mat1')}/movements/mov2`] = { delta: 5, reason: 'restock', createdAt: '2026-04-02T10:00:00Z' };
+    const res = await request(app)
+      .get('/materials/mat1/movements')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.movements).toHaveLength(2);
+  });
+
+  it('returns 404 for non-existent material', async () => {
+    const res = await request(app)
+      .get('/materials/nope/movements')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
   });
 });
