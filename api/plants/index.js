@@ -2657,13 +2657,20 @@ app.post('/plants/:id/fertilise', requireUser, async (req, res) => {
     const doc = await ref.get();
     if (!doc.exists) return res.status(404).json({ error: 'Plant not found' });
 
-    const { productName, npk, dilution, amount, notes } = req.body || {};
+    const { productName, productUrl, npk, dilution, amount, notes } = req.body || {};
     const now = new Date().toISOString();
     const existing = doc.data();
+
+    // Reject anything that isn't an http(s) URL — the value is rendered as a
+    // clickable link in the UI, so allowing javascript: / data: would be XSS.
+    const safeProductUrl = typeof productUrl === 'string' && /^https?:\/\//i.test(productUrl)
+      ? productUrl
+      : null;
 
     const entry = {
       date: now,
       productName: productName || null,
+      productUrl: safeProductUrl,
       npk: npk || null,
       dilution: dilution || null,
       amount: amount || null,
@@ -2676,6 +2683,7 @@ app.post('/plants/:id/fertilise', requireUser, async (req, res) => {
     // fields were supplied.
     const fertiliser = { ...(existing.fertiliser || {}) };
     if (productName) fertiliser.productName = productName;
+    if (safeProductUrl) fertiliser.productUrl = safeProductUrl;
     if (npk) fertiliser.npk = npk;
     if (dilution) fertiliser.dilution = dilution;
 

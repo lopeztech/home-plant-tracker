@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Modal, Button, Form, Row, Col } from 'react-bootstrap'
+import { Modal, Button, Form, Row, Col, InputGroup } from 'react-bootstrap'
 import { recommendApi } from '../api/plants.js'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useToast } from './Toast.jsx'
@@ -13,6 +13,7 @@ export default function FeedRecordModal({ plant, show, onHide }) {
   const seed = plant?.fertiliser || {}
   const [form, setForm] = useState({
     productName: seed.productName || '',
+    productUrl:  seed.productUrl || '',
     npk:         seed.npk || '',
     dilution:    seed.dilution || '',
     amount:      '',
@@ -43,6 +44,7 @@ export default function FeedRecordModal({ plant, show, onHide }) {
       setForm((f) => ({
         ...f,
         productName: rec.productName || f.productName,
+        productUrl:  rec.productUrl || f.productUrl,
         npk:         rec.npk || f.npk,
         dilution:    rec.dilution || f.dilution,
         amount:      rec.amount || f.amount,
@@ -73,7 +75,7 @@ export default function FeedRecordModal({ plant, show, onHide }) {
   const recent = log.slice(-5).reverse()
 
   return (
-    <Modal show={show} onHide={onHide} centered size="md">
+    <Modal show={show} onHide={onHide} centered size="lg">
       <Modal.Header closeButton>
         <Modal.Title>Feed {plant.name}</Modal.Title>
       </Modal.Header>
@@ -90,6 +92,32 @@ export default function FeedRecordModal({ plant, show, onHide }) {
               <Form.Group>
                 <Form.Label>NPK</Form.Label>
                 <Form.Control value={form.npk} onChange={setField('npk')} placeholder="10-10-10" />
+              </Form.Group>
+            </Col>
+            <Col xs={12}>
+              <Form.Group>
+                <Form.Label>Product link <span className="text-muted fw-normal">(optional)</span></Form.Label>
+                <InputGroup>
+                  <Form.Control
+                    type="url"
+                    value={form.productUrl}
+                    onChange={setField('productUrl')}
+                    placeholder="https://example.com/product"
+                  />
+                  {/^https?:\/\//i.test(form.productUrl) && (
+                    <Button
+                      as="a"
+                      href={form.productUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      variant="outline-secondary"
+                      title="Open product page"
+                      aria-label="Open product page in new tab"
+                    >
+                      Open
+                    </Button>
+                  )}
+                </InputGroup>
               </Form.Group>
             </Col>
             <Col xs={12} md={6}>
@@ -125,7 +153,16 @@ export default function FeedRecordModal({ plant, show, onHide }) {
                 {recent.map((e, i) => (
                   <li key={i} className="d-flex justify-content-between border-bottom py-1">
                     <span>{new Date(e.date).toLocaleDateString()}</span>
-                    <span className="text-muted">{e.productName || '—'}{e.dilution ? ` · ${e.dilution}` : ''}</span>
+                    <span className="text-muted">
+                      {e.productUrl && /^https?:\/\//i.test(e.productUrl) ? (
+                        <a href={e.productUrl} target="_blank" rel="noopener noreferrer">
+                          {e.productName || 'product'}
+                        </a>
+                      ) : (
+                        e.productName || '—'
+                      )}
+                      {e.dilution ? ` · ${e.dilution}` : ''}
+                    </span>
                   </li>
                 ))}
               </ul>

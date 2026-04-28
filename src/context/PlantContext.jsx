@@ -235,6 +235,7 @@ export function PlantProvider({ children }) {
       const entry = {
         date: now,
         productName: fields.productName || null,
+        productUrl: fields.productUrl || null,
         npk: fields.npk || null,
         dilution: fields.dilution || null,
         amount: fields.amount || null,
