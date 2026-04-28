@@ -122,19 +122,38 @@ function getUserClaims(req) {
 }
 
 const households = require('./households');
+const team = require('./team');
 
 // Resolve the active household for the authenticated actor and decorate the
 // request with: actorUserId, userId (= ownerId of the active household),
 // householdId, role, actorDisplayName. Pre-existing handlers continue to use
 // `req.userId` as the data-tree owner unchanged.
+//
+// When x-org-id header is present, try to resolve landscaper org context first.
+// If the actor is an active team member of that org, req.userId becomes the
+// org owner's UID so all existing data accessors work unchanged. req.orgRole
+// holds the landscaper role ('manager'|'technician').
 async function attachHouseholdContext(req, claims) {
   const displayName = claims.name || claims.email || null;
+  req.actorDisplayName = displayName;
+
+  const orgId = req.headers['x-org-id'];
+  if (orgId) {
+    const orgCtx = await team.resolveOrgContext(db, claims.sub, orgId);
+    if (orgCtx) {
+      req.actorUserId = claims.sub;
+      req.userId = orgCtx.userId;
+      req.orgRole = orgCtx.orgRole;
+      req.role = orgCtx.role; // household-compatible: 'editor'|'viewer'
+      return;
+    }
+  }
+
   const ctx = await households.resolveHouseholdContext(db, claims.sub, displayName);
   req.actorUserId = ctx.actorUserId;
   req.userId = ctx.userId;
   req.householdId = ctx.householdId;
   req.role = ctx.role;
-  req.actorDisplayName = displayName;
 }
 
 function requireUser(req, res, next) {
@@ -579,6 +598,7 @@ const { requireTier, checkQuota } = createTierGate(db);
 const countPlantsForReq      = (req) => billing.countPlants(db, req.userId);
 const countAiAnalysesForReq  = (req) => billing.readAiAnalysesUsage(db, req.userId);
 const countPropertiesForReq  = (req) => billing.countProperties(db, req.userId);
+const countTeamMembersForReq = (req) => team.countActiveMembers(db, req.userId);
 
 // ── Billing — non-webhook routes ─────────────────────────────────────────────
 // (Webhook is declared earlier, before express.json(), to keep the raw body
@@ -1820,6 +1840,132 @@ app.put('/households/:id/members/:userId', requireUser, async (req, res) => {
     res.status(200).json({ userId: targetId, role });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Landscaper team management — issue #163 ──────────────────────────────────
+// Team routes are only accessible to the org owner (not via x-org-id context).
+
+function requireOrgOwner(req, res, next) {
+  // org members acting via x-org-id must not manage the team themselves
+  if (req.orgRole) {
+    return res.status(403).json({ error: 'forbidden_role', requiredRole: 'owner', currentRole: req.orgRole });
+  }
+  return next();
+}
+
+// GET /me/orgs — list orgs the current user belongs to as a team member
+app.get('/me/orgs', requireUser, async (req, res) => {
+  try {
+    const orgs = await team.listOrgsForUser(db, req.actorUserId);
+    res.status(200).json({ orgs });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /team/invite — create an invite link (org owner only, landscaper_pro)
+app.post('/team/invite', requireUser, requireTier('landscaper_pro'), requireOrgOwner,
+  checkQuota('team_members', countTeamMembersForReq), async (req, res) => {
+    try {
+      const { role, assignedPropertyIds } = req.body || {};
+      if (!role || !(role in team.ORG_ROLES)) {
+        return res.status(400).json({ error: 'role must be one of: manager, technician' });
+      }
+      const invite = await team.createInvite(db, {
+        ownerUid: req.userId,
+        role,
+        assignedPropertyIds: assignedPropertyIds || null,
+      });
+      const inviteUrl = `${process.env.APP_BASE_URL || 'https://plants.lopezcloud.dev'}/team/accept?token=${invite.token}`;
+      res.status(201).json({ token: invite.token, inviteUrl, role: invite.role, expiresAt: invite.expiresAt });
+    } catch (err) {
+      if (err.code === 'invalid_role') return res.status(400).json({ error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+// GET /team — list active team members (org owner or manager)
+app.get('/team', requireUser, requireTier('landscaper_pro'), async (req, res) => {
+  try {
+    const members = await team.listMembers(db, req.userId);
+    res.status(200).json({ members });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /team/:memberUid — update role or assigned properties (org owner only)
+app.patch('/team/:memberUid', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    let memberUid;
+    try { memberUid = households.safeUserKey(req.params.memberUid); }
+    catch { return res.status(400).json({ error: 'Invalid memberUid' }); }
+
+    const memberRef = team.teamMemberRef(db, req.userId, memberUid);
+    const snap = await memberRef.get();
+    if (!snap.exists || snap.data().status === 'suspended') {
+      return res.status(404).json({ error: 'Team member not found' });
+    }
+
+    const updates = {};
+    if (req.body?.role !== undefined) {
+      if (!(req.body.role in team.ORG_ROLES)) {
+        return res.status(400).json({ error: 'role must be one of: manager, technician' });
+      }
+      updates.role = req.body.role;
+    }
+    if (req.body?.assignedPropertyIds !== undefined) {
+      updates.assignedPropertyIds = Array.isArray(req.body.assignedPropertyIds)
+        ? req.body.assignedPropertyIds : null;
+    }
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+
+    await memberRef.set(updates, { merge: true });
+    if (updates.role) {
+      await team.orgMembershipRef(db, memberUid, req.userId).set({ role: updates.role }, { merge: true });
+    }
+    res.status(200).json({ memberUid, ...snap.data(), ...updates });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /team/:memberUid — suspend a team member (org owner only)
+app.delete('/team/:memberUid', requireUser, requireTier('landscaper_pro'), requireOrgOwner, async (req, res) => {
+  try {
+    let memberUid;
+    try { memberUid = households.safeUserKey(req.params.memberUid); }
+    catch { return res.status(400).json({ error: 'Invalid memberUid' }); }
+
+    const memberRef = team.teamMemberRef(db, req.userId, memberUid);
+    const snap = await memberRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Team member not found' });
+
+    const now = new Date().toISOString();
+    await memberRef.set({ status: 'suspended', suspendedAt: now }, { merge: true });
+    await team.orgMembershipRef(db, memberUid, req.userId).set({ status: 'suspended' }, { merge: true });
+    res.status(204).send();
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /team/accept — accept a team invite (requireUser, no tier gate)
+app.post('/team/accept', requireUser, async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token || typeof token !== 'string') {
+      return res.status(400).json({ error: 'token is required' });
+    }
+    const result = await team.acceptInvite(db, { token, actorUserId: req.actorUserId });
+    res.status(200).json({ ownerUid: result.ownerUid, role: result.role });
+  } catch (err) {
+    const statusMap = { not_found: 404, already_used: 409, expired: 410 };
+    const status = statusMap[err.code] || 500;
+    res.status(status).json({ error: err.message });
   }
 });
 

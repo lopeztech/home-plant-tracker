@@ -6081,3 +6081,183 @@ describe('POST /properties/:id/restore', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// ── Landscaper team RBAC — issue #163 ────────────────────────────────────────
+
+function orgAuthHeader(sub, orgId) {
+  const payload = Buffer.from(JSON.stringify({ sub })).toString('base64');
+  return { Authorization: `Bearer h.${payload}.s`, 'x-org-id': orgId };
+}
+
+describe('team RBAC (#163)', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    // Give alice landscaper_pro tier
+    store['users/alice/subscription/current'] = { tier: 'landscaper_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('POST /team/invite creates an invite with token and inviteUrl', async () => {
+    const res = await request(app)
+      .post('/team/invite')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'manager' });
+    expect(res.status).toBe(201);
+    expect(typeof res.body.token).toBe('string');
+    expect(res.body.token.length).toBeGreaterThan(10);
+    expect(res.body.inviteUrl).toContain(res.body.token);
+    expect(res.body.role).toBe('manager');
+    expect(new Date(res.body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('POST /team/invite rejects invalid role', async () => {
+    const res = await request(app)
+      .post('/team/invite')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'owner' }); // owner is not a valid invite target
+    expect(res.status).toBe(400);
+  });
+
+  it('POST /team/accept lets bob join alice org', async () => {
+    const invRes = await request(app)
+      .post('/team/invite')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'technician' });
+    const token = invRes.body.token;
+
+    const acceptRes = await request(app)
+      .post('/team/accept')
+      .set('Authorization', authHeader('bob'))
+      .send({ token });
+    expect(acceptRes.status).toBe(200);
+    expect(acceptRes.body.ownerUid).toBe('alice');
+    expect(acceptRes.body.role).toBe('technician');
+  });
+
+  it('POST /team/accept rejects a reused token (409)', async () => {
+    const invRes = await request(app)
+      .post('/team/invite')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'manager' });
+    const token = invRes.body.token;
+
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token });
+    const second = await request(app).post('/team/accept').set('Authorization', authHeader('carol')).send({ token });
+    expect(second.status).toBe(409);
+  });
+
+  it('GET /team lists active members for org owner', async () => {
+    const invRes = await request(app)
+      .post('/team/invite')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'manager' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    const listRes = await request(app).get('/team').set('Authorization', authHeader('alice'));
+    expect(listRes.status).toBe(200);
+    expect(listRes.body.members).toHaveLength(1);
+    expect(listRes.body.members[0].memberUid).toBe('bob');
+    expect(listRes.body.members[0].role).toBe('manager');
+  });
+
+  it('GET /me/orgs returns orgs for a team member', async () => {
+    const invRes = await request(app)
+      .post('/team/invite')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'technician' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    const orgsRes = await request(app).get('/me/orgs').set('Authorization', authHeader('bob'));
+    expect(orgsRes.status).toBe(200);
+    expect(orgsRes.body.orgs).toHaveLength(1);
+    expect(orgsRes.body.orgs[0].ownerUid).toBe('alice');
+    expect(orgsRes.body.orgs[0].role).toBe('technician');
+  });
+
+  it('manager can read plants from owner org via x-org-id', async () => {
+    // alice has a plant
+    await request(app).post('/plants').set('Authorization', authHeader('alice')).send({ name: 'Fern' });
+
+    // bob joins as manager
+    const invRes = await request(app).post('/team/invite').set('Authorization', authHeader('alice')).send({ role: 'manager' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    // bob reads alice's plants via x-org-id
+    const plantsRes = await request(app).get('/plants').set(orgAuthHeader('bob', 'alice'));
+    expect(plantsRes.status).toBe(200);
+    const items = plantsRes.body.plants || plantsRes.body;
+    const names = (Array.isArray(items) ? items : []).map((p) => p.name);
+    expect(names).toContain('Fern');
+  });
+
+  it('manager can create plants in owner org', async () => {
+    const invRes = await request(app).post('/team/invite').set('Authorization', authHeader('alice')).send({ role: 'manager' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    const createRes = await request(app)
+      .post('/plants')
+      .set(orgAuthHeader('bob', 'alice'))
+      .send({ name: 'Orchid' });
+    expect(createRes.status).toBe(201);
+    expect(createRes.body.name).toBe('Orchid');
+  });
+
+  it('technician cannot create plants (read-only)', async () => {
+    const invRes = await request(app).post('/team/invite').set('Authorization', authHeader('alice')).send({ role: 'technician' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    const createRes = await request(app)
+      .post('/plants')
+      .set(orgAuthHeader('bob', 'alice'))
+      .send({ name: 'Cactus' });
+    expect(createRes.status).toBe(403);
+    expect(createRes.body.error).toBe('forbidden_role');
+  });
+
+  it('PATCH /team/:memberUid updates role', async () => {
+    const invRes = await request(app).post('/team/invite').set('Authorization', authHeader('alice')).send({ role: 'technician' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    const patchRes = await request(app)
+      .patch('/team/bob')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'manager' });
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body.role).toBe('manager');
+  });
+
+  it('DELETE /team/:memberUid suspends the member', async () => {
+    const invRes = await request(app).post('/team/invite').set('Authorization', authHeader('alice')).send({ role: 'manager' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    const delRes = await request(app).delete('/team/bob').set('Authorization', authHeader('alice'));
+    expect(delRes.status).toBe(204);
+
+    // bob can no longer act as org member
+    const plantsRes = await request(app).get('/plants').set(orgAuthHeader('bob', 'alice'));
+    // Falls back to bob's own household context (no plants there)
+    expect(plantsRes.status).toBe(200);
+  });
+
+  it('team member cannot manage team (requireOrgOwner)', async () => {
+    const invRes = await request(app).post('/team/invite').set('Authorization', authHeader('alice')).send({ role: 'manager' });
+    await request(app).post('/team/accept').set('Authorization', authHeader('bob')).send({ token: invRes.body.token });
+
+    // bob acting as org member tries to invite a new member
+    const inviteAsOrgRes = await request(app)
+      .post('/team/invite')
+      .set(orgAuthHeader('bob', 'alice'))
+      .send({ role: 'technician' });
+    expect(inviteAsOrgRes.status).toBe(403);
+  });
+
+  it('requires landscaper_pro tier for team management', async () => {
+    store['users/alice/subscription/current'] = { tier: 'home_pro', status: 'active' };
+    const res = await request(app)
+      .post('/team/invite')
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'manager' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('upgrade_required');
+  });
+});
