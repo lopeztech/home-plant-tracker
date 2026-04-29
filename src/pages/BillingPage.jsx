@@ -30,7 +30,7 @@ function Quota({ label, used, limit, unit }) {
 }
 
 export default function BillingPage() {
-  const { billingEnabled, tier, status, currentPeriodEnd, cancelAtPeriodEnd, quotas, usage, refresh } = useSubscription()
+  const { billingEnabled, tier, status, currentPeriodEnd, cancelAtPeriodEnd, hasStripeCustomer, isTrial, quotas, usage, refresh } = useSubscription()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
 
@@ -81,18 +81,28 @@ export default function BillingPage() {
                   {cancelAtPeriodEnd ? 'Ends' : 'Renews'} {new Date(currentPeriodEnd).toLocaleDateString()}
                 </div>
               )}
-              <div className="d-flex gap-2 mt-3">
+              <div className="d-flex gap-2 mt-3 flex-wrap">
                 {tier === 'free' && billingEnabled && (
                   <>
                     <Button variant="primary" onClick={() => upgrade('home_pro')} disabled={busy}>Upgrade to Home Pro</Button>
                     <Button variant="outline-primary" onClick={() => upgrade('landscaper_pro')} disabled={busy}>Landscaper Pro</Button>
                   </>
                 )}
-                {tier !== 'free' && billingEnabled && (
+                {tier !== 'free' && billingEnabled && hasStripeCustomer && (
                   <Button variant="outline-primary" onClick={manage} disabled={busy}>Manage subscription</Button>
+                )}
+                {tier !== 'free' && billingEnabled && !hasStripeCustomer && (
+                  <Button variant="primary" onClick={() => upgrade(tier)} disabled={busy}>Add payment method</Button>
                 )}
                 <Button as={Link} to="/pricing" variant="outline-secondary">See all plans</Button>
               </div>
+              {tier !== 'free' && billingEnabled && !hasStripeCustomer && (
+                <div className="text-muted fs-sm mt-2">
+                  {isTrial
+                    ? 'You\'re on a free trial. Add a payment method to keep your plan active when the trial ends.'
+                    : 'No payment method on file yet. Add one to manage billing through the Stripe portal.'}
+                </div>
+              )}
             </div>
           </div>
         </Col>
