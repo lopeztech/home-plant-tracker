@@ -1,11 +1,10 @@
 'use strict';
 
-// chore(deploy): force Cloud Function redeploy 2026-04-29 — production has
-// been stuck on PR #374 since #377's deploy failed at E2E smoke (the
-// onboarding spec wasn't updated for the persona picker). #379 fixed the
-// E2E but only touched e2e/, so paths-filter still skipped deploy-function.
-// This bumps a backend-path file so the next push triggers the deploy and
-// production picks up /profile, /households, and the rest.
+// chore(deploy): force Cloud Function redeploy 2026-04-29 — Stripe secrets
+// in Secret Manager were updated from the placeholder "DISABLED" value to
+// real keys, but the running function instances still had the old value
+// cached. Bumping this comment triggers a fresh deploy so all instances
+// resolve the new secret-version values on cold start.
 const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
