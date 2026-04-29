@@ -1,10 +1,11 @@
 'use strict';
 
-// chore(deploy): force Cloud Function redeploy 2026-04-29 — Stripe secrets
-// in Secret Manager were updated from the placeholder "DISABLED" value to
-// real keys, but the running function instances still had the old value
-// cached. Bumping this comment triggers a fresh deploy so all instances
-// resolve the new secret-version values on cold start.
+// chore(deploy): force Cloud Function redeploy 2026-04-29 (take 2) — the
+// first redeploy bumped instances after the wrong secret name was updated;
+// the function actually binds to the legacy `plant-tracker-stripe-*` names,
+// not the `home-plant-tracker-*` ones terraform manages. Real keys are now
+// in the legacy secrets; this bump rolls the function so warm instances
+// pick up the new :latest values.
 const functions = require('@google-cloud/functions-framework');
 const { Firestore } = require('@google-cloud/firestore');
 const { Storage } = require('@google-cloud/storage');
