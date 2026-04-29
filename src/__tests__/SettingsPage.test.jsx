@@ -34,8 +34,20 @@ vi.mock('../context/LayoutContext.jsx', () => ({
 }))
 
 const setAccountTypeMock = vi.fn().mockResolvedValue(undefined)
+const saveFeatureOverridesMock = vi.fn().mockResolvedValue(undefined)
+let profileCanEdit = false
+let profileFeatureOverrides = {}
 vi.mock('../context/ProfileContext.jsx', () => ({
-  useProfile: () => ({ accountType: 'household', setAccountType: setAccountTypeMock, loading: false, error: null, refresh: vi.fn() }),
+  useProfile: () => ({
+    accountType: 'household',
+    setAccountType: setAccountTypeMock,
+    featureOverrides: profileFeatureOverrides,
+    saveFeatureOverrides: saveFeatureOverridesMock,
+    canEditFeatureFlags: profileCanEdit,
+    loading: false,
+    error: null,
+    refresh: vi.fn(),
+  }),
 }))
 
 vi.mock('../contexts/AuthContext.jsx', () => ({
@@ -498,3 +510,54 @@ describe('SettingsPage Branding tab', () => {
     await waitFor(() => expect(brandingApi.save).toHaveBeenCalledWith({ logoUrl: 'https://storage.example.com/branding/logo.png' }))
   })
 })
+
+describe('SettingsPage Features tab (admin only)', () => {
+  beforeEach(() => {
+    saveFeatureOverridesMock.mockClear()
+    profileFeatureOverrides = {}
+  })
+
+  function tabLabels(container) {
+    return Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent.trim().toLowerCase())
+  }
+
+  it('hides the Features tab from non-admins', () => {
+    profileCanEdit = false
+    const { container } = renderAt('/settings/property')
+    expect(tabLabels(container).some((l) => l.includes('features'))).toBe(false)
+  })
+
+  it('redirects non-admins away from /settings/features', () => {
+    profileCanEdit = false
+    renderAt('/settings/features')
+    // Falls back to the Property tab content
+    expect(screen.getByText(/Floors & Zones/i)).toBeInTheDocument()
+  })
+
+  it('shows the Features tab to admins', () => {
+    profileCanEdit = true
+    const { container } = renderAt('/settings/property')
+    expect(tabLabels(container).some((l) => l.includes('features'))).toBe(true)
+  })
+
+  it('renders the feature toggle table at /settings/features for admins', () => {
+    profileCanEdit = true
+    renderAt('/settings/features')
+    expect(screen.getByText(/Feature visibility/i)).toBeInTheDocument()
+    // Each menu item should have an override <select> with our four options + Default
+    const selects = screen.getAllByRole('combobox')
+    expect(selects.length).toBeGreaterThan(0)
+  })
+
+  it('saves overrides via saveFeatureOverrides', async () => {
+    profileCanEdit = true
+    renderAt('/settings/features')
+    const branding = screen.getByLabelText(/Override for Branding/i)
+    fireEvent.change(branding, { target: { value: 'household' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save changes/i }))
+    await waitFor(() =>
+      expect(saveFeatureOverridesMock).toHaveBeenCalledWith(expect.objectContaining({ branding: 'household' })),
+    )
+  })
+})
+

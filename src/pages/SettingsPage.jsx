@@ -15,6 +15,7 @@ import { accountApi, exportApi, apiKeysApi, brandingApi, imagesApi, householdsAp
 import { useHousehold } from '../context/HouseholdContext.jsx'
 import { useProperty } from '../context/PropertyContext.jsx'
 import { useProfile } from '../context/ProfileContext.jsx'
+import { menuItems } from '../layouts/components/menuData.js'
 
 const TABS = [
   { id: 'property', label: 'Property', icon: 'layers', tags: 'floors zones floorplan rooms upload property' },
@@ -24,6 +25,7 @@ const TABS = [
   { id: 'api-keys', label: 'API Keys', icon: 'key', tags: 'api keys rest integration home assistant automation developer' },
   { id: 'client-properties', label: 'Properties', icon: 'home', tags: 'properties clients landscaper multi-property client management' },
   { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
+  { id: 'features', label: 'Features', icon: 'grid', tags: 'features admin menu visibility persona toggle hide show workspace', adminOnly: true },
   { id: 'advanced', label: 'Advanced', icon: 'tool', tags: 'reset onboarding developer version advanced' },
 ]
 
@@ -1518,22 +1520,157 @@ function ClientPropertiesTab({ search }) {
   )
 }
 
+function describeStaticDefault(personas) {
+  if (!personas) return 'Visible to all'
+  const set = new Set(personas)
+  if (set.has('both') || (set.has('household') && set.has('landscaper'))) return 'Visible to all'
+  if (set.has('landscaper')) return 'Landscaper only'
+  if (set.has('household')) return 'Household only'
+  return 'Visible to all'
+}
+
+function flattenMenuForFeatures(items) {
+  const rows = []
+  for (const section of items) {
+    rows.push({ key: section.key, label: section.label, isSection: true, personas: section.personas })
+    for (const child of section.children || []) {
+      rows.push({ key: child.key, label: child.label, isSection: false, personas: child.personas, parentKey: section.key })
+    }
+  }
+  return rows
+}
+
+function FeaturesTab({ search }) {
+  const { featureOverrides, saveFeatureOverrides, canEditFeatureFlags } = useProfile()
+  const [draft, setDraft] = useState(() => ({ ...featureOverrides }))
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(null)
+
+  // Reset draft when context overrides change (e.g. after refresh).
+  useEffect(() => { setDraft({ ...featureOverrides }) }, [featureOverrides])
+
+  const rows = useMemo(() => flattenMenuForFeatures(menuItems), [])
+  const dirty = useMemo(() => {
+    const a = featureOverrides
+    const b = draft
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)])
+    for (const k of keys) if (a[k] !== b[k]) return true
+    return false
+  }, [featureOverrides, draft])
+
+  const setRow = (key, value) => {
+    setDraft((prev) => {
+      const next = { ...prev }
+      if (value === '__default__') delete next[key]
+      else next[key] = value
+      return next
+    })
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    setSaveError(null)
+    try {
+      await saveFeatureOverrides(draft)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (err) {
+      setSaveError(err?.message || 'Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleReset = () => setDraft({})
+
+  if (!canEditFeatureFlags) {
+    return (
+      <SettingSection id="features-locked" title="Features" icon="grid" search={search}>
+        <p className="text-muted mb-0">Only the workspace admin (household owner or landscaper manager) can change feature visibility.</p>
+      </SettingSection>
+    )
+  }
+
+  return (
+    <SettingSection id="features" title="Feature visibility" icon="grid" search={search}>
+      <p className="text-muted mb-3">
+        Override which menu items each persona sees. Items left as <em>Default</em> follow the built-in persona rules.
+      </p>
+      <Table hover responsive size="sm" className="mb-3">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th style={{ width: 200 }}>Default</th>
+            <th style={{ width: 220 }}>Override</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const value = draft[row.key] || '__default__'
+            return (
+              <tr key={row.key} className={row.isSection ? 'table-active fw-500' : ''}>
+                <td>
+                  {row.isSection ? row.label : (<span className="ps-3">{row.label}</span>)}
+                </td>
+                <td><span className="text-muted small">{describeStaticDefault(row.personas)}</span></td>
+                <td>
+                  <Form.Select
+                    size="sm"
+                    value={value}
+                    onChange={(e) => setRow(row.key, e.target.value)}
+                    aria-label={`Override for ${row.label}`}
+                  >
+                    <option value="__default__">Default</option>
+                    <option value="both">Visible to all</option>
+                    <option value="household">Household only</option>
+                    <option value="landscaper">Landscaper only</option>
+                    <option value="hidden">Hidden</option>
+                  </Form.Select>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </Table>
+      <div className="d-flex align-items-center gap-2">
+        <Button variant="primary" size="sm" onClick={handleSave} disabled={!dirty || saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </Button>
+        <Button variant="outline-secondary" size="sm" onClick={handleReset} disabled={saving || Object.keys(draft).length === 0}>
+          Reset to defaults
+        </Button>
+        {saved && <span className="text-success small ms-2">Saved</span>}
+        {saveError && <span className="text-danger small ms-2">{saveError}</span>}
+      </div>
+    </SettingSection>
+  )
+}
+
 const VALID_TABS = TABS.map((t) => t.id)
 
 export default function SettingsPage() {
   const { tab = 'property' } = useParams()
   const [search, setSearch] = useState('')
+  const { canEditFeatureFlags } = useProfile()
 
-  if (!VALID_TABS.includes(tab)) {
-    return <Navigate to="/settings/property" replace />
-  }
+  // Hide admin-only tabs from non-admins.
+  const visibleTabs = useMemo(
+    () => TABS.filter((t) => !t.adminOnly || canEditFeatureFlags),
+    [canEditFeatureFlags],
+  )
+  const visibleTabIds = useMemo(() => visibleTabs.map((t) => t.id), [visibleTabs])
 
   // Which tabs match the current search query (used to badge the tab links)
   const matchingTabs = useMemo(() => {
     if (!search.trim()) return null
     const q = search.toLowerCase()
-    return new Set(TABS.filter((t) => t.tags.includes(q) || t.label.toLowerCase().includes(q)).map((t) => t.id))
-  }, [search])
+    return new Set(visibleTabs.filter((t) => t.tags.includes(q) || t.label.toLowerCase().includes(q)).map((t) => t.id))
+  }, [search, visibleTabs])
+
+  if (!VALID_TABS.includes(tab) || !visibleTabIds.includes(tab)) {
+    return <Navigate to="/settings/property" replace />
+  }
 
   return (
     <div className="content-wrapper">
@@ -1542,7 +1679,7 @@ export default function SettingsPage() {
       {/* Tab bar + search */}
       <div className="d-flex align-items-center gap-3 mb-4 flex-wrap">
         <Nav variant="tabs" className="flex-grow-1" role="tablist">
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <Nav.Item key={t.id}>
               <Nav.Link
                 as={Link}
@@ -1592,6 +1729,7 @@ export default function SettingsPage() {
         {tab === 'api-keys' && <ApiKeysTab search={search} />}
         {tab === 'client-properties' && <ClientPropertiesTab search={search} />}
         {tab === 'branding' && <BrandingTab search={search} />}
+        {tab === 'features' && <FeaturesTab search={search} />}
         {tab === 'advanced' && <AdvancedTab search={search} />}
       </div>
     </div>

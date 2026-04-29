@@ -16,7 +16,7 @@ import { buildWaterTasks } from '../../utils/todayTasks.js'
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const { properties, activePropertyId, switchTo } = useProperty()
-  const { accountType } = useProfile()
+  const { accountType, featureOverrides } = useProfile()
   const { navMinified, toggleSetting } = useLayoutContext()
   const { weather, location, plants, floors } = usePlantContext()
   const { open: openHelp } = useHelp()
@@ -30,8 +30,8 @@ export default function Sidebar() {
   )
 
   const visibleMenu = useMemo(
-    () => filterMenuByPersona(menuItems, accountType),
-    [accountType],
+    () => filterMenuByPersona(menuItems, accountType, featureOverrides),
+    [accountType, featureOverrides],
   )
 
   const toggleSidenav = () => {

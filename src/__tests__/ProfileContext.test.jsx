@@ -8,6 +8,10 @@ vi.mock('../api/plants.js', () => ({
     get: vi.fn(),
     set: vi.fn(),
   },
+  featureFlagsApi: {
+    get: vi.fn().mockResolvedValue({ overrides: {}, canEdit: false }),
+    save: vi.fn().mockResolvedValue({ overrides: {}, canEdit: true }),
+  },
 }))
 
 let authState = { isAuthenticated: true, isGuest: false }

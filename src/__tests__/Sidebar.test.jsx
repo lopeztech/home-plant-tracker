@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 
 const startTour = vi.fn()
 const openWhatsNew = vi.fn()
@@ -32,8 +32,9 @@ vi.mock('../context/PropertyContext.jsx', () => ({
   useProperty: () => ({ properties: [], activePropertyId: 'primary', switchTo: vi.fn() }),
 }))
 let profileAccountType = 'household'
+let profileFeatureOverrides = {}
 vi.mock('../context/ProfileContext.jsx', () => ({
-  useProfile: () => ({ accountType: profileAccountType }),
+  useProfile: () => ({ accountType: profileAccountType, featureOverrides: profileFeatureOverrides }),
 }))
 
 import Sidebar from '../layouts/components/Sidebar.jsx'
@@ -85,9 +86,33 @@ describe('Sidebar persona filter', () => {
 
   it('shows the Pro section for both persona', () => {
     profileAccountType = 'both'
+    profileFeatureOverrides = {}
     render(<MemoryRouter><Sidebar /></MemoryRouter>)
     expect(screen.getByRole('link', { name: /^Visits$/i })).toBeInTheDocument()
     // Universal items still visible
     expect(screen.getByRole('link', { name: /Today/i })).toBeInTheDocument()
+  })
+})
+
+describe('Sidebar feature-flag overrides', () => {
+  it("admin override 'hidden' removes a normally-visible item", () => {
+    profileAccountType = 'household'
+    profileFeatureOverrides = { propagation: 'hidden' }
+    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    expect(screen.queryByRole('link', { name: /Propagation/i })).toBeNull()
+    // Other universal items unaffected
+    expect(screen.getByRole('link', { name: /Today/i })).toBeInTheDocument()
+  })
+
+  it("admin override 'both' shows a normally-landscaper-only item to households", () => {
+    profileAccountType = 'household'
+    // The Pro section itself is landscaper-only; force it open and force a child visible.
+    profileFeatureOverrides = { pro: 'both', branding: 'both' }
+    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: /^Branding$/i })).toBeInTheDocument()
+  })
+
+  afterEach(() => {
+    profileFeatureOverrides = {}
   })
 })
