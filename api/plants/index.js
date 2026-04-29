@@ -683,6 +683,7 @@ app.get('/billing/subscription', requireUser, async (req, res) => {
       cancelAtPeriodEnd: sub?.cancelAtPeriodEnd || false,
       isTrial:           sub?.isTrial || false,
       trialDaysRemaining,
+      hasStripeCustomer: Boolean(sub?.stripeCustomerId),
       quotas: billing.TIERS[tier].quotas,
       usage: {
         plants:           plantsCount,

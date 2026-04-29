@@ -2708,6 +2708,29 @@ describe('Billing routes — dark mode (BILLING_ENABLED unset)', () => {
     expect(res.body.tier).toBe('free');
     expect(res.body.quotas.plants).toBe(10);
     expect(res.body.usage).toEqual({ plants: 0, ai_analyses: 0, photo_storage_mb: 0 });
+    expect(res.body.hasStripeCustomer).toBe(false);
+  });
+
+  it('GET /billing/subscription reports hasStripeCustomer=true when subscription has a customer id', async () => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = {
+      tier: 'home_pro', status: 'active', stripeCustomerId: 'cus_test_123',
+    };
+    const res = await request(app).get('/billing/subscription').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.hasStripeCustomer).toBe(true);
+  });
+
+  it('GET /billing/subscription reports hasStripeCustomer=false for trial users without a customer id', async () => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = {
+      tier: 'home_pro', status: 'trialing', isTrial: true, trialEnd: '2099-01-01T00:00:00Z',
+    };
+    const res = await request(app).get('/billing/subscription').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe('home_pro');
+    expect(res.body.isTrial).toBe(true);
+    expect(res.body.hasStripeCustomer).toBe(false);
   });
 
   it('POST /billing/create-checkout-session returns 503 when billing disabled', async () => {

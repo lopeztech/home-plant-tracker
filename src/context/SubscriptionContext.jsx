@@ -15,6 +15,7 @@ const DEFAULT_SNAPSHOT = {
   cancelAtPeriodEnd: false,
   isTrial:           false,
   trialDaysRemaining: null,
+  hasStripeCustomer: false,
 }
 
 export const SubscriptionContext = createContext(undefined)
