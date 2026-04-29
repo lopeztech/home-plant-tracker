@@ -1594,6 +1594,70 @@ app.put('/config/branding', requireUser, requireTier('landscaper_pro'), async (r
   }
 });
 
+// ── Feature-flag overrides (workspace-scoped, admin-edited) ───────────────────
+// The admin (household owner / landscaper org manager) can override which
+// menu items each persona sees, on top of the static defaults declared in
+// src/layouts/components/menuData.js. Any member can READ; only admins WRITE.
+//
+// Document shape at users/{ownerId}/config/featureFlags:
+//   { overrides: { [itemKey]: 'household'|'landscaper'|'both'|'hidden' },
+//     updatedAt: ISO }
+// Items absent from `overrides` fall back to their static persona array.
+
+const FEATURE_FLAG_VALUES = ['household', 'landscaper', 'both', 'hidden'];
+const FEATURE_KEY_RE = /^[a-z0-9-]{1,40}$/;
+
+function isWorkspaceAdmin(req) {
+  return req.role === 'owner' || req.orgRole === 'manager';
+}
+
+app.get('/config/feature-flags', requireUser, async (req, res) => {
+  try {
+    const doc = await userConfig(req.userId).doc('featureFlags').get();
+    const data = doc.exists ? doc.data() : {};
+    res.status(200).json({
+      overrides: data.overrides || {},
+      updatedAt: data.updatedAt || null,
+      canEdit: isWorkspaceAdmin(req),
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/config/feature-flags', requireUser, async (req, res) => {
+  if (!isWorkspaceAdmin(req)) {
+    return res.status(403).json({
+      error: 'forbidden_role',
+      requiredRole: 'owner',
+      currentRole: req.orgRole || req.role || null,
+    });
+  }
+  try {
+    const { overrides } = req.body || {};
+    if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) {
+      return res.status(400).json({ error: 'overrides must be an object' });
+    }
+    const cleaned = {};
+    for (const [key, value] of Object.entries(overrides)) {
+      if (!FEATURE_KEY_RE.test(key)) {
+        return res.status(400).json({ error: `invalid feature key: ${key}` });
+      }
+      if (!FEATURE_FLAG_VALUES.includes(value)) {
+        return res.status(400).json({
+          error: `value for ${key} must be one of ${FEATURE_FLAG_VALUES.join(', ')}`,
+        });
+      }
+      cleaned[key] = value;
+    }
+    const updatedAt = new Date().toISOString();
+    await userConfig(req.userId).doc('featureFlags').set({ overrides: cleaned, updatedAt }, { merge: false });
+    res.status(200).json({ overrides: cleaned, updatedAt, canEdit: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Households (multi-user shared access) ────────────────────────────────────
 // All data still lives at users/{ownerId}/... — households add a membership
 // overlay that lets multiple users see and edit the same plants. See

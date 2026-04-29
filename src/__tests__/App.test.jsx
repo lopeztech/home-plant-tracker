@@ -37,6 +37,10 @@ vi.mock('../api/plants.js', () => ({
     get: vi.fn().mockResolvedValue({ accountType: 'household' }),
     set: vi.fn().mockResolvedValue({ accountType: 'household' }),
   },
+  featureFlagsApi: {
+    get: vi.fn().mockResolvedValue({ overrides: {}, canEdit: false }),
+    save: vi.fn().mockResolvedValue({ overrides: {}, canEdit: true }),
+  },
 }))
 
 vi.mock('../contexts/AuthContext.jsx', async (importOriginal) => {

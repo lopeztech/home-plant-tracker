@@ -306,6 +306,11 @@ export const profileApi = {
   set: (accountType) => request('/profile', { method: 'PUT', body: JSON.stringify({ accountType }) }),
 }
 
+export const featureFlagsApi = {
+  get: () => request('/config/feature-flags'),
+  save: (overrides) => request('/config/feature-flags', { method: 'PUT', body: JSON.stringify({ overrides }) }),
+}
+
 export const householdsApi = {
   list: () => request('/households'),
   current: () => request('/households/current'),

@@ -688,6 +688,146 @@ describe('PUT /config/branding', () => {
   });
 });
 
+// ── /config/feature-flags ─────────────────────────────────────────────────────
+
+const featureFlagsPath = (sub) => `users/${sub || USER_SUB}/config/featureFlags`;
+
+describe('GET /config/feature-flags', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app).get('/config/feature-flags');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns empty overrides when nothing has been saved', async () => {
+    const res = await request(app)
+      .get('/config/feature-flags')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.overrides).toEqual({});
+    expect(res.body.canEdit).toBe(true); // lazy-created household → owner
+  });
+
+  it('returns saved overrides and canEdit=true for the owner', async () => {
+    store[featureFlagsPath()] = {
+      overrides: { branding: 'landscaper', propagation: 'household' },
+      updatedAt: '2026-04-29T10:00:00Z',
+    };
+    const res = await request(app)
+      .get('/config/feature-flags')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.overrides).toEqual({ branding: 'landscaper', propagation: 'household' });
+    expect(res.body.updatedAt).toBe('2026-04-29T10:00:00Z');
+    expect(res.body.canEdit).toBe(true);
+  });
+
+  it('returns canEdit=false for a non-owner household member', async () => {
+    // Owner creates the household; viewer joins it.
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'viewer' });
+    await request(app)
+      .post('/households/join')
+      .set('Authorization', authHeader('viewerbob'))
+      .send({ code: inviteRes.body.code });
+
+    store[featureFlagsPath('alice')] = {
+      overrides: { branding: 'hidden' },
+      updatedAt: '2026-04-29T10:00:00Z',
+    };
+
+    const res = await request(app)
+      .get('/config/feature-flags')
+      .set('Authorization', authHeader('viewerbob'));
+    expect(res.status).toBe(200);
+    expect(res.body.overrides).toEqual({ branding: 'hidden' });
+    expect(res.body.canEdit).toBe(false);
+  });
+});
+
+describe('PUT /config/feature-flags', () => {
+  it('returns 401 when unauthenticated', async () => {
+    const res = await request(app)
+      .put('/config/feature-flags')
+      .send({ overrides: {} });
+    expect(res.status).toBe(401);
+  });
+
+  it('saves overrides for an owner and returns them', async () => {
+    const res = await request(app)
+      .put('/config/feature-flags')
+      .set('Authorization', authHeader())
+      .send({ overrides: { branding: 'landscaper', today: 'both' } });
+    expect(res.status).toBe(200);
+    expect(res.body.overrides).toEqual({ branding: 'landscaper', today: 'both' });
+    expect(res.body.canEdit).toBe(true);
+    expect(store[featureFlagsPath()].overrides).toEqual({ branding: 'landscaper', today: 'both' });
+    expect(store[featureFlagsPath()].updatedAt).toBeTruthy();
+  });
+
+  it('replaces (not merges) the overrides map on each PUT', async () => {
+    store[featureFlagsPath()] = {
+      overrides: { branding: 'landscaper', propagation: 'household' },
+      updatedAt: '2026-04-29T10:00:00Z',
+    };
+    await request(app)
+      .put('/config/feature-flags')
+      .set('Authorization', authHeader())
+      .send({ overrides: { today: 'both' } });
+    expect(store[featureFlagsPath()].overrides).toEqual({ today: 'both' });
+  });
+
+  it('returns 400 when overrides is missing', async () => {
+    const res = await request(app)
+      .put('/config/feature-flags')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/overrides/);
+  });
+
+  it('returns 400 for an unknown persona value', async () => {
+    const res = await request(app)
+      .put('/config/feature-flags')
+      .set('Authorization', authHeader())
+      .send({ overrides: { branding: 'admin' } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/branding/);
+  });
+
+  it('returns 400 for an invalid feature key', async () => {
+    const res = await request(app)
+      .put('/config/feature-flags')
+      .set('Authorization', authHeader())
+      .send({ overrides: { 'BAD KEY!': 'household' } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/invalid feature key/);
+  });
+
+  it('returns 403 forbidden_role for a non-owner household member', async () => {
+    const list = await request(app).get('/households').set('Authorization', authHeader('alice'));
+    const householdId = list.body.households[0].id;
+    const inviteRes = await request(app)
+      .post(`/households/${householdId}/invites`)
+      .set('Authorization', authHeader('alice'))
+      .send({ role: 'editor' });
+    await request(app)
+      .post('/households/join')
+      .set('Authorization', authHeader('editbob'))
+      .send({ code: inviteRes.body.code });
+
+    const res = await request(app)
+      .put('/config/feature-flags')
+      .set('Authorization', authHeader('editbob'))
+      .send({ overrides: { branding: 'landscaper' } });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('forbidden_role');
+  });
+});
+
 // ── GET /plants ───────────────────────────────────────────────────────────────
 
 describe('GET /plants', () => {

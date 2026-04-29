@@ -54,9 +54,21 @@ export const menuItems = [
  * Drop sections / children whose `personas` array doesn't include the
  * current accountType. Universal items (no `personas` key) always pass.
  * Empty sections (all children filtered out) are removed.
+ *
+ * `overrides` is an optional map of `{ [item.key]: 'household'|'landscaper'|'both'|'hidden' }`
+ * set by the workspace admin. When present, the override wins over the static
+ * `personas` array; missing keys fall back to the static default.
  */
-export function filterMenuByPersona(items, accountType) {
-  const matches = (item) => !item.personas || item.personas.includes(accountType)
+export function filterMenuByPersona(items, accountType, overrides = {}) {
+  const matches = (item) => {
+    const override = overrides[item.key]
+    if (override) {
+      if (override === 'hidden') return false
+      if (override === 'both') return true
+      return override === accountType
+    }
+    return !item.personas || item.personas.includes(accountType)
+  }
   return items
     .filter(matches)
     .map((section) => {
