@@ -33,8 +33,13 @@ vi.mock('../context/PropertyContext.jsx', () => ({
 }))
 let profileAccountType = 'household'
 let profileFeatureOverrides = {}
+let profileCanEditFeatureFlags = false
 vi.mock('../context/ProfileContext.jsx', () => ({
-  useProfile: () => ({ accountType: profileAccountType, featureOverrides: profileFeatureOverrides }),
+  useProfile: () => ({
+    accountType: profileAccountType,
+    featureOverrides: profileFeatureOverrides,
+    canEditFeatureFlags: profileCanEditFeatureFlags,
+  }),
 }))
 
 import Sidebar from '../layouts/components/Sidebar.jsx'
@@ -114,5 +119,26 @@ describe('Sidebar feature-flag overrides', () => {
 
   afterEach(() => {
     profileFeatureOverrides = {}
+  })
+})
+
+describe('Sidebar admin section', () => {
+  afterEach(() => {
+    profileCanEditFeatureFlags = false
+  })
+
+  it('hides the Admin section from non-admins', () => {
+    profileCanEditFeatureFlags = false
+    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    expect(screen.queryByRole('link', { name: /^Features$/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /API Keys/i })).toBeNull()
+  })
+
+  it('shows Admin links to admins', () => {
+    profileCanEditFeatureFlags = true
+    render(<MemoryRouter><Sidebar /></MemoryRouter>)
+    expect(screen.getByRole('link', { name: /^Features$/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /API Keys/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /^Advanced$/i })).toBeInTheDocument()
   })
 })
