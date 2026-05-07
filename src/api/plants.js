@@ -526,3 +526,17 @@ export const visitsApi = {
     request(`/visits/${id}/complete`, { method: 'POST', body: JSON.stringify(data) }),
   getIcsToken: () => request('/visits/ics-token'),
 }
+
+export const templatesApi = {
+  listPlatform: () => request('/platform/templates'),
+  list: () => request('/templates'),
+  create: (data) => request('/templates', { method: 'POST', body: JSON.stringify(data) }),
+  get: (id) => request(`/templates/${id}`),
+  update: (id, data) => request(`/templates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id) => request(`/templates/${id}`, { method: 'DELETE' }),
+  clone: (id) => request(`/templates/${id}/clone`, { method: 'POST' }),
+  preview: (id, plantIds) =>
+    request(`/templates/${id}/preview`, { method: 'POST', body: JSON.stringify({ plantIds }) }),
+  apply: (id, data) =>
+    request(`/templates/${id}/apply`, { method: 'POST', body: JSON.stringify(data) }),
+}
