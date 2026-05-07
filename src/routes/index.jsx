@@ -11,6 +11,7 @@ const TodayPage = lazy(() => import('../pages/TodayPage.jsx'))
 const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage.jsx'))
 const CalendarPage = lazy(() => import('../pages/CalendarPage.jsx'))
 const SettingsPage = lazy(() => import('../pages/SettingsPage.jsx'))
+const AdminPage = lazy(() => import('../pages/AdminPage.jsx'))
 const ForecastPage = lazy(() => import('../pages/ForecastPage.jsx'))
 const InsightsPage = lazy(() => import('../pages/InsightsPage.jsx'))
 const BulkUploadPage = lazy(() => import('../pages/BulkUploadPage.jsx'))
@@ -56,6 +57,8 @@ export const routes = [
           { path: 'settings', element: <Navigate to="/settings/property" replace /> },
           { path: 'settings/billing', element: <BillingPage /> },
           { path: 'settings/:tab', element: <SettingsPage />, handle: { breadcrumb: 'Settings' } },
+          { path: 'admin', element: <Navigate to="/admin/features" replace /> },
+          { path: 'admin/:tab', element: <AdminPage />, handle: { breadcrumb: 'Admin' } },
           { path: 'pricing', element: <PricingPage />, handle: { breadcrumb: 'Pricing' } },
         ],
       },

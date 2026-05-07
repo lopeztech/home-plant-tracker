@@ -88,7 +88,7 @@ vi.mock('../components/LeafletFloorplan.jsx', () => ({
 }))
 
 import SettingsPage from '../pages/SettingsPage.jsx'
-import { accountApi, apiKeysApi, brandingApi, imagesApi } from '../api/plants.js'
+import { accountApi, brandingApi, imagesApi } from '../api/plants.js'
 
 function renderAt(path) {
   return render(
@@ -134,11 +134,16 @@ describe('SettingsPage tabs', () => {
     expect(screen.getByText(/Delete account/i)).toBeInTheDocument()
   })
 
-  it('shows the Advanced tab content at /settings/advanced', () => {
-    renderAt('/settings/advanced')
-    expect(screen.getByText(/About/i)).toBeInTheDocument()
-    // Version string from mocked constant
-    expect(screen.getByText(/0\.0\.0-test/i)).toBeInTheDocument()
+  it('redirects legacy admin tabs (advanced/api-keys/features) to /admin', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={['/settings/advanced']}>
+        <Routes>
+          <Route path="/settings/:tab" element={<SettingsPage />} />
+          <Route path="/admin/:tab" element={<div data-testid="admin-stub" />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(container.querySelector('[data-testid="admin-stub"]')).not.toBeNull()
   })
 
   it('renders navigation tabs for Property and Preferences', () => {
@@ -342,93 +347,6 @@ describe('SettingsPage Data tab', () => {
   })
 })
 
-describe('SettingsPage API Keys tab', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    apiKeysApi.list.mockResolvedValue({ keys: [] })
-  })
-
-  it('shows the API Keys tab in navigation', () => {
-    renderAt('/settings/api-keys')
-    expect(screen.getByText('API Keys')).toBeInTheDocument()
-  })
-
-  it('renders the Public REST API section', async () => {
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByText(/Public REST API/)).toBeInTheDocument())
-  })
-
-  it('shows no-keys message when list is empty', async () => {
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('no-keys-message')).toBeInTheDocument())
-    expect(screen.getByText(/No API keys yet/)).toBeInTheDocument()
-  })
-
-  it('displays existing active keys in table', async () => {
-    apiKeysApi.list.mockResolvedValue({
-      keys: [
-        { id: 'k1', name: 'Home Assistant', key: 'pt_live_hass...', prefix: 'pt_live_hass', createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null, revokedAt: null },
-      ],
-    })
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('api-keys-table')).toBeInTheDocument())
-    expect(screen.getByText('Home Assistant')).toBeInTheDocument()
-    expect(screen.getByText('pt_live_hass...')).toBeInTheDocument()
-  })
-
-  it('shows create key button and name input', async () => {
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('create-key-btn')).toBeInTheDocument())
-    expect(screen.getByTestId('new-key-name-input')).toBeInTheDocument()
-  })
-
-  it('create key button is disabled when name input is empty', async () => {
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('create-key-btn')).toBeDisabled())
-  })
-
-  it('calls apiKeysApi.create with the entered name', async () => {
-    apiKeysApi.create.mockResolvedValue({ id: 'new-k', key: 'pt_live_newkeyxxx', name: 'My App', prefix: 'pt_live_newk', createdAt: '2026-04-23T00:00:00Z' })
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('new-key-name-input')).toBeInTheDocument())
-    fireEvent.change(screen.getByTestId('new-key-name-input'), { target: { value: 'My App' } })
-    fireEvent.click(screen.getByTestId('create-key-btn'))
-    await waitFor(() => expect(apiKeysApi.create).toHaveBeenCalledWith('My App'))
-  })
-
-  it('shows the new plaintext key banner after creation', async () => {
-    apiKeysApi.create.mockResolvedValue({ id: 'new-k', key: 'pt_live_secret123', name: 'My App', prefix: 'pt_live_secr', createdAt: '2026-04-23T00:00:00Z' })
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('new-key-name-input')).toBeInTheDocument())
-    fireEvent.change(screen.getByTestId('new-key-name-input'), { target: { value: 'My App' } })
-    fireEvent.click(screen.getByTestId('create-key-btn'))
-    await waitFor(() => expect(screen.getByTestId('new-key-banner')).toBeInTheDocument())
-    expect(screen.getByTestId('new-key-value')).toHaveTextContent('pt_live_secret123')
-  })
-
-  it('shows revoke button for each key and calls apiKeysApi.revoke', async () => {
-    apiKeysApi.list.mockResolvedValue({
-      keys: [{ id: 'k1', name: 'HA', key: 'pt_live_ha...', prefix: 'pt_live_ha', createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null }],
-    })
-    apiKeysApi.revoke.mockResolvedValue({ revoked: true })
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('revoke-key-k1')).toBeInTheDocument())
-    fireEvent.click(screen.getByTestId('revoke-key-k1'))
-    await waitFor(() => expect(apiKeysApi.revoke).toHaveBeenCalledWith('k1'))
-  })
-
-  it('removes key from list after successful revoke', async () => {
-    apiKeysApi.list.mockResolvedValue({
-      keys: [{ id: 'k1', name: 'HA', key: 'pt_live_ha...', prefix: 'pt_live_ha', createdAt: '2026-04-01T00:00:00Z', lastUsedAt: null }],
-    })
-    apiKeysApi.revoke.mockResolvedValue({ revoked: true })
-    renderAt('/settings/api-keys')
-    await waitFor(() => expect(screen.getByTestId('revoke-key-k1')).toBeInTheDocument())
-    fireEvent.click(screen.getByTestId('revoke-key-k1'))
-    await waitFor(() => expect(screen.queryByTestId('revoke-key-k1')).not.toBeInTheDocument())
-  })
-})
-
 describe('SettingsPage Branding tab', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -508,56 +426,6 @@ describe('SettingsPage Branding tab', () => {
     fireEvent.change(screen.getByTestId('branding-logo-input'), { target: { files: [file] } })
     await waitFor(() => expect(imagesApi.upload).toHaveBeenCalledWith(file, 'branding'))
     await waitFor(() => expect(brandingApi.save).toHaveBeenCalledWith({ logoUrl: 'https://storage.example.com/branding/logo.png' }))
-  })
-})
-
-describe('SettingsPage Features tab (admin only)', () => {
-  beforeEach(() => {
-    saveFeatureOverridesMock.mockClear()
-    profileFeatureOverrides = {}
-  })
-
-  function tabLabels(container) {
-    return Array.from(container.querySelectorAll('.nav-link')).map((el) => el.textContent.trim().toLowerCase())
-  }
-
-  it('hides the Features tab from non-admins', () => {
-    profileCanEdit = false
-    const { container } = renderAt('/settings/property')
-    expect(tabLabels(container).some((l) => l.includes('features'))).toBe(false)
-  })
-
-  it('redirects non-admins away from /settings/features', () => {
-    profileCanEdit = false
-    renderAt('/settings/features')
-    // Falls back to the Property tab content
-    expect(screen.getByText(/Floors & Zones/i)).toBeInTheDocument()
-  })
-
-  it('shows the Features tab to admins', () => {
-    profileCanEdit = true
-    const { container } = renderAt('/settings/property')
-    expect(tabLabels(container).some((l) => l.includes('features'))).toBe(true)
-  })
-
-  it('renders the feature toggle table at /settings/features for admins', () => {
-    profileCanEdit = true
-    renderAt('/settings/features')
-    expect(screen.getByText(/Feature visibility/i)).toBeInTheDocument()
-    // Each menu item should have an override <select> with our four options + Default
-    const selects = screen.getAllByRole('combobox')
-    expect(selects.length).toBeGreaterThan(0)
-  })
-
-  it('saves overrides via saveFeatureOverrides', async () => {
-    profileCanEdit = true
-    renderAt('/settings/features')
-    const branding = screen.getByLabelText(/Override for Branding/i)
-    fireEvent.change(branding, { target: { value: 'household' } })
-    fireEvent.click(screen.getByRole('button', { name: /Save changes/i }))
-    await waitFor(() =>
-      expect(saveFeatureOverridesMock).toHaveBeenCalledWith(expect.objectContaining({ branding: 'household' })),
-    )
   })
 })
 

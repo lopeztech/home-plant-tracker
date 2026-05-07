@@ -16,7 +16,7 @@ import { buildWaterTasks } from '../../utils/todayTasks.js'
 export default function Sidebar() {
   const { user, logout } = useAuth()
   const { properties, activePropertyId, switchTo } = useProperty()
-  const { accountType, featureOverrides } = useProfile()
+  const { accountType, featureOverrides, canEditFeatureFlags } = useProfile()
   const { navMinified, toggleSetting } = useLayoutContext()
   const { weather, location, plants, floors } = usePlantContext()
   const { open: openHelp } = useHelp()
@@ -29,10 +29,24 @@ export default function Sidebar() {
     [plants, weather, floors],
   )
 
-  const visibleMenu = useMemo(
-    () => filterMenuByPersona(menuItems, accountType, featureOverrides),
-    [accountType, featureOverrides],
-  )
+  const visibleMenu = useMemo(() => {
+    const filtered = filterMenuByPersona(menuItems, accountType, featureOverrides)
+    if (!canEditFeatureFlags) return filtered
+    return [
+      ...filtered,
+      {
+        key: 'admin',
+        label: 'Admin',
+        isSection: true,
+        collapsible: true,
+        children: [
+          { key: 'admin-features', label: 'Features', icon: '/icons/sprite.svg#grid', url: '/admin/features' },
+          { key: 'admin-api-keys', label: 'API Keys', icon: '/icons/sprite.svg#key', url: '/admin/api-keys' },
+          { key: 'admin-advanced', label: 'Advanced', icon: '/icons/sprite.svg#tool', url: '/admin/advanced' },
+        ],
+      },
+    ]
+  }, [accountType, featureOverrides, canEditFeatureFlags])
 
   const toggleSidenav = () => {
     toggleSetting('navMinified', !navMinified)
