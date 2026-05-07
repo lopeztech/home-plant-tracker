@@ -57,7 +57,7 @@ export default function Sidebar() {
             {user.picture ? (
               <img src={user.picture} alt={user.name} className="rounded-circle" width={36} height={36} referrerPolicy="no-referrer" />
             ) : (
-              <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style={{ width: 36, height: 36, fontSize: '0.85rem' }}>
+              <div className="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center fw-bold" style={{ width: 36, height: 36, fontSize: 'var(--tx-size-sm)' }}>
                 {user.name?.charAt(0)?.toUpperCase() || '?'}
               </div>
             )}
@@ -76,7 +76,7 @@ export default function Sidebar() {
             value={activePropertyId}
             onChange={(e) => switchTo(e.target.value)}
             aria-label="Switch property"
-            style={{ fontSize: '0.78rem' }}
+            style={{ fontSize: 'var(--tx-size-xs)' }}
           >
             {properties.map((p) => (
               <option key={p.id} value={p.id}>{p.name}</option>
@@ -127,7 +127,7 @@ export default function Sidebar() {
                         type="button"
                         onClick={() => { startTour(tour.id); setTourMenuOpen(false) }}
                         className="btn btn-link btn-sm text-start w-100 p-0 py-1 text-white-50 text-decoration-none"
-                        style={{ fontSize: '0.8rem' }}
+                        style={{ fontSize: 'var(--tx-size-xs)' }}
                       >
                         {tour.label}
                       </button>

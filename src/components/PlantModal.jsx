@@ -1105,7 +1105,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                       }}
                       aria-label="Marker preview"
                     >
-                      <span style={{ fontSize: '1.35rem', lineHeight: 1 }}>
+                      <span style={{ fontSize: 'var(--tx-size-lg)', lineHeight: 1 }}>
                         {getPlantEmoji({ species: form.species, emoji: form.emoji })}
                       </span>
                     </div>
@@ -1131,7 +1131,7 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                             size="sm"
                             variant={form.emoji === e ? 'primary' : 'outline-secondary'}
                             onClick={() => update('emoji', e)}
-                            style={{ fontSize: '1.1rem', lineHeight: 1, padding: '0.25rem 0.5rem', minWidth: 36 }}
+                            style={{ fontSize: 'var(--tx-size-base)', lineHeight: 1, padding: 'var(--space-2) var(--space-3)', minWidth: 36 }}
                             aria-label={`Use ${e} as marker`}
                           >
                             {e}

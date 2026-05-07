@@ -27,6 +27,21 @@
   --tx-color-body:    var(--bs-body-color);
   --tx-color-muted:   var(--bs-secondary-color);
   --tx-color-heading: var(--bs-emphasis-color);
+
+  /* Spacing ladder — 4 px base */
+  --space-1: 0.25rem;   /*  4px */
+  --space-2: 0.5rem;    /*  8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-5: 1.5rem;    /* 24px */
+  --space-6: 2rem;      /* 32px */
+  --space-7: 3rem;      /* 48px */
+  --space-8: 4rem;      /* 64px */
+
+  /* Line-height tokens */
+  --lh-tight:   1.2;   /* headings, display */
+  --lh-normal:  1.5;   /* body, muted */
+  --lh-relaxed: 1.7;   /* long-form prose, notes */
 }
 
 /* ── Dark-mode contrast corrections ────────────────────────────────────
@@ -109,4 +124,21 @@
   font-size: var(--tx-size-lg);
   font-weight: 600;
   line-height: 1.2;
+}
+
+/* ── Reading-width constraints ─────────────────────────────────────────── */
+/* Long-form text: plant notes, journal entries, help articles */
+.prose-block { max-width: 65ch; }
+/* Card / list item secondary text */
+.card-text   { max-width: 45ch; }
+
+/* ── iOS auto-zoom prevention ──────────────────────────────────────────── */
+/* Keeps form inputs at ≥ 16px on mobile so Safari does not zoom on focus.
+ * Only applied on small viewports to avoid overriding desktop sizing. */
+@media (max-width: 767.98px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: max(var(--tx-size-base), 1rem);
+  }
 }

@@ -99,3 +99,42 @@ Raising opacity to `.85` lifts the effective grey to ~`#b9bcbf`, achieving **4.7
 ## Minimum Font Size (Lighthouse)
 
 All semantic tokens produce rendered sizes ≥ 12px (our `--tx-size-xs` floor), meeting Lighthouse's "Legible font sizes" requirement (≥ 12px). Chart library config strings (`'10px'`) used in ApexCharts axis labels are exempt — they render inside SVG elements that Lighthouse does not audit for legibility.
+
+## Spacing Scale
+
+**Ladder:** 4 px base · defined as CSS custom properties in `src/assets/sass/app/_typography.scss`
+
+| Token | rem | px | Primary use |
+|---|---|---|---|
+| `--space-1` | 0.25rem | 4px | Icon gaps, tight inline spacing |
+| `--space-2` | 0.5rem | 8px | Button padding (horizontal), badge gaps |
+| `--space-3` | 0.75rem | 12px | Form field spacing, list row padding |
+| `--space-4` | 1rem | 16px | Section internal padding, card body |
+| `--space-5` | 1.5rem | 24px | Panel padding, modal section gaps |
+| `--space-6` | 2rem | 32px | Page section separation |
+| `--space-7` | 3rem | 48px | Hero / marketing vertical rhythm |
+| `--space-8` | 4rem | 64px | Full-page display sections |
+
+**Guidance:**
+- Use `--space-*` tokens in inline styles and component SCSS where a specific step is required.
+- Use Bootstrap utility classes (`p-3`, `gap-2`, `mb-4`) when they map cleanly to the ladder; they already follow the 4 px grid.
+- Avoid arbitrary values like `margin: 10px` or `padding: 14px` — round to the nearest step.
+
+## Line-height Tokens
+
+| Token | Value | Use |
+|---|---|---|
+| `--lh-tight` | 1.2 | Headings, display figures |
+| `--lh-normal` | 1.5 | Body copy, metadata, muted text |
+| `--lh-relaxed` | 1.7 | Long-form prose: plant notes, journal entries, help articles |
+
+## Reading-width Constraints
+
+Long-form text containers should cap width to prevent overly long line lengths:
+
+- `.prose-block` — `max-width: 65ch` — plant notes, journal entries, help articles
+- `.card-text` — `max-width: 45ch` — card/list-item secondary text
+
+## Mobile Font-size Floor (iOS Auto-zoom Prevention)
+
+On viewports ≤ 767px, all text inputs, selects, and textareas are forced to `min(var(--tx-size-base), 1rem)` = 16px. This prevents iOS Safari from zooming in on the viewport when a user focuses a small-font input, which is the primary cause of the "screen jumped when I tapped the search box" complaint.
