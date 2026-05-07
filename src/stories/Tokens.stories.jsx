@@ -135,36 +135,57 @@ export const ColourPalettes = {
 
 // ─── Spacing ─────────────────────────────────────────────────────────────────
 
-const SPACING = [1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 32, 40, 48]
+const SPACE_TOKENS = [
+  { token: '--space-1', rem: '0.25rem', px: 4,  use: 'Icon gaps, tight inline spacing' },
+  { token: '--space-2', rem: '0.5rem',  px: 8,  use: 'Button padding, badge gaps' },
+  { token: '--space-3', rem: '0.75rem', px: 12, use: 'Form field spacing, list row padding' },
+  { token: '--space-4', rem: '1rem',    px: 16, use: 'Section internal padding, card body' },
+  { token: '--space-5', rem: '1.5rem',  px: 24, use: 'Panel padding, modal section gaps' },
+  { token: '--space-6', rem: '2rem',    px: 32, use: 'Page section separation' },
+  { token: '--space-7', rem: '3rem',    px: 48, use: 'Hero / marketing vertical rhythm' },
+  { token: '--space-8', rem: '4rem',    px: 64, use: 'Full-page padding, display sections' },
+]
 
 export const SpacingScale = {
   name: 'Spacing Scale',
   render: () => (
-    <div style={{ maxWidth: 640 }}>
-      <h4 className="tx-heading mb-3">Spacing — Bootstrap 4px grid</h4>
+    <div style={{ maxWidth: 680 }}>
+      <h4 className="tx-heading mb-3">Spacing — 4 px ladder</h4>
       <p className="tx-muted mb-4">
-        All spacing uses Bootstrap's 4 px grid via utility classes (<code>.gap-2</code>,{' '}
-        <code>.p-3</code>, etc.) or explicit <code>px</code> values.
+        CSS custom properties defined in <code>_typography.scss</code>. Use these tokens for
+        margins, paddings, and gaps; reach for Bootstrap utility classes (<code>.p-3</code>,{' '}
+        <code>.gap-2</code>) when they map cleanly.
       </p>
       <div className="d-flex flex-column gap-2">
-        {SPACING.map((u) => (
-          <div key={u} className="d-flex align-items-center gap-3">
-            <code style={{ width: 40, fontSize: 11, flexShrink: 0 }}>{u * 4}px</code>
+        {SPACE_TOKENS.map(({ token, rem, px, use }) => (
+          <div key={token} className="d-flex align-items-center gap-3">
+            <code style={{ width: 90, fontSize: 11, flexShrink: 0 }}>{token}</code>
             <div
               style={{
-                width: u * 4,
+                width: px,
                 height: 16,
                 background: 'var(--bs-primary, #5d623b)',
                 borderRadius: 2,
                 flexShrink: 0,
               }}
             />
-            <span className="tx-muted" style={{ fontSize: 11 }}>
-              {u}× · <code>.gap-{u > 5 ? `[custom]` : u}</code>
-            </span>
+            <span className="tx-muted" style={{ fontSize: 11, minWidth: 80 }}>{rem} / {px}px</span>
+            <span className="tx-muted" style={{ fontSize: 11 }}>{use}</span>
           </div>
         ))}
       </div>
+
+      <h4 className="tx-heading mt-5 mb-3">Line-height Tokens</h4>
+      <table className="table table-sm" style={{ maxWidth: 500 }}>
+        <thead>
+          <tr><th>Token</th><th>Value</th><th>Use</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>--lh-tight</code></td><td>1.2</td><td>Headings, display figures</td></tr>
+          <tr><td><code>--lh-normal</code></td><td>1.5</td><td>Body copy, metadata</td></tr>
+          <tr><td><code>--lh-relaxed</code></td><td>1.7</td><td>Long-form prose, notes, journal</td></tr>
+        </tbody>
+      </table>
     </div>
   ),
 }
