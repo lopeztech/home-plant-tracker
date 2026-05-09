@@ -10,6 +10,7 @@ import ErrorAlert from '../components/ErrorAlert.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import { SkeletonRect, SkeletonPlantCard } from '../components/Skeleton.jsx'
 import { outbreakApi } from '../api/plants.js'
+import NotificationBanner from '../components/NotificationBanner.jsx'
 
 export default function DashboardPage() {
   const { floors, activeFloorId, weather, handleSavePlant, handleDeletePlant, handleWaterPlant, handleMoisturePlant, plantsError, plants, plantsLoading, reloadPlants, isGuest } = usePlantContext()
@@ -116,6 +117,7 @@ export default function DashboardPage() {
     <div className="content-wrapper" style={{ padding: 0 }}>
       <div className="main-content">
         <div className="px-3 pt-2">
+          <NotificationBanner />
           <UpgradePrompt id="dashboard-plant-limit" quota="plants">
             You've reached your Free-tier plant limit. Unlock unlimited plants with Home Pro.
           </UpgradePrompt>

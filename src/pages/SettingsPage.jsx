@@ -12,7 +12,7 @@ import { TIMEZONE_GROUPS } from '../hooks/useTimezone.js'
 import { SUPPORTED_LANGUAGES } from '../i18n/index.js'
 import { useTranslation } from 'react-i18next'
 import i18n from '../i18n/index.js'
-import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi } from '../api/plants.js'
+import { accountApi, exportApi, brandingApi, imagesApi, householdsApi, propertiesApi, oauthApi, reportsApi, marketplaceApi, notificationsApi } from '../api/plants.js'
 import { useHousehold } from '../context/HouseholdContext.jsx'
 import { useProperty } from '../context/PropertyContext.jsx'
 import { useProfile } from '../context/ProfileContext.jsx'
@@ -23,6 +23,9 @@ const TABS = [
   { id: 'household', label: 'Household', icon: 'users', tags: 'household share invite member family roommate partner role viewer editor owner code' },
   { id: 'data', label: 'Data & export', icon: 'download', tags: 'export csv download backup data' },
   { id: 'client-properties', label: 'Properties', icon: 'home', tags: 'properties clients landscaper multi-property client management' },
+  { id: 'notifications', label: 'Notifications', icon: 'bell', tags: 'notifications push email reminders watering alerts digest' },
+  { id: 'marketplace', label: 'Marketplace', icon: 'package', tags: 'marketplace cuttings swaps community display name contact karma' },
+  { id: 'linked-devices', label: 'Linked Devices', icon: 'mic', tags: 'voice alexa google home apple shortcuts assistant linked devices oauth integration' },
   { id: 'branding', label: 'Branding', icon: 'star', tags: 'branding logo colour color business name landscaper white label report pdf' },
 ]
 
@@ -1239,6 +1242,424 @@ function BrandingTab({ search }) {
   )
 }
 
+function NotificationsTab({ search }) {
+  const [prefs, setPrefs] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    notificationsApi.getPreferences().then(setPrefs).catch((e) => setError(e.message))
+  }, [])
+
+  const handleChange = (key, value) => setPrefs((p) => ({ ...p, [key]: value }))
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    try {
+      const updated = await notificationsApi.updatePreferences(prefs)
+      setPrefs(updated)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const requestPushPermission = async () => {
+    if (!('Notification' in window)) { setError('Push notifications are not supported in this browser.'); return }
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') { setError('Push permission denied.'); return }
+    if ('serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready
+      const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY
+      if (!vapidKey) { setError('Push not configured (missing VAPID key).'); return }
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey })
+      await notificationsApi.registerToken({ subscription: JSON.parse(JSON.stringify(sub)), deviceLabel: navigator.userAgent.slice(0, 60) })
+      handleChange('pushEnabled', true)
+    }
+  }
+
+  if (!prefs) return <p className="text-muted fs-sm">Loading…</p>
+
+  return (
+    <div className="settings-section">
+      <h4 className="settings-section-title">Notifications</h4>
+      {error && <div className="alert alert-danger py-2 fs-sm mb-3">{error}</div>}
+      <div className="card mb-3">
+        <div className="card-body">
+          <h6 className="mb-3">Channels</h6>
+          <Form.Check type="switch" id="notif-email" label="Daily digest email" checked={!!prefs.emailEnabled} onChange={(e) => handleChange('emailEnabled', e.target.checked)} className="mb-2" />
+          {prefs.pushEnabled ? (
+            <Form.Check type="switch" id="notif-push" label="Push notifications (enabled)" checked={!!prefs.pushEnabled} onChange={(e) => handleChange('pushEnabled', e.target.checked)} className="mb-2" />
+          ) : (
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <Form.Check type="switch" id="notif-push" label="Push notifications" checked={false} onChange={() => requestPushPermission()} />
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="card mb-3">
+        <div className="card-body">
+          <h6 className="mb-3">Alert types</h6>
+          <Form.Check type="switch" id="notif-daily" label="Daily digest (due plants, overdue count)" checked={!!prefs.dailyDigest} onChange={(e) => handleChange('dailyDigest', e.target.checked)} className="mb-2" />
+          <Form.Check type="switch" id="notif-weekly" label="Weekly digest" checked={!!prefs.weeklyDigest} onChange={(e) => handleChange('weeklyDigest', e.target.checked)} className="mb-2" />
+          <Form.Check type="switch" id="notif-alerts" label="Per-plant alerts (overdue ≥ 3 days, frost/heatwave)" checked={!!prefs.perPlantAlerts} onChange={(e) => handleChange('perPlantAlerts', e.target.checked)} />
+        </div>
+      </div>
+      <div className="card mb-3">
+        <div className="card-body">
+          <h6 className="mb-3">Quiet hours</h6>
+          <div className="row g-2">
+            <div className="col-6">
+              <Form.Label className="fs-xs text-muted mb-1">Start</Form.Label>
+              <Form.Control type="time" size="sm" value={prefs.quietHoursStart || '08:00'} onChange={(e) => handleChange('quietHoursStart', e.target.value)} />
+            </div>
+            <div className="col-6">
+              <Form.Label className="fs-xs text-muted mb-1">End</Form.Label>
+              <Form.Control type="time" size="sm" value={prefs.quietHoursEnd || '20:00'} onChange={(e) => handleChange('quietHoursEnd', e.target.value)} />
+            </div>
+          </div>
+        </div>
+      </div>
+      <Button size="sm" variant="primary" onClick={handleSave} disabled={saving}>
+        {saving ? 'Saving…' : saved ? 'Saved!' : 'Save preferences'}
+      </Button>
+    </div>
+  )
+}
+
+function MarketplaceTab({ search }) {
+  const { isGuest } = useAuth()
+  const [profile, setProfile] = useState({ displayName: '', contactEmail: '', karma: 0, badges: [] })
+  const [loading, setLoading] = useState(!isGuest)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState(null)
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (isGuest) return
+    marketplaceApi.getMyProfile()
+      .then((data) => setProfile((p) => ({ ...p, ...data })))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false))
+  }, [isGuest])
+
+  const handleSave = async () => {
+    setSaving(true)
+    setError(null)
+    setSaved(false)
+    try {
+      await marketplaceApi.updateMyProfile({ displayName: profile.displayName, contactEmail: profile.contactEmail })
+      setSaved(true)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <>
+      <SettingSection id="marketplace-profile" title="Marketplace Profile" icon="package" search={search}>
+        <p className="text-muted fs-sm mb-3">
+          Your public profile on the <a href="/community" className="text-primary">Community Cuttings Board</a>.
+          Your display name and karma are visible to other gardeners; your contact details are only shown to users you engage with.
+        </p>
+        {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
+        {saved && <div className="alert alert-success py-2 mb-3">Profile saved.</div>}
+        {loading ? (
+          <p className="text-muted fs-sm">Loading…</p>
+        ) : (
+          <>
+            <div className="row g-3 mb-3">
+              <div className="col-12 col-md-4 text-center">
+                <div className="fw-bold display-6 text-primary">{profile.karma || 0}</div>
+                <div className="text-muted fs-xs">Karma</div>
+              </div>
+              <div className="col-12 col-md-8">
+                <Form.Group className="mb-3">
+                  <Form.Label className="fs-sm fw-semibold">Display name</Form.Label>
+                  <Form.Control size="sm" value={profile.displayName || ''} onChange={(e) => setProfile((p) => ({ ...p, displayName: e.target.value }))}
+                    placeholder="e.g. PlantLover42" maxLength={64} />
+                  <Form.Text className="text-muted fs-xs">Shown on your listings. Leave blank to appear as &quot;Anonymous&quot;.</Form.Text>
+                </Form.Group>
+                <Form.Group className="mb-0">
+                  <Form.Label className="fs-sm fw-semibold">Contact email (for listings)</Form.Label>
+                  <Form.Control type="email" size="sm" value={profile.contactEmail || ''} onChange={(e) => setProfile((p) => ({ ...p, contactEmail: e.target.value }))}
+                    placeholder="you@example.com" />
+                  <Form.Text className="text-muted fs-xs">Shown on your active listings so collectors can reach you.</Form.Text>
+                </Form.Group>
+              </div>
+            </div>
+            <Button size="sm" variant="primary" onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save profile'}</Button>
+          </>
+        )}
+      </SettingSection>
+    </>
+  )
+}
+
+const VOICE_CLIENTS = [
+  { id: 'alexa.lopezcloud.dev',          name: 'Amazon Alexa',    icon: 'mic' },
+  { id: 'google-home.lopezcloud.dev',    name: 'Google Home',     icon: 'mic' },
+  { id: 'apple-shortcuts.lopezcloud.dev', name: 'Apple Shortcuts', icon: 'mic' },
+]
+
+function LinkedDevicesTab({ search }) {
+  const { isGuest } = useAuth()
+  const [grants, setGrants] = useState([])
+  const [loading, setLoading] = useState(!isGuest)
+  const [error, setError] = useState(null)
+  const [revoking, setRevoking] = useState(null)
+
+  const loadGrants = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { grants: list } = await oauthApi.listGrants()
+      setGrants(list)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { if (!isGuest) loadGrants() }, [loadGrants, isGuest])
+
+  const handleRevoke = async (id) => {
+    setRevoking(id)
+    setError(null)
+    try {
+      await oauthApi.revokeGrant(id)
+      setGrants((prev) => prev.filter((g) => g.id !== id))
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setRevoking(null)
+    }
+  }
+
+  return (
+    <>
+      <SettingSection id="linked-devices-intro" title="Linked Voice Assistants" icon="mic" search={search}>
+        <p className="text-muted fs-sm mb-3">
+          Connect your plant tracker to voice assistants like Amazon Alexa, Google Home, or Apple Shortcuts.
+          Once linked, you can ask your assistant to water plants, check care schedules, and get weather alerts hands-free.
+          Requires a <strong>Home Pro</strong> subscription.
+        </p>
+        <div className="row g-2">
+          {VOICE_CLIENTS.map((client) => (
+            <div key={client.id} className="col-12 col-md-4">
+              <div className="border rounded p-3 d-flex flex-column align-items-center gap-2 text-center">
+                <svg className="sa-icon sa-icon-2x" aria-hidden="true">
+                  <use href="/icons/sprite.svg#mic"></use>
+                </svg>
+                <div className="fw-semibold fs-sm">{client.name}</div>
+                <div className="text-muted fs-xs">Account linking coming soon</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </SettingSection>
+
+      <SettingSection id="linked-devices-active" title="Active Connections" icon="shield" search={search}>
+        {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
+        {loading ? (
+          <p className="text-muted fs-sm">Loading…</p>
+        ) : grants.length === 0 ? (
+          <p className="text-muted fs-sm">No linked voice assistants yet.</p>
+        ) : (
+          <Table size="sm" className="mb-0">
+            <thead>
+              <tr>
+                <th>Device</th>
+                <th>Connected</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {grants.map((g) => (
+                <tr key={g.id}>
+                  <td>{g.clientName}</td>
+                  <td className="text-muted fs-xs">{new Date(g.createdAt).toLocaleDateString()}</td>
+                  <td className="text-muted fs-xs">{new Date(g.expiresAt).toLocaleDateString()}</td>
+                  <td>
+                    <Button
+                      variant="outline-danger"
+                      size="sm"
+                      onClick={() => handleRevoke(g.id)}
+                      disabled={revoking === g.id}
+                      data-testid={`revoke-grant-${g.id}`}
+                    >
+                      {revoking === g.id ? 'Revoking…' : 'Revoke'}
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </SettingSection>
+    </>
+  )
+}
+
+function ReportGenerateModal({ propertyId, propertyName, onClose }) {
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0]
+  })
+  const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0])
+  const [sections, setSections] = useState({ health: true, watering: true, feeding: true, photos: true })
+  const [generating, setGenerating] = useState(false)
+  const [downloadUrl, setDownloadUrl] = useState(null)
+  const [error, setError] = useState(null)
+
+  const toggleSection = (key) => setSections((s) => ({ ...s, [key]: !s[key] }))
+
+  const handleGenerate = async () => {
+    setGenerating(true)
+    setError(null)
+    try {
+      const result = await reportsApi.generate({
+        propertyId,
+        dateRange: { from: `${fromDate}T00:00:00.000Z`, to: `${toDate}T23:59:59.999Z` },
+        includeSections: sections,
+      })
+      setDownloadUrl(result.downloadUrl)
+    } catch (err) {
+      setError(err.message || 'Failed to generate report')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  return (
+    <div className="modal show d-block" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="report-modal-title">
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title" id="report-modal-title">Generate Care Report — {propertyName}</h5>
+            <button type="button" className="btn-close" onClick={onClose} aria-label="Close"></button>
+          </div>
+          <div className="modal-body">
+            {error && <div className="alert alert-danger py-2 mb-3">{error}</div>}
+            {downloadUrl ? (
+              <div className="text-center py-3">
+                <svg className="sa-icon sa-icon-2x mb-2 text-success" aria-hidden="true"><use href="/icons/sprite.svg#check-circle"></use></svg>
+                <p className="mb-3">Your report is ready.</p>
+                <a href={downloadUrl} target="_blank" rel="noreferrer" className="btn btn-success">
+                  <svg className="sa-icon me-1" style={{ width: 14, height: 14 }} aria-hidden="true"><use href="/icons/sprite.svg#download"></use></svg>
+                  Download PDF
+                </a>
+              </div>
+            ) : (
+              <>
+                <Form.Group className="mb-3">
+                  <Form.Label className="fs-sm fw-semibold">Date range</Form.Label>
+                  <div className="d-flex gap-2 align-items-center">
+                    <Form.Control type="date" size="sm" value={fromDate} onChange={(e) => setFromDate(e.target.value)} aria-label="From date" />
+                    <span className="text-muted fs-sm">to</span>
+                    <Form.Control type="date" size="sm" value={toDate} onChange={(e) => setToDate(e.target.value)} aria-label="To date" />
+                  </div>
+                </Form.Group>
+                <Form.Group>
+                  <Form.Label className="fs-sm fw-semibold">Include sections</Form.Label>
+                  <div className="d-flex flex-wrap gap-2">
+                    {Object.entries(sections).map(([key, val]) => (
+                      <Form.Check
+                        key={key}
+                        type="checkbox"
+                        id={`section-${key}`}
+                        label={key.charAt(0).toUpperCase() + key.slice(1)}
+                        checked={val}
+                        onChange={() => toggleSection(key)}
+                      />
+                    ))}
+                  </div>
+                </Form.Group>
+              </>
+            )}
+          </div>
+          {!downloadUrl && (
+            <div className="modal-footer">
+              <Button variant="secondary" size="sm" onClick={onClose}>Cancel</Button>
+              <Button variant="primary" size="sm" onClick={handleGenerate} disabled={generating}>
+                {generating ? 'Generating…' : 'Generate PDF'}
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="modal-backdrop show" onClick={onClose}></div>
+    </div>
+  )
+}
+
+function ReportsSection({ search }) {
+  const { isGuest } = useAuth()
+  const [reports, setReports] = useState([])
+  const [loading, setLoading] = useState(!isGuest)
+  const [error, setError] = useState(null)
+
+  const loadReports = useCallback(async () => {
+    try {
+      setLoading(true)
+      const { reports: list } = await reportsApi.list()
+      setReports(list)
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { if (!isGuest) loadReports() }, [loadReports, isGuest])
+
+  return (
+    <SettingSection id="reports-history" title="Report History" icon="file-text" search={search}>
+      {error && <div className="alert alert-danger py-2 mb-2">{error}</div>}
+      {loading ? (
+        <p className="text-muted fs-sm">Loading…</p>
+      ) : reports.length === 0 ? (
+        <p className="text-muted fs-sm mb-0">No reports generated yet. Use the button above to generate your first report.</p>
+      ) : (
+        <Table size="sm" className="mb-0">
+          <thead>
+            <tr><th>Property</th><th>Period</th><th>Generated</th><th></th></tr>
+          </thead>
+          <tbody>
+            {reports.map((r) => (
+              <tr key={r.reportId}>
+                <td className="fw-medium">{r.propertyName}</td>
+                <td className="text-muted fs-xs">
+                  {new Date(r.dateRange.from).toLocaleDateString()} – {new Date(r.dateRange.to).toLocaleDateString()}
+                </td>
+                <td className="text-muted fs-xs">{new Date(r.createdAt).toLocaleDateString()}</td>
+                <td>
+                  <a
+                    href={reportsApi.downloadUrl(r.reportId)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn btn-outline-secondary btn-sm"
+                    data-testid={`download-report-${r.reportId}`}
+                  >
+                    PDF
+                  </a>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </SettingSection>
+  )
+}
+
 function ClientPropertiesTab({ search }) {
   const { properties, refresh } = useProperty()
   const [creating, setCreating] = useState(false)
@@ -1246,6 +1667,7 @@ function ClientPropertiesTab({ search }) {
   const [newType, setNewType] = useState('residential')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
+  const [reportModalProp, setReportModalProp] = useState(null)
 
   const handleCreate = async () => {
     if (!newName.trim()) return
@@ -1273,6 +1695,14 @@ function ClientPropertiesTab({ search }) {
   }
 
   return (
+    <>
+    {reportModalProp && (
+      <ReportGenerateModal
+        propertyId={reportModalProp.id}
+        propertyName={reportModalProp.name}
+        onClose={() => setReportModalProp(null)}
+      />
+    )}
     <SettingSection id="client-properties" title="Client Properties" icon="home" search={search}>
       <div className="p-0">
         <Table hover responsive className="mb-0">
@@ -1280,7 +1710,7 @@ function ClientPropertiesTab({ search }) {
             <tr>
               <th>Name</th>
               <th>Type</th>
-              <th style={{ width: 80 }}></th>
+              <th style={{ width: 160 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -1289,11 +1719,16 @@ function ClientPropertiesTab({ search }) {
                 <td className="fw-medium">{p.name}</td>
                 <td className="text-capitalize text-muted fs-sm">{p.type || 'residential'}</td>
                 <td>
-                  {p.id !== 'primary' && (
-                    <Button variant="outline-danger" size="sm" onClick={() => handleArchive(p.id)} aria-label={`Archive ${p.name}`}>
-                      <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#trash"></use></svg>
+                  <div className="d-flex gap-1">
+                    <Button variant="outline-primary" size="sm" onClick={() => setReportModalProp(p)} aria-label={`Generate report for ${p.name}`} data-testid={`report-btn-${p.id}`}>
+                      Report
                     </Button>
-                  )}
+                    {p.id !== 'primary' && (
+                      <Button variant="outline-danger" size="sm" onClick={() => handleArchive(p.id)} aria-label={`Archive ${p.name}`}>
+                        <svg className="sa-icon" style={{ width: 12, height: 12 }} aria-hidden="true"><use href="/icons/sprite.svg#trash"></use></svg>
+                      </Button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1324,6 +1759,8 @@ function ClientPropertiesTab({ search }) {
         )}
       </div>
     </SettingSection>
+    <ReportsSection search={search} />
+    </>
   )
 }
 
@@ -1405,6 +1842,9 @@ export default function SettingsPage() {
         {tab === 'household' && <HouseholdTab search={search} />}
         {tab === 'data' && <DataTab search={search} />}
         {tab === 'client-properties' && <ClientPropertiesTab search={search} />}
+        {tab === 'notifications' && <NotificationsTab search={search} />}
+        {tab === 'marketplace' && <MarketplaceTab search={search} />}
+        {tab === 'linked-devices' && <LinkedDevicesTab search={search} />}
         {tab === 'branding' && <BrandingTab search={search} />}
       </div>
     </div>

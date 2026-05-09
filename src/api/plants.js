@@ -508,6 +508,44 @@ export const rebatesApi = {
   matches: (lat, lng) => request(`/rebates/matches?lat=${lat}&lng=${lng}`),
 }
 
+export const marketplaceApi = {
+  listListings: (params = {}) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v != null)).toString()
+    return request(`/marketplace/listings${q ? '?' + q : ''}`)
+  },
+  getListing: (id) => request(`/marketplace/listings/${id}`),
+  createListing: (data) => request('/marketplace/listings', { method: 'POST', body: JSON.stringify(data) }),
+  updateListing: (id, data) => request(`/marketplace/listings/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  claimListing: (id) => request(`/marketplace/listings/${id}/claim`, { method: 'POST', body: JSON.stringify({}) }),
+  confirmHandover: (id) => request(`/marketplace/listings/${id}/confirm-handover`, { method: 'POST', body: JSON.stringify({}) }),
+  reportListing: (id, reason) => request(`/marketplace/listings/${id}/report`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  getProfile: (userId) => request(`/marketplace/profile/${userId}`),
+  getMyProfile: () => request('/marketplace/me'),
+  updateMyProfile: (data) => request('/marketplace/me', { method: 'PUT', body: JSON.stringify(data) }),
+}
+
+export const reportsApi = {
+  generate: (body) => request('/reports/generate', { method: 'POST', body: JSON.stringify(body) }),
+  list: () => request('/reports'),
+  downloadUrl: (reportId) => `${import.meta.env.VITE_API_BASE_URL || ''}/reports/${reportId}/download`,
+}
+
+export const oauthApi = {
+  getAuthorizeUrl: (clientId, redirectUri, state) => {
+    const base = import.meta.env.VITE_API_BASE_URL || ''
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      scope: 'voice',
+      state: state || '',
+    })
+    return `${base}/oauth/authorize?${params}`
+  },
+  listGrants: () => request('/oauth/grants'),
+  revokeGrant: (id) => request(`/oauth/grants/${id}`, { method: 'DELETE' }),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()
@@ -570,4 +608,11 @@ export const templatesApi = {
     request(`/templates/${id}/preview`, { method: 'POST', body: JSON.stringify({ plantIds }) }),
   apply: (id, data) =>
     request(`/templates/${id}/apply`, { method: 'POST', body: JSON.stringify(data) }),
+}
+
+export const notificationsApi = {
+  getPreferences: () => request('/preferences/notifications'),
+  updatePreferences: (data) => request('/preferences/notifications', { method: 'PUT', body: JSON.stringify(data) }),
+  registerToken: (data) => request('/preferences/notifications/fcm-tokens', { method: 'POST', body: JSON.stringify(data) }),
+  revokeToken: (token) => request(`/preferences/notifications/fcm-tokens/${encodeURIComponent(token)}`, { method: 'DELETE' }),
 }

@@ -48,6 +48,15 @@ export const menuItems = [
     ],
   },
   {
+    key: 'community',
+    label: 'Community',
+    isSection: true,
+    collapsible: true,
+    children: [
+      { key: 'community-board', label: 'Cuttings Board', icon: '/icons/sprite.svg#package', url: '/community' },
+    ],
+  },
+  {
     key: 'manage',
     label: 'Manage',
     isSection: true,

@@ -163,6 +163,17 @@ beforeAll(() => {
         return JSON.parse(Buffer.from(token.slice(6), 'hex').toString());
       },
     },
+    './reports/plantCareReport': {
+      generatePdfBuffer: async () => Buffer.from('%PDF-1.4 mock-pdf-content'),
+    },
+    './email': {
+      sendEmail: async () => ({ sent: true }),
+      TEMPLATES: { dailyDigest: 'd-1', weeklyDigest: 'd-2', plantAlert: 'd-3' },
+    },
+    'web-push': {
+      setVapidDetails: () => {},
+      sendNotification: async () => ({ statusCode: 201 }),
+    },
   });
 });
 
@@ -6863,6 +6874,58 @@ describe('POST /materials', () => {
   });
 });
 
+// ── OAuth 2.0 authorisation server ───────────────────────────────────────────
+
+const VALID_CLIENT_ID  = 'alexa.lopezcloud.dev';
+const VALID_REDIRECT   = 'https://pitangui.amazon.com/api/skill/link/M1IIGQ9IEV36MY';
+
+describe('GET /oauth/authorize', () => {
+  it('redirects with code when all params valid', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice', state: 'abc123' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(302);
+    const location = res.headers['location'];
+    expect(location).toMatch(/code=/);
+    expect(location).toMatch(/state=abc123/);
+  });
+
+  it('rejects unknown client_id', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: 'unknown.bad', redirect_uri: VALID_REDIRECT, scope: 'voice' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_client');
+  });
+
+  it('rejects mismatched redirect_uri', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: 'https://evil.example.com', scope: 'voice' })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_redirect_uri');
+  });
+
+  it('rejects unsupported response_type', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'token', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT })
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('unsupported_response_type');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('POST /gifts/purchase', () => {
   it('returns 503 when billing is disabled', async () => {
     const res = await request(app)
@@ -7387,5 +7450,797 @@ describe('GET /rebates/matches', () => {
   it('requires auth', async () => {
     const res = await request(app).get('/rebates/matches?lat=34.05&lng=-118.24');
     expect(res.status).toBe(401);
+  });
+});
+
+// Helper: complete the authorize → token round-trip and return tokens
+async function oauthFullFlow() {
+  const authRes = await request(app)
+    .get('/oauth/authorize')
+    .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice', state: 'st' })
+    .set('Authorization', authHeader());
+  expect(authRes.status).toBe(302);
+  const url = new URL(authRes.headers['location']);
+  const code = url.searchParams.get('code');
+
+  const tokenRes = await request(app)
+    .post('/oauth/token')
+    .send({ grant_type: 'authorization_code', code, redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+  expect(tokenRes.status).toBe(200);
+  return tokenRes.body; // { access_token, refresh_token, ... }
+}
+
+describe('POST /oauth/token — authorization_code', () => {
+  it('exchanges a valid code for access + refresh tokens', async () => {
+    const tokens = await oauthFullFlow();
+    expect(tokens.access_token).toBeTruthy();
+    expect(tokens.refresh_token).toBeTruthy();
+    expect(tokens.token_type).toBe('Bearer');
+    expect(tokens.expires_in).toBe(3600);
+    expect(tokens.scope).toBe('voice');
+  });
+
+  it('rejects a code that has already been used', async () => {
+    // Get a fresh code
+    const authRes = await request(app)
+      .get('/oauth/authorize')
+      .query({ response_type: 'code', client_id: VALID_CLIENT_ID, redirect_uri: VALID_REDIRECT, scope: 'voice' })
+      .set('Authorization', authHeader());
+    const url = new URL(authRes.headers['location']);
+    const code = url.searchParams.get('code');
+
+    // First exchange succeeds
+    await request(app).post('/oauth/token').send({ grant_type: 'authorization_code', code, redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+
+    // Second exchange fails
+    const res = await request(app).post('/oauth/token').send({ grant_type: 'authorization_code', code, redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('code_already_used');
+  });
+
+  it('rejects an unknown code', async () => {
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'authorization_code', code: 'notavalidcode', redirect_uri: VALID_REDIRECT, client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('invalid_code');
+  });
+
+  it('rejects unsupported grant_type', async () => {
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'client_credentials', client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('unsupported_grant_type');
+  });
+});
+
+describe('POST /oauth/token — refresh_token', () => {
+  it('issues a new access token given a valid refresh token', async () => {
+    const { refresh_token } = await oauthFullFlow();
+
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token, client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(200);
+    expect(res.body.access_token).toBeTruthy();
+    expect(res.body.token_type).toBe('Bearer');
+  });
+
+  it('rejects an unknown refresh token', async () => {
+    const res = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token: 'notreal', client_id: VALID_CLIENT_ID });
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('invalid_refresh_token');
+  });
+});
+
+describe('POST /oauth/revoke', () => {
+  it('revokes a refresh token and invalidates it for further use', async () => {
+    const { refresh_token } = await oauthFullFlow();
+
+    const revokeRes = await request(app).post('/oauth/revoke').send({ token: refresh_token });
+    expect(revokeRes.status).toBe(200);
+    expect(revokeRes.body.revoked).toBe(true);
+
+    // Subsequent refresh attempt must fail
+    const refreshRes = await request(app)
+      .post('/oauth/token')
+      .send({ grant_type: 'refresh_token', refresh_token, client_id: VALID_CLIENT_ID });
+    expect(refreshRes.status).toBe(401);
+    expect(refreshRes.body.error).toBe('token_revoked');
+  });
+
+  it('returns 200 for an unknown token (RFC 7009 §2.2)', async () => {
+    const res = await request(app).post('/oauth/revoke').send({ token: 'unknowntokenvalue' });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('GET /oauth/grants', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns active grants', async () => {
+    await oauthFullFlow();
+    const res = await request(app).get('/oauth/grants').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.grants).toHaveLength(1);
+    expect(res.body.grants[0].clientName).toBe('Amazon Alexa');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/oauth/grants');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('DELETE /oauth/grants/:id', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('revokes a grant and removes it from the list', async () => {
+    await oauthFullFlow();
+    const listRes = await request(app).get('/oauth/grants').set('Authorization', authHeader());
+    const grantId = listRes.body.grants[0].id;
+
+    const revokeRes = await request(app)
+      .delete(`/oauth/grants/${grantId}`)
+      .set('Authorization', authHeader());
+    expect(revokeRes.status).toBe(200);
+    expect(revokeRes.body.revoked).toBe(true);
+
+    const listAfter = await request(app).get('/oauth/grants').set('Authorization', authHeader());
+    expect(listAfter.body.grants).toHaveLength(0);
+  });
+
+  it('returns 404 for unknown grant', async () => {
+    const res = await request(app)
+      .delete('/oauth/grants/no-such-id')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).delete('/oauth/grants/some-id');
+    expect(res.status).toBe(401);
+  });
+});
+
+// ── Voice intent endpoints ────────────────────────────────────────────────────
+
+async function makeVoiceBearer() {
+  // Get tokens via full OAuth flow (billing must be enabled + home_pro for /voice/*)
+  process.env.BILLING_ENABLED = 'true';
+  store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  const { access_token } = await oauthFullFlow();
+  return `Bearer ${access_token}`;
+}
+
+describe('GET /voice/today', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns a due-plants summary', async () => {
+    const bearer = await makeVoiceBearer();
+    // Plant overdue by 10 days
+    store[plantPath('p-water')] = { name: 'Monstera', frequencyDays: 7, lastWatered: new Date(Date.now() - 10 * 86400000).toISOString() };
+    const res = await request(app).get('/voice/today').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(1);
+    expect(res.body.plants[0]).toBe('Monstera');
+    expect(res.body.summary).toMatch(/Monstera/);
+  });
+
+  it('returns all-up-to-date message when nothing is due', async () => {
+    const bearer = await makeVoiceBearer();
+    store[plantPath('p-fresh')] = { name: 'Snake plant', frequencyDays: 14, lastWatered: new Date().toISOString() };
+    const res = await request(app).get('/voice/today').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(0);
+    expect(res.body.summary).toMatch(/up to date/i);
+  });
+
+  it('rejects missing Bearer token', async () => {
+    const res = await request(app).get('/voice/today');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /voice/plants/:nameOrFuzzy/status', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns status for an exact plant name match', async () => {
+    const bearer = await makeVoiceBearer();
+    const lastWatered = new Date(Date.now() - 2 * 86400000).toISOString();
+    store[plantPath('p-status')] = { name: 'Fiddle leaf fig', health: 'Good', room: 'Living Room', lastWatered };
+    const res = await request(app).get('/voice/plants/Fiddle leaf fig/status').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatch(/Fiddle leaf fig/);
+    expect(res.body.summary).toMatch(/2 days? ago/i);
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const bearer = await makeVoiceBearer();
+    const res = await request(app).get('/voice/plants/unicornplant/status').set('Authorization', bearer);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('plant_not_found');
+  });
+});
+
+describe('POST /voice/plants/:nameOrFuzzy/water', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('logs a watering and returns confirmation', async () => {
+    const bearer = await makeVoiceBearer();
+    store[plantPath('p-voice-water')] = { name: 'Pothos', wateringLog: [] };
+    const res = await request(app).post('/voice/plants/Pothos/water').set('Authorization', bearer);
+    expect(res.status).toBe(201);
+    expect(res.body.summary).toMatch(/Pothos/);
+    expect(res.body.wateredAt).toBeTruthy();
+    expect(store[plantPath('p-voice-water')].lastWatered).toBeTruthy();
+  });
+
+  it('returns 404 for unknown plant', async () => {
+    const bearer = await makeVoiceBearer();
+    const res = await request(app).post('/voice/plants/NoSuchPlant/water').set('Authorization', bearer);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('plant_not_found');
+  });
+});
+
+describe('GET /voice/weather', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns no-location message when location not set', async () => {
+    const bearer = await makeVoiceBearer();
+    const res = await request(app).get('/voice/weather').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatch(/No location/i);
+  });
+
+  it('returns location name when preferences are set', async () => {
+    const bearer = await makeVoiceBearer();
+    store[`users/${USER_SUB}/config/preferences`] = { location: 'London, UK' };
+    const res = await request(app).get('/voice/weather').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.location).toBe('London, UK');
+  });
+});
+
+// ── Plant care report generation (#160) ──────────────────────────────────────
+
+describe('POST /reports/generate', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+    // Pre-seed a property and a plant
+    store[`users/${USER_SUB}/properties/primary`] = { name: 'My Home', type: 'residential', archived: false };
+    store[plantPath('plant-1')] = { name: 'Monstera', propertyId: 'primary', frequencyDays: 7, lastWatered: new Date(Date.now() - 5 * 86400000).toISOString(), health: 'Good', wateringLog: [], feedingLog: [] };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('generates a PDF and returns a signed download URL', async () => {
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+    expect(res.status).toBe(201);
+    expect(res.body.downloadUrl).toBeTruthy();
+    expect(res.body.reportId).toBeTruthy();
+    expect(res.body.propertyName).toBe('My Home');
+    // PDF buffer should have been saved to GCS
+    expect(storageSavedFiles.some((f) => f.path.startsWith('reports/'))).toBe(true);
+  });
+
+  it('respects a custom dateRange', async () => {
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary', dateRange: { from: '2026-01-01T00:00:00.000Z', to: '2026-01-31T23:59:59.999Z' } });
+    expect(res.status).toBe(201);
+    expect(res.body.dateRange.from).toMatch(/2026-01-01/);
+  });
+
+  it('returns 400 for invalid date range (from > to)', async () => {
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary', dateRange: { from: '2026-12-31T00:00:00.000Z', to: '2026-01-01T00:00:00.000Z' } });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('date_range_from_must_be_before_to');
+  });
+
+  it('requires home_pro tier', async () => {
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'free', status: 'active' };
+    const res = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('upgrade_required');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/reports/generate').send({ propertyId: 'primary' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /reports', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('returns an empty list when no reports exist', async () => {
+    const res = await request(app).get('/reports').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.reports).toEqual([]);
+  });
+
+  it('returns generated reports', async () => {
+    // Generate a report first
+    store[plantPath('p2')] = { name: 'Snake plant', propertyId: 'primary', health: 'Good', wateringLog: [], feedingLog: [] };
+    await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+
+    const res = await request(app).get('/reports').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.reports).toHaveLength(1);
+    expect(res.body.reports[0].propertyId).toBe('primary');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/reports');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /reports/:reportId/download', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    store[`users/${USER_SUB}/subscription/current`] = { tier: 'home_pro', status: 'active' };
+  });
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('redirects to a signed URL for a valid report', async () => {
+    store[plantPath('p3')] = { name: 'Pothos', propertyId: 'primary', health: 'Good', wateringLog: [], feedingLog: [] };
+    const genRes = await request(app)
+      .post('/reports/generate')
+      .set('Authorization', authHeader())
+      .send({ propertyId: 'primary' });
+    expect(genRes.status).toBe(201);
+    const { reportId } = genRes.body;
+
+    const res = await request(app)
+      .get(`/reports/${reportId}/download`)
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(302);
+    expect(res.headers['location']).toBeTruthy();
+  });
+
+  it('returns 404 for unknown report', async () => {
+    const res = await request(app)
+      .get('/reports/no-such-report/download')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/reports/any/download');
+    expect(res.status).toBe(401);
+  });
+});
+
+// ── Marketplace (#264) ────────────────────────────────────────────────────────
+
+// Seed a postcodes.io cache entry so tests don't need to hit the network
+const POSTCODE_CACHE_KEY = 'SW1A';
+
+beforeEach(() => {
+  store[`postcodeCentroids/${POSTCODE_CACHE_KEY}`] = { lat: 51.5, lng: -0.13 };
+});
+
+describe('POST /marketplace/listings', () => {
+  it('creates a listing and returns 201', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => '{"isPlantListing":true,"reason":"plant offering"}' } });
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Monstera deliciosa', kind: 'cutting', outwardCode: 'SW1A', contactEmail: 'test@test.com', description: 'Healthy cutting' });
+    expect(res.status).toBe(201);
+    expect(res.body.species).toBe('Monstera deliciosa');
+    expect(res.body.kind).toBe('cutting');
+    expect(res.body.outwardCode).toBe('SW1A');
+    expect(res.body.status).toBe('active');
+    expect(res.body.lat).toBe(51.5);
+  });
+
+  it('returns 422 when Gemini rejects as non-plant listing', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => '{"isPlantListing":false,"reason":"unrelated content"}' } });
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Not a plant', kind: 'cutting', outwardCode: 'SW1A', contactEmail: 'x@x.com' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('listing_not_recognised_as_plant_offering');
+  });
+
+  it('returns 422 for blocked word in description', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Pothos', kind: 'cutting', outwardCode: 'SW1A', contactEmail: 'x@x.com', description: 'click here to buy now' });
+    expect(res.status).toBe(422);
+    expect(res.body.error).toBe('listing_contains_prohibited_content');
+  });
+
+  it('returns 400 when required fields missing', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ kind: 'cutting' });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when no contact info provided', async () => {
+    geminiGenerateFn = async () => ({ response: { text: () => '{"isPlantListing":true}' } });
+    const res = await request(app)
+      .post('/marketplace/listings')
+      .set('Authorization', authHeader())
+      .send({ species: 'Fern', kind: 'cutting', outwardCode: 'SW1A' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/contact/i);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/marketplace/listings').send({ species: 'x', kind: 'cutting', outwardCode: 'SW1A' });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('GET /marketplace/listings', () => {
+  beforeEach(() => {
+    store['marketplaceListings/l1'] = { species: 'Monstera', kind: 'cutting', outwardCode: 'SW1A', lat: 51.5, lng: -0.13, status: 'active', contactEmail: 'secret@x.com', ownerUid: 'other-user', createdAt: new Date().toISOString() };
+    store['marketplaceListings/l2'] = { species: 'Pothos', kind: 'seed', outwardCode: 'EC1A', lat: 51.52, lng: -0.10, status: 'active', contactEmail: 'secret2@x.com', ownerUid: 'other-user', createdAt: new Date().toISOString() };
+  });
+
+  it('returns active listings without contact info', async () => {
+    const res = await request(app).get('/marketplace/listings');
+    expect(res.status).toBe(200);
+    expect(res.body.listings).toHaveLength(2);
+    expect(res.body.listings[0].contactEmail).toBeUndefined();
+    expect(res.body.listings[0].ownerUid).toBeUndefined();
+  });
+
+  it('filters by kind', async () => {
+    const res = await request(app).get('/marketplace/listings?kind=cutting');
+    expect(res.status).toBe(200);
+    expect(res.body.listings.every((l) => l.kind === 'cutting')).toBe(true);
+  });
+
+  it('filters by species (case-insensitive)', async () => {
+    const res = await request(app).get('/marketplace/listings?species=monstera');
+    expect(res.status).toBe(200);
+    expect(res.body.listings).toHaveLength(1);
+    expect(res.body.listings[0].species).toBe('Monstera');
+  });
+});
+
+describe('POST /marketplace/listings/:id/report — auto-hide at 3 reports', () => {
+  beforeEach(() => {
+    store['marketplaceListings/r-list'] = { species: 'Fern', kind: 'cutting', outwardCode: 'SW1A', status: 'active', reportCount: 0, ownerUid: 'not-me', createdAt: new Date().toISOString() };
+  });
+
+  it('increments reportCount', async () => {
+    const res = await request(app).post('/marketplace/listings/r-list/report').set('Authorization', authHeader()).send({ reason: 'spam' });
+    expect(res.status).toBe(201);
+    expect(store['marketplaceListings/r-list'].reportCount).toBe(1);
+    expect(res.body.autoHidden).toBe(false);
+  });
+
+  it('auto-hides listing when reportCount reaches 3', async () => {
+    store['marketplaceListings/r-list'].reportCount = 2;
+    const res = await request(app).post('/marketplace/listings/r-list/report').set('Authorization', authHeader()).send({ reason: 'spam' });
+    expect(res.status).toBe(201);
+    expect(res.body.autoHidden).toBe(true);
+    expect(store['marketplaceListings/r-list'].status).toBe('hidden');
+  });
+});
+
+describe('GET /marketplace/profile/:userId', () => {
+  it('returns public profile and listings', async () => {
+    store[`users/pub-user/marketplaceProfile/profile`] = { displayName: 'GardenFan', karma: 3, badges: [] };
+    store['marketplaceListings/pub-l'] = { species: 'Cactus', kind: 'cutting', outwardCode: 'N1', status: 'active', ownerUid: 'pub-user', contactEmail: 'x@x.com', createdAt: new Date().toISOString() };
+    const res = await request(app).get('/marketplace/profile/pub-user');
+    expect(res.status).toBe(200);
+    expect(res.body.profile.karma).toBe(3);
+    expect(res.body.listings.some((l) => l.species === 'Cactus')).toBe(true);
+    expect(res.body.listings[0].contactEmail).toBeUndefined();
+  });
+});
+
+describe('GET /marketplace/me and PUT /marketplace/me', () => {
+  it('returns empty profile for new user', async () => {
+    const res = await request(app).get('/marketplace/me').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.karma).toBe(0);
+  });
+
+  it('updates display name', async () => {
+    const res = await request(app).put('/marketplace/me').set('Authorization', authHeader()).send({ displayName: 'LeafLover', contactEmail: 'leaf@x.com' });
+    expect(res.status).toBe(200);
+    expect(store[`users/${USER_SUB}/marketplaceProfile/profile`].displayName).toBe('LeafLover');
+  });
+});
+
+describe('GET /marketplace/listings/:id — single listing', () => {
+  beforeEach(() => {
+    store['marketplaceListings/detail-1'] = {
+      species: 'Aloe vera', kind: 'cutting', outwardCode: 'N1',
+      status: 'active', contactEmail: 'owner@example.com', ownerUid: 'other-user',
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('hides contact info for unauthenticated request', async () => {
+    const res = await request(app).get('/marketplace/listings/detail-1');
+    expect(res.status).toBe(200);
+    expect(res.body.species).toBe('Aloe vera');
+    expect(res.body.contactEmail).toBeUndefined();
+    expect(res.body.ownerUid).toBeUndefined();
+  });
+
+  it('reveals contact info for authenticated request', async () => {
+    const res = await request(app).get('/marketplace/listings/detail-1').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.contactEmail).toBe('owner@example.com');
+  });
+
+  it('returns 404 for unknown listing', async () => {
+    const res = await request(app).get('/marketplace/listings/no-such-listing');
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('PUT /marketplace/listings/:id — owner update', () => {
+  beforeEach(() => {
+    store['marketplaceListings/edit-1'] = {
+      species: 'Ficus', kind: 'cutting', outwardCode: 'SW1A',
+      status: 'active', contactEmail: 'owner@example.com',
+      ownerUid: USER_SUB, createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('owner can update description and status', async () => {
+    const res = await request(app)
+      .put('/marketplace/listings/edit-1')
+      .set('Authorization', authHeader())
+      .send({ description: 'Updated description', status: 'claimed' });
+    expect(res.status).toBe(200);
+    expect(res.body.description).toBe('Updated description');
+    expect(res.body.status).toBe('claimed');
+  });
+
+  it('returns 403 when not the owner', async () => {
+    const res = await request(app)
+      .put('/marketplace/listings/edit-1')
+      .set('Authorization', authHeader('other-person'))
+      .send({ description: 'Nope' });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('not_owner');
+  });
+
+  it('returns 404 when listing does not exist', async () => {
+    const res = await request(app)
+      .put('/marketplace/listings/nonexistent')
+      .set('Authorization', authHeader())
+      .send({ description: 'Test' });
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /marketplace/listings/:id/claim', () => {
+  beforeEach(() => {
+    store['marketplaceListings/claim-1'] = {
+      species: 'Succulent', kind: 'cutting', outwardCode: 'EC1A',
+      status: 'active', contactEmail: 'x@x.com', ownerUid: 'another-owner',
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('marks listing as claimed', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/claim-1/claim')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.claimed).toBe(true);
+    expect(store['marketplaceListings/claim-1'].status).toBe('claimed');
+    expect(store['marketplaceListings/claim-1'].claimedByUid).toBe(USER_SUB);
+  });
+
+  it('returns 400 when owner tries to claim own listing', async () => {
+    store['marketplaceListings/claim-1'].ownerUid = USER_SUB;
+    const res = await request(app)
+      .post('/marketplace/listings/claim-1/claim')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('cannot_claim_own_listing');
+  });
+
+  it('returns 404 for removed listing', async () => {
+    store['marketplaceListings/claim-1'].status = 'removed';
+    const res = await request(app)
+      .post('/marketplace/listings/claim-1/claim')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('POST /marketplace/listings/:id/confirm-handover', () => {
+  beforeEach(() => {
+    store['marketplaceListings/handover-1'] = {
+      species: 'Begonia', kind: 'division', outwardCode: 'W1A',
+      status: 'claimed', contactEmail: 'x@x.com', ownerUid: USER_SUB,
+      createdAt: new Date().toISOString(),
+    };
+  });
+
+  it('owner confirms handover and receives +1 karma', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/handover-1/confirm-handover')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.completed).toBe(true);
+    expect(store['marketplaceListings/handover-1'].status).toBe('completed');
+    expect(store[`users/${USER_SUB}/marketplaceProfile/profile`].karma).toBe(1);
+  });
+
+  it('returns 403 when not the owner', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/handover-1/confirm-handover')
+      .set('Authorization', authHeader('not-owner'));
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 404 for unknown listing', async () => {
+    const res = await request(app)
+      .post('/marketplace/listings/no-such/confirm-handover')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /voice/plants/:nameOrFuzzy/status — watered today branch', () => {
+  afterEach(() => { delete process.env.BILLING_ENABLED; });
+
+  it('reports watered today when daysAgo is 0', async () => {
+    const bearer = await makeVoiceBearer();
+    store[plantPath('p-today')] = { name: 'Jade plant', health: 'Excellent', room: 'Kitchen', lastWatered: new Date().toISOString() };
+    const res = await request(app).get('/voice/plants/Jade plant/status').set('Authorization', bearer);
+    expect(res.status).toBe(200);
+    expect(res.body.summary).toMatch(/watered today/i);
+  });
+});
+
+// ── Notification preferences and dispatch (#162) ─────────────────────────────
+
+describe('GET /preferences/notifications', () => {
+  it('returns default preferences for new user', async () => {
+    const res = await request(app).get('/preferences/notifications').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.emailEnabled).toBe(true);
+    expect(res.body.pushEnabled).toBe(false);
+    expect(res.body.dailyDigest).toBe(true);
+  });
+
+  it('returns stored preferences when they exist', async () => {
+    store[`users/${USER_SUB}/preferences/notifications`] = { pushEnabled: true, emailEnabled: false, dailyDigest: false, weeklyDigest: true, quietHoursStart: '09:00', quietHoursEnd: '21:00', fcmTokens: [] };
+    const res = await request(app).get('/preferences/notifications').set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.pushEnabled).toBe(true);
+    expect(res.body.weeklyDigest).toBe(true);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/preferences/notifications');
+    expect(res.status).toBe(401);
+  });
+});
+
+describe('PUT /preferences/notifications', () => {
+  it('updates preferences and returns merged result', async () => {
+    const res = await request(app)
+      .put('/preferences/notifications')
+      .set('Authorization', authHeader())
+      .send({ emailEnabled: false, weeklyDigest: true, quietHoursStart: '07:00' });
+    expect(res.status).toBe(200);
+    expect(store[`users/${USER_SUB}/preferences/notifications`].weeklyDigest).toBe(true);
+  });
+
+  it('returns 400 when no valid fields provided', async () => {
+    const res = await request(app)
+      .put('/preferences/notifications')
+      .set('Authorization', authHeader())
+      .send({ unknownField: 'value' });
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /preferences/notifications/fcm-tokens', () => {
+  it('registers a push subscription token', async () => {
+    const res = await request(app)
+      .post('/preferences/notifications/fcm-tokens')
+      .set('Authorization', authHeader())
+      .send({ token: 'fcm-token-abc', deviceLabel: 'Chrome on MacBook' });
+    expect(res.status).toBe(201);
+    expect(res.body.registered).toBe(true);
+    const stored = store[`users/${USER_SUB}/preferences/notifications`];
+    expect(stored.fcmTokens.some((t) => t.token === 'fcm-token-abc')).toBe(true);
+  });
+
+  it('returns 400 when neither token nor subscription provided', async () => {
+    const res = await request(app)
+      .post('/preferences/notifications/fcm-tokens')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('DELETE /preferences/notifications/fcm-tokens/:token', () => {
+  it('removes a token', async () => {
+    store[`users/${USER_SUB}/preferences/notifications`] = { fcmTokens: [{ token: 'tok-del', deviceLabel: 'Phone' }] };
+    const res = await request(app)
+      .delete('/preferences/notifications/fcm-tokens/tok-del')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(store[`users/${USER_SUB}/preferences/notifications`].fcmTokens).toHaveLength(0);
+  });
+});
+
+describe('POST /notifications/dispatch', () => {
+  it('returns disabled status when NOTIFICATIONS_ENABLED is not set', async () => {
+    const res = await request(app).post('/notifications/dispatch');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('notifications_disabled');
+  });
+
+  it('processes users and sends digest when NOTIFICATIONS_ENABLED=true', async () => {
+    process.env.NOTIFICATIONS_ENABLED = 'true';
+    // Seed a user doc so collection().get() finds it
+    store[`users/${USER_SUB}`] = { createdAt: new Date().toISOString() };
+    store[`users/${USER_SUB}/preferences/notifications`] = {
+      emailEnabled: true, pushEnabled: false, dailyDigest: true,
+      quietHoursStart: '00:00', quietHoursEnd: '23:59', fcmTokens: [],
+    };
+    store[`users/${USER_SUB}/config/preferences`] = { email: 'test@example.com' };
+    store[plantPath('dispatch-p1')] = { name: 'Fern', frequencyDays: 7, lastWatered: new Date(Date.now() - 8 * 86400000).toISOString() };
+    const res = await request(app).post('/notifications/dispatch');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(typeof res.body.sent).toBe('number');
+    delete process.env.NOTIFICATIONS_ENABLED;
+  });
+
+  it('skips users with no notification preferences', async () => {
+    process.env.NOTIFICATIONS_ENABLED = 'true';
+    // Seed a user doc with no preferences — should be skipped
+    store[`users/${USER_SUB}`] = { createdAt: new Date().toISOString() };
+    const res = await request(app).post('/notifications/dispatch');
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('ok');
+    expect(res.body.skipped).toBeGreaterThanOrEqual(1);
+    delete process.env.NOTIFICATIONS_ENABLED;
   });
 });

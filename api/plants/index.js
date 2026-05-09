@@ -18,6 +18,8 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 let jwt;
 try { jwt = require('jsonwebtoken'); } catch { jwt = null; }
+let webPush;
+try { webPush = require('web-push'); } catch { webPush = null; }
 
 // ── Gemini API fetch patch ────────────────────────────────────────────────────
 // The Gemini API sometimes embeds generated text that contains raw control
@@ -6720,6 +6722,979 @@ app.get('/rebates/matches', requireUser, (req, res) => {
   }
   const matches = matchRebates(lat, lng);
   res.status(200).json({ rebates: matches, total: matches.length });
+});
+
+// ── Plant-swap marketplace (#264) ────────────────────────────────────────────
+// UK-only, free listings, postcode-prefix geosearch via postcodes.io.
+// No payments, no in-app chat — users exchange contact via profile fields.
+
+const MARKETPLACE_BLOCKED_WORDS = ['spam', 'scam', 'buy now', 'click here'];
+
+// Haversine distance in km between two lat/lng points
+function haversineKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Lookup outward code (e.g. "SW1A") → { lat, lng } via postcodes.io, cached in Firestore
+async function resolvePostcodeCentroid(outwardCode) {
+  const key = outwardCode.toUpperCase().replace(/\s/g, '');
+  const cacheRef = db.collection('postcodeCentroids').doc(key);
+  const cached = await cacheRef.get();
+  if (cached.exists) return cached.data();
+  const response = await globalThis.fetch(`https://api.postcodes.io/outcodes/${encodeURIComponent(key)}`);
+  if (!response.ok) throw new Error(`postcodes.io lookup failed for ${key}`);
+  const { result } = await response.json();
+  if (!result?.latitude) throw new Error(`No centroid for postcode ${key}`);
+  const coords = { lat: result.latitude, lng: result.longitude };
+  await cacheRef.set(coords);
+  return coords;
+}
+
+// Gemini one-shot check: is this a genuine plant listing?
+async function checkIsPlantListing(text) {
+  try {
+    const prompt = `You are a content moderator for a plant-swap marketplace. Read the following listing description and decide if it is a genuine plant cutting, division, seed, or plant offering. Reply with only valid JSON in this format: {"isPlantListing":true|false,"reason":"brief reason"}\n\nListing: ${text.slice(0, 500)}`;
+    const result = await geminiWithRetry({ contents: [{ parts: [{ text: prompt }] }] });
+    const parsed = parseGeminiJson(result.response.text());
+    return parsed;
+  } catch {
+    return { isPlantListing: true, reason: 'check_unavailable' };
+  }
+}
+
+function hasBlockedWords(text) {
+  const lower = (text || '').toLowerCase();
+  return MARKETPLACE_BLOCKED_WORDS.some((w) => lower.includes(w));
+}
+
+// GET /marketplace/listings — browse with optional filtering
+app.get('/marketplace/listings', async (req, res) => {
+  try {
+    const { outwardCode, radiusKm, species, kind, sort = 'newest' } = req.query;
+    const snap = await db.collection('marketplaceListings')
+      .orderBy('createdAt', 'desc').limit(100).get();
+    let listings = snap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((l) => l.status === 'active');
+
+    // Geographic filter
+    if (outwardCode) {
+      try {
+        const { lat, lng } = await resolvePostcodeCentroid(outwardCode);
+        const radius = Math.min(Number(radiusKm) || 15, 100);
+        listings = listings.filter((l) => {
+          if (!l.lat || !l.lng) return false;
+          return haversineKm(lat, lng, l.lat, l.lng) <= radius;
+        });
+        if (sort === 'nearest') {
+          listings.sort((a, b) => haversineKm(lat, lng, a.lat, a.lng) - haversineKm(lat, lng, b.lat, b.lng));
+        }
+      } catch {
+        // If postcode lookup fails, return unfiltered
+      }
+    }
+
+    if (species) {
+      const q = species.toLowerCase();
+      listings = listings.filter((l) => (l.species || '').toLowerCase().includes(q));
+    }
+    if (kind) listings = listings.filter((l) => l.kind === kind);
+
+    // Omit sensitive contact info from public listing list
+    listings = listings.map(({ contactEmail: _e, contactPhone: _p, ownerUid: _u, ...safe }) => safe);
+    res.status(200).json({ listings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /marketplace/listings/:id — single listing detail (shows contact info to auth users)
+app.get('/marketplace/listings/:id', softAuth, async (req, res) => {
+  try {
+    const snap = await db.collection('marketplaceListings').doc(req.params.id).get();
+    if (!snap.exists || snap.data().status === 'removed') {
+      return res.status(404).json({ error: 'listing_not_found' });
+    }
+    const listing = { id: snap.id, ...snap.data() };
+    // Only reveal contact info to authenticated users
+    if (!req.userId) {
+      const { contactEmail: _e, contactPhone: _p, ownerUid: _u, ...safe } = listing;
+      return res.status(200).json(safe);
+    }
+    res.status(200).json(listing);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings — create a listing
+app.post('/marketplace/listings', requireUser, async (req, res) => {
+  try {
+    const { species, kind, description, outwardCode, contactEmail, contactPhone, suggestedDonation, imageUrls } = req.body || {};
+    if (!species || !kind || !outwardCode) {
+      return res.status(400).json({ error: 'species, kind, and outwardCode are required' });
+    }
+    const VALID_KINDS = ['cutting', 'division', 'seed', 'mature', 'surplus'];
+    if (!VALID_KINDS.includes(kind)) {
+      return res.status(400).json({ error: `kind must be one of: ${VALID_KINDS.join(', ')}` });
+    }
+    if (!contactEmail && !contactPhone) {
+      return res.status(400).json({ error: 'contactEmail or contactPhone is required' });
+    }
+    if (hasBlockedWords(description)) {
+      return res.status(422).json({ error: 'listing_contains_prohibited_content' });
+    }
+
+    const check = await checkIsPlantListing(`${species} ${description || ''}`);
+    if (!check.isPlantListing) {
+      return res.status(422).json({ error: 'listing_not_recognised_as_plant_offering', reason: check.reason });
+    }
+
+    let lat = null, lng = null;
+    try {
+      const centroid = await resolvePostcodeCentroid(outwardCode);
+      lat = centroid.lat;
+      lng = centroid.lng;
+    } catch {
+      return res.status(400).json({ error: 'invalid_outward_code' });
+    }
+
+    // Load lister's display name
+    const profileRef = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const profileSnap = await profileRef.get();
+    const displayName = profileSnap.exists ? profileSnap.data().displayName : null;
+
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 14 * 86400000).toISOString();
+    const data = {
+      ownerUid: req.userId,
+      ownerDisplayName: displayName || 'Anonymous',
+      species: String(species).trim(),
+      kind,
+      description: description ? String(description).trim() : '',
+      outwardCode: outwardCode.toUpperCase().trim(),
+      lat,
+      lng,
+      contactEmail: contactEmail || null,
+      contactPhone: contactPhone || null,
+      suggestedDonation: suggestedDonation || null,
+      imageUrls: Array.isArray(imageUrls) ? imageUrls.slice(0, 3) : [],
+      status: 'active',
+      reportCount: 0,
+      createdAt: now,
+      expiresAt,
+    };
+    const docRef = await db.collection('marketplaceListings').add(data);
+    res.status(201).json({ id: docRef.id, ...data });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /marketplace/listings/:id — update (owner only)
+app.put('/marketplace/listings/:id', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'listing_not_found' });
+    if (snap.data().ownerUid !== req.userId) return res.status(403).json({ error: 'not_owner' });
+    const { description, contactEmail, contactPhone, suggestedDonation, status } = req.body || {};
+    const update = { updatedAt: new Date().toISOString() };
+    if (description !== undefined) update.description = String(description).trim();
+    if (contactEmail !== undefined) update.contactEmail = contactEmail;
+    if (contactPhone !== undefined) update.contactPhone = contactPhone;
+    if (suggestedDonation !== undefined) update.suggestedDonation = suggestedDonation;
+    if (status === 'claimed' || status === 'active') update.status = status;
+    await ref.set(update, { merge: true });
+    const updated = await ref.get();
+    res.status(200).json({ id: updated.id, ...updated.data() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings/:id/claim — mark as claimed
+app.post('/marketplace/listings/:id/claim', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists || snap.data().status === 'removed') return res.status(404).json({ error: 'listing_not_found' });
+    if (snap.data().ownerUid === req.userId) return res.status(400).json({ error: 'cannot_claim_own_listing' });
+    await ref.set({ status: 'claimed', claimedByUid: req.userId, claimedAt: new Date().toISOString() }, { merge: true });
+    res.status(200).json({ claimed: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings/:id/confirm-handover — owner confirms listing complete
+app.post('/marketplace/listings/:id/confirm-handover', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'listing_not_found' });
+    if (snap.data().ownerUid !== req.userId) return res.status(403).json({ error: 'not_owner' });
+    const now = new Date().toISOString();
+    await ref.set({ status: 'completed', completedAt: now }, { merge: true });
+    // Award +1 karma to lister
+    const karmaRef = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const kSnap = await karmaRef.get();
+    const current = kSnap.exists ? (kSnap.data().karma || 0) : 0;
+    await karmaRef.set({ karma: current + 1, updatedAt: now }, { merge: true });
+    res.status(200).json({ completed: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /marketplace/listings/:id/report — report a listing
+app.post('/marketplace/listings/:id/report', requireUser, async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    const listingRef = db.collection('marketplaceListings').doc(req.params.id);
+    const snap = await listingRef.get();
+    if (!snap.exists || snap.data().status === 'removed') return res.status(404).json({ error: 'listing_not_found' });
+
+    const reportId = `${Date.now()}-${req.userId}`;
+    await db.collection('marketplaceReports').doc(reportId).set({
+      listingId: req.params.id, reporterUid: req.userId,
+      reason: reason || 'unspecified', status: 'pending', createdAt: new Date().toISOString(),
+    });
+
+    // Auto-hide at 3 reports
+    const newCount = (snap.data().reportCount || 0) + 1;
+    const update = { reportCount: newCount };
+    if (newCount >= 3) update.status = 'hidden';
+    await listingRef.set(update, { merge: true });
+
+    res.status(201).json({ reported: true, autoHidden: newCount >= 3 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /marketplace/profile/:userId — public profile
+app.get('/marketplace/profile/:userId', async (req, res) => {
+  try {
+    const profileRef = db.collection('users').doc(req.params.userId).collection('marketplaceProfile').doc('profile');
+    const profileSnap = await profileRef.get();
+    const profile = profileSnap.exists ? profileSnap.data() : { karma: 0, badges: [] };
+
+    const listingsSnap = await db.collection('marketplaceListings').orderBy('createdAt', 'desc').limit(20).get();
+    const listings = listingsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((l) => l.ownerUid === req.params.userId && l.status !== 'removed')
+      .map(({ contactEmail: _e, contactPhone: _p, ownerUid: _u, ...safe }) => safe);
+
+    res.status(200).json({ profile: { userId: req.params.userId, ...profile }, listings });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET/PUT /marketplace/me — authenticated user's own profile
+app.get('/marketplace/me', requireUser, async (req, res) => {
+  try {
+    const ref = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const snap = await ref.get();
+    res.status(200).json(snap.exists ? snap.data() : { karma: 0, badges: [], displayName: null, contactEmail: null, contactPhone: null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/marketplace/me', requireUser, async (req, res) => {
+  try {
+    const { displayName, contactEmail, contactPhone } = req.body || {};
+    const ref = db.collection('users').doc(req.userId).collection('marketplaceProfile').doc('profile');
+    const now = new Date().toISOString();
+    const update = { updatedAt: now };
+    if (displayName !== undefined) update.displayName = String(displayName).trim().slice(0, 64);
+    if (contactEmail !== undefined) update.contactEmail = contactEmail;
+    if (contactPhone !== undefined) update.contactPhone = contactPhone;
+    await ref.set(update, { merge: true });
+    const updated = await ref.get();
+    res.status(200).json(updated.data());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Plant care report generation (#160) ──────────────────────────────────────
+// Generates per-property PDF care reports using @react-pdf/renderer.
+// Tier gate: home_pro (own household / primary property); landscaper_pro (any property).
+
+const { generatePdfBuffer } = require('./reports/plantCareReport');
+
+function userReports(userId) {
+  return db.collection('users').doc(userId).collection('reports');
+}
+
+app.post('/reports/generate', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const { propertyId = 'primary', dateRange, includeSections } = req.body || {};
+
+    // Default date range: last 30 days
+    const to   = dateRange?.to   ? new Date(dateRange.to)   : new Date();
+    const from = dateRange?.from ? new Date(dateRange.from) : new Date(to.getTime() - 30 * 86400000);
+    if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+      return res.status(400).json({ error: 'invalid_date_range' });
+    }
+    if (from > to) {
+      return res.status(400).json({ error: 'date_range_from_must_be_before_to' });
+    }
+
+    // Load property name
+    let propertyName = 'My Garden';
+    const propSnap = await userProperties(req.userId).doc(propertyId).get();
+    if (propSnap.exists) propertyName = propSnap.data().name || propertyName;
+
+    // Load plants (optionally filtered by propertyId)
+    const plantsSnap = await userPlants(req.userId).get();
+    const plants = plantsSnap.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((p) => (p.propertyId || 'primary') === propertyId);
+
+    // Load branding (landscaper_pro users only; home_pro gets default)
+    let branding = null;
+    const brandingDoc = await db.collection('users').doc(req.userId).collection('config').doc('branding').get();
+    if (brandingDoc.exists) branding = brandingDoc.data();
+
+    // Fetch logo bytes so the renderer can embed it
+    if (branding?.logoUrl) {
+      try {
+        const logoRes = await globalThis.fetch(branding.logoUrl);
+        if (!logoRes.ok) throw new Error('logo_fetch_failed');
+        const buf = Buffer.from(await logoRes.arrayBuffer());
+        branding = { ...branding, logoUrl: buf };
+      } catch {
+        branding = { ...branding, logoUrl: null };
+      }
+    }
+
+    const pdfBuffer = await generatePdfBuffer({
+      plants,
+      branding,
+      dateRange: { from: from.toISOString(), to: to.toISOString() },
+      propertyName,
+      includeSections,
+    });
+
+    // Persist to GCS
+    const reportId = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
+    const gcsFilePath = `reports/${req.userId}/${reportId}.pdf`;
+    await storage.bucket(IMAGES_BUCKET).file(gcsFilePath).save(pdfBuffer, { contentType: 'application/pdf' });
+    const [signedUrl] = await storage.bucket(IMAGES_BUCKET).file(gcsFilePath).getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 30 * 24 * 60 * 60 * 1000, // 30 days
+    });
+
+    const now = new Date().toISOString();
+    const meta = {
+      reportId,
+      propertyId,
+      propertyName,
+      dateRange: { from: from.toISOString(), to: to.toISOString() },
+      includeSections: includeSections || {},
+      gcsPath: gcsFilePath,
+      createdAt: now,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    await userReports(req.userId).doc(reportId).set(meta);
+
+    res.status(201).json({ reportId, downloadUrl: signedUrl, ...meta });
+  } catch (err) {
+    log.error('report_generate_failed', { error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/reports', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userReports(req.userId).orderBy('createdAt', 'desc').limit(20).get();
+    const now = new Date();
+    const reports = snap.docs
+      .map((d) => d.data())
+      .filter((r) => new Date(r.expiresAt) > now);
+    res.status(200).json({ reports });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/reports/:reportId/download', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userReports(req.userId).doc(req.params.reportId).get();
+    if (!snap.exists) return res.status(404).json({ error: 'report_not_found' });
+    const { gcsPath, expiresAt } = snap.data();
+    if (new Date(expiresAt) < new Date()) return res.status(410).json({ error: 'report_expired' });
+    const [signedUrl] = await storage.bucket(IMAGES_BUCKET).file(gcsPath).getSignedUrl({
+      version: 'v4',
+      action: 'read',
+      expires: Date.now() + 60 * 60 * 1000, // 1 hour
+    });
+    res.redirect(302, signedUrl);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── OAuth 2.0 authorisation server (RFC 6749 + RFC 7009) ─────────────────────
+// Lets third-party voice assistants (Alexa, Google Home, Apple Shortcuts) link
+// a user's account and call /voice/* endpoints using standard Bearer tokens.
+// No external SDK needed — the flow is straightforward enough to implement
+// directly using the crypto + jwt tooling already present in this file.
+
+const OAUTH_SECRET = process.env.OAUTH_JWT_SECRET || 'oauth-dev-secret';
+const ACCESS_TOKEN_TTL  = 60 * 60;              // 1 hour (seconds)
+const REFRESH_TOKEN_TTL = 30 * 24 * 60 * 60;   // 30 days (seconds)
+const AUTH_CODE_TTL     = 10 * 60 * 1000;       // 10 minutes (ms)
+
+// Pre-issued clients. Redirect URIs match each platform's account-linking spec.
+const OAUTH_CLIENTS = {
+  'alexa.lopezcloud.dev': {
+    name: 'Amazon Alexa',
+    redirectUris: ['https://pitangui.amazon.com/api/skill/link/M1IIGQ9IEV36MY', 'https://layla.amazon.com/api/skill/link/M1IIGQ9IEV36MY'],
+    scopes: ['voice'],
+  },
+  'google-home.lopezcloud.dev': {
+    name: 'Google Home',
+    redirectUris: ['https://oauth-redirect.googleusercontent.com/r/home-plant-tracker-lcd', 'https://oauth-redirect-sandbox.googleusercontent.com/r/home-plant-tracker-lcd'],
+    scopes: ['voice'],
+  },
+  'apple-shortcuts.lopezcloud.dev': {
+    name: 'Apple Shortcuts',
+    redirectUris: ['planttracker://oauth/callback', 'https://plants.lopezcloud.dev/oauth/callback'],
+    scopes: ['voice'],
+  },
+};
+
+function userOauthGrants(userId) {
+  return db.collection('users').doc(userId).collection('oauthGrants');
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function issueAccessToken(userId, clientId, scopes) {
+  if (!jwt) throw new Error('jwt_unavailable');
+  return jwt.sign(
+    { sub: userId, client_id: clientId, scopes, type: 'oauth_access' },
+    OAUTH_SECRET,
+    { expiresIn: ACCESS_TOKEN_TTL },
+  );
+}
+
+function verifyAccessToken(token) {
+  if (!jwt) throw new Error('jwt_unavailable');
+  const payload = jwt.verify(token, OAUTH_SECRET);
+  if (payload.type !== 'oauth_access') throw new Error('wrong_token_type');
+  return payload;
+}
+
+// Middleware: authenticate /voice/* endpoints using OAuth Bearer tokens.
+async function requireOauthBearer(req, res, next) {
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'missing_token' });
+  }
+  let payload;
+  try {
+    payload = verifyAccessToken(auth.slice(7));
+  } catch {
+    return res.status(401).json({ error: 'invalid_token' });
+  }
+  req.userId = payload.sub;
+  req.oauthClientId = payload.client_id;
+  req.oauthScopes = payload.scopes || [];
+  next();
+}
+
+// GET /oauth/authorize — redirect-based authorisation; requires the user to
+// already hold a valid Google Bearer token (the app session). The assistant
+// platform opens this URL in a webview during account linking.
+app.get('/oauth/authorize', requireUser, async (req, res) => {
+  try {
+    const { client_id, redirect_uri, state, response_type, scope } = req.query;
+    if (response_type !== 'code') {
+      return res.status(400).json({ error: 'unsupported_response_type' });
+    }
+    const client = OAUTH_CLIENTS[client_id];
+    if (!client) return res.status(400).json({ error: 'invalid_client' });
+    if (!client.redirectUris.includes(redirect_uri)) {
+      return res.status(400).json({ error: 'invalid_redirect_uri' });
+    }
+    const scopes = (scope || 'voice').split(/[\s,]+/).filter(Boolean);
+    const invalidScope = scopes.find((s) => !client.scopes.includes(s));
+    if (invalidScope) return res.status(400).json({ error: 'invalid_scope' });
+
+    // Issue a one-time short-lived authorisation code stored in a global
+    // top-level collection so the token endpoint can resolve it without
+    // knowing the userId in advance.
+    const code = crypto.randomBytes(24).toString('hex');
+    const expiresAt = Date.now() + AUTH_CODE_TTL;
+    await db.collection('oauthCodes').doc(code).set({
+      userId: req.userId, clientId: client_id, redirectUri: redirect_uri, scopes, expiresAt, used: false,
+    });
+
+    const dest = new URL(redirect_uri);
+    dest.searchParams.set('code', code);
+    if (state) dest.searchParams.set('state', state);
+    res.redirect(302, dest.toString());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /oauth/token — token endpoint (authorization_code + refresh_token grants)
+app.post('/oauth/token', async (req, res) => {
+  try {
+    if (!jwt) return res.status(503).json({ error: 'jwt_unavailable' });
+    const { grant_type, code, redirect_uri, client_id, refresh_token } = req.body || {};
+
+    const client = OAUTH_CLIENTS[client_id];
+    if (!client) return res.status(401).json({ error: 'invalid_client' });
+
+    if (grant_type === 'authorization_code') {
+      if (!code) return res.status(400).json({ error: 'missing_code' });
+
+      // Find the code across all users (scan by top-level hash is impractical;
+      // instead the code itself is stored at users/{uid}/oauthCodes/{code} and
+      // the uid is encoded in the code via a signed prefix).
+      // Simpler approach: the code contains the userId as a prefix separated by '.'.
+      // The authorize endpoint embeds the uid so we can resolve it directly.
+      // Re-derive from the token store by scanning is a security risk; instead we
+      // use a top-level cross-user lookup collection.
+      const globalRef = db.collection('oauthCodes').doc(code);
+      const globalSnap = await globalRef.get();
+      if (!globalSnap.exists) return res.status(400).json({ error: 'invalid_code' });
+      const { userId, clientId, redirectUri, scopes, expiresAt, used } = globalSnap.data();
+
+      if (used) return res.status(400).json({ error: 'code_already_used' });
+      if (Date.now() > expiresAt) return res.status(400).json({ error: 'code_expired' });
+      if (clientId !== client_id) return res.status(400).json({ error: 'client_mismatch' });
+      if (redirectUri !== redirect_uri) return res.status(400).json({ error: 'redirect_uri_mismatch' });
+
+      // Mark code as used (consume it)
+      await globalRef.set({ used: true }, { merge: true });
+
+      const accessToken = issueAccessToken(userId, client_id, scopes);
+      const rawRefresh = crypto.randomBytes(32).toString('hex');
+      const refreshHash = hashToken(rawRefresh);
+      const now = new Date().toISOString();
+      const expiry = new Date(Date.now() + REFRESH_TOKEN_TTL * 1000).toISOString();
+
+      const grantRef = await userOauthGrants(userId).add({
+        clientId: client_id, scopes, refreshTokenHash: refreshHash,
+        expiresAt: expiry, revokedAt: null, createdAt: now,
+      });
+      // Global hash index lets the refresh_token grant look up userId + grantId
+      await db.collection('oauthRefreshHashes').doc(refreshHash).set({
+        userId, grantId: grantRef.id, revokedAt: null, createdAt: now,
+      });
+
+      return res.status(200).json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: ACCESS_TOKEN_TTL,
+        refresh_token: rawRefresh,
+        scope: scopes.join(' '),
+      });
+    }
+
+    if (grant_type === 'refresh_token') {
+      if (!refresh_token) return res.status(400).json({ error: 'missing_refresh_token' });
+      const refreshHash = hashToken(refresh_token);
+
+      // Scan grants for matching hash (a user will have at most a handful)
+      // We store grants per-user so we need the userId. Use a top-level hash index.
+      const hashRef = db.collection('oauthRefreshHashes').doc(refreshHash);
+      const hashSnap = await hashRef.get();
+      if (!hashSnap.exists) return res.status(401).json({ error: 'invalid_refresh_token' });
+      const { userId, grantId } = hashSnap.data();
+
+      const grantSnap = await userOauthGrants(userId).doc(grantId).get();
+      if (!grantSnap.exists) return res.status(401).json({ error: 'invalid_refresh_token' });
+      const grant = grantSnap.data();
+      if (grant.revokedAt) return res.status(401).json({ error: 'token_revoked' });
+      if (grant.clientId !== client_id) return res.status(401).json({ error: 'client_mismatch' });
+      if (new Date(grant.expiresAt) < new Date()) return res.status(401).json({ error: 'refresh_token_expired' });
+
+      const accessToken = issueAccessToken(userId, client_id, grant.scopes);
+      return res.status(200).json({
+        access_token: accessToken,
+        token_type: 'Bearer',
+        expires_in: ACCESS_TOKEN_TTL,
+        scope: grant.scopes.join(' '),
+      });
+    }
+
+    return res.status(400).json({ error: 'unsupported_grant_type' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /oauth/revoke — RFC 7009 token revocation
+app.post('/oauth/revoke', async (req, res) => {
+  try {
+    const { token } = req.body || {};
+    if (!token) return res.status(400).json({ error: 'missing_token' });
+
+    // Try to interpret as a refresh token (most common revocation target)
+    const refreshHash = hashToken(token);
+    const hashRef = db.collection('oauthRefreshHashes').doc(refreshHash);
+    const hashSnap = await hashRef.get();
+    if (hashSnap.exists && !hashSnap.data().revokedAt) {
+      const { userId, grantId } = hashSnap.data();
+      const now = new Date().toISOString();
+      await userOauthGrants(userId).doc(grantId).set({ revokedAt: now }, { merge: true });
+      await hashRef.set({ revokedAt: now }, { merge: true });
+    }
+    // RFC 7009 §2.2: always return 200 regardless of whether the token was found
+    res.status(200).json({ revoked: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /oauth/grants — list active linked devices for the authenticated user
+app.get('/oauth/grants', requireUser, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userOauthGrants(req.userId).get();
+    const grants = snap.docs
+      .filter((d) => !d.data().revokedAt && new Date(d.data().expiresAt) > new Date())
+      .map((d) => {
+        const g = d.data();
+        const client = OAUTH_CLIENTS[g.clientId] || {};
+        return {
+          id: d.id,
+          clientId: g.clientId,
+          clientName: client.name || g.clientId,
+          scopes: g.scopes,
+          createdAt: g.createdAt,
+          expiresAt: g.expiresAt,
+        };
+      });
+    res.status(200).json({ grants });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /oauth/grants/:id — revoke a specific grant (user-facing revocation)
+app.delete('/oauth/grants/:id', requireUser, async (req, res) => {
+  try {
+    const ref = userOauthGrants(req.userId).doc(req.params.id);
+    const snap = await ref.get();
+    if (!snap.exists) return res.status(404).json({ error: 'grant_not_found' });
+    if (snap.data().revokedAt) return res.status(409).json({ error: 'already_revoked' });
+    const now = new Date().toISOString();
+    await ref.set({ revokedAt: now }, { merge: true });
+    // Also revoke the hash index so refresh tokens stop working immediately
+    const { refreshTokenHash } = snap.data();
+    if (refreshTokenHash) {
+      await db.collection('oauthRefreshHashes').doc(refreshTokenHash).set({ revokedAt: now }, { merge: true });
+    }
+    res.status(200).json({ revoked: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Voice intent endpoints ─────────────────────────────────────────────────────
+// These endpoints are designed for SSML-ready voice assistant responses.
+// All require a valid OAuth Bearer access token (home_pro+).
+
+// Fuzzy plant name resolver — returns the best match or null
+async function resolveVoicePlant(userId, nameParam) {
+  const snap = await userPlants(userId).get();
+  const plants = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const query = nameParam.toLowerCase();
+  // Exact match first, then substring
+  const exact = plants.find((p) => (p.name || '').toLowerCase() === query);
+  if (exact) return exact;
+  const sub = plants.find(
+    (p) => (p.name || '').toLowerCase().includes(query) || query.includes((p.name || '').toLowerCase()),
+  );
+  return sub || null;
+}
+
+// GET /voice/today — today's watering + feeding tasks (SSML-friendly summary)
+app.get('/voice/today', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const snap = await userPlants(req.userId).get();
+    const now = new Date();
+    const due = [];
+    for (const d of snap.docs) {
+      const p = { id: d.id, ...d.data() };
+      if (!p.frequencyDays || !p.lastWatered) continue;
+      const next = new Date(new Date(p.lastWatered).getTime() + p.frequencyDays * 86400000);
+      if (next <= now) due.push(p.name || p.species || 'Unknown plant');
+    }
+    const count = due.length;
+    let summary;
+    if (count === 0) {
+      summary = 'All plants are up to date. No watering needed today.';
+    } else if (count === 1) {
+      summary = `One plant needs watering today: ${due[0]}.`;
+    } else {
+      const list = due.length <= 5 ? due.slice(0, -1).join(', ') + ' and ' + due[due.length - 1] : due.slice(0, 5).join(', ') + ` and ${count - 5} more`;
+      summary = `${count} plants need watering today: ${list}.`;
+    }
+    res.status(200).json({ summary, count, plants: due });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /voice/plants/:nameOrFuzzy/status — plant health + last watered
+app.get('/voice/plants/:nameOrFuzzy/status', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const plant = await resolveVoicePlant(req.userId, req.params.nameOrFuzzy);
+    if (!plant) {
+      return res.status(404).json({
+        error: 'plant_not_found',
+        summary: `I couldn't find a plant called ${req.params.nameOrFuzzy} in your collection.`,
+      });
+    }
+    const name = plant.name || plant.species || 'your plant';
+    let waterSentence = '';
+    if (plant.lastWatered) {
+      const daysAgo = Math.floor((Date.now() - new Date(plant.lastWatered).getTime()) / 86400000);
+      waterSentence = daysAgo === 0
+        ? ` It was watered today.`
+        : ` It was last watered ${daysAgo} day${daysAgo !== 1 ? 's' : ''} ago.`;
+    }
+    const health = plant.health ? ` Its health is ${plant.health.toLowerCase()}.` : '';
+    const summary = `Your ${name} is in ${plant.room || 'an unknown location'}.${health}${waterSentence}`;
+    res.status(200).json({ summary, plant: { id: plant.id, name: plant.name, health: plant.health, lastWatered: plant.lastWatered, room: plant.room } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /voice/plants/:nameOrFuzzy/water — log a watering via voice
+app.post('/voice/plants/:nameOrFuzzy/water', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const plant = await resolveVoicePlant(req.userId, req.params.nameOrFuzzy);
+    if (!plant) {
+      return res.status(404).json({
+        error: 'plant_not_found',
+        summary: `I couldn't find a plant called ${req.params.nameOrFuzzy} in your collection.`,
+      });
+    }
+    const now = new Date().toISOString();
+    const waterEntry = { date: now, method: 'manual', source: 'voice' };
+    await userPlants(req.userId).doc(plant.id).set({
+      lastWatered: now,
+      wateringLog: [...(plant.wateringLog || []).slice(-49), waterEntry],
+      updatedAt: now,
+    }, { merge: true });
+    const name = plant.name || plant.species || 'your plant';
+    res.status(201).json({ summary: `Logged watering for ${name}.`, wateredAt: now, plantId: plant.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /voice/weather — weather summary with plant care impact
+app.get('/voice/weather', requireOauthBearer, requireTier('home_pro'), async (req, res) => {
+  try {
+    const configRef = db.collection('users').doc(req.userId).collection('config').doc('preferences');
+    const configSnap = await configRef.get();
+    const prefs = configSnap.exists ? configSnap.data() : {};
+    const location = prefs.location || null;
+    if (!location) {
+      return res.status(200).json({
+        summary: 'No location is set for your garden. Please set your location in Settings to get weather updates.',
+        location: null,
+      });
+    }
+    // Return the stored location; actual weather is fetched by the frontend
+    res.status(200).json({
+      summary: `Weather data for ${location} is available in the app. Check the forecast for any frost or heat alerts affecting your plants.`,
+      location,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Push/email notifications (#162) ──────────────────────────────────────────
+
+const { sendEmail } = require('./email');
+
+// Initialise web-push VAPID once if credentials are available
+if (webPush && process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  webPush.setVapidDetails(
+    'mailto:notifications@plants.lopezcloud.dev',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  );
+}
+
+async function sendPushNotification(subscription, payload) {
+  if (!webPush || !process.env.VAPID_PUBLIC_KEY) return { skipped: true, reason: 'vapid_unavailable' };
+  try {
+    await webPush.sendNotification(subscription, JSON.stringify(payload));
+    return { sent: true };
+  } catch (err) {
+    if (err.statusCode === 410 || err.statusCode === 404) return { expired: true };
+    throw err;
+  }
+}
+
+function userNotificationPrefs(userId) {
+  return db.collection('users').doc(userId).collection('preferences').doc('notifications');
+}
+
+// GET /preferences/notifications
+app.get('/preferences/notifications', requireUser, async (req, res) => {
+  try {
+    const snap = await userNotificationPrefs(req.userId).get();
+    const defaults = {
+      pushEnabled: false, emailEnabled: true, perPlantAlerts: false,
+      dailyDigest: true, weeklyDigest: false,
+      quietHoursStart: '08:00', quietHoursEnd: '20:00', fcmTokens: [],
+    };
+    res.status(200).json(snap.exists ? { ...defaults, ...snap.data() } : defaults);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /preferences/notifications
+app.put('/preferences/notifications', requireUser, async (req, res) => {
+  try {
+    const allowed = ['pushEnabled', 'emailEnabled', 'perPlantAlerts', 'dailyDigest', 'weeklyDigest', 'quietHoursStart', 'quietHoursEnd'];
+    const update = {};
+    for (const key of allowed) {
+      if (req.body && req.body[key] !== undefined) update[key] = req.body[key];
+    }
+    if (Object.keys(update).length === 0) return res.status(400).json({ error: 'no_valid_fields' });
+    await userNotificationPrefs(req.userId).set(update, { merge: true });
+    const snap = await userNotificationPrefs(req.userId).get();
+    res.status(200).json(snap.data());
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /preferences/notifications/fcm-tokens — register a push subscription
+app.post('/preferences/notifications/fcm-tokens', requireUser, async (req, res) => {
+  try {
+    const { token, deviceLabel, subscription } = req.body || {};
+    if (!token && !subscription) return res.status(400).json({ error: 'token or subscription is required' });
+    const ref = userNotificationPrefs(req.userId);
+    const snap = await ref.get();
+    const existing = snap.exists ? (snap.data().fcmTokens || []) : [];
+    const entry = { token: token || null, subscription: subscription || null, deviceLabel: deviceLabel || 'Unknown device', lastSeen: new Date().toISOString() };
+    const filtered = existing.filter((t) => t.token !== token);
+    await ref.set({ fcmTokens: [...filtered, entry] }, { merge: true });
+    res.status(201).json({ registered: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /preferences/notifications/fcm-tokens/:token — revoke a push subscription
+app.delete('/preferences/notifications/fcm-tokens/:token', requireUser, async (req, res) => {
+  try {
+    const ref = userNotificationPrefs(req.userId);
+    const snap = await ref.get();
+    const existing = snap.exists ? (snap.data().fcmTokens || []) : [];
+    const filtered = existing.filter((t) => t.token !== decodeURIComponent(req.params.token));
+    await ref.set({ fcmTokens: filtered }, { merge: true });
+    res.status(200).json({ removed: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /notifications/dispatch — Cloud Scheduler OIDC target; processes all users
+app.post('/notifications/dispatch', async (req, res) => {
+  if (process.env.NOTIFICATIONS_ENABLED !== 'true') {
+    return res.status(200).json({ status: 'notifications_disabled' });
+  }
+  try {
+    const usersSnap = await db.collection('users').get();
+    let sent = 0, skipped = 0;
+    const now = new Date();
+    const todayKey = now.toISOString().slice(0, 10);
+
+    for (const userDoc of usersSnap.docs) {
+      const userId = userDoc.id;
+      const prefSnap = await userNotificationPrefs(userId).get();
+      if (!prefSnap.exists) { skipped++; continue; }
+      const prefs = prefSnap.data();
+      if (!prefs.dailyDigest && !prefs.perPlantAlerts) { skipped++; continue; }
+
+      // Idempotency check: skip if already dispatched today
+      const logRef = db.collection('users').doc(userId).collection('notificationLog').doc(todayKey);
+      const logSnap = await logRef.get();
+      if (logSnap.exists && logSnap.data().dailyDispatched) { skipped++; continue; }
+
+      // Quiet-hours check (UTC approximation)
+      const [startH] = (prefs.quietHoursStart || '08:00').split(':').map(Number);
+      const [endH] = (prefs.quietHoursEnd || '20:00').split(':').map(Number);
+      const currentH = now.getUTCHours();
+      if (currentH < startH || currentH >= endH) { skipped++; continue; }
+
+      // Aggregate today's tasks
+      const plantsSnap = await userPlants(userId).get();
+      const due = [];
+      const overdue = [];
+      for (const d of plantsSnap.docs) {
+        const p = { id: d.id, ...d.data() };
+        if (!p.frequencyDays || !p.lastWatered) continue;
+        const next = new Date(new Date(p.lastWatered).getTime() + p.frequencyDays * 86400000);
+        const daysLate = Math.floor((now - next) / 86400000);
+        if (daysLate === 0) due.push(p.name || p.species || 'A plant');
+        if (daysLate >= 1) overdue.push({ name: p.name || p.species || 'A plant', daysLate });
+      }
+
+      // Send push
+      if (prefs.pushEnabled && (prefs.fcmTokens || []).length > 0) {
+        const payload = {
+          title: 'Plant Tracker',
+          body: due.length > 0 ? `${due.length} plant${due.length !== 1 ? 's' : ''} need watering today` : `${overdue.length} plant${overdue.length !== 1 ? 's' : ''} overdue`,
+          icon: '/icons/icon-192x192.png',
+        };
+        for (const t of prefs.fcmTokens) {
+          if (t.subscription) {
+            await sendPushNotification(t.subscription, payload).catch(() => {});
+          }
+        }
+      }
+
+      // Send email digest
+      if (prefs.emailEnabled && prefs.dailyDigest) {
+        const userPrefsSnap = await db.collection('users').doc(userId).collection('config').doc('preferences').get();
+        const email = userPrefsSnap.exists ? userPrefsSnap.data().email : null;
+        if (email) {
+          await sendEmail({
+            to: email,
+            template: 'dailyDigest',
+            dynamicData: { dueCount: due.length, overdueCount: overdue.length, duePlants: due.slice(0, 5), overduePlants: overdue.slice(0, 5) },
+          }).catch(() => {});
+        }
+      }
+
+      await logRef.set({ dailyDispatched: true, dispatchedAt: now.toISOString() }, { merge: true });
+      sent++;
+    }
+    res.status(200).json({ status: 'ok', sent, skipped });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 functions.http('plantsApi', app);
