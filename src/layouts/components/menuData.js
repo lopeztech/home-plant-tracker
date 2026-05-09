@@ -23,6 +23,7 @@ export const menuItems = [
     personas: ['landscaper', 'both'],
     children: [
       { key: 'visits', label: 'Visits', icon: '/icons/sprite.svg#calendar', url: '/visits' },
+      { key: 'materials', label: 'Materials', icon: '/icons/sprite.svg#package', url: '/materials' },
       { key: 'client-properties', label: 'Properties', icon: '/icons/sprite.svg#home', url: '/settings/client-properties' },
       { key: 'branding', label: 'Branding', icon: '/icons/sprite.svg#star', url: '/settings/branding' },
     ],
