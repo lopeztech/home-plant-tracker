@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Button, ProgressBar, Alert, Row, Col, Form, Badge } from 'react-bootstrap'
 import { Link } from 'react-router'
 import { useSubscription } from '../context/SubscriptionContext.jsx'
+import { useAuth } from '../contexts/AuthContext.jsx'
 import { billingApi, giftsApi } from '../api/plants.js'
 import { useToast } from '../components/Toast.jsx'
 import { friendlyErrorMessage } from '../utils/errorMessages.js'
@@ -36,6 +37,7 @@ function GiftStatusBadge({ status }) {
 
 export default function BillingPage() {
   const { billingEnabled, tier, status, currentPeriodEnd, cancelAtPeriodEnd, hasStripeCustomer, isTrial, quotas, usage, refresh } = useSubscription()
+  const { isGuest } = useAuth()
   const toast = useToast()
   const [busy, setBusy] = useState(false)
   const [redeemCode, setRedeemCode] = useState('')
@@ -45,12 +47,13 @@ export default function BillingPage() {
   const [giftsLoading, setGiftsLoading] = useState(false)
 
   useEffect(() => {
+    if (isGuest) { setSentGifts([]); return }
     setGiftsLoading(true)
     giftsApi.mine()
       .then((r) => setSentGifts(r.sent || []))
       .catch(() => setSentGifts([]))
       .finally(() => setGiftsLoading(false))
-  }, [])
+  }, [isGuest])
 
   const redeem = async (e) => {
     e.preventDefault()

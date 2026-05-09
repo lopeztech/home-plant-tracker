@@ -26,6 +26,10 @@ vi.mock('../context/SubscriptionContext.jsx', () => ({
   useSubscription: () => snapshot,
 }))
 
+vi.mock('../contexts/AuthContext.jsx', () => ({
+  useAuth: () => ({ isGuest: false, isAuthenticated: true, userId: 'test-user' }),
+}))
+
 import BillingPage from '../pages/BillingPage.jsx'
 
 const baseSnapshot = {
