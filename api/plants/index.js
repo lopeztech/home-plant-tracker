@@ -158,6 +158,8 @@ async function attachHouseholdContext(req, claims) {
   req.userId = ctx.userId;
   req.householdId = ctx.householdId;
   req.role = ctx.role;
+  req.actorDisplayName = displayName;
+  req.actorEmail = claims.email || null;
 }
 
 function requireUser(req, res, next) {
@@ -245,6 +247,101 @@ async function signPlantData(data) {
 
 const OUTDOOR_ROOMS = new Set(['Garden', 'Balcony', 'Outdoors', 'Patio', 'Terrace', 'Deck', 'Yard', 'Courtyard', 'Porch', 'Veranda']);
 
+// ── Gift subscription helpers ─────────────────────────────────────────────────
+const GIFT_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+
+function generateGiftCode() {
+  const len = GIFT_CODE_ALPHABET.length;
+  const maxUnbiased = 256 - (256 % len);
+  const positions = [];
+  while (positions.length < 12) {
+    const chunk = crypto.randomBytes(32);
+    for (let i = 0; i < chunk.length && positions.length < 12; i++) {
+      if (chunk[i] < maxUnbiased) positions.push(chunk[i] % len);
+    }
+  }
+  return positions.slice(0, 4).map(p => GIFT_CODE_ALPHABET[p]).join('') + '-' +
+         positions.slice(4, 8).map(p => GIFT_CODE_ALPHABET[p]).join('') + '-' +
+         positions.slice(8, 12).map(p => GIFT_CODE_ALPHABET[p]).join('');
+}
+
+function hashGiftCode(code) {
+  return crypto.createHash('sha256').update(code.toUpperCase()).digest('hex');
+}
+
+const GIFT_PRICE_ENV = {
+  3:  'STRIPE_PRICE_GIFT_HOMEPRO_3MO',
+  12: 'STRIPE_PRICE_GIFT_HOMEPRO_1YR',
+};
+
+async function handleGiftPurchaseCompleted(db, session) {
+  const meta = session.metadata || {};
+  const purchaserUid = meta.purchaserUid;
+  if (!purchaserUid) return;
+  const durationMonths = parseInt(meta.durationMonths, 10) || 3;
+
+  // Retry up to 3 times for a unique code.
+  let code, codeHashed;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    code = generateGiftCode();
+    codeHashed = hashGiftCode(code);
+    const existing = await db.collection('giftCodeHashes').doc(codeHashed).get();
+    if (!existing.exists) break;
+    if (attempt === 2) throw new Error('Failed to generate a unique gift code');
+  }
+
+  const now = new Date().toISOString();
+  const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const giftId = `${purchaserUid.slice(0, 8)}-${Date.now()}`;
+
+  const giftData = {
+    code,
+    codeHashed,
+    purchaserUid,
+    purchaserEmail: session.customer_email || null,
+    recipientEmail: meta.recipientEmail || null,
+    recipientName: meta.recipientName || null,
+    tier: 'home_pro',
+    durationMonths,
+    stripePaymentIntentId: session.payment_intent || null,
+    status: 'active',
+    purchasedAt: now,
+    expiresAt,
+  };
+
+  await db.collection('gifts').doc(giftId).set(giftData);
+  await db.collection('giftCodeHashes').doc(codeHashed).set({ giftId });
+  await db.collection('users').doc(purchaserUid).collection('giftsSent').doc(giftId).set({
+    giftId, status: 'active', tier: 'home_pro', durationMonths,
+    recipientEmail: meta.recipientEmail || null,
+    recipientName: meta.recipientName || null,
+    purchasedAt: now, expiresAt,
+  });
+}
+
+// ── Rebate catalog (loaded at boot; served from memory) ───────────────────────
+const REBATE_CATALOG = [
+  ...require('./data/rebates/us-ca.json'),
+  ...require('./data/rebates/uk-london.json'),
+];
+const REBATE_CATEGORIES = [
+  { id: 'water', label: 'Water Saving', icon: 'droplet' },
+  { id: 'native-plant', label: 'Native Plants', icon: 'leaf' },
+  { id: 'compost', label: 'Composting', icon: 'layers' },
+  { id: 'energy', label: 'Energy', icon: 'zap' },
+];
+
+function matchRebates(lat, lng) {
+  const now = new Date().toISOString().slice(0, 10);
+  return REBATE_CATALOG.filter((r) => {
+    const { minLat, maxLat, minLng, maxLng } = r.eligibility;
+    if (lat < minLat || lat > maxLat) return false;
+    if (lng < minLng || lng > maxLng) return false;
+    if (r.validUntil && r.validUntil < now) return false;
+    return true;
+  });
+}
+
 const billing = require('./billing');
 const { createTierGate } = require('./tierGate');
 
@@ -275,7 +372,12 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (r
   await eventRef.set({ type: event.type, receivedAt: new Date().toISOString() });
 
   try {
-    await billing.applySubscriptionEvent(db, event);
+    const obj = event.data?.object || {};
+    if (event.type === 'checkout.session.completed' && obj.metadata?.giftPurchase === 'true') {
+      await handleGiftPurchaseCompleted(db, obj);
+    } else {
+      await billing.applySubscriptionEvent(db, event);
+    }
     return res.status(200).json({ received: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
@@ -6501,6 +6603,123 @@ app.post('/sit/:token/water/:plantId', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Gift subscriptions ────────────────────────────────────────────────────────
+
+app.post('/gifts/purchase', requireUser, async (req, res) => {
+  const { durationMonths = 3, recipientEmail, recipientName, currency = 'usd' } = req.body || {};
+  const months = parseInt(durationMonths, 10);
+  if (months !== 3 && months !== 12) {
+    return res.status(400).json({ error: 'durationMonths must be 3 or 12' });
+  }
+
+  const stripe = billing.getStripe();
+  if (!stripe) return res.status(503).json({ error: 'billing_disabled' });
+
+  const priceEnvKey = GIFT_PRICE_ENV[months];
+  const priceId = process.env[priceEnvKey];
+  if (!priceId) return res.status(503).json({ error: `Gift price not configured (${priceEnvKey})` });
+
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      client_reference_id: req.userId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      currency,
+      success_url: `${process.env.BILLING_SUCCESS_URL || 'https://plants.lopezcloud.dev'}/settings/billing?gift=sent`,
+      cancel_url: `${process.env.BILLING_CANCEL_URL || 'https://plants.lopezcloud.dev'}/gift?status=cancelled`,
+      metadata: {
+        giftPurchase: 'true',
+        purchaserUid: req.userId,
+        durationMonths: String(months),
+        recipientEmail: recipientEmail || '',
+        recipientName: recipientName || '',
+      },
+    });
+    return res.status(200).json({ url: session.url, id: session.id });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/gifts/redeem', requireUser, async (req, res) => {
+  const { code } = req.body || {};
+  if (!code || typeof code !== 'string') {
+    return res.status(400).json({ error: 'code is required' });
+  }
+  const codeHashed = hashGiftCode(code.replace(/-/g, '').trim());
+  try {
+    const hashSnap = await db.collection('giftCodeHashes').doc(codeHashed).get();
+    if (!hashSnap.exists) return res.status(404).json({ error: 'invalid_code' });
+    const { giftId } = hashSnap.data();
+
+    const giftSnap = await db.collection('gifts').doc(giftId).get();
+    if (!giftSnap.exists) return res.status(404).json({ error: 'invalid_code' });
+    const gift = giftSnap.data();
+
+    if (gift.status !== 'active') return res.status(409).json({ error: 'gift_already_redeemed' });
+    if (gift.expiresAt && gift.expiresAt < new Date().toISOString()) {
+      return res.status(410).json({ error: 'gift_expired' });
+    }
+    if (gift.recipientEmail && req.actorEmail) {
+      if (gift.recipientEmail.toLowerCase() !== req.actorEmail.toLowerCase()) {
+        return res.status(403).json({ error: 'gift_not_for_this_account' });
+      }
+    }
+
+    const now = new Date();
+    const trialEnd = new Date(now.getTime() + gift.durationMonths * 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    await db.collection('users').doc(req.userId).collection('subscription').doc('current').set({
+      isTrial: true,
+      trialTier: gift.tier,
+      trialEnd,
+      status: 'active',
+      giftRedemptionId: giftId,
+      updatedAt: now.toISOString(),
+    }, { merge: true });
+
+    const update = {
+      status: 'redeemed', redeemedAt: now.toISOString(), redeemedByUid: req.userId,
+    };
+    await db.collection('gifts').doc(giftId).set(update, { merge: true });
+    if (gift.purchaserUid) {
+      await db.collection('users').doc(gift.purchaserUid).collection('giftsSent').doc(giftId).set(
+        { status: 'redeemed', redeemedAt: now.toISOString() }, { merge: true }
+      );
+    }
+
+    return res.status(200).json({ tier: gift.tier, trialEnd });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/gifts/mine', requireUser, async (req, res) => {
+  try {
+    const snap = await db.collection('users').doc(req.userId).collection('giftsSent').get();
+    const sent = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    return res.status(200).json({ sent });
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /rebates/categories ───────────────────────────────────────────────────
+app.get('/rebates/categories', (req, res) => {
+  res.status(200).json({ categories: REBATE_CATEGORIES });
+});
+
+// ── GET /rebates/matches ──────────────────────────────────────────────────────
+app.get('/rebates/matches', requireUser, (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+  if (isNaN(lat) || isNaN(lng)) {
+    return res.status(400).json({ error: 'lat and lng query parameters are required' });
+  }
+  const matches = matchRebates(lat, lng);
+  res.status(200).json({ rebates: matches, total: matches.length });
 });
 
 functions.http('plantsApi', app);

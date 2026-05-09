@@ -11,6 +11,10 @@ vi.mock('../api/plants.js', () => ({
     createCheckoutSession: (...args) => createCheckoutSession(...args),
     createPortalSession: (...args) => createPortalSession(...args),
   },
+  giftsApi: {
+    mine: vi.fn().mockResolvedValue({ gifts: [] }),
+    redeem: vi.fn().mockResolvedValue({ ok: true }),
+  },
 }))
 
 vi.mock('../components/Toast.jsx', () => ({
@@ -20,6 +24,10 @@ vi.mock('../components/Toast.jsx', () => ({
 let snapshot
 vi.mock('../context/SubscriptionContext.jsx', () => ({
   useSubscription: () => snapshot,
+}))
+
+vi.mock('../contexts/AuthContext.jsx', () => ({
+  useAuth: () => ({ isGuest: false, isAuthenticated: true, userId: 'test-user' }),
 }))
 
 import BillingPage from '../pages/BillingPage.jsx'

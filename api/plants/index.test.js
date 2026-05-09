@@ -6863,6 +6863,106 @@ describe('POST /materials', () => {
   });
 });
 
+describe('POST /gifts/purchase', () => {
+  it('returns 503 when billing is disabled', async () => {
+    const res = await request(app)
+      .post('/gifts/purchase')
+      .set('Authorization', authHeader())
+      .send({ durationMonths: 3 });
+    expect(res.status).toBe(503);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/gifts/purchase').send({ durationMonths: 3 });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 400 for an invalid durationMonths', async () => {
+    const res = await request(app)
+      .post('/gifts/purchase')
+      .set('Authorization', authHeader())
+      .send({ durationMonths: 6 });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/durationMonths/);
+  });
+});
+
+describe('POST /gifts/redeem', () => {
+  it('returns 400 when code is missing', async () => {
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({});
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 404 for a non-existent code', async () => {
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({ code: 'XXXX-XXXX-XXXX' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('invalid_code');
+  });
+
+  it('redeems a valid active gift and upgrades subscription', async () => {
+    const code = 'ABCD-EFGH-JKMN';
+    const codeHashed = require('crypto').createHash('sha256').update(code.replace(/-/g, '').trim()).digest('hex');
+    const giftId = 'gift-test-1';
+    store[`gifts/${giftId}`] = {
+      code, codeHashed, purchaserUid: 'other-user',
+      tier: 'home_pro', durationMonths: 3,
+      status: 'active', purchasedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 1e10).toISOString(),
+      recipientEmail: null,
+    };
+    store[`giftCodeHashes/${codeHashed}`] = { giftId };
+    store[`users/other-user/giftsSent/${giftId}`] = { giftId, status: 'active', durationMonths: 3 };
+
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({ code });
+    expect(res.status).toBe(200);
+    expect(res.body.tier).toBe('home_pro');
+    expect(res.body.trialEnd).toBeDefined();
+
+    const sub = store[`users/${USER_SUB}/subscription/current`];
+    expect(sub.isTrial).toBe(true);
+    expect(sub.trialTier).toBe('home_pro');
+    expect(sub.giftRedemptionId).toBe(giftId);
+
+    const updatedGift = store[`gifts/${giftId}`];
+    expect(updatedGift.status).toBe('redeemed');
+    expect(updatedGift.redeemedByUid).toBe(USER_SUB);
+  });
+
+  it('returns 409 when the gift is already redeemed', async () => {
+    const code = 'AAAA-BBBB-CCCC';
+    const codeHashed = require('crypto').createHash('sha256').update(code.replace(/-/g, '').trim()).digest('hex');
+    const giftId = 'gift-redeemed-1';
+    store[`gifts/${giftId}`] = {
+      code, codeHashed, status: 'redeemed',
+      tier: 'home_pro', durationMonths: 3,
+      purchasedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 1e10).toISOString(),
+    };
+    store[`giftCodeHashes/${codeHashed}`] = { giftId };
+
+    const res = await request(app)
+      .post('/gifts/redeem')
+      .set('Authorization', authHeader())
+      .send({ code });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('gift_already_redeemed');
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).post('/gifts/redeem').send({ code: 'AAAA-BBBB-CCCC' });
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('PUT /materials/:id', () => {
   it('updates material metadata', async () => {
     store[matPath('mat1')] = { name: 'Old name', unit: 'g', onHand: 100, reorderThreshold: 10, reorderQty: 20, archived: false };
@@ -7098,5 +7198,194 @@ describe('GET /materials — propertyId scoping (billing enabled)', () => {
     expect(res.status).toBe(200);
     expect(res.body.materials).toHaveLength(1);
     expect(res.body.materials[0].name).toBe('Site supply');
+  });
+});
+
+// ── Gift subscriptions ────────────────────────────────────────────────────────
+
+describe('GET /gifts/mine', () => {
+  beforeEach(() => {
+    store[`users/${USER_SUB}/giftsSent/gift-a`] = {
+      giftId: 'gift-a', status: 'active', tier: 'home_pro',
+      durationMonths: 3, recipientEmail: 'friend@example.com', purchasedAt: '2026-04-01T00:00:00Z',
+    };
+    store[`users/${USER_SUB}/giftsSent/gift-b`] = {
+      giftId: 'gift-b', status: 'redeemed', tier: 'home_pro',
+      durationMonths: 12, recipientEmail: null, purchasedAt: '2026-03-01T00:00:00Z',
+    };
+  });
+
+  it('returns sent gifts for the authenticated user', async () => {
+    const res = await request(app)
+      .get('/gifts/mine')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.sent)).toBe(true);
+    expect(res.body.sent.length).toBe(2);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/gifts/mine');
+    expect(res.status).toBe(401);
+  });
+});
+
+
+// ── POST /billing/webhook (gift checkout) ────────────────────────────────────
+
+describe('POST /billing/webhook — gift checkout.session.completed', () => {
+  const FAKE_SK  = 'sk_test_fakefakefakefakefakefakefakefakefakefak';
+  const FAKE_WHSEC = 'whsec_testfakesecret';
+  let savedBillingEnabled;
+
+  beforeEach(() => {
+    savedBillingEnabled = process.env.BILLING_ENABLED;
+    process.env.BILLING_ENABLED = 'true';
+    process.env.STRIPE_SECRET_KEY = FAKE_SK;
+    process.env.STRIPE_WEBHOOK_SECRET = FAKE_WHSEC;
+  });
+
+  afterEach(() => {
+    if (savedBillingEnabled === undefined) {
+      delete process.env.BILLING_ENABLED;
+    } else {
+      process.env.BILLING_ENABLED = savedBillingEnabled;
+    }
+    delete process.env.STRIPE_SECRET_KEY;
+    delete process.env.STRIPE_WEBHOOK_SECRET;
+  });
+
+  function makeStripeHeader(payload) {
+    const Stripe = require('stripe');
+    const s = Stripe(FAKE_SK);
+    return s.webhooks.generateTestHeaderString({ payload, secret: FAKE_WHSEC });
+  }
+
+  it('mints a gift code and stores gift records for a completed gift checkout', async () => {
+    const purchaserUid = USER_SUB;
+    const session = {
+      id: 'cs_test_gift_001',
+      object: 'checkout.session',
+      payment_intent: 'pi_test_001',
+      customer_email: 'buyer@example.com',
+      metadata: {
+        giftPurchase: 'true',
+        purchaserUid,
+        durationMonths: '3',
+        recipientEmail: 'recipient@example.com',
+        recipientName: 'Alice',
+      },
+    };
+    const event = {
+      id: 'evt_gift_001',
+      type: 'checkout.session.completed',
+      data: { object: session },
+    };
+    const payload = JSON.stringify(event);
+    const header = makeStripeHeader(payload);
+
+    const res = await request(app)
+      .post('/billing/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', header)
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.received).toBe(true);
+
+    // A gift doc should have been written to giftCodeHashes
+    const hashEntries = Object.keys(store).filter(k => k.startsWith('giftCodeHashes/'));
+    expect(hashEntries.length).toBe(1);
+
+    // The purchaser should have a giftsSent record
+    const sentEntries = Object.keys(store).filter(k => k.startsWith(`users/${purchaserUid}/giftsSent/`));
+    expect(sentEntries.length).toBe(1);
+    const sent = store[sentEntries[0]];
+    expect(sent.status).toBe('active');
+    expect(sent.durationMonths).toBe(3);
+    expect(sent.recipientEmail).toBe('recipient@example.com');
+  });
+
+  it('returns 400 when the webhook signature is invalid', async () => {
+    const event = { id: 'evt_bad', type: 'checkout.session.completed', data: { object: {} } };
+    const res = await request(app)
+      .post('/billing/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', 'bad-sig')
+      .send(JSON.stringify(event));
+    expect(res.status).toBe(400);
+  });
+});
+
+// ── GET /rebates/categories ───────────────────────────────────────────────────
+
+describe('GET /rebates/categories', () => {
+  it('returns the category list without auth', async () => {
+    const res = await request(app).get('/rebates/categories');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.categories)).toBe(true);
+    const ids = res.body.categories.map((c) => c.id);
+    expect(ids).toContain('water');
+    expect(ids).toContain('native-plant');
+    expect(ids).toContain('compost');
+    expect(ids).toContain('energy');
+  });
+});
+
+// ── GET /rebates/matches ──────────────────────────────────────────────────────
+
+describe('GET /rebates/matches', () => {
+  it('returns SoCal rebates for a Los Angeles coordinate', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=34.05&lng=-118.24')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBeGreaterThan(0);
+    const ids = res.body.rebates.map((r) => r.id);
+    expect(ids).toContain('ladwp-turf-removal');
+    expect(ids).toContain('socal-mwd-turf-rebate');
+  });
+
+  it('returns London rebates for a central London coordinate', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=51.5&lng=-0.1')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBeGreaterThan(0);
+    const ids = res.body.rebates.map((r) => r.id);
+    expect(ids).toContain('london-rewilding-garden-grant');
+    expect(ids).toContain('thames-water-smart-meter');
+  });
+
+  it('returns empty for a location with no matched rebates (New Zealand)', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=-36.85&lng=174.76')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    expect(res.body.total).toBe(0);
+    expect(res.body.rebates).toHaveLength(0);
+  });
+
+  it('does not return SoCal rebates for a Bay Area coordinate', async () => {
+    const res = await request(app)
+      .get('/rebates/matches?lat=37.77&lng=-122.41')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(200);
+    const ids = res.body.rebates.map((r) => r.id);
+    expect(ids).not.toContain('ladwp-turf-removal');
+    expect(ids).toContain('ebmud-baywise-rebate');
+  });
+
+  it('returns 400 when lat/lng are missing', async () => {
+    const res = await request(app)
+      .get('/rebates/matches')
+      .set('Authorization', authHeader());
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/lat/);
+  });
+
+  it('requires auth', async () => {
+    const res = await request(app).get('/rebates/matches?lat=34.05&lng=-118.24');
+    expect(res.status).toBe(401);
   });
 });

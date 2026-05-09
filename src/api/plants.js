@@ -493,6 +493,21 @@ export const companionsApi = {
     request(`/config/beds/${encodeURIComponent(roomId)}/compatibility`),
 }
 
+export const giftsApi = {
+  purchase: (durationMonths, { recipientEmail, recipientName, currency } = {}) =>
+    request('/gifts/purchase', {
+      method: 'POST',
+      body: JSON.stringify({ durationMonths, recipientEmail, recipientName, currency }),
+    }),
+  redeem: (code) => request('/gifts/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
+  mine: () => request('/gifts/mine'),
+}
+
+export const rebatesApi = {
+  categories: () => request('/rebates/categories'),
+  matches: (lat, lng) => request(`/rebates/matches?lat=${lat}&lng=${lng}`),
+}
+
 export const imagesApi = {
   async upload(file, prefix = 'plants') {
     const ext = file.name.split('.').pop()

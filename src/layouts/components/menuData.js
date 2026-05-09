@@ -39,6 +39,15 @@ export const menuItems = [
     ],
   },
   {
+    key: 'discover',
+    label: 'Discover',
+    isSection: true,
+    collapsible: true,
+    children: [
+      { key: 'rebates', label: 'Rebates & Grants', icon: '/icons/sprite.svg#dollar-sign', url: '/rebates' },
+    ],
+  },
+  {
     key: 'manage',
     label: 'Manage',
     isSection: true,

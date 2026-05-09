@@ -1,0 +1,116 @@
+[
+  {
+    "id": "london-rewilding-garden-grant",
+    "name": "London Rewilding Home Garden Grant",
+    "region": "uk-london",
+    "category": "native-plant",
+    "amountFormula": "Up to £500 for native plantings and wildlife features",
+    "amountCents": 50000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 51.28,
+      "maxLat": 51.7,
+      "minLng": -0.52,
+      "maxLng": 0.35
+    },
+    "applyUrl": "https://www.london.gov.uk/programmes-strategies/environment-and-climate-change/biodiversity",
+    "affiliateUrl": null,
+    "description": "Greater London Authority grants for homeowners converting garden space to native planting schemes that support pollinators and biodiversity.",
+    "validUntil": "2027-03-31"
+  },
+  {
+    "id": "thames-water-smart-meter",
+    "name": "Thames Water Smart Meter Programme",
+    "region": "uk-london",
+    "category": "water",
+    "amountFormula": "Free smart meter installation + water saving devices worth up to £40",
+    "amountCents": 4000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 51.28,
+      "maxLat": 51.7,
+      "minLng": -0.52,
+      "maxLng": 0.35
+    },
+    "applyUrl": "https://www.thameswater.co.uk/help/water-saving/smart-meters",
+    "affiliateUrl": null,
+    "description": "Thames Water customers can get a free smart meter and a bundle of free water-saving devices including a garden hosepipe timer.",
+    "validUntil": "2027-12-31"
+  },
+  {
+    "id": "london-water-butt-scheme",
+    "name": "London Borough Water Butt Discount Scheme",
+    "region": "uk-london",
+    "category": "water",
+    "amountFormula": "Water butts from £10 (discounted from RRP £50+)",
+    "amountCents": 1000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 51.28,
+      "maxLat": 51.7,
+      "minLng": -0.52,
+      "maxLng": 0.35
+    },
+    "applyUrl": "https://www.getcomposting.com/butt/",
+    "affiliateUrl": null,
+    "description": "Heavily subsidised water butts for London residents through borough councils. Collects rainwater for garden irrigation.",
+    "validUntil": "2027-12-31"
+  },
+  {
+    "id": "southwark-compost-bin",
+    "name": "Southwark Council Home Composting Scheme",
+    "region": "uk-london",
+    "category": "compost",
+    "amountFormula": "Subsidised compost bins from £7 (RRP £30+)",
+    "amountCents": 700,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 51.45,
+      "maxLat": 51.55,
+      "minLng": -0.11,
+      "maxLng": 0.07
+    },
+    "applyUrl": "https://www.southwark.gov.uk/environment-and-green-spaces/recycling-and-rubbish/home-composting",
+    "affiliateUrl": null,
+    "description": "Southwark Council residents can buy subsidised compost bins and wormeries to recycle kitchen and garden waste into plant food.",
+    "validUntil": "2027-12-31"
+  },
+  {
+    "id": "london-urban-orchard",
+    "name": "London Urban Orchard / Community Fruit Tree Scheme",
+    "region": "uk-london",
+    "category": "native-plant",
+    "amountFormula": "Free or subsidised fruit trees (up to 3 per garden)",
+    "amountCents": 3000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 51.28,
+      "maxLat": 51.7,
+      "minLng": -0.52,
+      "maxLng": 0.35
+    },
+    "applyUrl": "https://www.londontreeofficers.com/community-fruit-tree-scheme",
+    "affiliateUrl": null,
+    "description": "Mayor of London scheme providing subsidised fruit trees for private London gardens to increase canopy cover and urban food production.",
+    "validUntil": "2027-04-30"
+  },
+  {
+    "id": "hackney-green-garden-grant",
+    "name": "Hackney Green Garden Grant",
+    "region": "uk-london",
+    "category": "native-plant",
+    "amountFormula": "Up to £250 for front-garden greening",
+    "amountCents": 25000,
+    "amountUnit": "flat",
+    "eligibility": {
+      "minLat": 51.52,
+      "maxLat": 51.58,
+      "minLng": -0.1,
+      "maxLng": 0.0
+    },
+    "applyUrl": "https://hackney.gov.uk/greener-hackney",
+    "affiliateUrl": null,
+    "description": "Hackney Council grants for replacing front-garden paving with plants, helping manage surface water run-off and improve local biodiversity.",
+    "validUntil": "2027-03-31"
+  }
+]
