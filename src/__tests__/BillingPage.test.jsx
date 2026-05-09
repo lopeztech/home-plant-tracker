@@ -11,6 +11,10 @@ vi.mock('../api/plants.js', () => ({
     createCheckoutSession: (...args) => createCheckoutSession(...args),
     createPortalSession: (...args) => createPortalSession(...args),
   },
+  giftsApi: {
+    mine: vi.fn().mockResolvedValue({ gifts: [] }),
+    redeem: vi.fn().mockResolvedValue({ ok: true }),
+  },
 }))
 
 vi.mock('../components/Toast.jsx', () => ({
