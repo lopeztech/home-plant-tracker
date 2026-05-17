@@ -1,35 +1,36 @@
-import { lazy, Suspense } from 'react'
+import { Suspense } from 'react'
 import { Navigate } from 'react-router'
 import App from '../App.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 import AuthLayout from '../layouts/AuthLayout.jsx'
+import { lazyWithRetry } from '../utils/lazyWithRetry.js'
 
-const LoginPage = lazy(() => import('../pages/LoginPage.jsx'))
-const DashboardPage = lazy(() => import('../pages/DashboardPage.jsx'))
-const PlantDetailPage = lazy(() => import('../pages/PlantDetailPage.jsx'))
-const TodayPage = lazy(() => import('../pages/TodayPage.jsx'))
-const AnalyticsPage = lazy(() => import('../pages/AnalyticsPage.jsx'))
-const CalendarPage = lazy(() => import('../pages/CalendarPage.jsx'))
-const SettingsPage = lazy(() => import('../pages/SettingsPage.jsx'))
-const AdminPage = lazy(() => import('../pages/AdminPage.jsx'))
-const ForecastPage = lazy(() => import('../pages/ForecastPage.jsx'))
-const InsightsPage = lazy(() => import('../pages/InsightsPage.jsx'))
-const BulkUploadPage = lazy(() => import('../pages/BulkUploadPage.jsx'))
-const BillingPage = lazy(() => import('../pages/BillingPage.jsx'))
-const PricingPage = lazy(() => import('../pages/PricingPage.jsx'))
-const PrivacyPage = lazy(() => import('../pages/PrivacyPage.jsx'))
-const TermsPage = lazy(() => import('../pages/TermsPage.jsx'))
-const ScanPage = lazy(() => import('../pages/ScanPage.jsx'))
-const PropagationPage = lazy(() => import('../pages/PropagationPage.jsx'))
-const VisitsPage = lazy(() => import('../pages/VisitsPage.jsx'))
-const TemplatesPage = lazy(() => import('../pages/TemplatesPage.jsx'))
-const MaterialsPage = lazy(() => import('../pages/MaterialsPage.jsx'))
-const PortalPage = lazy(() => import('../pages/PortalPage.jsx'))
-const SitPage = lazy(() => import('../pages/SitPage.jsx'))
-const RebatesPage = lazy(() => import('../pages/RebatesPage.jsx'))
-const GiftPage = lazy(() => import('../pages/GiftPage.jsx'))
-const CommunityPage = lazy(() => import('../pages/CommunityPage.jsx'))
-const CommunityGuidelinesPage = lazy(() => import('../pages/CommunityGuidelinesPage.jsx'))
+const LoginPage = lazyWithRetry(() => import('../pages/LoginPage.jsx'))
+const DashboardPage = lazyWithRetry(() => import('../pages/DashboardPage.jsx'))
+const PlantDetailPage = lazyWithRetry(() => import('../pages/PlantDetailPage.jsx'))
+const TodayPage = lazyWithRetry(() => import('../pages/TodayPage.jsx'))
+const AnalyticsPage = lazyWithRetry(() => import('../pages/AnalyticsPage.jsx'))
+const CalendarPage = lazyWithRetry(() => import('../pages/CalendarPage.jsx'))
+const SettingsPage = lazyWithRetry(() => import('../pages/SettingsPage.jsx'))
+const AdminPage = lazyWithRetry(() => import('../pages/AdminPage.jsx'))
+const ForecastPage = lazyWithRetry(() => import('../pages/ForecastPage.jsx'))
+const InsightsPage = lazyWithRetry(() => import('../pages/InsightsPage.jsx'))
+const BulkUploadPage = lazyWithRetry(() => import('../pages/BulkUploadPage.jsx'))
+const BillingPage = lazyWithRetry(() => import('../pages/BillingPage.jsx'))
+const PricingPage = lazyWithRetry(() => import('../pages/PricingPage.jsx'))
+const PrivacyPage = lazyWithRetry(() => import('../pages/PrivacyPage.jsx'))
+const TermsPage = lazyWithRetry(() => import('../pages/TermsPage.jsx'))
+const ScanPage = lazyWithRetry(() => import('../pages/ScanPage.jsx'))
+const PropagationPage = lazyWithRetry(() => import('../pages/PropagationPage.jsx'))
+const VisitsPage = lazyWithRetry(() => import('../pages/VisitsPage.jsx'))
+const TemplatesPage = lazyWithRetry(() => import('../pages/TemplatesPage.jsx'))
+const MaterialsPage = lazyWithRetry(() => import('../pages/MaterialsPage.jsx'))
+const PortalPage = lazyWithRetry(() => import('../pages/PortalPage.jsx'))
+const SitPage = lazyWithRetry(() => import('../pages/SitPage.jsx'))
+const RebatesPage = lazyWithRetry(() => import('../pages/RebatesPage.jsx'))
+const GiftPage = lazyWithRetry(() => import('../pages/GiftPage.jsx'))
+const CommunityPage = lazyWithRetry(() => import('../pages/CommunityPage.jsx'))
+const CommunityGuidelinesPage = lazyWithRetry(() => import('../pages/CommunityGuidelinesPage.jsx'))
 
 export const routes = [
   {
