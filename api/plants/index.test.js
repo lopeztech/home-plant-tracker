@@ -7378,6 +7378,57 @@ describe('POST /billing/webhook — gift checkout.session.completed', () => {
       .send(JSON.stringify(event));
     expect(res.status).toBe(400);
   });
+
+  it('is idempotent: a Stripe retry for the same event does not mint a second gift', async () => {
+    const purchaserUid = USER_SUB;
+    const session = {
+      id: 'cs_test_gift_retry',
+      object: 'checkout.session',
+      payment_intent: 'pi_test_retry',
+      customer_email: 'buyer@example.com',
+      metadata: {
+        giftPurchase: 'true',
+        purchaserUid,
+        durationMonths: '3',
+        recipientEmail: 'recipient@example.com',
+      },
+    };
+    const event = {
+      id: 'evt_gift_retry',
+      type: 'checkout.session.completed',
+      data: { object: session },
+    };
+    const payload = JSON.stringify(event);
+    const header = makeStripeHeader(payload);
+
+    const first = await request(app)
+      .post('/billing/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', header)
+      .send(payload);
+    expect(first.status).toBe(200);
+    expect(first.body.duplicate).toBeUndefined();
+
+    const hashesAfterFirst = Object.keys(store).filter(k => k.startsWith('giftCodeHashes/'));
+    const sentAfterFirst = Object.keys(store).filter(k => k.startsWith(`users/${purchaserUid}/giftsSent/`));
+    expect(hashesAfterFirst.length).toBe(1);
+    expect(sentAfterFirst.length).toBe(1);
+
+    const second = await request(app)
+      .post('/billing/webhook')
+      .set('Content-Type', 'application/json')
+      .set('stripe-signature', header)
+      .send(payload);
+    expect(second.status).toBe(200);
+    expect(second.body.duplicate).toBe(true);
+
+    expect(Object.keys(store).filter(k => k.startsWith('giftCodeHashes/'))).toHaveLength(1);
+    expect(Object.keys(store).filter(k => k.startsWith(`users/${purchaserUid}/giftsSent/`))).toHaveLength(1);
+
+    // The dedup record carries the completed marker — proves failures (which
+    // never reach the set() call) cannot wedge subsequent retries.
+    expect(store[`stripeEvents/${event.id}`]?.status).toBe('completed');
+  });
 });
 
 // ── GET /rebates/categories ───────────────────────────────────────────────────
