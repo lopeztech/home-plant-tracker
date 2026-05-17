@@ -282,19 +282,25 @@ async function handleGiftPurchaseCompleted(db, session) {
   if (!purchaserUid) return;
   const durationMonths = parseInt(meta.durationMonths, 10) || 3;
 
+  // Deterministic giftId from the Stripe checkout session — makes the
+  // whole handler safe to retry. Stripe session IDs are unique per purchase.
+  const giftId = `gift_${session.id}`;
+  const giftRef = db.collection('gifts').doc(giftId);
+  const existing = await giftRef.get();
+  if (existing.exists) return;
+
   // Retry up to 3 times for a unique code.
   let code, codeHashed;
   for (let attempt = 0; attempt < 3; attempt++) {
     code = generateGiftCode();
     codeHashed = hashGiftCode(code);
-    const existing = await db.collection('giftCodeHashes').doc(codeHashed).get();
-    if (!existing.exists) break;
+    const collision = await db.collection('giftCodeHashes').doc(codeHashed).get();
+    if (!collision.exists) break;
     if (attempt === 2) throw new Error('Failed to generate a unique gift code');
   }
 
   const now = new Date().toISOString();
   const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  const giftId = `${purchaserUid.slice(0, 8)}-${Date.now()}`;
 
   const giftData = {
     code,
@@ -305,13 +311,17 @@ async function handleGiftPurchaseCompleted(db, session) {
     recipientName: meta.recipientName || null,
     tier: 'home_pro',
     durationMonths,
+    stripeCheckoutSessionId: session.id,
     stripePaymentIntentId: session.payment_intent || null,
     status: 'active',
     purchasedAt: now,
     expiresAt,
   };
 
-  await db.collection('gifts').doc(giftId).set(giftData);
+  // Order matters: write the hash + giftsSent first so the gift is
+  // redeemable end-to-end, then write the gifts/{giftId} doc last as
+  // the "completed" marker. If a partial failure happens between writes,
+  // the next webhook retry sees no gift doc and reruns to completion.
   await db.collection('giftCodeHashes').doc(codeHashed).set({ giftId });
   await db.collection('users').doc(purchaserUid).collection('giftsSent').doc(giftId).set({
     giftId, status: 'active', tier: 'home_pro', durationMonths,
@@ -319,6 +329,7 @@ async function handleGiftPurchaseCompleted(db, session) {
     recipientName: meta.recipientName || null,
     purchasedAt: now, expiresAt,
   });
+  await giftRef.set(giftData);
 }
 
 // ── Rebate catalog (loaded at boot; served from memory) ───────────────────────
@@ -367,11 +378,16 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (r
     return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
   }
 
-  // Idempotency — Stripe may retry; use event.id as the dedup key.
+  // Idempotency — Stripe retries on non-2xx. Only short-circuit on retries
+  // once the handler has FINISHED successfully (status='completed'). Both
+  // handlers below are safe to run more than once: applySubscriptionEvent
+  // uses merge-true writes on deterministic paths, and the gift handler
+  // early-exits if a gift for this checkout session already exists.
   const eventRef = db.collection('stripeEvents').doc(event.id);
   const seen = await eventRef.get();
-  if (seen.exists) return res.status(200).json({ received: true, duplicate: true });
-  await eventRef.set({ type: event.type, receivedAt: new Date().toISOString() });
+  if (seen.exists && seen.data()?.status === 'completed') {
+    return res.status(200).json({ received: true, duplicate: true });
+  }
 
   try {
     const obj = event.data?.object || {};
@@ -380,6 +396,11 @@ app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (r
     } else {
       await billing.applySubscriptionEvent(db, event);
     }
+    await eventRef.set({
+      type: event.type,
+      status: 'completed',
+      receivedAt: new Date().toISOString(),
+    });
     return res.status(200).json({ received: true });
   } catch (err) {
     return res.status(500).json({ error: err.message });
