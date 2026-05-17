@@ -190,14 +190,11 @@ jobs:
       - name: Upload to GCS
         run: gsutil cp "${{ env.ZIP_NAME }}" gs://${{ secrets.FUNCTION_SOURCE_BUCKET }}/${{ env.ZIP_NAME }}
 
-      - name: Persist latest source object name
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.PLATFORM_INFRA_TOKEN }}
-        run: |
-          gh secret set HOME_PLANT_TRACKER_FUNCTION_SOURCE_OBJECT \
-            --repo lopeztech/platform-infra \
-            --body "${{ env.ZIP_NAME }}"
+      # platform-infra resolves the function source by listing the bucket and picking
+      # the newest .zip (see lopeztech/platform-infra PR #60). The workflow_dispatch
+      # input below wins as an explicit override; the HOME_PLANT_TRACKER_FUNCTION_SOURCE_OBJECT
+      # secret in platform-infra is now only a bootstrap fallback for empty buckets,
+      # so we no longer need to push our ZIP name into that secret on every deploy.
 
       - name: Trigger platform-infra Terraform apply
         env:
