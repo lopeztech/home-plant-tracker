@@ -361,19 +361,22 @@ const { createTierGate } = require('./tierGate');
 const app = express();
 app.set('trust proxy', true); // Behind API Gateway — trust X-Forwarded-For
 
-// ── Stripe webhook — declared BEFORE app.use(express.json()) so we receive
-// the raw request body for signature verification. Signature is checked via
-// STRIPE_WEBHOOK_SECRET; the webhook deliberately has no api_key auth in the
-// API Gateway spec.
+// ── Stripe webhook — must use the raw request body for signature verification.
+// In production, @google-cloud/functions-framework parses JSON bodies before any
+// Express middleware runs, so `req.body` is already a parsed object. The framework
+// preserves the original bytes on `req.rawBody`. In unit tests the framework is
+// mocked out and express.raw() runs unimpeded, leaving the Buffer on `req.body`.
+// STRIPE_WEBHOOK_SECRET secures this endpoint; it has no api_key auth at the gateway.
 app.post('/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const stripe = billing.getStripe();
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!stripe || !secret) return res.status(503).json({ error: 'billing_disabled' });
 
   const sig = req.headers['stripe-signature'];
+  const rawPayload = req.rawBody || req.body;
   let event;
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, secret);
+    event = stripe.webhooks.constructEvent(rawPayload, sig, secret);
   } catch (err) {
     return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
   }
