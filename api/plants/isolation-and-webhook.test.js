@@ -413,22 +413,39 @@ describe('POST /billing/webhook', () => {
       expect(store['stripeEvents/evt_b']).toBeDefined();
     });
 
-    it('surfaces 500 when applySubscriptionEvent throws, but event is still recorded', async () => {
+    it('surfaces 500 when applySubscriptionEvent throws AND does not mark the event completed so Stripe retries can re-run the handler', async () => {
+      let throws = true;
+      const applySpy = vi.fn(async () => {
+        if (throws) throw new Error('firestore write failed');
+      });
       stripeConstructEventFn = () => ({ id: 'evt_err_1', type: 'customer.subscription.deleted', data: { object: {} } });
-      applySubscriptionEventFn = async () => { throw new Error('firestore write failed'); };
+      applySubscriptionEventFn = applySpy;
 
-      const res = await request(app)
+      const first = await request(app)
         .post('/billing/webhook')
         .set('stripe-signature', 't=1,v1=a')
         .set('Content-Type', 'application/json')
         .send({});
 
-      expect(res.status).toBe(500);
-      expect(res.body.error).toMatch(/firestore write failed/);
-      // Event is marked seen — Stripe will retry, which is the intended behavior;
-      // the duplicate guard will then short-circuit. This test documents that
-      // contract so future refactors don't accidentally un-record failed events.
-      expect(store['stripeEvents/evt_err_1']).toBeDefined();
+      expect(first.status).toBe(500);
+      expect(first.body.error).toMatch(/firestore write failed/);
+      // After a failed first delivery the dedup record must NOT be marked
+      // completed — otherwise every Stripe retry would short-circuit and the
+      // subscription doc would never be written. This was a real bug.
+      expect(store['stripeEvents/evt_err_1']?.status).not.toBe('completed');
+
+      // Simulate Stripe's retry succeeding now that the transient failure is gone.
+      throws = false;
+      const second = await request(app)
+        .post('/billing/webhook')
+        .set('stripe-signature', 't=1,v1=a')
+        .set('Content-Type', 'application/json')
+        .send({});
+
+      expect(second.status).toBe(200);
+      expect(second.body).toEqual({ received: true });
+      expect(applySpy).toHaveBeenCalledTimes(2);
+      expect(store['stripeEvents/evt_err_1']?.status).toBe('completed');
     });
   });
 });
