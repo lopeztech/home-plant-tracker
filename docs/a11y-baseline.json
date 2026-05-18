@@ -1,0 +1,507 @@
+{
+  "generatedAt": "2026-05-18T09:19:15.232Z",
+  "route": "/login",
+  "themes": [
+    "olive",
+    "earth",
+    "aurora",
+    "lunar",
+    "nebula",
+    "night",
+    "solar",
+    "storm",
+    "flare"
+  ],
+  "modes": [
+    "light",
+    "dark"
+  ],
+  "results": {
+    "olive": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "earth": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "aurora": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "lunar": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "nebula": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "night": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "solar": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "storm": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "flare": {
+      "light": {
+        "violationCount": 1,
+        "nodeCount": 7,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 7,
+            "samples": [
+              {
+                "target": ".text-center:nth-child(2) > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".mb-0",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 9.2pt (12.25px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-3.w-100.align-items-center > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".gap-4.flex-column.w-100 > p",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              },
+              {
+                "target": ".flex-grow-1 > .fs-sm",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.78 (foreground color: #7e8489, background color: #ffffff, font size: 8.2pt (10.9375px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      },
+      "dark": {
+        "violationCount": 1,
+        "nodeCount": 1,
+        "violations": [
+          {
+            "id": "color-contrast",
+            "impact": "serious",
+            "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+            "nodeCount": 1,
+            "samples": [
+              {
+                "target": ".btn-primary",
+                "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 3.3 (foreground color: #ffffff, background color: #43a047, font size: 8.7pt (11.55px), font weight: normal). Expected contrast ratio of 4.5:1"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
