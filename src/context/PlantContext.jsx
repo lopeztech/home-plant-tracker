@@ -34,9 +34,11 @@ export function PlantProvider({ children }) {
   const [plantsNextCursor, setPlantsNextCursor] = useState(null)
   const [plantsLoadingMore, setPlantsLoadingMore] = useState(false)
 
-  const PAGE_SIZE = 200
-  // Hard cap to prevent runaway requests if the cursor stream is misbehaving.
-  // 50 pages × 200 = 10,000 plants — well past any landscaper_pro library.
+  // Request every plant in a single round-trip — the backend caps at 5000
+  // (sanity bound). Asking for the cap keeps the response in paginated
+  // shape ({plants, hasMore, nextCursor}) so the drain helper stays
+  // available as a safety net if a future user exceeds the cap.
+  const PAGE_SIZE = 5000
   const MAX_AUTO_PAGES = 50
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
   const [activeFloorId, setActiveFloorId] = useState(null)
