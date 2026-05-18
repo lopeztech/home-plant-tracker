@@ -42,10 +42,14 @@ async function ensureBuilt() {
 
 async function startPreview() {
   console.log(`• Starting vite preview on :${PORT}`)
+  // detached:true gives the child its own process group so we can SIGKILL the
+  // whole tree later; without this, `npx → node → vite` leaves a grandchild
+  // running and CI waits for the orphan until job-timeout.
   const proc = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], {
     cwd: REPO_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, BROWSER: 'none' },
+    detached: true,
   })
   const deadline = Date.now() + 30_000
   while (Date.now() < deadline) {
@@ -57,8 +61,18 @@ async function startPreview() {
     }
     await sleep(250)
   }
-  proc.kill()
+  killTree(proc)
   throw new Error(`preview never responded on ${ORIGIN}`)
+}
+
+function killTree(proc) {
+  if (!proc || proc.killed) return
+  try {
+    // Negative PID targets the process group created by detached:true.
+    process.kill(-proc.pid, 'SIGKILL')
+  } catch {
+    try { proc.kill('SIGKILL') } catch { /* already gone */ }
+  }
 }
 
 async function auditOne(page, theme, mode) {
@@ -134,7 +148,7 @@ async function run() {
     console.log(`Total contrast-violation nodes across ${THEMES.length * MODES.length} permutations: ${total}`)
   } finally {
     await browser.close()
-    preview.kill()
+    killTree(preview)
   }
 }
 
