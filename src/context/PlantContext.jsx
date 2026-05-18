@@ -34,7 +34,10 @@ export function PlantProvider({ children }) {
   const [plantsNextCursor, setPlantsNextCursor] = useState(null)
   const [plantsLoadingMore, setPlantsLoadingMore] = useState(false)
 
-  const PAGE_SIZE = 50
+  const PAGE_SIZE = 200
+  // Hard cap to prevent runaway requests if the cursor stream is misbehaving.
+  // 50 pages × 200 = 10,000 plants — well past any landscaper_pro library.
+  const MAX_AUTO_PAGES = 50
   const [floors, setFloors] = useState(DEFAULT_FLOORS)
   const [activeFloorId, setActiveFloorId] = useState(null)
   const [isAnalysingFloorplan, setIsAnalysingFloorplan] = useState(false)
@@ -60,6 +63,7 @@ export function PlantProvider({ children }) {
         .then(({ flushed }) => {
           if (flushed > 0) plantsApi.list({ limit: PAGE_SIZE }).then(({ plants: p, hasMore, nextCursor }) => {
             setPlants(p); setPlantsHasMore(hasMore); setPlantsNextCursor(nextCursor)
+            if (hasMore && nextCursor) drainRemainingPages(nextCursor)
           }).catch(() => {})
         })
         .catch(() => {})
@@ -71,6 +75,10 @@ export function PlantProvider({ children }) {
       window.removeEventListener('online', goOnline)
       window.removeEventListener('offline', goOffline)
     }
+    // drainRemainingPages is referenced in goOnline but is stable across
+    // renders (useCallback with empty deps); intentionally omitted to avoid
+    // re-binding listeners on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isGuest])
 
   // Auto-mark every outdoor plant as watered once per rainy day.
@@ -110,6 +118,31 @@ export function PlantProvider({ children }) {
   const logoutRef = useRef(logout)
   useEffect(() => { logoutRef.current = logout }, [logout])
 
+  // Drain remaining pages in the background after the first page renders.
+  // Keeps time-to-first-paint fast while ensuring users with large libraries
+  // (>PAGE_SIZE plants) see every marker on the floorplan, not just the
+  // first page. Without this, anyone over the page size sees fewer plants
+  // than the server reports.
+  const drainRemainingPages = useCallback(async (firstCursor) => {
+    let cursor = firstCursor
+    let pages = 0
+    while (cursor && pages < MAX_AUTO_PAGES) {
+      try {
+        const { plants: more, hasMore, nextCursor } = await plantsApi.list({ limit: PAGE_SIZE, after: cursor })
+        setPlants((prev) => {
+          const seen = new Set(prev.map((p) => p.id))
+          return [...prev, ...more.filter((p) => !seen.has(p.id))]
+        })
+        setPlantsHasMore(hasMore)
+        setPlantsNextCursor(nextCursor)
+        cursor = hasMore ? nextCursor : null
+        pages += 1
+      } catch {
+        break
+      }
+    }
+  }, [])
+
   const reloadPlants = useCallback(() => {
     if (!isAuthenticated || isGuest) return Promise.resolve()
     setPlantsLoading(true)
@@ -120,6 +153,7 @@ export function PlantProvider({ children }) {
         setPlants(loaded)
         setPlantsHasMore(hasMore)
         setPlantsNextCursor(nextCursor)
+        if (hasMore && nextCursor) drainRemainingPages(nextCursor)
       })
       .catch((err) => {
         const friendly = toFriendlyError(err, { context: 'plants' })
@@ -146,19 +180,23 @@ export function PlantProvider({ children }) {
       .then(({ flushed }) => {
         if (flushed > 0) plantsApi.list({ limit: PAGE_SIZE }).then(({ plants: p, hasMore, nextCursor }) => {
           setPlants(p); setPlantsHasMore(hasMore); setPlantsNextCursor(nextCursor)
+          if (hasMore && nextCursor) drainRemainingPages(nextCursor)
         }).catch(() => {})
       })
       .catch(() => {})
 
     return Promise.all([loadPlants, loadFloors]).finally(() => setPlantsLoading(false))
-  }, [isAuthenticated, isGuest])
+  }, [isAuthenticated, isGuest, drainRemainingPages])
 
   const loadMorePlants = useCallback(async () => {
     if (!plantsHasMore || plantsLoadingMore || !plantsNextCursor) return
     setPlantsLoadingMore(true)
     try {
       const { plants: more, hasMore, nextCursor } = await plantsApi.list({ limit: PAGE_SIZE, after: plantsNextCursor })
-      setPlants((prev) => [...prev, ...more])
+      setPlants((prev) => {
+        const seen = new Set(prev.map((p) => p.id))
+        return [...prev, ...more.filter((p) => !seen.has(p.id))]
+      })
       setPlantsHasMore(hasMore)
       setPlantsNextCursor(nextCursor)
     } catch {
