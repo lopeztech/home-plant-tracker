@@ -2926,7 +2926,9 @@ app.get('/plants', requireUser, async (req, res) => {
     const after    = req.query.after || null;
     const propertyId = req.query.propertyId || null;
     const paginated = rawLimit !== null || after !== null;
-    const limit = rawLimit ? Math.min(rawLimit, 200) : 200;
+    // Sanity cap of 5000 — large enough for any realistic plant library, small
+    // enough to prevent runaway responses if a buggy client passes 1e9.
+    const limit = rawLimit ? Math.min(rawLimit, 5000) : 5000;
 
     let query = userPlants(req.userId).orderBy('createdAt', 'desc').limit(limit + 1);
     if (after) query = query.startAfter(after);
