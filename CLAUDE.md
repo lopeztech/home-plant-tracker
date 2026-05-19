@@ -314,6 +314,7 @@ All HTTP handlers in **`index.js`** (~4000 lines). Supporting modules: `billing.
 - `BILLING_ENABLED` — `'true'` to activate tier/quota enforcement; anything else makes `requireTier` and `checkQuota` no-ops (dark-ship switch)
 - `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`
 - `STRIPE_PRICE_*_MONTHLY`, `STRIPE_PRICE_*_ANNUAL` — per-tier price IDs
+- `STRIPE_PRICE_FAMILY_MONTHLY`, `STRIPE_PRICE_FAMILY_ANNUAL` — Family Plan add-on price IDs (see `docs/family-plan-activation.md`)
 
 Injected by Terraform / Cloud Run. Not needed for unit tests (mocked).
 
@@ -357,7 +358,7 @@ Sub-collections (all under a plant doc): `soilTests`, `amendments`, `substrateCh
 - `branding` — (landscaper_pro only) `businessName`, `primaryColor` (hex), `logoUrl` (signed), contact info
 
 ### Subscription — `users/{userId}/subscription/current`
-`tier`, `status` (active/trialing/past_due/cancelled), `currentPeriodStart`, `currentPeriodEnd`, `cancelAtPeriodEnd`, `stripeCustomerId`, `stripeSubscriptionId`, `usage: { plants, ai_analyses, photo_storage_mb }`.
+`tier`, `status` (active/trialing/past_due/cancelled), `currentPeriodStart`, `currentPeriodEnd`, `cancelAtPeriodEnd`, `stripeCustomerId`, `stripeSubscriptionId`, `usage: { plants, ai_analyses, photo_storage_mb }`, `addons: { family?: true }` (add-on map populated from Stripe `subscription_items`; `family` lifts `household_members` quota from 1 → 5 when `appliesTo` matches the active tier).
 
 ### API keys — `users/{userId}/apiKeys/{id}` + `apiKeyHashes/{hash}` (top-level lookup)
 Hash-only storage; plaintext key displayed once on creation.
@@ -365,11 +366,13 @@ Hash-only storage; plaintext key displayed once on creation.
 ## Billing & tier gating
 
 `api/plants/billing.js` — `TIERS`:
-| Tier | Level | Plants | AI analyses/mo | Photos | Properties | Team |
-|---|---|---|---|---|---|---|
-| `free` | 0 | 10 | 5 | 50 MB | 1 | 0 |
-| `home_pro` | 1 | ∞ | ∞ | 2 GB | 1 | 0 |
-| `landscaper_pro` | 2 | ∞ | ∞ | 10 GB | ∞ | 10 |
+| Tier | Level | Plants | AI analyses/mo | Photos | Properties | Team | Household |
+|---|---|---|---|---|---|---|---|
+| `free` | 0 | 10 | 5 | 50 MB | 1 | 0 | 1 |
+| `home_pro` | 1 | ∞ | ∞ | 2 GB | 3 | 0 | 1 (5 with `family` add-on) |
+| `landscaper_pro` | 2 | ∞ | ∞ | 10 GB | ∞ | 10 | 10 |
+
+**Add-ons (`billing.ADDONS`)** — paid extensions layered onto a base tier as extra Stripe `subscription_items`. Lift specific quotas without changing the tier itself. `family` (`$4.99/mo` or `$49/yr`) attaches to `home_pro` and raises `household_members` to 5. Backend wiring shipped in #411; UI prompt + member-cap enforcement land in follow-ups. See `docs/family-plan-activation.md` for one-time Stripe setup.
 
 `getCurrentTier(db, userId)` resolves from Firestore subscription doc. Past-due within a 7-day grace still returns stored tier; after that → `free`. `BILLING_ENABLED !== 'true'` short-circuits everything to free and no-ops the middlewares — **this is the dark-ship switch**.
 

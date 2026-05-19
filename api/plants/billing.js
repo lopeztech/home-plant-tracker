@@ -12,6 +12,7 @@ const TIERS = {
       photo_storage_mb:  50,
       properties:        1,
       team_members:      0,
+      household_members: 1,
     },
   },
   home_pro: {
@@ -22,6 +23,7 @@ const TIERS = {
       photo_storage_mb:  2048,
       properties:        3,
       team_members:      0,
+      household_members: 1,
     },
   },
   landscaper_pro: {
@@ -32,11 +34,29 @@ const TIERS = {
       photo_storage_mb:  10240,
       properties:        Infinity,
       team_members:      10,
+      household_members: 10,
     },
   },
 };
 
 const TIER_ORDER = ['free', 'home_pro', 'landscaper_pro'];
+
+// ── Add-ons ──────────────────────────────────────────────────────────────────
+// Add-ons are paid extensions attached to an existing subscription as extra
+// `subscription_items` on the Stripe side. They lift specific quotas on the
+// base tier (rather than upgrading the tier itself). #411 Family Plan v1.
+//
+// `priceEnv` lookups mirror PRICE_ENV for base tiers in index.js so manual
+// activation (docs/family-plan-activation.md) follows the same pattern as
+// the original Stripe activation flow (#239).
+
+const ADDONS = {
+  family: {
+    appliesTo:    ['home_pro'],            // base tier(s) that can attach it
+    quotaOverrides: { household_members: 5 },
+    priceEnv:     { month: 'STRIPE_PRICE_FAMILY_MONTHLY', year: 'STRIPE_PRICE_FAMILY_ANNUAL' },
+  },
+};
 
 function billingEnabled() {
   return process.env.BILLING_ENABLED === 'true';
@@ -110,6 +130,48 @@ function tierQuota(tier, quotaType) {
   return TIERS[tier]?.quotas?.[quotaType] ?? 0;
 }
 
+// ── Add-on resolution ────────────────────────────────────────────────────────
+
+/**
+ * Returns the active add-on names attached to the user's subscription.
+ * Reads `subscription.addons` (object map of name → true/false) — entries
+ * present and truthy are considered active. An add-on whose base tier is no
+ * longer met (e.g. user downgraded from home_pro to free) is filtered out
+ * so it cannot leak benefits into a lower tier.
+ */
+async function getActiveAddons(db, userId) {
+  if (!billingEnabled()) return [];
+  const sub = await readSubscription(db, userId);
+  if (!sub?.addons) return [];
+  const tier = await getCurrentTier(db, userId);
+  return Object.keys(sub.addons)
+    .filter((name) => sub.addons[name] && ADDONS[name])
+    .filter((name) => ADDONS[name].appliesTo.includes(tier));
+}
+
+async function hasAddon(db, userId, name) {
+  const active = await getActiveAddons(db, userId);
+  return active.includes(name);
+}
+
+/**
+ * Returns the user's effective quotas after applying any active add-ons.
+ * Add-on overrides take the MAX of the base tier quota and the add-on's
+ * quota value, so attaching an add-on never reduces a quota.
+ */
+function effectiveQuotas(tier, addonNames = []) {
+  const base = TIERS[tier]?.quotas || {};
+  const out = { ...base };
+  for (const name of addonNames) {
+    const addon = ADDONS[name];
+    if (!addon) continue;
+    for (const [key, val] of Object.entries(addon.quotaOverrides || {})) {
+      out[key] = Math.max(out[key] ?? 0, val);
+    }
+  }
+  return out;
+}
+
 // ── Usage counters ──────────────────────────────────────────────────────────
 
 function monthKey(d = new Date()) {
@@ -165,17 +227,22 @@ async function applySubscriptionEvent(db, event) {
     userId = obj.client_reference_id || null;
     stripeCustomerId = obj.customer || null;
     const tier = obj.metadata?.tier || null;
+    const addonsFromMetadata = parseAddonsMetadata(obj.metadata?.addons);
     if (userId && stripeCustomerId) {
       await db.collection('stripeCustomers').doc(stripeCustomerId).set({
         userId, updatedAt: new Date().toISOString(),
       }, { merge: true });
-      await db.collection('users').doc(userId).collection('subscription').doc('current').set({
+      const subWrite = {
         tier,
         stripeCustomerId,
         stripeSubscriptionId: obj.subscription || null,
         status: 'active',
         updatedAt: new Date().toISOString(),
-      }, { merge: true });
+      };
+      if (addonsFromMetadata) subWrite.addons = addonsFromMetadata;
+      await db.collection('users').doc(userId).collection('subscription').doc('current').set(
+        subWrite, { merge: true },
+      );
     }
     return;
   }
@@ -196,6 +263,13 @@ async function applySubscriptionEvent(db, event) {
     if (obj.current_period_end) update.currentPeriodEnd = new Date(obj.current_period_end * 1000).toISOString();
     if (typeof obj.cancel_at_period_end === 'boolean') update.cancelAtPeriodEnd = obj.cancel_at_period_end;
     if (obj.metadata?.tier) update.tier = obj.metadata.tier;
+
+    // Re-derive add-ons from the live subscription items so add/remove via the
+    // Stripe Customer Portal flows through without needing a fresh checkout.
+    const itemList = obj.items?.data || [];
+    if (itemList.length > 0) {
+      update.addons = deriveAddonsFromItems(itemList);
+    }
   } else if (event.type === 'invoice.payment_failed') {
     update.status = 'past_due';
   } else if (event.type === 'invoice.payment_succeeded') {
@@ -205,20 +279,52 @@ async function applySubscriptionEvent(db, event) {
   await ref.set(update, { merge: true });
 }
 
+// ── Add-on helpers ───────────────────────────────────────────────────────────
+
+// Parse the `addons` checkout-session metadata field into a Firestore-shaped
+// map (e.g. "family,bonus" → { family: true, bonus: true }).
+function parseAddonsMetadata(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const names = raw.split(',').map((s) => s.trim()).filter(Boolean);
+  if (names.length === 0) return null;
+  return Object.fromEntries(names.map((n) => [n, true]));
+}
+
+// Inspect a `subscription.items.data` array and return a Firestore-shaped
+// add-on map, matching priceIds against ADDONS[*].priceEnv values. The same
+// shape used by parseAddonsMetadata so reads downstream don't branch.
+function deriveAddonsFromItems(items) {
+  const out = {};
+  for (const [name, addon] of Object.entries(ADDONS)) {
+    const envVars = Object.values(addon.priceEnv || {});
+    const priceIds = envVars.map((v) => process.env[v]).filter(Boolean);
+    if (priceIds.length === 0) continue;
+    const matched = items.some((it) => priceIds.includes(it?.price?.id));
+    if (matched) out[name] = true;
+  }
+  return out;
+}
+
 module.exports = {
   TIERS,
   TIER_ORDER,
+  ADDONS,
   billingEnabled,
   getStripe,
   readSubscription,
   getCurrentTier,
   tierMeetsMinimum,
   tierQuota,
+  getActiveAddons,
+  hasAddon,
+  effectiveQuotas,
   countPlants,
   countProperties,
   readAiAnalysesUsage,
   incrementAiAnalyses,
   readStorageUsageMb,
   applySubscriptionEvent,
+  parseAddonsMetadata,
+  deriveAddonsFromItems,
   monthKey,
 };

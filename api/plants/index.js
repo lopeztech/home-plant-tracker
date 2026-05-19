@@ -745,12 +745,31 @@ app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
   const stripe = billing.getStripe();
   if (!stripe) return res.status(503).json({ error: 'billing_disabled' });
   try {
-    const { tier, interval = 'month', successUrl, cancelUrl } = req.body || {};
+    const { tier, interval = 'month', successUrl, cancelUrl, addons = [] } = req.body || {};
     if (!PRICE_ENV[tier] || !PRICE_ENV[tier][interval]) {
       return res.status(400).json({ error: 'Invalid tier/interval' });
     }
     const priceId = process.env[PRICE_ENV[tier][interval]];
     if (!priceId) return res.status(500).json({ error: `Price ID env var ${PRICE_ENV[tier][interval]} is not configured` });
+
+    // Resolve add-on line items. An add-on is rejected if it isn't applicable
+    // to the requested base tier; missing env vars surface as 500 the same way
+    // base-tier prices do.
+    const lineItems = [{ price: priceId, quantity: 1 }];
+    const validatedAddons = [];
+    if (Array.isArray(addons)) {
+      for (const name of addons) {
+        const addon = billing.ADDONS[name];
+        if (!addon)                          return res.status(400).json({ error: `Unknown add-on: ${name}` });
+        if (!addon.appliesTo.includes(tier)) return res.status(400).json({ error: `Add-on ${name} not available on ${tier}` });
+        const envVar = addon.priceEnv?.[interval];
+        if (!envVar)                         return res.status(400).json({ error: `Add-on ${name} not available on ${interval} interval` });
+        const addonPriceId = process.env[envVar];
+        if (!addonPriceId)                   return res.status(500).json({ error: `Price ID env var ${envVar} is not configured` });
+        lineItems.push({ price: addonPriceId, quantity: 1 });
+        validatedAddons.push(name);
+      }
+    }
 
     // Reuse an existing Stripe Customer if the user already has one.
     const existing = await billing.readSubscription(db, req.userId);
@@ -760,15 +779,18 @@ app.post('/billing/create-checkout-session', requireUser, async (req, res) => {
       customerId = customer.id;
     }
 
+    const metadata = { userId: req.userId, tier };
+    if (validatedAddons.length > 0) metadata.addons = validatedAddons.join(',');
+
     const session = await stripe.checkout.sessions.create({
       mode:                  'subscription',
       customer:              customerId,
       client_reference_id:   req.userId,
-      line_items:            [{ price: priceId, quantity: 1 }],
+      line_items:            lineItems,
       success_url:           successUrl || `${process.env.BILLING_SUCCESS_URL || 'https://plants.lopezcloud.dev'}/settings/billing?status=success`,
       cancel_url:            cancelUrl  || `${process.env.BILLING_CANCEL_URL  || 'https://plants.lopezcloud.dev'}/pricing?status=cancelled`,
-      subscription_data:     { metadata: { userId: req.userId, tier } },
-      metadata:              { userId: req.userId, tier },
+      subscription_data:     { metadata },
+      metadata,
     });
     return res.status(200).json({ url: session.url, id: session.id });
   } catch (err) {
@@ -796,10 +818,11 @@ app.get('/billing/subscription', requireUser, async (req, res) => {
   try {
     const tier = await billing.getCurrentTier(db, req.userId);
     const sub  = await billing.readSubscription(db, req.userId);
-    const [plantsCount, aiAnalyses, storageMb] = await Promise.all([
+    const [plantsCount, aiAnalyses, storageMb, addons] = await Promise.all([
       billing.countPlants(db, req.userId),
       billing.readAiAnalysesUsage(db, req.userId),
       billing.readStorageUsageMb(db, req.userId),
+      billing.getActiveAddons(db, req.userId),
     ]);
     const trialDaysRemaining = sub?.isTrial && sub?.trialEnd
       ? Math.max(0, Math.ceil((new Date(sub.trialEnd).getTime() - Date.now()) / 86400000))
@@ -813,7 +836,8 @@ app.get('/billing/subscription', requireUser, async (req, res) => {
       isTrial:           sub?.isTrial || false,
       trialDaysRemaining,
       hasStripeCustomer: Boolean(sub?.stripeCustomerId),
-      quotas: billing.TIERS[tier].quotas,
+      addons,
+      quotas:            billing.effectiveQuotas(tier, addons),
       usage: {
         plants:           plantsCount,
         ai_analyses:      aiAnalyses,
