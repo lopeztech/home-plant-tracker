@@ -321,3 +321,42 @@
     min-width: 0;
   }
 }
+
+/* ── Mobile PlantModal (#401 PR 2) ────────────────────────────────────────
+
+   Active-tab underline indicator: 2px bar pinned to the bottom of the
+   selected nav-link. Framer Motion's `layoutId` morphs the bar between
+   tabs with a spring, so we only need it absolutely positioned within a
+   relative-positioned button. Tabs that aren't selected don't render the
+   indicator span at all.
+
+   The pill below the panels is a fallback affordance for users who don't
+   discover horizontal swipe between tabs. */
+.plant-mobile-tab {
+  position: relative;
+}
+
+.plant-mobile-tab-indicator {
+  position: absolute;
+  left: 0.5rem;
+  right: 0.5rem;
+  bottom: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--bs-primary, currentColor);
+  pointer-events: none;
+}
+
+.plant-mobile-tab-pill {
+  background: var(--bs-tertiary-bg, var(--bs-body-bg));
+}
+
+.plant-mobile-tab-pill .btn {
+  /* Drop the default link colour so disabled-state contrast works against
+     the lighter pill background. */
+  color: var(--bs-link-color);
+}
+
+.plant-mobile-tab-pill .btn:disabled {
+  color: var(--bs-secondary-color);
+}

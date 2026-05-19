@@ -1,6 +1,6 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { MemoryRouter } from 'react-router'
 import PlantModal from '../components/PlantModal.jsx'
 import { measurementsApi, phenologyApi, journalApi } from '../api/plants.js'
@@ -948,6 +948,129 @@ describe('PlantModal', () => {
     fireEvent.click(tab('Watering'))
     fireEvent.keyDown(tab('Watering'), { key: 'ArrowUp' })
     expect(tab('Plant')).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+// ── Mobile sheet V2: swipe + indicator + tab pill (#401 PR 2) ─────────────────
+
+describe('PlantModal — mobile sheet V2 (swipeable tabs)', () => {
+  // The mobile-only affordances (reorder, indicator, prev/next pill, swipe
+  // wrapper) gate on `useSheet`, which is `!embedded && isMobile && v2Flag`.
+  // We mock matchMedia + the env flag so the render path matches what users
+  // see at <768px with VITE_PLANT_MODAL_V2='true' set at build time.
+  let originalMatchMedia
+  let originalFlag
+  beforeEach(() => {
+    vi.clearAllMocks()
+    originalMatchMedia = window.matchMedia
+    window.matchMedia = (query) => ({
+      matches: query === '(max-width: 767px)',
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    })
+    originalFlag = import.meta.env.VITE_PLANT_MODAL_V2
+    import.meta.env.VITE_PLANT_MODAL_V2 = 'true'
+  })
+  afterEach(() => {
+    window.matchMedia = originalMatchMedia
+    import.meta.env.VITE_PLANT_MODAL_V2 = originalFlag
+  })
+
+  const tab = (name) => screen.getByRole('tab', { name })
+
+  it('reorders the tab strip so Health sits before Growth on mobile', () => {
+    renderModal({ plant: existingPlant })
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent.trim())
+    // Plant must remain first (matches default activeTab and the desktop
+    // contract). After reorder, Health rides up to position 4 — ahead of
+    // Growth/Journal — because users check health more than they record growth.
+    expect(tabs[0]).toBe('Plant')
+    expect(tabs.indexOf('Health')).toBeLessThan(tabs.indexOf('Growth'))
+    expect(tabs.indexOf('Health')).toBeLessThan(tabs.indexOf('Journal'))
+  })
+
+  it('renders the spring-physics indicator only on the active tab', () => {
+    const { container } = renderModal({ plant: existingPlant })
+    const indicators = container.querySelectorAll('.plant-mobile-tab-indicator')
+    expect(indicators.length).toBe(1)
+    // The indicator should live inside the active tab button.
+    expect(tab('Plant')).toContainElement(indicators[0])
+  })
+
+  it('moves the indicator into the newly-selected tab on click', () => {
+    const { container } = renderModal({ plant: existingPlant })
+    fireEvent.click(tab('Watering'))
+    const indicators = container.querySelectorAll('.plant-mobile-tab-indicator')
+    expect(indicators.length).toBe(1)
+    expect(tab('Watering')).toContainElement(indicators[0])
+    expect(tab('Plant')).not.toContainElement(indicators[0])
+  })
+
+  it('exposes a prev/next pill labelled "Plant tab pager"', () => {
+    renderModal({ plant: existingPlant })
+    const pager = screen.getByRole('navigation', { name: /plant tab pager/i })
+    expect(pager).toBeInTheDocument()
+  })
+
+  it('disables Prev on the first tab and Next on the last tab', () => {
+    renderModal({ plant: existingPlant })
+    const pager = screen.getByRole('navigation', { name: /plant tab pager/i })
+    const prev = pager.querySelector('button:first-of-type')
+    expect(prev).toBeDisabled()
+
+    // Jump to the last tab via End — the keyboard-roving handler.
+    fireEvent.keyDown(tab('Plant'), { key: 'End' })
+    const next = pager.querySelector('button:last-of-type')
+    expect(next).toBeDisabled()
+  })
+
+  it('advances to the next tab when the pill Next button is clicked', () => {
+    renderModal({ plant: existingPlant })
+    // Order is Plant → Watering on mobile.
+    expect(tab('Plant')).toHaveAttribute('aria-selected', 'true')
+    const pager = screen.getByRole('navigation', { name: /plant tab pager/i })
+    fireEvent.click(pager.querySelector('button:last-of-type'))
+    expect(tab('Watering')).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('shows the tab count in the pager (current / total)', () => {
+    renderModal({ plant: existingPlant })
+    const pager = screen.getByRole('navigation', { name: /plant tab pager/i })
+    // The middle counter must report "1 / N" while on the first tab.
+    expect(pager.textContent).toMatch(/1\s*\/\s*\d+/)
+  })
+
+  it('does not reorder tabs when not embedded but viewport is desktop (matchMedia=false)', () => {
+    // Override the beforeEach matchMedia mock for this test only.
+    window.matchMedia = (query) => ({
+      matches: false,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      onchange: null,
+      dispatchEvent: () => false,
+    })
+    renderModal({ plant: existingPlant })
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent.trim())
+    // Desktop order: Plant → Watering → Care → Growth → … (Health near the end).
+    expect(tabs[0]).toBe('Plant')
+    expect(tabs[1]).toBe('Watering')
+    expect(tabs[2]).toBe('Care')
+    expect(tabs[3]).toBe('Growth')
+    // And the pager pill must NOT render on desktop.
+    expect(screen.queryByRole('navigation', { name: /plant tab pager/i })).not.toBeInTheDocument()
+  })
+
+  it('does not render the pager when embedded (page route reuses PlantModal)', () => {
+    renderModal({ plant: existingPlant, embedded: true })
+    expect(screen.queryByRole('navigation', { name: /plant tab pager/i })).not.toBeInTheDocument()
   })
 })
 
