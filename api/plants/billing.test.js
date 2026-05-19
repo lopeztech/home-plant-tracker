@@ -197,6 +197,101 @@ describe('billing.applySubscriptionEvent', () => {
   });
 });
 
+describe('billing add-ons (#411)', () => {
+  beforeEach(() => {
+    process.env.BILLING_ENABLED = 'true';
+    process.env.STRIPE_PRICE_FAMILY_MONTHLY = 'price_fam_m';
+    process.env.STRIPE_PRICE_FAMILY_ANNUAL  = 'price_fam_y';
+  });
+
+  it('exposes the family add-on definition with home_pro applicability', () => {
+    expect(billing.ADDONS.family).toMatchObject({
+      appliesTo: ['home_pro'],
+      quotaOverrides: { household_members: 5 },
+    });
+  });
+
+  it('parseAddonsMetadata splits a comma-separated metadata string', () => {
+    expect(billing.parseAddonsMetadata('family')).toEqual({ family: true });
+    expect(billing.parseAddonsMetadata('family,foo')).toEqual({ family: true, foo: true });
+    expect(billing.parseAddonsMetadata('')).toBeNull();
+    expect(billing.parseAddonsMetadata(null)).toBeNull();
+  });
+
+  it('deriveAddonsFromItems matches Stripe items against ADDONS priceEnv', () => {
+    const items = [{ price: { id: 'price_home_pro' } }, { price: { id: 'price_fam_m' } }];
+    expect(billing.deriveAddonsFromItems(items)).toEqual({ family: true });
+  });
+
+  it('getActiveAddons returns family when stored and tier is home_pro', async () => {
+    const db = makeDb({
+      'users/u1/subscription/current': {
+        tier: 'home_pro', status: 'active', addons: { family: true },
+      },
+    });
+    expect(await billing.getActiveAddons(db, 'u1')).toEqual(['family']);
+    expect(await billing.hasAddon(db, 'u1', 'family')).toBe(true);
+  });
+
+  it('getActiveAddons filters out addons whose appliesTo no longer matches', async () => {
+    // User cancelled home_pro → tier resolves to free, family should not leak.
+    const db = makeDb({
+      'users/u1/subscription/current': {
+        tier: 'home_pro', status: 'canceled', addons: { family: true },
+      },
+    });
+    expect(await billing.getActiveAddons(db, 'u1')).toEqual([]);
+  });
+
+  it('getActiveAddons is empty when billing is disabled', async () => {
+    process.env.BILLING_ENABLED = 'false';
+    const db = makeDb({
+      'users/u1/subscription/current': {
+        tier: 'home_pro', status: 'active', addons: { family: true },
+      },
+    });
+    expect(await billing.getActiveAddons(db, 'u1')).toEqual([]);
+  });
+
+  it('effectiveQuotas lifts household_members from 1 to 5 with family add-on', () => {
+    expect(billing.effectiveQuotas('home_pro').household_members).toBe(1);
+    expect(billing.effectiveQuotas('home_pro', ['family']).household_members).toBe(5);
+  });
+
+  it('effectiveQuotas never reduces a quota below the tier baseline', () => {
+    // landscaper_pro baseline is 10 — family addon's 5 must NOT override down.
+    const q = billing.effectiveQuotas('landscaper_pro', ['family']);
+    expect(q.household_members).toBe(10);
+  });
+
+  it('applySubscriptionEvent persists addons from checkout metadata', async () => {
+    const db = makeDb();
+    await billing.applySubscriptionEvent(db, {
+      type: 'checkout.session.completed',
+      data: { object: {
+        client_reference_id: 'u1', customer: 'cus_test', subscription: 'sub_test',
+        metadata: { tier: 'home_pro', addons: 'family' },
+      }},
+    });
+    expect(db._store['users/u1/subscription/current'].addons).toEqual({ family: true });
+  });
+
+  it('applySubscriptionEvent re-derives addons from live subscription items', async () => {
+    const db = makeDb({
+      'stripeCustomers/cus_test': { userId: 'u1' },
+      'users/u1/subscription/current': { tier: 'home_pro', status: 'active', stripeCustomerId: 'cus_test' },
+    });
+    await billing.applySubscriptionEvent(db, {
+      type: 'customer.subscription.updated',
+      data: { object: {
+        id: 'sub_test', customer: 'cus_test', status: 'active',
+        items: { data: [{ price: { id: 'price_home_pro' } }, { price: { id: 'price_fam_m' } }] },
+      }},
+    });
+    expect(db._store['users/u1/subscription/current'].addons).toEqual({ family: true });
+  });
+});
+
 describe('billing.countPlants + ai_analyses usage', () => {
   it('counts plants under users/{uid}/plants', async () => {
     const db = makeDb({
