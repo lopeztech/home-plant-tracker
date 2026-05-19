@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo, useContext } from 'react'
 import { Link } from 'react-router'
 import { Modal, Button, Form, Badge, Spinner, Row, Col, Pagination, Accordion } from 'react-bootstrap'
+import { motion } from 'framer-motion'
 import ImageAnalyser from './ImageAnalyser.jsx'
 import PlantQRTag from './PlantQRTag.jsx'
 import WateringSheet from './WateringSheet.jsx'
@@ -9,6 +10,7 @@ import LifecycleTab from './LifecycleTab.jsx'
 import BloomTab from './BloomTab.jsx'
 import PlantSheet from './PlantSheet.jsx'
 import { useMediaQuery } from '../hooks/useMediaQuery.js'
+import { SPRING } from '../motion/tokens.js'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, wildlifeApi, incidentApi, dormancyApi } from '../api/plants.js'
 import HardinessBadge from './HardinessBadge.jsx'
 import LuxMeterButton from './LuxMeterButton.jsx'
@@ -280,6 +282,39 @@ const MOBILE_SHEET_QUERY = '(max-width: 767px)'
 // Framer Motion bottom sheet rather than React-Bootstrap's modal.
 function isPlantSheetEnabled() {
   try { return import.meta.env?.VITE_PLANT_MODAL_V2 === 'true' } catch { return false }
+}
+
+// Mobile tab order (#401 PR 2). Most-frequently used surfaces ride to the
+// front of the strip so the daily logging path fits without horizontal
+// scroll on a 360px viewport; rarely-used tabs (Blooms, Lifecycle, Wildlife)
+// move to the tail. Desktop modal + embedded page keep the existing order.
+const MOBILE_TAB_ORDER = [
+  'edit', 'watering', 'care', 'health', 'growth', 'journal',
+  'soil', 'harvest', 'blooms', 'lifecycle', 'wildlife',
+]
+
+// Swipe gesture thresholds — either far-enough drag or fast-enough flick
+// switches to the adjacent tab. Tuned so a deliberate one-thumb swipe always
+// triggers, but ordinary vertical scroll never does.
+const TAB_SWIPE_DISTANCE_PX = 80
+const TAB_SWIPE_VELOCITY = 400
+
+// Wraps the tab-panel siblings with a horizontal-drag motion container only
+// when the mobile sheet is active. On desktop / embedded view we render a
+// plain fragment so the existing DOM (and its CSS) is untouched.
+function PanelSwipeWrapper({ enabled, onDragEnd, children }) {
+  if (!enabled) return children
+  return (
+    <motion.div
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.15}
+      onDragEnd={onDragEnd}
+      style={{ touchAction: 'pan-y' }}
+    >
+      {children}
+    </motion.div>
+  )
 }
 
 export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onMoisture, onClose, embedded = false, initialTab, onTabChange, onDirtyChange }) {
@@ -590,21 +625,46 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
   const isEdiblePlant = form.category === 'edible'
 
   const TABS = useMemo(
-    () => [
-      { id: 'edit', label: 'Plant' },
-      { id: 'watering', label: 'Watering' },
-      { id: 'care', label: 'Care' },
-      { id: 'growth', label: 'Growth' },
-      { id: 'journal', label: 'Journal' },
-      ...(isEditing ? [{ id: 'blooms', label: 'Blooms' }] : []),
-      ...(isEditing ? [{ id: 'lifecycle', label: 'Lifecycle' }] : []),
-      ...(isEditing ? [{ id: 'soil', label: 'Soil' }] : []),
-      ...(isEdiblePlant ? [{ id: 'harvest', label: 'Harvest' }] : []),
-      ...(isEditing ? [{ id: 'health', label: 'Health' }] : []),
-      ...(isEditing ? [{ id: 'wildlife', label: 'Wildlife' }] : []),
-    ],
-    [isEdiblePlant, isEditing],
+    () => {
+      const base = [
+        { id: 'edit', label: 'Plant' },
+        { id: 'watering', label: 'Watering' },
+        { id: 'care', label: 'Care' },
+        { id: 'growth', label: 'Growth' },
+        { id: 'journal', label: 'Journal' },
+        ...(isEditing ? [{ id: 'blooms', label: 'Blooms' }] : []),
+        ...(isEditing ? [{ id: 'lifecycle', label: 'Lifecycle' }] : []),
+        ...(isEditing ? [{ id: 'soil', label: 'Soil' }] : []),
+        ...(isEdiblePlant ? [{ id: 'harvest', label: 'Harvest' }] : []),
+        ...(isEditing ? [{ id: 'health', label: 'Health' }] : []),
+        ...(isEditing ? [{ id: 'wildlife', label: 'Wildlife' }] : []),
+      ]
+      if (!useSheet) return base
+      // Mobile sheet: reorder by MOBILE_TAB_ORDER, preserving only the tabs
+      // that are actually visible for this plant (e.g. Harvest is edibles-only).
+      const byId = new Map(base.map((t) => [t.id, t]))
+      return MOBILE_TAB_ORDER.map((id) => byId.get(id)).filter(Boolean)
+    },
+    [isEdiblePlant, isEditing, useSheet],
   )
+
+  // Index of the active tab in the (possibly reordered) TABS list — used by
+  // the swipe handler and the prev/next pill so they share one source of truth.
+  const activeTabIndex = TABS.findIndex((t) => t.id === activeTab)
+  const prevTab = activeTabIndex > 0 ? TABS[activeTabIndex - 1] : null
+  const nextTab = activeTabIndex >= 0 && activeTabIndex < TABS.length - 1 ? TABS[activeTabIndex + 1] : null
+
+  const handlePanelDragEnd = useCallback((_, info) => {
+    const distance = info?.offset?.x ?? 0
+    const velocity = info?.velocity?.x ?? 0
+    if (distance < -TAB_SWIPE_DISTANCE_PX || velocity < -TAB_SWIPE_VELOCITY) {
+      if (nextTab) setActiveTab(nextTab.id)
+    } else if (distance > TAB_SWIPE_DISTANCE_PX || velocity > TAB_SWIPE_VELOCITY) {
+      if (prevTab) setActiveTab(prevTab.id)
+    }
+  }, [nextTab, prevTab, setActiveTab])
+
+  const panelSwipeEnabled = useSheet && isEditing && TABS.length > 1
 
   const handleDormancyEnter = useCallback(async () => {
     setDormancyLoading(true); setDormancyError(null)
@@ -1009,17 +1069,31 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
                   aria-selected={selected}
                   aria-controls={`plant-tabpanel-${tab.id}`}
                   tabIndex={selected ? 0 : -1}
-                  className={`nav-link${selected ? ' active' : ''}${embedded ? ' text-start' : ''}`}
+                  className={`nav-link${selected ? ' active' : ''}${embedded ? ' text-start' : ''}${useSheet ? ' plant-mobile-tab' : ''}`}
                   onClick={() => setActiveTab(tab.id)}
                   onKeyDown={(e) => handleTabKeyDown(e, i)}
                 >
                   {tab.label}
+                  {selected && useSheet && (
+                    <motion.span
+                      layoutId="plant-mobile-tab-indicator"
+                      className="plant-mobile-tab-indicator"
+                      transition={SPRING}
+                      aria-hidden="true"
+                    />
+                  )}
                 </button>
               </li>
             )
           })}
         </ul>
       )}
+
+      {/* Tab panels — horizontally-draggable on mobile sheet so a swipe
+          left/right moves to the adjacent tab. Desktop and embedded views
+          render the children as plain siblings (PanelSwipeWrapper is a
+          no-op fragment unless `panelSwipeEnabled`). */}
+      <PanelSwipeWrapper enabled={panelSwipeEnabled} onDragEnd={handlePanelDragEnd}>
 
       {/* Edit form */}
       {mode !== null && (!isEditing || activeTab === 'edit') && (
@@ -2438,6 +2512,40 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
           ))}
         </Modal.Body>
       )}
+
+      {/* Prev/next pill — visible alternative to the swipe gesture so users
+          who don't discover horizontal drag still get one-thumb tab
+          navigation. Mobile sheet only. */}
+      {panelSwipeEnabled && activeTabIndex >= 0 && (
+        <nav
+          aria-label="Plant tab pager"
+          className="plant-mobile-tab-pill d-flex justify-content-between align-items-center px-3 py-2 border-top"
+        >
+          <button
+            type="button"
+            className="btn btn-link btn-sm p-0 text-decoration-none"
+            onClick={() => prevTab && setActiveTab(prevTab.id)}
+            disabled={!prevTab}
+            aria-label={prevTab ? `Previous: ${prevTab.label}` : 'No previous tab'}
+          >
+            <span aria-hidden="true">←</span> {prevTab ? prevTab.label : ''}
+          </button>
+          <span className="text-muted fs-xs" aria-hidden="true">
+            {activeTabIndex + 1} / {TABS.length}
+          </span>
+          <button
+            type="button"
+            className="btn btn-link btn-sm p-0 text-decoration-none"
+            onClick={() => nextTab && setActiveTab(nextTab.id)}
+            disabled={!nextTab}
+            aria-label={nextTab ? `Next: ${nextTab.label}` : 'No next tab'}
+          >
+            {nextTab ? nextTab.label : ''} <span aria-hidden="true">→</span>
+          </button>
+        </nav>
+      )}
+
+      </PanelSwipeWrapper>
 
       {/* Unsaved-change guard */}
       {showUnsavedGuard && (
