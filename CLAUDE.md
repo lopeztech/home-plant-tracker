@@ -134,6 +134,7 @@ Factory that returns a `request()` helper (adds `x-api-key`, `Authorization: Bea
 - `useRtl.js` — detects RTL languages (ar, he, fa, ur), injects Bootstrap RTL CSS, sets `document.dir`.
 - `useTimezone.js` — IANA timezone picker (grouped UTC / Americas / Europe / Africa-ME / Asia / Pacific), stored in localStorage, applied to reminders and calendar.
 - `useUnitSystem.js` — metric/imperial preference (auto-detect from `en-US/en-LR/my` → imperial; else metric), localStorage persist.
+- `useMediaQuery.js` — generic `matchMedia` subscription; SSR-safe default-false on first paint.
 
 ### `src/layouts/`
 - `MainLayout.jsx` — Smart Admin CSS-Grid shell (topbar + sidebar + `<Outlet>` + footer); redirects to `/login` when unauthenticated.
@@ -162,7 +163,7 @@ Factory that returns a `request()` helper (adds `x-api-key`, `Authorization: Bea
 
 ### `src/components/` (~42 files, flat)
 Grouped by function:
-- **Plant CRUD**: `PlantModal.jsx` (large; tabs: Plant / Care / Watering / Fertilise / Journal / Soil / Harvest / Health), `BulkPlantCard.jsx`, `PlantQRTag.jsx`, `SoilTab.jsx`
+- **Plant CRUD**: `PlantModal.jsx` (large; tabs: Plant / Care / Watering / Fertilise / Journal / Soil / Harvest / Health), `PlantSheet.jsx` (Framer Motion bottom-sheet shell used by PlantModal on <768px when `VITE_PLANT_MODAL_V2=true`, #401), `BulkPlantCard.jsx`, `PlantQRTag.jsx`, `SoilTab.jsx`
 - **Floorplan**: `Floorplan3D.jsx` (Three.js + R3F), `FloorplanGame.jsx` (playable 3D), `LeafletFloorplan.jsx` (2D), `FloorplanPanel.jsx`, `PlantMarker.jsx`, `PlantIcon.jsx`, `FloorNav.jsx`
 - **Panels / lists**: `PlantListPanel.jsx` (virtualised via react-window), `FloorplanPanel.jsx`
 - **Care logs**: `FeedRecordModal.jsx`, `WateringSheet.jsx`
@@ -416,6 +417,7 @@ VITE_GOOGLE_CLIENT_ID=           # OAuth 2.0 Web client ID
 VITE_API_BASE_URL=               # API Gateway URL
 VITE_API_KEY=                    # x-api-key for API Gateway
 VITE_ML_INSIGHTS_ENABLED=        # 'true' to show /insights
+VITE_PLANT_MODAL_V2=             # 'true' renders the mobile bottom-sheet shell (#401, off by default; <768px only)
 ```
 
 Build-time globals injected by `vite.config.js`: commit SHA, build timestamp.
