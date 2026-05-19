@@ -87,14 +87,42 @@ Defined in `src/assets/sass/app/_typography.scss` and available throughout the a
 **Before:** `fw-700` — outside the approved weight set; visually heavy against lighter dashboard numbers.  
 **After:** `fw-600` — consistent semibold across all stat panels.
 
-## WCAG AA Contrast Compliance
+## Accessibility
 
-### Fix applied
+### Contrast policy
+
+The app targets **WCAG 2.2 AA** across all 9 themes × {light, dark}:
+
+| Element class                                  | Minimum ratio |
+|------------------------------------------------|---------------|
+| Normal text (< 18.66px regular, < 24px bold)   | 4.5 : 1       |
+| Large text (≥ 18.66px regular, ≥ 14px bold)    | 3.0 : 1       |
+| UI components, focus indicators, status icons  | 3.0 : 1       |
+| Focus rings                                    | ≥ 3px width, ≥ 3 : 1 against the surface |
+
+Status colour is never the only carrier of meaning — every red/green pair is also iconographic (`sa-icon` sprite: `icon-check`, `icon-clock`, `icon-alert`).
+
+### Programmatic verification
+
+```bash
+npm run audit:a11y    # builds dist/, serves it via vite preview, runs axe-core
+                      # against /login for each theme × {light, dark}, writes
+                      # docs/a11y-baseline.json
+```
+
+A non-blocking CI workflow (`.github/workflows/a11y-audit.yml`) runs the same audit on every PR and posts a sticky comment with the per-theme diff against `docs/a11y-baseline.json`. Increases mean the PR introduces new contrast violations and should be addressed before merge.
+
+Storybook's a11y addon (`@storybook/addon-a11y`) surfaces per-story violations inline at `http://localhost:6006`. The `Design Tokens / Contrast Pairs` story renders the reference grid of foreground/background pairs that must meet the targets above.
+
+### Remediation status
+
+Phase 1 (this commit) establishes the baseline and tooling. Phase 2 — per-theme remediation — is tracked as follow-ups to #399.
+
+### Historical fix — dark-mode muted text
+
 `[data-bs-theme="dark"] { --bs-secondary-color: rgba(222, 226, 230, 0.85); }` in `_typography.scss`.
 
-Bootstrap's dark-mode default of `rgba(222,226,230,.75)` blends to an effective grey of ~`#adadb0` on Smart Admin's darkest panel background (`#14181e` in night theme), yielding a contrast ratio of **3.8:1** — below the 4.5:1 AA threshold for normal-size text.
-
-Raising opacity to `.85` lifts the effective grey to ~`#b9bcbf`, achieving **4.7:1** on the night theme and **≥ 5.5:1** on all lighter dark backgrounds (nebula, lunar, storm). All 9 themes in both light and dark modes now clear WCAG AA for body and muted text.
+Bootstrap's dark-mode default of `rgba(222,226,230,.75)` blends to an effective grey of ~`#adadb0` on Smart Admin's darkest panel background (`#14181e` in night theme), yielding a contrast ratio of **3.8:1** — below the 4.5:1 AA threshold for normal-size text. Raising opacity to `.85` lifts the effective grey to ~`#b9bcbf`, achieving **4.7:1** on the night theme and **≥ 5.5:1** on all lighter dark backgrounds.
 
 ## Minimum Font Size (Lighthouse)
 

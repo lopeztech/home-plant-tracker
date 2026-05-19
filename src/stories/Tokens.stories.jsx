@@ -222,6 +222,69 @@ export const MotionTokens = {
   ),
 }
 
+// ─── Contrast Pairs ──────────────────────────────────────────────────────────
+
+// Foreground / background pairs that MUST meet WCAG 2.2 AA contrast:
+// - 4.5:1 for normal text
+// - 3:1 for large text (≥ 18.66px or ≥ 14px bold) and UI components / graphics
+//
+// `target` is the minimum ratio the pair is expected to clear. Engineering
+// references this grid in Phase 2 remediation work (#399).
+const CONTRAST_PAIRS = [
+  { label: 'Body text on body bg',         fg: 'var(--bs-body-color)',    bg: 'var(--bs-body-bg)',            target: 4.5 },
+  { label: 'Muted text on body bg',        fg: 'var(--bs-secondary-color)', bg: 'var(--bs-body-bg)',          target: 4.5 },
+  { label: 'Body text on panel surface',   fg: 'var(--bs-body-color)',    bg: 'var(--bs-tertiary-bg)',        target: 4.5 },
+  { label: 'White on primary button',      fg: '#ffffff',                 bg: 'var(--bs-primary)',            target: 4.5 },
+  { label: 'White on success badge',       fg: '#ffffff',                 bg: 'var(--bs-success)',            target: 4.5 },
+  { label: 'White on danger badge',        fg: '#ffffff',                 bg: 'var(--bs-danger)',             target: 4.5 },
+  { label: 'White on warning badge',       fg: '#ffffff',                 bg: 'var(--bs-warning)',            target: 4.5 },
+  { label: 'Link text on body bg',         fg: 'var(--bs-link-color)',    bg: 'var(--bs-body-bg)',            target: 4.5 },
+  { label: 'Border on body bg (UI 3:1)',   fg: 'var(--bs-border-color)',  bg: 'var(--bs-body-bg)',            target: 3.0 },
+  { label: 'Focus ring on body bg',        fg: 'var(--bs-primary)',       bg: 'var(--bs-body-bg)',            target: 3.0 },
+]
+
+export const ContrastPairs = {
+  name: 'Contrast Pairs',
+  render: () => (
+    <div style={{ maxWidth: 840 }}>
+      <h4 className="tx-heading mb-2">WCAG 2.2 AA — required contrast pairs</h4>
+      <p className="tx-muted mb-3" style={{ maxWidth: 640 }}>
+        Reference grid for the colour-contrast policy in DESIGN.md. Each row renders the
+        foreground on its background; the target is the minimum ratio. Switch themes via{' '}
+        <code>LayoutContext.changeThemeStyle()</code> to verify each palette in turn.
+      </p>
+      <p className="tx-muted mb-4" style={{ maxWidth: 640, fontSize: 12 }}>
+        Programmatic verification runs in CI via{' '}
+        <code>npm run audit:a11y</code> against <code>/login</code> for all 9 themes × {'{'}light, dark{'}'}.
+        See <code>docs/a11y-baseline.json</code> for the latest report.
+      </p>
+
+      <div className="d-flex flex-column gap-2">
+        {CONTRAST_PAIRS.map(({ label, fg, bg, target }) => (
+          <div key={label} className="d-flex align-items-stretch border rounded overflow-hidden">
+            <div
+              style={{ background: bg, color: fg, padding: '12px 16px', flex: 1, minWidth: 0 }}
+            >
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{label}</div>
+              <div style={{ fontSize: 12, opacity: 0.85 }}>
+                The quick brown fox jumps over the lazy dog
+              </div>
+            </div>
+            <div
+              className="d-flex flex-column justify-content-center px-3 bg-body-tertiary"
+              style={{ minWidth: 160, fontSize: 11 }}
+            >
+              <code className="tx-muted">fg: {fg}</code>
+              <code className="tx-muted">bg: {bg}</code>
+              <div className="tx-muted mt-1">target ≥ {target.toFixed(1)}:1</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  ),
+}
+
 // ─── Z-Index Layers ───────────────────────────────────────────────────────────
 
 const Z_LAYERS = [
