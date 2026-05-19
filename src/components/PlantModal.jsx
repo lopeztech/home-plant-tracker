@@ -7,6 +7,8 @@ import WateringSheet from './WateringSheet.jsx'
 import SoilTab from './SoilTab.jsx'
 import LifecycleTab from './LifecycleTab.jsx'
 import BloomTab from './BloomTab.jsx'
+import PlantSheet from './PlantSheet.jsx'
+import { useMediaQuery } from '../hooks/useMediaQuery.js'
 import { imagesApi, recommendApi, plantsApi, analyseApi, measurementsApi, phenologyApi, journalApi, harvestApi, wildlifeApi, incidentApi, dormancyApi } from '../api/plants.js'
 import HardinessBadge from './HardinessBadge.jsx'
 import LuxMeterButton from './LuxMeterButton.jsx'
@@ -269,8 +271,21 @@ function DiagnosticUpload({ plantId, plant, onComplete }) {
   )
 }
 
+// Breakpoint for switching from the centred desktop modal to the mobile
+// bottom sheet (#401). 768px = Bootstrap `md` — keeps tablets on the modal.
+const MOBILE_SHEET_QUERY = '(max-width: 767px)'
+
+// Feature flag for #401 Phase 1 rollout. When this evaluates true AND the
+// viewport is below MOBILE_SHEET_QUERY, the non-embedded shell is the
+// Framer Motion bottom sheet rather than React-Bootstrap's modal.
+function isPlantSheetEnabled() {
+  try { return import.meta.env?.VITE_PLANT_MODAL_V2 === 'true' } catch { return false }
+}
+
 export default function PlantModal({ plant, position, floors, activeFloorId, weather, onSave, onDelete, onWater, onMoisture, onClose, embedded = false, initialTab, onTabChange, onDirtyChange }) {
   const isEditing = !!plant
+  const isMobile = useMediaQuery(MOBILE_SHEET_QUERY)
+  const useSheet = !embedded && isMobile && isPlantSheetEnabled()
   const [mode, setMode] = useState(() => (plant ? 'edit' : null))
   const [activeTab, setActiveTabInternal] = useState(initialTab || 'edit')
   const setActiveTab = useCallback((next) => {
@@ -2512,6 +2527,10 @@ export default function PlantModal({ plant, position, floors, activeFloorId, wea
       <div className="modal-content position-relative shadow-sm plant-detail-shell" aria-labelledby="plant-modal-title">
         {innerContent}
       </div>
+    ) : useSheet ? (
+      <PlantSheet show onClose={handleClose} ariaLabelledBy="plant-modal-title">
+        {innerContent}
+      </PlantSheet>
     ) : (
       <Modal show onHide={handleClose} size="lg" centered scrollable fullscreen="sm-down" aria-labelledby="plant-modal-title">
         {innerContent}
