@@ -1,0 +1,31 @@
+export const C = {
+  paper: '#FAF5EC',
+  card: '#FFFFFF',
+  panel: '#FBF7EE',
+  ink: '#283323',
+  green: '#3E5641',
+  greenBright: '#5C7E4F',
+  terra: '#5E9C4F',
+  terraDeep: '#437A33',
+  terraSoft: '#DCEBCB',
+  gold: '#E0A53C',
+  goldDeep: '#C2871E',
+  goldSoft: '#F7E8C6',
+  soil: '#79573F',
+  sage: '#8BA888',
+  sageBg: '#E7EFDC',
+  muted: '#857F6E',
+  line: 'rgba(74,60,45,0.15)',
+  line2: 'rgba(74,60,45,0.10)',
+  serif: '"Newsreader", Georgia, serif',
+  sans: '"Hanken Grotesk", system-ui, sans-serif',
+  r: { sm: 10, md: 12, lg: 14, xl: 16, pill: 20, round: '50%' },
+  sp: { xs: 6, sm: 9, md: 12, lg: 16, xl: 18, xxl: 24 },
+  tap: 44,
+}
+
+export const CSTAT = {
+  overdue: { color: '#CC4A2C', soft: '#F6E0D2', label: 'Overdue' },
+  today:   { color: '#D99A2B', soft: '#F7E8C6', label: 'Due today' },
+  ok:      { color: '#5C7E4F', soft: '#E4EDDD', label: 'Healthy' },
+}

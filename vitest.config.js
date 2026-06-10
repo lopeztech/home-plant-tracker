@@ -8,7 +8,7 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/__tests__/setup.js'],
     css: false,
-    exclude: ['node_modules/**', 'e2e/**', 'api/**'],
+    exclude: ['node_modules/**', 'e2e/**', 'api/**', '.claude/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
