@@ -1,7 +1,6 @@
 import { Suspense, useEffect } from 'react'
 import { useRtl } from '../hooks/useRtl.js'
 import { Outlet, Navigate, useLocation } from 'react-router'
-import { useMediaQuery } from '../hooks/useMediaQuery.js'
 import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { PlantProvider } from '../context/PlantContext.jsx'
@@ -61,12 +60,10 @@ function AuthLoader() {
 export default function MainLayout() {
   const { isAuthenticated, isLoading, isGuest, logout } = useAuth()
   const location = useLocation()
-  const isMobile = useMediaQuery('(max-width: 767px)')
   useRtl()
 
   if (isLoading) return <AuthLoader />
   if (!isAuthenticated) return <Navigate to="/login" replace />
-  if (isMobile) return <Navigate to="/mobile" replace />
 
   return (
     <MotionConfig reducedMotion="user">
