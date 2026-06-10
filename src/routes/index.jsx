@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { Navigate } from 'react-router'
 import App from '../App.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
+import MobileLayout from '../layouts/MobileLayout.jsx'
 import AuthLayout from '../layouts/AuthLayout.jsx'
 import { lazyWithRetry } from '../utils/lazyWithRetry.js'
 
@@ -31,6 +32,7 @@ const RebatesPage = lazyWithRetry(() => import('../pages/RebatesPage.jsx'))
 const GiftPage = lazyWithRetry(() => import('../pages/GiftPage.jsx'))
 const CommunityPage = lazyWithRetry(() => import('../pages/CommunityPage.jsx'))
 const CommunityGuidelinesPage = lazyWithRetry(() => import('../pages/CommunityGuidelinesPage.jsx'))
+const MobilePage = lazyWithRetry(() => import('../pages/MobilePage.jsx'))
 
 export const routes = [
   {
@@ -47,6 +49,13 @@ export const routes = [
         element: <AuthLayout />,
         children: [
           { path: '/login', element: <LoginPage /> },
+        ],
+      },
+      {
+        path: '/mobile',
+        element: <MobileLayout />,
+        children: [
+          { index: true, element: <Suspense fallback={null}><MobilePage /></Suspense> },
         ],
       },
       {

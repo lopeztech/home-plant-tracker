@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router'
 import { usePlantContext } from '../context/PlantContext.jsx'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { useSubscription } from '../context/SubscriptionContext.jsx'
-import { plantsApi } from '../api/plants.js'
+import { journalApi } from '../api/plants.js'
 import { getWateringStatus } from '../utils/watering.js'
 import { C } from './tokens.js'
 import { MRule, MTabBar } from './shell.jsx'
@@ -45,7 +45,7 @@ function normalizePlant(plant, weather, floors, timezone) {
 }
 
 export function MobileApp() {
-  const { plants, floors, activeFloorId, weather, handleWaterPlant } = usePlantContext()
+  const { plants, floors, activeFloorId, weather, timezone, handleWaterPlant } = usePlantContext()
   const { user, logout } = useAuth()
   const { tier } = useSubscription()
   const navigate = useNavigate()
@@ -56,8 +56,6 @@ export function MobileApp() {
   const [careHistory, setCareHistory] = useState({})
 
   // Normalized plants with _status/_daysUntil/icon
-  // Use the stored timezone from PlantContext (via useTimezone hook inside PlantContext)
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const normalizedPlants = useMemo(
     () => plants.map((p) => normalizePlant(p, weather, floors, timezone)),
     [plants, weather, floors, timezone],
@@ -90,8 +88,17 @@ export function MobileApp() {
 
   const openPlant = useCallback((plantId) => {
     setView({ screen: 'plant', plantId })
-    // Fetch care history for the plant from API (journal/watering logs)
-    plantsApi.list?.({ id: plantId }).catch(() => {})
+    journalApi.list(plantId)
+      .then((entries) => {
+        const history = (entries || []).slice(0, 5).map((e) => ({
+          date: e.date ? new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
+          kind: e.type === 'watering' ? 'water' : e.type === 'fertiliser' ? 'feed' : 'note',
+          label: e.title || e.type || 'Note',
+          detail: e.body || e.notes || '',
+        }))
+        setCareHistory((prev) => ({ ...prev, [plantId]: history }))
+      })
+      .catch(() => {})
   }, [])
 
   const goTab = useCallback((key) => {
@@ -112,8 +119,8 @@ export function MobileApp() {
   }, [navigate])
 
   const userInfo = {
-    name: user?.displayName || user?.email?.split('@')[0] || 'Plant Keeper',
-    initial: (user?.displayName || user?.email || 'A')[0].toUpperCase(),
+    name: user?.name || user?.email?.split('@')[0] || 'Plant Keeper',
+    initial: (user?.name || user?.email || 'A')[0].toUpperCase(),
     plan: tier === 'landscaper_pro' ? 'Landscaper Pro' : tier === 'home_pro' ? 'Home Pro' : 'Free',
     tier,
   }
