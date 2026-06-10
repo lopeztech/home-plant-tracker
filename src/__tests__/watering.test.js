@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { getWateringStatus, getAdjustedWaterAmount, isOutdoor, urgencyColor, urgencyLabel, OUTDOOR_ROOMS, getSeason, getHemisphere, SEASONAL_MULTIPLIERS, getPlantAttributeMultiplier, getSuggestedFrequency, getMoistureStatusAdjustment, getMoistureFrequencySuggestion, getMoistureDisplay, computeRainCredit, localDateStr } from '../utils/watering.js'
 
 function makePlant(overrides = {}) {
@@ -289,6 +289,10 @@ describe('getHemisphere', () => {
 // ── Seasonal watering adjustments ──────────────────────────────────────────
 
 describe('getWateringStatus — seasonal adjustments', () => {
+  // Pin date to April so hemisphere-based season expectations are stable
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-04-15T12:00:00Z')) })
+  afterEach(() => { vi.useRealTimers() })
+
   function makeWeatherWithLocation(lat, overrides = {}) {
     return {
       current: {
@@ -396,6 +400,10 @@ describe('getWateringStatus — seasonal adjustments', () => {
 // ── getAdjustedWaterAmount — seasonal ──────────────────────────────────────
 
 describe('getAdjustedWaterAmount — seasonal adjustments', () => {
+  // Pin date to April so southern/northern hemisphere expectations are stable
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-04-15T12:00:00Z')) })
+  afterEach(() => { vi.useRealTimers() })
+
   it('increases water amount in summer', () => {
     // Use southern hemisphere in Jan → summer, multiplier 1.3
     const plant = { waterAmount: '250ml', room: 'Living Room', floor: 'ground' }
@@ -554,6 +562,10 @@ describe('getWateringStatus — indoor humidity', () => {
 // ── getAdjustedWaterAmount — plant attributes + humidity ───────────────────
 
 describe('getAdjustedWaterAmount — plant attributes', () => {
+  // Pin date to April for stable seasonal multiplier in the stacking test
+  beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(new Date('2026-04-15T12:00:00Z')) })
+  afterEach(() => { vi.useRealTimers() })
+
   it('small pot + full sun increases water amount', () => {
     const plant = { waterAmount: '200ml', room: 'Living Room', floor: 'ground', potSize: 'small', sunExposure: 'full-sun' }
     const result = getAdjustedWaterAmount(plant)
