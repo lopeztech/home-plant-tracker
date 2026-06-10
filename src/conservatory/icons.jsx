@@ -26,4 +26,17 @@ export const IC = {
   star: <path d="M12 3.2l2.5 5.6 6.1.6-4.6 4 1.4 6L12 16.8 6.6 19.4 8 13.4 3.4 9.4l6.1-.6z" />,
   logout: <><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><path d="M16 17l5-5-5-5M21 12H9" /></>,
   bloom: <><circle cx="12" cy="12" r="3" /><path d="M12 9c0-3 1-5 0-7-1 2 0 4 0 7zM12 15c0 3-1 5 0 7 1-2 0-4 0-7zM15 12c3 0 5-1 7 0-2 1-4 0-7 0zM9 12c-3 0-5 1-7 0 2-1 4 0 7 0z" /></>,
+  // Desktop additions
+  forecast: <><path d="M6 16a4 4 0 010-8 5 5 0 019.6-1.5A3.5 3.5 0 0118 16Z" /></>,
+  prop: <><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M20 4 8.5 16.5M14 4h6v6" /></>,
+  sun: <><circle cx="12" cy="12" r="4.2" /><path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M19.4 4.6l-1.7 1.7M6.3 17.7l-1.7 1.7" /></>,
+  cloud: <path d="M6 18a4 4 0 010-8 5 5 0 019.6-1.5A3.5 3.5 0 0118 18Z" />,
+  clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  camera: <><rect x="2.5" y="6.5" width="19" height="13" rx="2.5" /><circle cx="12" cy="13" r="3.6" /><path d="M8 6.5l1.4-2.5h5.2L16 6.5" /></>,
+  scissors: <><circle cx="6" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12" /></>,
+  sparkle: <><path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9z" /><path d="M19 14l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z" /></>,
+  plus: <><path d="M12 5v14M5 12h14" /></>,
+  search: <><circle cx="11" cy="11" r="7" /><path d="M21 21l-4-4" /></>,
+  filter: <path d="M3 5h18l-7 8v6l-4-2v-4z" />,
+  upload: <><path d="M12 16V4M7 9l5-5 5 5" /><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3" /></>,
 }
