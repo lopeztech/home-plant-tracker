@@ -99,7 +99,8 @@ export async function enterGuestMode(page, { dismissOverlays = true, ...overlayO
   await guestButton.waitFor({ state: 'visible', timeout: 10_000 })
   await guestButton.click()
   // AuthLayout redirect lands on /today (PR #317).
-  await page.waitForURL(/\/today|\/$/, { timeout: 10_000 })
+  // On mobile viewports MainLayout redirects to /mobile (feat/conservatory-mobile).
+  await page.waitForURL(/\/today|\/$|\/mobile/, { timeout: 10_000 })
 }
 
 /**

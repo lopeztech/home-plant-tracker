@@ -20,6 +20,7 @@ import { test, expect } from '@playwright/test'
 import { attachErrorListeners, enterGuestMode } from './_helpers.js'
 
 const ROUTES = [
+  { path: '/mobile',               label: 'Mobile (Conservatory UI)' },
   { path: '/today',                label: 'Today (daily tasks)' },
   { path: '/',                     label: 'Dashboard (Garden)' },
   { path: '/propagation',          label: 'Propagation' },
