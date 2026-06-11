@@ -13,7 +13,7 @@ function AuthGate() {
       </div>
     )
   }
-  if (!isLoading && !isAuthenticated) return <Navigate to="/login?returnTo=/app" replace />
+  if (!isAuthenticated) return <Navigate to="/login?returnTo=/app" replace />
   return <Outlet />
 }
 
