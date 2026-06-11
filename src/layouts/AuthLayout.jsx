@@ -1,8 +1,9 @@
-import { Outlet, Navigate } from 'react-router'
+import { Outlet, Navigate, useLocation } from 'react-router'
 import { useAuth } from '../contexts/AuthContext.jsx'
 
 export default function AuthLayout() {
   const { isAuthenticated, isLoading } = useAuth()
+  const location = useLocation()
 
   if (isLoading) {
     return (
@@ -14,7 +15,11 @@ export default function AuthLayout() {
     )
   }
 
-  if (isAuthenticated) return <Navigate to="/today" replace />
+  if (isAuthenticated) {
+    const params = new URLSearchParams(location.search)
+    const returnTo = params.get('returnTo')
+    return <Navigate to={returnTo || '/today'} replace />
+  }
 
   return <Outlet />
 }

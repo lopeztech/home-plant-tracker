@@ -5,7 +5,7 @@ import { PlantProvider } from '../context/PlantContext.jsx'
 import ErrorBoundary from '../components/ErrorBoundary.jsx'
 
 function AuthGate() {
-  const { isLoading } = useAuth()
+  const { isLoading, isAuthenticated } = useAuth()
   if (isLoading) {
     return (
       <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -13,6 +13,7 @@ function AuthGate() {
       </div>
     )
   }
+  if (!isAuthenticated) return <Navigate to="/login?returnTo=/app" replace />
   return <Outlet />
 }
 
