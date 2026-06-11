@@ -41,7 +41,7 @@ function normalizePlant(plant, weather, floors, timezone) {
 
 export function DesktopApp() {
   const { plants, floors, activeFloorId, weather, timezone, handleWaterPlant } = usePlantContext()
-  const { user, logout, isAuthenticated } = useAuth()
+  const { user, logout, isAuthenticated, isGuest } = useAuth()
   const { tier, ...subscription } = useSubscription()
 
   const [screen, setScreen] = useState('garden')
@@ -51,9 +51,9 @@ export function DesktopApp() {
   const [careHistory, setCareHistory] = useState({})
 
   useEffect(() => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated || isGuest) return
     propagationApi.list?.()?.then((data) => setPropagations(Array.isArray(data) ? data : data?.items || [])).catch(() => {})
-  }, [isAuthenticated])
+  }, [isAuthenticated, isGuest])
 
   const normalizedPlants = useMemo(
     () => plants.map((p) => normalizePlant(p, weather, floors, timezone)),
@@ -73,6 +73,7 @@ export function DesktopApp() {
   const openPlant = useCallback((id) => {
     setActivePlantId(id)
     setScreen('plant')
+    if (isGuest) return
     journalApi.list(id).then((entries) => {
       const history = (entries || []).slice(0, 6).map((e) => ({
         date: e.date ? new Date(e.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—',
