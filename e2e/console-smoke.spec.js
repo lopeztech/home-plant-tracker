@@ -21,6 +21,7 @@ import { attachErrorListeners, enterGuestMode } from './_helpers.js'
 
 const ROUTES = [
   { path: '/mobile',               label: 'Mobile (Conservatory UI)' },
+  { path: '/app',                  label: 'Desktop Conservatory UI' },
   { path: '/today',                label: 'Today (daily tasks)' },
   { path: '/',                     label: 'Dashboard (Garden)' },
   { path: '/propagation',          label: 'Propagation' },

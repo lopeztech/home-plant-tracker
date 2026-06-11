@@ -3,6 +3,7 @@ import { Navigate } from 'react-router'
 import App from '../App.jsx'
 import MainLayout from '../layouts/MainLayout.jsx'
 import MobileLayout from '../layouts/MobileLayout.jsx'
+import DesktopConservatoryLayout from '../layouts/DesktopConservatoryLayout.jsx'
 import AuthLayout from '../layouts/AuthLayout.jsx'
 import { lazyWithRetry } from '../utils/lazyWithRetry.js'
 
@@ -33,6 +34,7 @@ const GiftPage = lazyWithRetry(() => import('../pages/GiftPage.jsx'))
 const CommunityPage = lazyWithRetry(() => import('../pages/CommunityPage.jsx'))
 const CommunityGuidelinesPage = lazyWithRetry(() => import('../pages/CommunityGuidelinesPage.jsx'))
 const MobilePage = lazyWithRetry(() => import('../pages/MobilePage.jsx'))
+const DesktopConservatoryPage = lazyWithRetry(() => import('../pages/DesktopConservatoryPage.jsx'))
 
 export const routes = [
   {
@@ -56,6 +58,13 @@ export const routes = [
         element: <MobileLayout />,
         children: [
           { index: true, element: <Suspense fallback={null}><MobilePage /></Suspense> },
+        ],
+      },
+      {
+        path: '/app',
+        element: <DesktopConservatoryLayout />,
+        children: [
+          { index: true, element: <Suspense fallback={null}><DesktopConservatoryPage /></Suspense> },
         ],
       },
       {
