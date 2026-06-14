@@ -22,7 +22,7 @@
     "@react-pdf/renderer": "^4.5.1",
     "@sendgrid/mail": "^8.1.6",
     "cors": "^2.8.5",
-    "csv-parse": "^6.2.1",
+    "csv-parse": "^7.0.0",
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "express-rate-limit": "^8.5.1",
