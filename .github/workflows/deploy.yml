@@ -114,7 +114,7 @@ jobs:
       # Cache Playwright browsers. Keyed on the @playwright/test version from
       # package-lock so a dep bump invalidates the cache.
       - name: Cache Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
@@ -307,7 +307,7 @@ jobs:
         run: npm ci --legacy-peer-deps
 
       - name: Cache Playwright browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
